@@ -1,0 +1,128 @@
+/*
+ * The top bar, for all four shells.
+ *
+ * # Two rows on a phone, deliberately, instead of three by accident
+ *
+ * The old markup was one `Row` with `wrap`, and a `Spacer` in the middle of a
+ * wrapping flex line does what it is told: it eats the remaining width and
+ * pushes everything after it onto new lines. At 390px that produced the
+ * wordmark on one line, the scan bar on another, and the site and operator tags
+ * stranded on a third — left-aligned, in a row of their own, reading as two
+ * stray buttons rather than as a statement of where you are.
+ *
+ * Nothing is hidden to fix it. D111 puts the locator on every surface, and the
+ * site tag is what tells an operator which warehouse their acts will be
+ * recorded against — a chrome that drops either to save a hundred pixels is a
+ * chrome that lies at exactly the width where it matters most. So the layout is
+ * decided rather than left to wrapping: identity and place on one line, the
+ * locator across the full width beneath it.
+ *
+ * Above 48rem the locator returns to the line, which is where it already was,
+ * so no wide screen changes.
+ */
+
+.chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-4);
+}
+
+.mark,
+.tags {
+  flex: 0 0 auto;
+}
+
+/* Takes the middle and gives it back: a long screen name may wrap rather than
+   push where-you-are onto a line of its own. */
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* `margin-left: auto` rather than a spacer element, so that when there is no
+   room to spare the pair simply wraps instead of being shoved. */
+.tags {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-3);
+  margin-left: auto;
+}
+
+/* **A row of its own, and the full width of it.** `order` rather than a second
+   element: one locator in the DOM is one scan input for the gate to count, and
+   two would be two things fighting for focus under D117. */
+.locator {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .locator {
+    order: 0;
+    flex: 0 1 auto;
+  }
+}
+
+/*
+ * **Pinned wherever the rail is a sheet.**
+ *
+ * On Bench and Desk below 62rem the navigation is behind the Menu key in this
+ * bar, and a key at the top of a worklist somebody has scrolled to the bottom
+ * of is worth nothing — which is the same failure as the rail sitting below the
+ * work, reached from the other end. So the bar stays. Floor and Plain have no
+ * rail and no `nav`, so they never get this class and scroll away as before.
+ *
+ * **The ring is how it covers the gutters.** The bar sits inside the page's
+ * horizontal padding, so an opaque background alone leaves two columns of
+ * scrolling work showing beside it. A negative margin would fix that and law 3
+ * forbids one; a `100vw` width would fix it and reintroduce the sideways scroll
+ * this repository has already chased once. A spread shadow paints outward from
+ * the border box without affecting layout, so it fills the gutters — and above
+ * and below, where it reads as the bar's own padding.
+ *
+ * `--ano-950` and not a face token: the chrome is chassis (D118), a fixed
+ * material that does not change with the time of day.
+ */
+@media (max-width: 61.9375rem) {
+  .pinned {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--ano-950);
+    box-shadow: 0 0 0 var(--gap-5) var(--ano-950);
+  }
+}
+
+.mark {
+  font-weight: 800;
+  letter-spacing: var(--track-mark);
+  text-transform: uppercase;
+  font-size: 0.76rem;
+  color: var(--legend);
+  text-shadow: 0 -1px 0 rgba(var(--lo), 0.7);
+}
+
+.title {
+  font-weight: 700;
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--legend-dim);
+  text-shadow: 0 1px 0 rgba(var(--hi), 0.06);
+}
+
+/* **Floor's chrome is smaller, and that is a decision rather than drift.**
+   A handheld at 430px is mostly work and the bar above it is a label, so it
+   gives back what it can. It reads as backwards against the density scale —
+   floor's base type is *larger* than desk's — which is the point: this is the
+   one element on a Floor screen that is not being read at arm's length. It
+   lives here as one override rather than as a fourth copy of the block above. */
+[data-density="floor"] .mark {
+  font-size: 0.7rem;
+}
+
+[data-density="floor"] .title {
+  font-size: 0.68rem;
+}

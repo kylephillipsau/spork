@@ -1,0 +1,49 @@
+/*
+ * One column, narrower than any of the working shells.
+ *
+ * Nothing here is compared against anything else — it is a form filled in once
+ * — so the constraint is reading length rather than density, and a wide measure
+ * makes a short form look like a long one.
+ */
+.page {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-5);
+  max-width: 44rem;
+  padding: var(--gap-6) var(--gap-5) calc(var(--gap-6) * 2);
+  /* Fills the screen so the form below has somewhere to sit. */
+  min-height: 100dvh;
+}
+
+@media (min-width: 48rem) {
+  .page {
+    max-width: none;
+    padding-left: calc((100vw - 44rem) / 2);
+    padding-right: calc((100vw - 44rem) / 2);
+  }
+}
+
+.column {
+  min-width: 0;
+}
+
+/*
+ * Centred in whatever is left under the chrome, for screens that do not change
+ * size.
+ *
+ * Sign in is two fields, and on a phone it sat in the top third with two-thirds
+ * of bare chassis under it. **Not the default**, because passkeys and the site
+ * chooser are lists: centring a list means every row added shifts the rest of
+ * the page by half a row, which is worse than the space it saves.
+ *
+ * **Auto margins rather than `justify-content`**, so a form taller than the
+ * space simply pins to the top and scrolls — centring would have put its first
+ * field above the top of the screen with no way to reach it.
+ */
+.centred {
+  margin-block: auto;
+}
+
+

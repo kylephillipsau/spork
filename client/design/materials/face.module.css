@@ -1,0 +1,889 @@
+/* ═══════════════════════════════════════════════════════════════════
+   THE FACE — the instrument face, and the one refractive element (D118)
+
+   The chassis is metal and the data is paper. Every number and every
+   identifier lives here, on a surface with the contrast of paper, and
+   NOTHING TRANSLUCENT IS EVER LAID OVER IT (D119) — a rule that has
+   already broken once and cost measurable contrast.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.face {
+  background: var(--face);
+  color: var(--face-ink);
+  border-radius: var(--r-face);
+
+  /* **Its own containing block.** Without this the grain layer below —
+     `position: absolute; inset: 0` — resolves against the nearest positioned
+     ancestor, which is the panel, and paints fine bright noise across the
+     whole chassis. The faces hide most of it; what shows is every gap between
+     them. That is the "stark separator" that had been read as a design choice
+     and tuned three times over. It was a containing block. */
+  position: relative;
+
+  /* No outline rings. Two hard 1px outlines used to draw the seating here and
+     a hard outline is the thing that reads as drawn — this rule is the one my
+     earlier pass claimed to have softened and silently did not, so the rings
+     it describes removing were still shipping. What is left is occlusion: the
+     shadow a recessed thing casts into the metal around it. */
+  box-shadow:
+    0 1px 3px rgba(var(--lo), 0.35),
+    0 0 16px -4px rgba(var(--lo), 0.5),
+    inset 0 3px 14px rgba(var(--lo), 0.42),
+    inset 0 -1px 6px rgba(var(--lo), 0.22);
+}
+
+/* THE COVER LENS. Metal is opaque — a metal that refracted would be a
+   glass — so refraction happens exactly once, where a real instrument
+   actually has glass. Confined to the top 76px and masked out before it
+   reaches a line of running text. An earlier draft ran this across the
+   whole face and bought gloss with legibility, which on a screen read
+   at arm's length by someone in gloves is the worst trade available. */
+.face::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 76px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(196deg, rgba(var(--hi), var(--face-lift)) 0%, rgba(var(--hi), 0) 58%);
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0, 0, 0) 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, rgb(0, 0, 0) 0%, transparent 100%);
+}
+
+/* Where the face meets the metal.
+ 
+   **The dispersion is gone.** Cool at one corner and warm at the other was
+   the physics of a cover glass and, drawn at any strength you could see, it
+   was an orange line down one side and a white one down the other — which is
+   a coloured border however carefully it was derived.
+ 
+   What separates a face from the panel is tone: the face is far darker than
+   the metal around it and casts into it. That is enough. This is one faint
+   catch along the top, gone by a third of the way down, and no outline at
+   all around the other three sides. */
+.face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    180deg in oklab,
+    var(--edge-face) 0%,
+    transparent 34%
+  );
+  -webkit-mask:
+    linear-gradient(rgb(0, 0, 0) 0 0) content-box,
+    linear-gradient(rgb(0, 0, 0) 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(rgb(0, 0, 0) 0 0) content-box,
+    linear-gradient(rgb(0, 0, 0) 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+}
+
+.face > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* **One padding owner per box.** This used to be `--gap-4 --gap-5`, which on a
+   handheld was 24 by 36 — and it sat inside a padded panel and around a padded
+   well, so a capture row began 78px in from a 430px edge. The face is the
+   paper; it insets its content once, and modestly. */
+.pad {
+  padding: var(--gap-3) var(--gap-4);
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: overlay;
+  background-image: var(--tex-fine);
+  background-size: 90px 90px;
+}
+
+/* **A well inside a padded face does not pad again.**
+   The rule here used to say the opposite — *"a well inside a padded face
+   already sits in from the edge, so it carries its own padding rather than
+   inheriting the face's"* — which is the double stated as a reason for itself.
+   It keeps a small inset so the recess still reads as one; the face owns the
+   rest. A well on an *unpadded* face is the list idiom (band, then well) and
+   keeps its full padding, because there it is the only owner. */
+
+/* ── THE WELL, ON A FACE ───────────────────────────────────────────
+   On the DAY face this is a recess. On the NIGHT face it LIFTS, because
+   a recess in an already-dark field is invisible — same component,
+   opposite direction, because the job is separation rather than literal
+   depth. Both directions come from the tokens, so this rule is stated
+   once here and resolved in tokens.css. */
+
+/* Separation by tone and a soft inset, not by an outline. */
+.well {
+  background: var(--face-well);
+  padding: var(--gap-4);
+  border-radius: var(--r-well);
+  box-shadow: inset 0 1px 4px rgba(var(--lo), 0.14);
+}
+
+.pad > .well {
+  padding: var(--gap-2);
+}
+
+/* ── INK ON THE FACE ───────────────────────────────────────────────── */
+
+.soft {
+  color: var(--face-soft);
+}
+
+/* Slightly heavier and slightly tighter. At 0.88em on a dark face the
+   default weight dissolved, and the fix is not more size — a description
+   should stay quieter than the code above it — but enough stroke to hold
+   its own against the ground. */
+.faint {
+  color: var(--face-faint);
+  font-size: 0.88em;
+  font-weight: 450;
+  letter-spacing: -0.004em;
+}
+
+/* ── THE BAND ──────────────────────────────────────────────────────── */
+
+/* A strip of tone that runs out rather than a bar that stops. The fill
+   fades to nothing across the width, so there is no vertical edge at
+   either end and no hard boundary under it. */
+.band {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-3);
+  /* **A label, not a bar.** This was a filled strip strong enough to pull the
+     eye off the rows underneath it — a separator competing with the thing it
+     separates. It is a quiet tonal wash now, fading out well before the far
+     edge, and the weight moved into the letterforms where it costs nothing. */
+  background: linear-gradient(
+    90deg in oklab,
+    color-mix(in oklab, var(--band-bg) 48%, transparent) 0%,
+    color-mix(in oklab, var(--band-bg) 16%, transparent) 44%,
+    transparent 78%
+  );
+  color: color-mix(in oklab, var(--face-ink) 78%, transparent);
+  padding: var(--gap-2) var(--gap-3);
+  border-radius: var(--r-well);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* The label takes the slack so the count sits at the far end. `margin-left:
+   auto` would do the same and is the usual idiom, but margin is not
+   available here (D124) and a growing sibling is the honest version. */
+.bandLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bandCount {
+  font-family: var(--font-mono);
+  opacity: 0.66;
+}
+
+/* ── THE FINDING ───────────────────────────────────────────────────
+   The only amber in the interface (D115). */
+
+/* The severity stripe stays — it is the one place a solid edge is the
+   point — but it fades out down its length rather than ruling the block. */
+.finding {
+  background: var(--face-amber-soft);
+  border-radius: var(--r-well);
+  padding: var(--gap-3) var(--gap-4);
+  background-image: linear-gradient(
+    180deg in oklab,
+    var(--face-amber) 0%,
+    color-mix(in oklab, var(--face-amber) 35%, transparent) 100%
+  );
+  background-size: 3px 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+
+.findingKind {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--face-amber);
+  font-weight: 700;
+}
+
+/* ── EVIDENCE PAIR ─────────────────────────────────────────────────── */
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--face-well);
+  border-radius: var(--r-well);
+  overflow: hidden;
+  box-shadow: inset 0 1px 4px rgba(var(--lo), 0.14);
+}
+
+.pairCell {
+  padding: var(--gap-2) var(--gap-3);
+}
+
+/* A divider that fades top and bottom rather than butting into both edges. */
+.pairCell + .pairCell {
+  background-image: linear-gradient(
+    180deg in oklab,
+    transparent 0%,
+    var(--face-rule) 22%,
+    var(--face-rule) 78%,
+    transparent 100%
+  );
+  background-size: 1px 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+
+.pairKey {
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--face-faint);
+  font-weight: 700;
+}
+
+.pairValue {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+/* ── THE READOUT ───────────────────────────────────────────────────
+   The role that did not exist in the old stylesheet and should. A
+   weight or a carton count is not body text containing digits — it is
+   the thing the operator walked over to read. Thin-space grouping, and
+   the unit set small beside the figure rather than as part of it. */
+
+.readout {
+  display: flex;
+  flex-direction: column;
+}
+
+.readoutKey {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--face-faint);
+}
+
+/* inline-flex with a gap rather than a margin on the unit: the number and
+   its unit are two things set on one baseline, which is what gap is for. */
+.readoutValue {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--face-ink);
+}
+
+.readoutLarge .readoutValue {
+  font-size: var(--readout);
+}
+
+/* A stated figure sitting beside fields being typed into. It is not the
+   number the operator came to read, so it does not get read's size — it
+   matches the inputs it sits with, and differs only by not being one. */
+.readoutSmall .readoutValue {
+  font-size: 1.15rem;
+}
+
+.readoutUnit {
+  font-size: 0.44em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--face-faint);
+  text-transform: uppercase;
+}
+
+/* ── IDENTIFIER ────────────────────────────────────────────────────
+   Anything read off a label or said down a phone. Prose is not. */
+
+.code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.94em;
+  /* **Breaks anywhere, because some codes are long.** Almost everything drawn
+     as code here is a bin or an item — short enough that this rule never
+     applies. An import token is 68 characters, and on a 390px screen it pushed
+     the page 286px sideways, which the pocket viewport in the render gate
+     caught. A rule that is inert for short strings costs the short ones
+     nothing. */
+  overflow-wrap: anywhere;
+}
+
+/* ── THE DIMENSION LINE ────────────────────────────────────────────
+   A system about weights and measures can afford ornament only if the
+   ornament is doing the measuring, so this carries real figures off
+   the record rather than decorating around them. */
+
+.dim {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  color: var(--face-faint);
+}
+
+.dimLine {
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+  position: relative;
+}
+
+.dimLine::before,
+.dimLine::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  width: 1px;
+  height: 7px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.dimLine::before {
+  left: 0;
+}
+
+.dimLine::after {
+  right: 0;
+}
+
+.dimValue {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* ── PILL ──────────────────────────────────────────────────────────
+   Green confirms; it never reports a steady state (D115). */
+
+.pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.44rem;
+  font-weight: 700;
+  background: var(--face-good-soft);
+  color: var(--face-good);
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--face-good) 28%, transparent);
+}
+
+.pillQuiet {
+  background: color-mix(in oklab, var(--face-faint) 12%, transparent);
+  color: var(--face-faint);
+  box-shadow: none;
+}
+
+/* Steel reports state. Violet acts, amber finds, green confirms. */
+.pillSteel {
+  background: var(--face-steel-soft);
+  color: var(--face-steel);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--face-steel) 26%, transparent);
+}
+
+.steel {
+  color: var(--face-steel);
+}
+
+/* ── THE EMPTY SLOT ────────────────────────────────────────────────
+   A carton with nothing in it is still a carton standing on the bench.
+   Rendering that as absence — a faint line of text in a tall dark gap —
+   made the busiest state on the screen and the emptiest one look like
+   the same amount of nothing.
+ 
+   A dashed rule is right exactly here: it means *not yet*, which is the
+   one thing this element is for. */
+.empty {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-4);
+  padding: var(--gap-4) var(--gap-4) var(--gap-4) var(--gap-3);
+  min-height: 92px;
+  /* Faint structure rather than an outline: a hatched ground that says the
+     slot exists, under a dashed edge soft enough not to box it in. */
+  background-color: color-mix(in oklab, var(--face-faint) 5%, transparent);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--face-faint) 7%, transparent) 0 1px,
+    transparent 1px 9px
+  );
+  outline: 1px dashed color-mix(in oklab, var(--face-faint) 26%, transparent);
+  outline-offset: -1px;
+  color: var(--face-faint);
+}
+
+.emptyGhost {
+  width: 88px;
+  height: 80px;
+  flex: none;
+  overflow: visible;
+}
+
+.ghostLine {
+  fill: none;
+  stroke: color-mix(in oklab, var(--face-faint) 62%, transparent);
+  stroke-width: 1;
+  stroke-linecap: square;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The far bottom corner is occluded, and an engineering drawing dashes what
+   it cannot see rather than omitting it. */
+.ghostHidden {
+  stroke: color-mix(in oklab, var(--face-faint) 26%, transparent);
+  stroke-dasharray: 2.5 2.5;
+}
+
+.emptyText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  min-width: 0;
+}
+
+.emptyLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--face-faint) 82%, transparent);
+}
+
+.emptyNote {
+  font-size: 0.88em;
+  font-weight: 450;
+  letter-spacing: -0.004em;
+}
+
+/* ── THE FIELD ─────────────────────────────────────────────────────
+   Stage 4 is two boxes — weight and height — and they are the only
+   genuinely variable input in the whole recorded process. So the field
+   is sized for a gloved hand at arm's length rather than for a form:
+   the target minimum comes from the density, and the value is set in
+   the readout's own face because it is a figure being entered, not
+   prose being typed. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--face-faint);
+}
+
+.fieldInput {
+  min-height: var(--target);
+  padding: var(--gap-2) var(--gap-3);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--face-ink);
+  background: var(--face-well);
+  border: none;
+  border-radius: var(--r-control);
+  /* Depth from an inset shadow and a hairline of the bottom edge only —
+     a full outline around every input is four lines per field. */
+  box-shadow:
+    inset 0 1px 4px rgba(var(--lo), 0.16),
+    inset 0 -1px 0 color-mix(in oklab, var(--face-rule) 70%, transparent);
+}
+
+.fieldInput:focus-visible {
+  outline: 2px solid var(--face-nitrile);
+  outline-offset: 1px;
+}
+
+.fieldNumeric {
+  text-align: right;
+}
+
+/* Widths are named roles rather than lengths, so a call site says what the
+   field is for and the density says how wide that is (D123). */
+.fieldInline {
+  width: var(--field-inline);
+  flex: none;
+}
+
+.fieldMeasure {
+  width: var(--field-measure);
+  flex: none;
+}
+
+/* In a table the column heading already names the field, and repeating it
+   above every input is noise that also doubles the row height. The label
+   stays for a screen reader. */
+.fieldQuiet .fieldLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── THE TABLE ─────────────────────────────────────────────────────
+   Ruled like a docket. Identifiers are mono because they are read off a
+   label; the quantities are tabular because they are compared down a
+   column rather than read across a row. */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--face-faint);
+  font-weight: 700;
+  padding: 0 var(--gap-3) var(--gap-2) 0;
+}
+
+.table td {
+  padding: var(--gap-2) var(--gap-3) var(--gap-2) 0;
+  vertical-align: baseline;
+}
+
+/* Rules that fade at both ends.
+ 
+   `border-bottom` draws corner to corner at full strength, and a table of
+   them is a stack of hard lines — the thing that made this read as ruled
+   paper rather than as a surface. A gradient painted on the ROW instead of
+   the cell fades across the whole width and never seams between columns. */
+.table thead tr,
+.table tbody tr {
+  background-image: linear-gradient(
+    90deg in oklab,
+    transparent 0%,
+    color-mix(in oklab, var(--face-rule) 62%, transparent) 8%,
+    color-mix(in oklab, var(--face-rule) 62%, transparent) 72%,
+    transparent 96%
+  );
+  background-size: 100% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+
+.table tbody tr {
+  background-image: linear-gradient(
+    90deg in oklab,
+    transparent 0%,
+    color-mix(in oklab, var(--face-rule-soft) 70%, transparent) 8%,
+    color-mix(in oklab, var(--face-rule-soft) 70%, transparent) 72%,
+    transparent 96%
+  );
+}
+
+.table tbody tr:last-child {
+  background-image: none;
+}
+
+/* Scoped rather than forced: `!important` here was covering for the element
+   selectors above it, and a design system that has to shout at itself has a
+   specificity problem rather than a padding one. */
+.table td.numeric,
+.table th.numeric {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Actions sit at the end of a row and should not stretch the row's height. */
+.table td.action {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* **Flush only at the edge.** Both rules above carried `padding-right: 0`
+   unconditionally, which is right for the last column and wrong for any other:
+   a right-aligned figure then touches the column after it. The import screen
+   drew "UNTYPEDCLOCK" as a heading and "0Australia/Brisbane" in its cells.
+   Every table in the app until then happened to end in its numbers, so nothing
+   had shown it — and no assertion can: the render gate counts faces and keys
+   and measures overflow, none of which sees two columns touching. */
+.table td.numeric:last-child,
+.table th.numeric:last-child,
+.table td.action:last-child,
+.table th.action:last-child {
+  padding-right: 0;
+}
+
+/* The scroller is the container's job, not the table's: a wide table
+   must scroll inside its own box rather than push the page sideways. */
+/*
+ * A table too wide for the screen scrolls here rather than pushing the page.
+ *
+ * **`position: relative` is the load-bearing line.** `overflow-x` only clips
+ * descendants whose containing block this is, and the quiet field label below
+ * is `position: absolute` — so against a static scroller it resolved to the
+ * face instead, escaped the clip, and dragged the document out to wherever the
+ * table's layout had put it. One 1px screen-reader label, 73px of sideways
+ * scroll, and every visible thing correctly clipped the whole time.
+ */
+.scroller {
+  position: relative;
+  overflow-x: auto;
+}
+
+/* Below this a four-column table with a description in one column stops being
+   a table: it drew "Nitrile glove, blue, medium" one word per line and slid a
+   key over the figure beside it. Opt-in, because most tables here are two or
+   three short columns and would scroll for no reason. */
+.tableWide {
+  min-width: 34rem;
+}
+
+/* ── THE CHOOSER ───────────────────────────────────────────────────
+   A select, dressed as a field.
+ 
+   It was in the component inventory and never built, so the pack screen
+   reached for a bare `<select>` — which renders as the operating
+   system's own control: a light box with its own chrome, sitting on an
+   instrument face that has spent a lot of effort not looking like one.
+ 
+   `appearance: none` and a drawn caret, because the point of the face is
+   that everything on it belongs to the same instrument. */
+
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  min-width: 0;
+}
+
+.chooserControl {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.chooserSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: var(--target);
+  padding: var(--gap-2) calc(var(--gap-5) + var(--gap-2)) var(--gap-2) var(--gap-3);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  color: var(--face-ink);
+  background: var(--face-well);
+  border: none;
+  border-radius: var(--r-control);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  box-shadow:
+    inset 0 1px 4px rgba(var(--lo), 0.16),
+    inset 0 -1px 0 color-mix(in oklab, var(--face-rule) 70%, transparent);
+}
+
+.chooserSelect:focus-visible {
+  outline: 2px solid var(--face-nitrile);
+  outline-offset: 1px;
+}
+
+/* The caret is drawn rather than inherited, and it does not take the
+   pointer — the whole control is the target. */
+.chooserCaret {
+  position: absolute;
+  right: var(--gap-3);
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--face-faint);
+  border-bottom: 1.5px solid var(--face-faint);
+  transform: translateY(-2px) rotate(45deg);
+  pointer-events: none;
+}
+
+/* ── the locator ──────────────────────────────────────────────────────
+   One input, always present, and wider than a measurement field because
+   what goes in it is an identifier rather than a number (D111). */
+.scan {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.scanInput {
+  /* Left-aligned, unlike a measurement: an identifier is read from its
+     start and compared by prefix by eye, and right-aligning it puts the
+     part that distinguishes two SKUs against the wrong edge. */
+  text-align: left;
+  letter-spacing: 0.04em;
+}
+
+.scanHint {
+  font-size: 0.72rem;
+  color: var(--face-faint);
+}
+
+/* ── tabs ─────────────────────────────────────────────────────────────
+   One of a set, exactly one chosen. The current one is marked by ground
+   and an edge rather than by the lamp, which stays reserved for the act
+   the operator is about to perform. */
+.tabs {
+  display: inline-flex;
+  /* **Wrapping, because seven tabs do not fit a handheld.** The findings
+     screen has four short words and never needed it; D138's seven
+     arrangements overflow a 430px viewport, and a tab strip that runs off the
+     edge of the device is a defect wherever it happens rather than a reason to
+     use a different control. */
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 1px;
+  border-radius: var(--r-control);
+  background: var(--face-rule-soft);
+  box-shadow: inset 0 1px 3px rgba(var(--lo), 0.14);
+}
+
+.tab {
+  min-height: var(--target);
+  padding: 0 var(--gap-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-2);
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
+  color: var(--face-faint);
+  background: transparent;
+  border-radius: calc(var(--r-control) - 1px);
+}
+
+.tab:hover {
+  color: var(--face-ink);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--face-nitrile);
+  outline-offset: -2px;
+}
+
+/* Raised out of the trough rather than coloured: the chosen one is the one
+   standing proud, which reads at a glance and costs no channel. */
+.tabOn {
+  color: var(--face-ink);
+  background: var(--face);
+  box-shadow:
+    0 1px 0 rgba(var(--hi), 0.06),
+    0 1px 2px rgba(var(--lo), 0.28);
+}
+
+.tabCount {
+  font-variant-numeric: tabular-nums;
+  color: var(--face-steel);
+}
+
+/* ── THE PHOTOGRAPH ─────────────────────────────────────────────────
+   D141. A picture of the thing, for somebody who has to find it on a
+   shelf. It sits on the face like every other piece of data, because
+   that is what it is: evidence with the contrast of paper, not
+   decoration laid over the chassis.
+
+   Square, and the image covers rather than fits. A warehouse photograph
+   is a carton on a bench in whatever aspect the handheld held, and a
+   list of ragged rectangles is a list nobody can scan down. Cropping
+   the edges of a box loses nothing a picker needs; letterboxing costs
+   every row the same height as the tallest picture. */
+.photo {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  overflow: hidden;
+  border-radius: var(--r-well);
+  background: var(--face-well);
+  box-shadow: inset 0 1px 4px rgba(var(--lo), 0.14);
+}
+
+.photoPlate {
+  composes: photo;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.photo img,
+.photoPlate img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Where the picture came from, when it did not come from this code.
+   Bottom-left rather than over the middle of the subject, and it wears
+   the face's own ink rather than a colour, because this is a caption
+   and not a warning — D115 keeps the one alarming colour for findings. */
+.photoFrom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1px var(--gap-2);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--face);
+  background: color-mix(in oklab, var(--face-ink) 72%, transparent);
+}
+
+/* Nothing photographed: the well, and two hairlines crossing it. A
+   drawn absence, on EmptySlot's argument — a row with no picture still
+   has to line up with the rows that have one. */
+.photoAbsent {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to bottom right, transparent calc(50% - 0.5px),
+      var(--face-rule) calc(50% - 0.5px), var(--face-rule) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom left, transparent calc(50% - 0.5px),
+      var(--face-rule) calc(50% - 0.5px), var(--face-rule) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px));
+}

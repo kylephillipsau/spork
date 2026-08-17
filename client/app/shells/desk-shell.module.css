@@ -1,0 +1,131 @@
+/*
+ * The Desk chassis: a work column, and a rail beside it when something is
+ * selected.
+ *
+ * Wider than Bench because the constraint here is density — how much evidence
+ * fits in front of somebody at once — where Bench's is repetition and one
+ * column of work.
+ */
+.page {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-5);
+  max-width: 92rem;
+  padding: var(--gap-6) var(--gap-5) calc(var(--gap-6) * 2);
+}
+
+@media (min-width: 96rem) {
+  .page {
+    max-width: none;
+    padding-left: calc((100vw - 92rem) / 2);
+    padding-right: calc((100vw - 92rem) / 2);
+  }
+}
+
+/*
+ * **Two columns, and the rail is the fixed one.**
+ *
+ * `minmax(0, 1fr)` on the work column rather than `1fr`: a grid track's default
+ * minimum is `auto`, which is the content's intrinsic width, so one long
+ * unbroken code in a finding would push the track wider than its share and
+ * shove the rail off the edge. This is the same failure the tables solve with
+ * their own scroller, arriving one level up.
+ */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26rem;
+  gap: var(--gap-5);
+  align-items: start;
+}
+
+/* Below that, the rail has nowhere to be beside anything, so it goes under —
+   still beside in reading order, which is what matters for the argument that
+   it is not an overlay. */
+@media (max-width: 72rem) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/*
+ * Sticky rather than fixed, and only where there is room for it: the queue
+ * scrolls and the evidence stays put, which is the whole of "inspect without
+ * leaving". `fixed` would take it out of flow and let the last row of the
+ * queue slide underneath it.
+ */
+.rail {
+  min-width: 0;
+}
+
+/* Nothing selected. The panel is always in the document so the screen has
+   somewhere to draw into; while it holds nothing it takes no column, no gap and
+   no space in the reading order. */
+.rail:empty {
+  display: none;
+}
+
+.split:has(> .rail:empty) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 72.0625rem) {
+  .rail {
+    position: sticky;
+    top: var(--gap-5);
+  }
+}
+
+
+
+/* The work rail beside everything else, and above it on anything narrow. */
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-5);
+}
+
+/* **One rail, and on a narrow screen it comes after the work.**
+   
+   Stacked *above* the work in one column it put eleven navigation rows between
+   the top of the page and the first thing anybody came for, so a phone
+   scrolled through the whole menu to reach a queue. The first fix drew a second
+   rail on the landing screen and hid this one — which left two `nav` landmarks
+   in the document, twenty links where there are ten destinations, and a hidden
+   Sign out that a click found before the visible one.
+   
+   So: order, not duplication. Content first, navigation after, which is where a
+   thumb is anyway (D134's argument for the Floor dock, applied to a page). */
+.body > [data-region="chrome"] {
+  order: 2;
+}
+
+.work {
+  order: 1;
+  min-width: 0;
+}
+
+/*
+ * **62rem, where it used to be 72.** Two different questions were sharing one
+ * number: how wide before the evidence panel sits beside the work, and how wide
+ * before the rail is a column. The first is still 72rem — an evidence panel is
+ * 26rem and it needs the room. The second is the same question Bench answers,
+ * and it now has the same answer, which is also where the sheet gives way.
+ * Between 62 and 72 a Desk screen is a rail and one work column, which is what
+ * Bench has been at that width all along.
+ *
+ * Repeated in `bench-shell.module.css`, `nav-sheet.module.css` and
+ * `useNavSheet.ts`: a media query cannot read a custom property.
+ */
+@media (min-width: 62rem) {
+  .body:has(> [data-region="chrome"]) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .body > [data-region="chrome"] {
+    order: 0;
+  }
+}
+

@@ -1,0 +1,353 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ANODISE — bead-blasted Type III hardcoat (D120)
+
+   Isotropic. No lay, no directional grain, no striated band. The finish
+   on an instrument fascia rather than on a phone.
+
+   This file owns the whole recipe. Nothing composes a subset of it,
+   because there is no half of this that is still anodised aluminium
+   (D123) — which is why the primitive that renders it accepts neither
+   `className` nor `style`.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.panel {
+  background-color: var(--ano-700);
+  border-radius: var(--r-panel);
+
+  /* THE BODY IS UNIFORM (D121). Brightness on a matte surface is a
+     function of the angle between its normal and the light, and every
+     point on a flat panel shares one normal — so a flat panel under a
+     distant lamp is evenly lit. What varies is the PERIMETER, because
+     the chamfers are the only part with a different normal. */
+  background-image:
+    /* four edge lights: a Fresnel baseline that never goes out, plus a
+       swing weighted by how squarely that edge faces the lamp */
+    linear-gradient(to bottom, rgba(var(--hi), calc(0.012 + 0.05 * var(--e-t))), transparent 18px),
+    linear-gradient(to top, rgba(var(--hi), calc(0.006 + 0.03 * var(--e-b))), transparent 15px),
+    linear-gradient(to right, rgba(var(--hi), calc(0.007 + 0.026 * var(--e-l))), transparent 14px),
+    linear-gradient(to left, rgba(var(--hi), calc(0.007 + 0.024 * var(--e-r))), transparent 14px),
+    /* the body: one very gentle downward falloff, and nothing else */
+    linear-gradient(180deg, rgba(var(--hi), 0.016), transparent 24%, rgba(var(--lo), 0.1)),
+    /* anodic drift — dye uptake is never even across a panel */
+    radial-gradient(125% 95% at 24% 2%, rgba(var(--hi), 0.013), transparent 64%);
+}
+
+/* micro-roughness. Always on, no direction, does not move. */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  /* Tuned for the strip, not the slab. The chassis is almost entirely
+     covered by faces, so the only metal anybody sees is the gap between
+     them — and grain set for a full panel blows a twelve-pixel gap out
+     into a bright sanded band, which is the harshest separator on the
+     screen and the one nobody put there on purpose. */
+  opacity: 0.24;
+  mix-blend-mode: overlay;
+  background-image: var(--tex-blast);
+  background-size: 120px 120px;
+}
+
+/* MICRO-SPARKLE, AT THE EDGES. The blast field thresholded to its top
+   sixteenth, so only the pits survive. Held at the perimeter for two
+   reasons: the chamfer reaches the specular direction far more readily
+   than the flat field does, and the flat field is where the reading
+   happens. Breathes with the lamp rather than sliding under it. */
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: calc(0.03 + 0.085 * var(--glint));
+  background-image: var(--tex-pits);
+  background-size: 200px 200px;
+  -webkit-mask-image: radial-gradient(
+    126% 126% at 50% 50%,
+    transparent 24%,
+    rgba(0, 0, 0, 0.42) 64%,
+    rgb(0, 0, 0) 100%
+  );
+  mask-image: radial-gradient(
+    126% 126% at 50% 50%,
+    transparent 24%,
+    rgba(0, 0, 0, 0.42) 64%,
+    rgb(0, 0, 0) 100%
+  );
+}
+
+/* ── ELEVATION ─────────────────────────────────────────────────────
+   Blur, not a drawn outline. The 1px inset rings that used to sit here ran
+   corner to corner at full strength on all four sides, which is what a line
+   does and not what light does. The soft bands in the background above still
+   carry the lamp; they are broad enough to read as falloff rather than as a
+   border, which is the only difference that matters. */
+/* **Separation by occlusion.** Cutting the edge back to a top-only catch took
+   the silhouette with it, and a panel with no outline floats. The answer is
+   not a brighter line — it is a DARK reveal: the contact shadow a raised
+   object casts into whatever it sits on. It defines the shape at any strength
+   and can never read as a glowing border, which is the failure the bright
+   version kept producing. */
+.flush {
+  box-shadow:
+    0 0 0 1px rgba(var(--lo), 0.45),
+    0 1px 3px rgba(var(--lo), 0.4);
+}
+
+.raised {
+  box-shadow:
+    0 0 0 1px rgba(var(--lo), 0.55),
+    0 2px 7px rgba(var(--lo), 0.45),
+    0 14px 30px -14px rgba(var(--lo), 0.62);
+}
+
+.lifted {
+  box-shadow:
+    0 0 0 1px rgba(var(--lo), 0.62),
+    0 4px 12px rgba(var(--lo), 0.5),
+    0 24px 52px -20px rgba(var(--lo), 0.66),
+    0 60px 120px -54px rgba(var(--lo), 0.88);
+}
+
+/* ── THE FRAME ─────────────────────────────────────────────────────
+   How much metal shows around what the panel holds. `bezel` leaves a
+   margin of it, which is what a face wants: a face is seated into metal,
+   and with no margin its own seating draws against the panel's edge. */
+
+.bezel {
+  padding: var(--gap-3);
+}
+
+/* THE EDGE.
+ 
+   A gradient masked to a one-pixel frame — `mask-composite: exclude`
+   punches out everything inside a 1px padding and keeps the ring. It
+   replaced the relief groove, which was the most literal piece of
+   hardware in the system. */
+.edge {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1px;
+  /* Top only, and gone by a third of the way down. Tracing all four sides
+     — even in a gradient — is a white line around the panel, which is the
+     solid border this was supposed to replace. A surface needs to say it
+     has a top; it does not need to be outlined to say it. */
+  background: linear-gradient(
+    180deg in oklab,
+    rgba(var(--hi), calc(0.02 + 0.065 * var(--e-t))) 0%,
+    var(--edge-dim) 18%,
+    transparent 34%
+  );
+  -webkit-mask:
+    linear-gradient(rgb(0, 0, 0) 0 0) content-box,
+    linear-gradient(rgb(0, 0, 0) 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(rgb(0, 0, 0) 0 0) content-box,
+    linear-gradient(rgb(0, 0, 0) 0 0);
+  mask-composite: exclude;
+}
+
+/* ── L2, THE WELL ──────────────────────────────────────────────────
+   A pocket: shadow at the top where the wall cuts the light, a hairline
+   of catch along the bottom where it comes back. */
+
+.well {
+  background-color: var(--ano-900);
+  border-radius: var(--r-well);
+  box-shadow:
+    inset 0 2px 8px rgba(var(--lo), 0.55),
+    inset 0 -1px 0 rgba(var(--hi), 0.035);
+}
+
+/* ── L4, THE KEY ───────────────────────────────────────────────────
+   The same blasted finish, one grade lighter. It moves a single pixel on
+   press and loses most of its elevation, which is enough to read as
+   struck — a control on a pack bench is hit a thousand times a day by
+   someone who is not looking at it, so the feedback has to be quick
+   rather than large. */
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-2);
+  min-height: var(--target);
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--legend);
+  text-shadow: 0 -1px 0 rgba(var(--lo), 0.65);
+  background-color: var(--ano-500);
+  background-image: var(--tex-blast),
+    linear-gradient(180deg, rgba(var(--hi), 0.105), rgba(var(--lo), 0.22));
+  background-size: 120px 120px, auto;
+  background-blend-mode: overlay, normal;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+  border-radius: var(--r-control);
+  /* No riser. A 3px slab of shadow under a cap is a moulded key from a
+     photograph of one, and it is the most dated thing the system had. What
+     replaces it is elevation and a lit top edge — the control still reads
+     as raised, and as drawn rather than photographed. */
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hi), 0.18),
+    0 1px 2px rgba(var(--lo), 0.5),
+    0 6px 16px -8px rgba(var(--lo), 0.6);
+  transition:
+    transform 90ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    box-shadow 90ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    background-color 120ms linear;
+}
+
+/* One sheen crossing the cap on hover: the single piece of glamour in
+   the system, and it is on the element you are about to touch rather
+   than on the page at large. */
+.key::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 34%, rgba(var(--hi), 0.14) 50%, transparent 66%);
+  transform: translateX(-120%);
+  transition: transform 420ms cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+.key:hover {
+  background-color: var(--ano-400);
+}
+
+.key:hover::after {
+  transform: translateX(120%);
+}
+
+.key:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hi), 0.1),
+    inset 0 2px 6px rgba(var(--lo), 0.4),
+    0 1px 2px rgba(var(--lo), 0.5);
+}
+
+.key:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+/* The one key on a screen that is lit from within. Its glow is the
+   elevation — nothing under it needs drawing. */
+.live {
+  color: var(--key-live-ink);
+  background-color: var(--key-live);
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hi), 0.3),
+    0 1px 2px rgba(var(--lo), 0.45),
+    0 8px 20px -8px rgba(var(--lo), 0.55),
+    0 0 28px -8px color-mix(in oklab, var(--lamp-nitrile) 55%, transparent);
+}
+
+.live:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 7px rgba(var(--lo), 0.38),
+    0 1px 2px rgba(var(--lo), 0.5),
+    0 0 18px -8px color-mix(in oklab, var(--lamp-nitrile) 45%, transparent);
+}
+
+.keySmall {
+  min-height: calc(var(--target) - 12px);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.68rem;
+}
+
+.keyBlock {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   Somewhere to go
+   ---------------------------------------------------------------------------
+
+   A destination cut into the chassis rather than a cap standing on it. It
+   shares the key's ground and its blast, and it deliberately does not share the
+   key's shout: `.key` is uppercase, letter-spaced and bold because it names one
+   act, and five groups of readable words set that way is a menu nobody reads.
+
+   Never lit. `.live` belongs to the one thing you are about to do, and a
+   destination is not that — `Tabs` settled the same argument for the same
+   reason. Where you already are is ground and an edge, per D128. */
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-2);
+  min-height: var(--target);
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  font-size: 0.95rem;
+  /* **Inherited, because a link goes on both materials.** D118 splits the
+     system into metal chassis and paper data, and they have opposite inks:
+     `--legend` is legible on the chassis and nearly invisible on an instrument
+     face, which is exactly how the first landing screen drew — four grey words
+     on white. Inheriting means a link reads as whatever surface it is on, and
+     the rail on the chassis and a link on a face are both right without a
+     variant prop the call site has to choose. */
+  color: inherit;
+  text-decoration: none;
+  /* Underlined on paper, where it sits among prose and has to be findable as a
+     link; the chassis versions sit alone in a rail and do not need it. */
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+  border-radius: var(--r-control);
+  background-color: transparent;
+  transition:
+    background-color 120ms linear,
+    color 120ms linear;
+}
+
+.link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Focus is drawn, because a keyboard is how a bench is driven and an outline
+   nobody can see is an outline that is not there. */
+.link:focus-visible {
+  outline: 2px solid var(--lamp-nitrile);
+  outline-offset: 2px;
+}
+
+/* On the chassis: no underline. A rail of underlined rows is a rail that reads
+   as a list of exceptions, and the row's own position already says it is
+   somewhere to go. */
+.linkChassis {
+  text-decoration-line: none;
+}
+
+.linkChassis:hover {
+  background-color: color-mix(in oklab, currentColor 8%, transparent);
+}
+
+/* Where you already are: a pocket, not a lamp. */
+.linkHere {
+  text-decoration-line: none;
+  background-color: color-mix(in oklab, currentColor 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 22%, transparent);
+}
+
+.linkBlock {
+  display: flex;
+  width: 100%;
+}

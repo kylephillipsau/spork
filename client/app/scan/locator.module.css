@@ -1,0 +1,16 @@
+/* The locator sits in the chrome's header row, and its answer hangs beneath
+   without pushing the row apart — the header is a fixed landmark and a panel
+   that reflows it moves every screen's content when a scan fails. */
+.locator {
+  position: relative;
+  flex: 0 1 22rem;
+  min-width: 12rem;
+}
+
+.locator > [data-layer="panel"] {
+  position: absolute;
+  top: calc(100% + var(--gap-2));
+  right: 0;
+  z-index: 2;
+  min-width: 22rem;
+}

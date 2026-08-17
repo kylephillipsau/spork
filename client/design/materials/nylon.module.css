@@ -1,0 +1,155 @@
+/* ═══════════════════════════════════════════════════════════════════
+   NYLON — ripstop, satin (D122)
+
+   The company sells nitrile gloves, hair nets and protective equipment
+   and is called Nylonite, so a textile in the system is the trade
+   rather than a flourish. What keeps it from becoming decoration is a
+   boundary with no exceptions: metal encloses, nylon protects and
+   labels. It appears where the system is padded, carried or tagged,
+   and it never carries a number.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.nylon {
+  background-color: var(--nyl-700);
+
+  background-image:
+    /* edge light, same law as the metal but softer-shouldered */
+    linear-gradient(to bottom, rgba(var(--hi), calc(0.014 + 0.06 * var(--e-t))), transparent 13px),
+    linear-gradient(to top, rgba(var(--hi), calc(0.008 + 0.04 * var(--e-b))), transparent 11px),
+    /* THE ONE TRAVELLING BODY SHEEN IN THE SYSTEM. A blast pit is a
+       flat facet on a flat plane; a fibre bundle is a cylinder, which
+       presents every normal at once, so some part of every thread is
+       always at the specular angle. Metal's body holds still and
+       nylon's travels — a real difference, so it is the one told in
+       motion. Wide enough that it drifts rather than sweeps. */
+    radial-gradient(
+      195% 155% at var(--lx) var(--ly),
+      rgba(var(--hi), 0.038),
+      rgba(var(--hi), 0.011) 50%,
+      transparent 78%
+    ),
+    /* ripstop: the heavier reinforcing thread, both axes. That grid is
+       the whole point — a tear runs until it meets the next thread. */
+    repeating-linear-gradient(90deg, rgba(var(--hi), 0.06) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(0deg, rgba(var(--hi), 0.048) 0 1px, transparent 1px 15px),
+    /* plain weave: warp over weft */
+    repeating-linear-gradient(90deg, rgba(var(--hi), 0.03) 0 1px, rgba(var(--lo), 0.06) 1px 2px),
+    repeating-linear-gradient(0deg, rgba(var(--hi), 0.02) 0 1px, rgba(var(--lo), 0.048) 1px 2px),
+    linear-gradient(168deg, rgba(var(--hi), 0.03), rgba(var(--lo), 0.24) 70%);
+}
+
+/* fibre irregularity — a weave is never perfectly regular */
+.nylon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.34;
+  mix-blend-mode: overlay;
+  background-image: var(--tex-blast);
+  background-size: 90px 90px;
+}
+
+/* dyed nitrile-violet, for the one place the accent is a textile rather
+   than a light — and nowhere a status could be mistaken for it. */
+.dyed {
+  background-color: var(--nyl-dyed);
+}
+
+.flush {
+  box-shadow: inset 0 1px 0 rgba(var(--hi), 0.07);
+}
+
+.raised {
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hi), 0.07),
+    0 3px 8px rgba(var(--lo), 0.42),
+    0 20px 44px -20px rgba(var(--lo), 0.6);
+}
+
+/* ── THE BOOT ──────────────────────────────────────────────────────
+   The moulded case a handheld actually lives in, and the webbing loop
+   a strap threads through. */
+
+.boot {
+  padding: 13px 11px 15px;
+}
+
+.loop {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 84px;
+  height: 13px;
+  z-index: 5;
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hi), 0.12),
+    inset 0 -1px 0 rgba(var(--lo), 0.7),
+    0 2px 4px rgba(var(--lo), 0.6);
+}
+
+/* ── THE TAG ───────────────────────────────────────────────────────
+   A woven care label: stitched edge, mono, nothing else. It carries
+   what a thing IS — a site, a device, a tenant — never what it reads. */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: 0.3rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--legend);
+  text-shadow: 0 -1px 0 rgba(var(--lo), 0.7);
+  border-radius: var(--r-control);
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hi), 0.08),
+    0 1px 2px rgba(var(--lo), 0.4);
+}
+
+/* The stitch line a woven label carries. Dashed, and faded along its run
+   so it does not box the tag in. */
+.tag::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px dashed rgba(var(--hi), 0.14);
+  border-radius: calc(var(--r-control) - 3px);
+}
+
+/* ---------------------------------------------------------------------------
+   A count of work waiting (D112)
+   ---------------------------------------------------------------------------
+
+   Narrower than a tag and set in tabular figures, because it is a number that
+   changes while you look at it and a proportional four is a different width
+   from a proportional one. Never coloured: a badge is a quantity, not a
+   judgement, and amber belongs to findings alone (D115, D126). */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0.15rem 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  /* **Inherited, like `Link`, and for the same reason.** A badge goes wherever
+     its destination goes, and D118 gives metal and paper opposite inks: pinned
+     to `--legend` it read correctly in the chassis rail and washed out to pale
+     grey on white when the landing screen drew the rail on an instrument face.
+     A count nobody can read is a count that is not there. */
+  color: inherit;
+  border-radius: var(--r-control);
+  background-color: color-mix(in oklab, currentColor 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 24%, transparent);
+}

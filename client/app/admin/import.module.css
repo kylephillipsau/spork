@@ -1,0 +1,44 @@
+/* The file button. A raw `<input type="file">` cannot be styled, so it is
+   hidden inside a label that is dressed as a key — the same arrangement the
+   capture screen uses for its camera, and for the same reasons: it stays
+   operable by keyboard and findable by a screen reader. */
+.file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target);
+  padding: 0 var(--gap-4);
+  gap: var(--gap-2);
+  cursor: pointer;
+  border-radius: var(--r-control);
+  color: var(--face-ink);
+  background: var(--face-well);
+  box-shadow: inset 0 0 0 1px var(--face-rule);
+  font: inherit;
+  font-size: 0.82rem;
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
+}
+
+.file:focus-within {
+  box-shadow: inset 0 0 0 2px var(--face-steel);
+}
+
+.file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

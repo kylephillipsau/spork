@@ -1,0 +1,18 @@
+-- Migration 89: the ledger answers which schema is running.
+--
+-- D163. Migration 80 created `schema_migration` and granted it to nobody,
+-- deliberately: it is the migrator's own bookkeeping, the migrator connects as
+-- `postgres`, and a table the application cannot touch is a table the
+-- application cannot corrupt. That reasoning still holds for writing.
+--
+-- **Reading it turns out to be the one thing a deployment most needs to say
+-- about itself.** `/api/readiness` reports the schema head so that *did the
+-- deploy land* is answerable from outside the machine — which is the question
+-- that could not be answered at all a week ago, when a deploy was queued and
+-- nothing reachable could say whether it had finished. The endpoint runs as
+-- `nylonite_app`, so without this it silently omitted the field.
+--
+-- SELECT only. The migrator still owns the writing, and an application that
+-- could record a migration it had not run is the single lie the whole mechanism
+-- exists to prevent.
+GRANT SELECT ON schema_migration TO nylonite_app;

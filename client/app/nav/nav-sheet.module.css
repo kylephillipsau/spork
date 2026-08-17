@@ -1,0 +1,81 @@
+/*
+ * The rail as a sheet, below the width where it can be a column.
+ *
+ * **62rem is repeated here, in `useNavSheet.ts`, and in both shells.** A media
+ * query cannot read a custom property and there is no CSS build step, so the
+ * number lives in four places and each says so. It is the width at which the
+ * rail becomes a column beside the work — not the width at which Desk splits
+ * out its evidence panel, which is a different question and still 72rem.
+ */
+
+.scroll {
+  display: contents;
+}
+
+/* Above the breakpoint this file does nothing at all: the column is the column
+   it always was, placed by the shell's grid. */
+
+@media (max-width: 61.9375rem) {
+  .sheet {
+    display: none;
+  }
+
+  /*
+   * Opaque, full-screen, and part of the chassis rather than a face.
+   *
+   * D119 forbids anything translucent laid over text, and a menu is the exact
+   * case that rule was written for — a list of destinations over a worklist,
+   * with the rows of both showing through each other. `--ano-950` is the same
+   * material the Floor dock uses and for the same reason: it is the device, not
+   * the paper laid on it.
+   *
+   * Below the room's grain at z-index 60, which is atmosphere over everything
+   * and has no pointer events.
+   */
+  .sheet[data-open] {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    gap: var(--gap-3);
+    padding: var(--gap-4) var(--gap-3) var(--gap-2);
+    background: var(--ano-950);
+  }
+
+  /* The destinations scroll; the way out does not. `min-height: 0` is what
+     lets a flex child scroll instead of growing its parent — without it a
+     fourteen-row rail pushes Close off the bottom of the screen. */
+  .sheet[data-open] > .scroll {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* **An edge above it, like the Floor dock's.** Close and Sign out are both
+     keys and the second one is destructive, so the way out of the sheet has to
+     read as part of the device rather than as the last row of the list. Depth
+     from an occluding edge, never from a blur (D118). */
+  .close {
+    padding-top: var(--gap-2);
+    box-shadow: inset 0 1px 0 rgba(var(--hi), 0.05);
+    /* Clear of the home indicator on a device that has one. Zero elsewhere. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/*
+ * The control that opens it, and nothing above the breakpoint — there the rail
+ * is on the screen already and a button to reveal it would reveal nothing.
+ */
+.trigger {
+  display: none;
+}
+
+@media (max-width: 61.9375rem) {
+  .trigger {
+    display: flex;
+  }
+}

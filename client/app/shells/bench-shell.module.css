@@ -1,0 +1,59 @@
+.page {
+  position: relative;
+  z-index: 2;
+  max-width: 74rem;
+  padding: var(--gap-6) var(--gap-5) calc(var(--gap-6) * 2);
+}
+
+@media (min-width: 78rem) {
+  .page {
+    max-width: none;
+    padding-left: calc((100vw - 74rem) / 2);
+    padding-right: calc((100vw - 74rem) / 2);
+  }
+}
+
+
+
+/* The rail beside the work, and beneath it on anything narrow. `gap` rather
+   than margin (law 3), and the work column takes what is left — `minmax(0, 1fr)`
+   because a table wider than its track otherwise pushes the rail off-screen. */
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-5);
+}
+
+/* **One rail, and on a narrow screen it comes after the work.**
+   
+   Stacked *above* the work in one column it put eleven navigation rows between
+   the top of the page and the first thing anybody came for, so a phone
+   scrolled through the whole menu to reach a queue. The first fix drew a second
+   rail on the landing screen and hid this one — which left two `nav` landmarks
+   in the document, twenty links where there are ten destinations, and a hidden
+   Sign out that a click found before the visible one.
+   
+   So: order, not duplication. Content first, navigation after, which is where a
+   thumb is anyway (D134's argument for the Floor dock, applied to a page). */
+.body > [data-region="chrome"] {
+  order: 2;
+}
+
+.work {
+  order: 1;
+  min-width: 0;
+}
+
+/* The width at which the rail is a column, and below which it is a sheet.
+   Repeated in `desk-shell.module.css`, `nav-sheet.module.css` and
+   `useNavSheet.ts`, because a media query cannot read a custom property. */
+@media (min-width: 62rem) {
+  .body:has(> [data-region="chrome"]) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .body > [data-region="chrome"] {
+    order: 0;
+  }
+}
+

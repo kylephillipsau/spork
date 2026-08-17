@@ -1,0 +1,20 @@
+.room {
+  position: relative;
+  min-height: 100vh;
+}
+
+/*
+ * Atmospheric grain over the whole page. The materials carry their own
+ * micro-roughness, so this is only what sits between the viewer and the
+ * room — kept low, because grain is a finish and not an effect.
+ */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.085;
+  mix-blend-mode: soft-light;
+  background-image: var(--tex-blast);
+  background-size: 180px 180px;
+}

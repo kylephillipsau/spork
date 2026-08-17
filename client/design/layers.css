@@ -1,0 +1,75 @@
+/* ═══════════════════════════════════════════════════════════════════
+   LAYER CONTRACTS
+
+   Every element in the design system declares its layer, and the layer
+   decides its physics. This file holds only what is true of a layer
+   regardless of which material renders it; the recipes live beside it
+   in materials/.
+
+   The rule this file exists to make checkable: an element styled
+   outside the stack is the crack the whole material comes apart at.
+   `scripts/check-laws.mjs` fails the build on a primitive that renders
+   without a data-layer.
+   ═══════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ano-950);
+}
+
+body {
+  margin: 0;
+  background: var(--ano-950);
+  color: var(--legend);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* L0 — the ground. Never holds content. */
+[data-layer="ground"] {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+/* L1 / L1b — anything the solver lights carries its own stacking context,
+   so the texture and sparkle pseudo-elements cannot escape it. */
+[data-material] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-material] > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* L5 — a lamp is emitted light and never receives any. */
+[data-layer="lamp"] {
+  flex: none;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+:focus-visible {
+  outline: 2px solid var(--lamp-nitrile);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

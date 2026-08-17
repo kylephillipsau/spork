@@ -1,0 +1,250 @@
+/* ═══════════════════════════════════════════════════════════════════
+   TOKENS — the single source. `tokens.gen.ts` is generated from this
+   file and CI fails when the two disagree (D124), so nothing here is
+   restated in TypeScript by hand.
+
+   Three blocks carry the theme contract and the generator checks them
+   against each other:
+
+     :root                                   the complete DAY palette
+     :root:not([data-theme="light"])         the NIGHT face, under
+       inside @media (prefers-color-scheme: dark)   the OS preference
+     :root[data-theme="dark"]                the NIGHT face, chosen
+
+   Only face tokens are themed. The chassis is a fixed material and does
+   not change with the time of day (D118).
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ---- chassis: anodised aluminium. Warm-biased blacks. ---- */
+  --ano-950: #08090b;
+  --ano-900: #0d0e11;
+  --ano-700: #191c22;
+  --ano-500: #323842;
+  --ano-400: #3f4550;
+
+  /* ---- nylon: warmer and softer than the anodise it sits against ---- */
+  --nyl-700: #22242b;
+  --nyl-dyed: #23204a;
+
+  /* ---- light: one key, cool. one ambient, warm. (D121) ---- */
+  --hi: 214, 228, 255;
+  --lo: 10, 7, 5;
+
+  /* ---- legend ink, screen-printed onto the chassis ---- */
+  --legend: #cbd2db;
+  --legend-dim: #5b636f;
+
+  /* ---- lamps: emitted light, never paint (D115, D118) ---- */
+  --lamp-amber: #ff9a3c;
+  --lamp-amber-core: #ffc585;
+  --lamp-nitrile: #8b86ff;
+  --lamp-nitrile-core: #c6c3ff;
+  --lamp-good: #4ed9a0;
+  --lamp-good-core: #a8f2d4;
+  --lamp-off: #23272e;
+
+  /* ---- the key (L4). The riser is darker than any panel tone, because
+          it is the shadow under a cap rather than a surface. ---- */
+  --key-live: #3a3599;
+  --key-live-ink: #f4f3ff;
+
+  /* ---- the instrument face: DAY ---- */
+  --face: #e9eae5;
+  --face-well: #f8f9f5;
+  --face-ink: #0e1013;
+  --face-soft: #454a52;
+  --face-faint: #737983;
+  --face-rule: #c7cbc4;
+  --face-rule-soft: #dde0d9;
+  --face-nitrile: #3a3690;
+  --face-amber: #9c4600;
+  --face-amber-soft: #fbe6d2;
+  --face-good: #285440;
+  --face-good-soft: #d8ede1;
+  /* Steel: the state channel.
+     There was no way to say "sealed" or "nearly out" without reaching for
+     amber, and amber marks findings and nothing else (D115) — "amber is
+     convenient for a warning" is the erosion that rule exists to stop. So
+     state gets its own accent, cool and industrial, which is also the one
+     hue that cannot be mistaken for the violet that means *act*. */
+  --face-steel: #2f5a6a;
+  --face-steel-soft: #dbe8ed;
+  --band-bg: #14161a;
+  --face-lift: 0.024;
+
+  /* ---- form ----
+     Square. The squircles were a misreading: "organic" here means light that
+     falls off, not corners that round over. Sharp geometry with soft light is
+     a coherent thing and a rarer one — rounding the corners as well made it
+     the same soft-UI everything else is.
+
+     Controls keep two pixels, which is not a radius anybody reads as one. It
+     stops an input's corner pixel from looking like a defect at the size a
+     bench monitor renders it. */
+  --r-panel: 0px;
+  --r-face: 0px;
+  --r-well: 0px;
+  --r-control: 2px;
+  --r-pill: 0px;
+
+  /* ---- edges ----
+     Barely there, and only where the lamp is.
+
+     These were three or four times this and the result was a white line
+     around every panel — which is the same solid border as before, drawn in
+     a gradient. An edge exists to say a surface has a top; it does not need
+     to trace the whole outline to do that. */
+  --edge-dim: rgba(var(--hi), 0.02);
+  --edge-face: rgba(var(--hi), 0.05);
+
+  /* ---- type ---- */
+  --font-ui: "Archivo Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --track-legend: 0.2em;
+  /* The wordmark, tracked wider than the legend beside it. It was a bare
+     0.24em in four stylesheets; this is the same number with a name. */
+  --track-mark: 0.24em;
+
+  /* ---- textures. Two octaves, not four (D120). ---- */
+  --tex-blast: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23b)'/%3E%3C/svg%3E");
+  --tex-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='1' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='90' height='90' filter='url(%23f)'/%3E%3C/svg%3E");
+  --tex-pits: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='1' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='discrete' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1'/%3E%3CfeFuncG type='discrete' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1'/%3E%3CfeFuncB type='discrete' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1'/%3E%3CfeFuncA type='discrete' tableValues='1 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23s)'/%3E%3C/svg%3E");
+
+  /* ---- written by the light solver, per panel, every frame (D121).
+          These defaults describe the lamp at rest: above, slightly left. ---- */
+  --e-t: 1;
+  --e-b: 0;
+  --e-l: 0.34;
+  --e-r: 0;
+  --glint: 0.45;
+  --lx: 38%;
+  --ly: -20%;
+}
+
+/* ═══ NIGHT FACE ═══ Only face tokens move. The chassis does not. ═══ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --face: #0e1014;
+    --face-well: #181c24;
+    --face-ink: #f1f3f6;
+    --face-soft: #afb6c1;
+    --face-faint: #838b96;
+    --face-rule: #2a303b;
+    --face-rule-soft: #1e232b;
+    --face-nitrile: #a9a5f5;
+    --face-amber: #f5a75f;
+    --face-amber-soft: #2a1a0b;
+    --face-good: #86c4a3;
+    --face-good-soft: #12241b;
+    --face-steel: #86bcd0;
+    --face-steel-soft: #10222b;
+    --band-bg: #222836;
+    --face-lift: 0.02;
+  }
+}
+
+:root[data-theme="dark"] {
+  --face: #0e1014;
+  --face-well: #181c24;
+  --face-ink: #f1f3f6;
+  --face-soft: #afb6c1;
+  --face-faint: #838b96;
+  --face-rule: #2a303b;
+  --face-rule-soft: #1e232b;
+  --face-nitrile: #a9a5f5;
+  --face-amber: #f5a75f;
+  --face-amber-soft: #2a1a0b;
+  --face-good: #86c4a3;
+  --face-good-soft: #12241b;
+  --face-steel: #86bcd0;
+  --face-steel-soft: #10222b;
+  --band-bg: #222836;
+  --face-lift: 0.02;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DENSITY — two modes over one token set, selected by surface rather
+   than by viewport, because the difference is postural (D109).
+   Not part of the theme contract; the generator ignores these blocks.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The scale is stated, not derived.
+ *
+ * It was derived — six gaps multiplied off a `--step` of 4px at desk — and the
+ * arithmetic was the defect: `--gap-4` is what `.pad` and `.well` use, and it
+ * came out at 8px. Panels had eight pixels of breathing room and everything sat
+ * jammed against an edge. A 4px step is a sub-unit for optical nudges; it is
+ * not a base to multiply padding out of.
+ *
+ * So the steps are written down, and neither has a value nobody chose.
+ *
+ * # Spacing follows the viewport; targets follow the device
+ *
+ * **The gaps used to follow `data-density`, and that put the most generous
+ * scale on the smallest screen.** Floor means gloves, so floor got 1.5× — and
+ * floor is also the 430px handheld, so a phone was padded half again as hard as
+ * a 1600px bench. The capture walk came out at 2,519px for seven rows, and 36%
+ * of the width was padding before a character was drawn.
+ *
+ * One conflation caused it: a glove needs a 48px **target**; it does not need
+ * 36px of **padding** around a card that contains one. Those are two different
+ * questions and they were answered with one variable.
+ *
+ * So they are separated. `--target`, `--text-base`, `--readout` and the field
+ * widths stay on density, because they are about the hand and the eye. The gaps
+ * move to the viewport, mobile-first, and get *more* generous as the screen
+ * does — which is the direction they should always have run. */
+
+/* The hand and the eye. A glove wants a bigger target and a handheld held at
+   arm's length wants bigger type; neither wants more padding. */
+[data-density="floor"] {
+  --text-base: 17px;
+  --target: 48px;
+  --readout: 2.5rem;
+  /* Field widths, so a call site names a role rather than a number. */
+  --field-inline: 6rem;
+  --field-measure: 11rem;
+}
+
+[data-density="desk"] {
+  --text-base: 15px;
+  --target: 34px;
+  --readout: 1.9rem;
+  --field-inline: 5rem;
+  --field-measure: 9rem;
+}
+
+/* The screen. Mobile-first: this is what a 390px phone gets, and every step up
+   is a screen with room to spare. The two breakpoints are the ones the chrome
+   and the rail already use (D159, D119) rather than a second system. */
+:root {
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 14px;
+  --gap-5: 18px;
+  --gap-6: 24px;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --gap-3: 12px;
+    --gap-4: 16px;
+    --gap-5: 24px;
+    --gap-6: 32px;
+  }
+}
+
+@media (min-width: 62rem) {
+  :root {
+    --gap-1: 6px;
+    --gap-2: 12px;
+    --gap-3: 18px;
+    --gap-4: 24px;
+    --gap-5: 32px;
+    --gap-6: 44px;
+  }
+}

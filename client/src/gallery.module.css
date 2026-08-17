@@ -1,0 +1,36 @@
+/*
+ * Gallery chrome only. Nothing here is part of the design system, which is
+ * why it lives under src/ rather than design/ — the laws checker holds
+ * design/ to rules a scratch page does not need to satisfy.
+ */
+
+.page {
+  position: relative;
+  z-index: 2;
+  max-width: 74rem;
+  padding: var(--gap-6) var(--gap-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-6);
+}
+
+@media (min-width: 78rem) {
+  .page {
+    padding-left: calc((100vw - 74rem) / 2);
+    padding-right: calc((100vw - 74rem) / 2);
+    max-width: none;
+  }
+}
+
+.pad {
+  padding: var(--gap-4) var(--gap-5);
+}
+
+.legend {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
+  color: var(--legend-dim);
+  text-shadow: 0 1px 0 rgba(var(--hi), 0.06);
+}

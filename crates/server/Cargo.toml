@@ -1,0 +1,63 @@
+[package]
+name = "nylonite-server"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "The API server. Actix on Postgres, with tenancy enforced by the database."
+
+[[bin]]
+name = "nylonite-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "nylonite-scheduler"
+path = "src/bin/scheduler.rs"
+
+[dependencies]
+actix-web = "4"
+# Serving the client bundle from the same origin as the API, because the
+# session is a cookie and a separately-hosted bundle would trade a working
+# sign-on for a SameSite problem.
+actix-files = "0.6"
+deadpool-postgres = "0.14"
+tokio-postgres = { version = "0.7", features = ["with-uuid-1", "with-chrono-0_4"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "sync", "signal", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde", "v7", "v5"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+nylonite-policy = { workspace = true }
+
+# Authentication (Q171 / D11). Pinned to the stable line: argon2 0.6 is at
+# release-candidate 8 and a password hash is not where to run one.
+argon2 = "0.5"
+# Session tokens: 32 bytes from the OS CSPRNG, well past OWASP's 64-bit floor.
+rand = "0.8"
+# The token is stored as a SHA-256 digest, never in the clear -- a stolen
+# database backup must not hand over live sessions.
+sha2 = "0.10"
+
+# Server-rendered pages. Markup is Rust macros checked at compile time, so a
+# mistyped tag or a missing variable is a build error rather than a blank screen
+# — which matters in a codebase where the recurring failure has been things that
+# compiled and were never run.
+maud = { version = "0.27", features = ["actix-web"] }
+# The import path reads the export the system of record produces. A hand-rolled
+# CSV reader is how one row in nine thousand gets silently mangled by a quoted
+# comma. Promoted out of dev-dependencies when `importing` moved into the crate,
+# so the endpoint and the example read the file the same way.
+csv = "1"
+webauthn-rs = { version = "0.5.5", features = ["conditional-ui", "danger-allow-state-serialisation"] }
+webauthn-rs-proto = "0.5.5"
+
+[dev-dependencies]
+# `test::init_service` builds the real `App` in-process, so the harness exercises
+# the handlers rather than the SQL they happen to contain. Thirty-one endpoints
+# had never been executed by anything before this.
+actix-http = "3"
+# One `join!`, for the concurrent-setup race: an advisory lock nothing runs two
+# requests against is an advisory lock nobody has checked.
+futures-util = "0.3"

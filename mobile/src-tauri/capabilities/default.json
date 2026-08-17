@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "default",
+  "description": "What the webview may ask the shell to do.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "http:default",
+      "comment": "HTTPS only, and only ever the server the build was pointed at. The scope is deliberately not a single host: a laptop build points at a development server, and a rule that only holds for the deployment is a rule somebody edits in a hurry.",
+      "allow": [{ "url": "https://**" }]
+    }
+  ]
+}

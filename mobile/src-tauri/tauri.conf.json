@@ -1,0 +1,39 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Nylonite",
+  "version": "0.1.0",
+  "identifier": "com.nylonite.floor",
+  "build": {
+    "frontendDist": "../../client/dist-mobile",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm --prefix ../client run dev -- --mode mobile",
+    "beforeBuildCommand": "npm --prefix ../client run build:mobile"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Nylonite",
+        "width": 430,
+        "height": 932,
+        "resizable": true,
+        "backgroundColor": "#08090A"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https: ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": { "debugApplicationIdSuffix": ".debug" },
+    "iOS": { "minimumSystemVersion": "15.0" }
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+# The development team ID, which is an account detail rather than a property of
+# the software. Set `APPLE_DEVELOPMENT_TEAM`, or write it here — see README.
+src-tauri/tauri.ios.conf.json
+# Anything that can sign a build. None of it belongs in a repository.
+*.p12
+*.mobileprovision
+*.cer

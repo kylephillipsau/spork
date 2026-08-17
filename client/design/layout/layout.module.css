@@ -1,0 +1,97 @@
+/*
+ * Layout owns spacing; components own padding; nothing owns margin.
+ * `check-laws.mjs` fails the build on a `margin` declaration anywhere in
+ * design/, and this file is not exempt.
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  min-width: 0;
+}
+
+.row[data-align="start"] {
+  align-items: flex-start;
+}
+.row[data-align="center"] {
+  align-items: center;
+}
+.row[data-align="end"] {
+  align-items: flex-end;
+}
+.row[data-align="baseline"] {
+  align-items: baseline;
+}
+.row[data-align="stretch"] {
+  align-items: stretch;
+}
+.row[data-wrap] {
+  flex-wrap: wrap;
+}
+
+.grid {
+  display: grid;
+  min-width: 0;
+}
+
+.grid[data-columns="2"] {
+  grid-template-columns: 1fr;
+}
+.grid[data-columns="3"] {
+  grid-template-columns: 1fr;
+}
+.grid[data-columns="4"] {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .grid[data-columns="3"],
+  .grid[data-columns="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 940px) {
+  .grid[data-columns="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid[data-columns="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .grid[data-columns="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/*
+ * THE THING THAT TRAILS A ROW, AND STAYS TRAILING WHEN IT WRAPS.
+ *
+ * Third occurrence, which is D167's own threshold for naming a composition.
+ * `Record` and `Notice` each solved it inside their own grid; the docks did not
+ * and could not — they are bare rows, and the render gate's two checks look for
+ * a record's action and a notice's key, so a dock's wrapped key is in the one
+ * place neither of them can see. `PutawayDock` drew "Put away" at the left of
+ * its second line at 430px and nothing said so.
+ *
+ * A growing, end-aligned box rather than `margin-left: auto` (D124): on one
+ * line it sits at the right margin, and on a line of its own it sits at the
+ * same right margin, which a margin cannot do without knowing which case it is.
+ */
+.trailing {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--gap-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}

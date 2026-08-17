@@ -1,0 +1,194 @@
+/*
+ * ONE ROW OF A WORKLIST (D167).
+ *
+ * # Rows that exist only when filled
+ *
+ * The first shape of this used `grid-template-areas` — one map, every slot
+ * placed. It was wrong in a way that took a screenshot to see: a named area
+ * with nothing in it still reserves its track, so a carton row carrying only a
+ * reference and a "Gone" pill drew an empty band where the note would have
+ * gone. Enumerating a variant per absent slot needed six `:has()` rules whose
+ * specificity had to be counted by hand.
+ *
+ * So the record is a column of up to three bands, and a band the screen did
+ * not supply is not rendered. Two of them share the same two-column split —
+ * content, then the thing that trails — which is what keeps the action on the
+ * far right of every row of every list even when the content beside it wraps.
+ * `Spacer` could not: `margin-left: auto` pushes to the end of the *line*, and
+ * once a row wraps that is the middle of the record.
+ */
+
+.record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  min-width: 0;
+}
+
+/*
+ * Content on the left, the trailing thing on the right — and when they will
+ * not both fit, the trailing thing takes the next line whole rather than
+ * squeezing the content.
+ *
+ * **This was a two-column grid first, and the grid was wrong.** With
+ * `minmax(0, 1fr) auto` the figures never yield, so a pick line carrying both
+ * "40 to pick" and "12 free in that bin" left the name about six characters,
+ * and `GLOVE-M` broke across two lines as `GLOVE-` / `M`. A code split down
+ * the middle is worse than a figure on its own line: the picker is matching it
+ * against a label on a shelf.
+ *
+ * So: flex, and `.head` claims 14rem before anything wraps. `min()` keeps that
+ * claim from overflowing a container narrower than 14rem, which the desk rail
+ * and the 390px pocket both produce.
+ *
+ * **A growing sibling, not `margin-left: auto`** — D124's own remedy, and the
+ * better one here. `.facts` grows to fill whatever the name leaves, and its
+ * contents are end-aligned inside it: on one line that puts the figures at the
+ * right margin, and on a line of their own it puts them at the same right
+ * margin, which a margin could not do without knowing which case it was in.
+ */
+.top,
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-1) var(--gap-3);
+  min-width: 0;
+}
+
+.top {
+  align-items: baseline;
+}
+
+.foot {
+  align-items: center;
+}
+
+.top > *,
+.foot > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The name claims 14rem before anything wraps. `min()` keeps that claim from
+   overflowing a container narrower than 14rem, which the desk rail and the
+   390px pocket both produce. */
+.top > *:first-child,
+.foot > *:first-child {
+  min-width: min(14rem, 100%);
+}
+
+/* **The action grows too, and end-aligns inside itself** — the same trick as
+   `.facts`, for the same reason. Sized to its content it wrapped to the left
+   of the next line, so a walk showed Capture at the right margin on three rows
+   and at the left on four, which is the exact inconsistency this pattern was
+   built to end. Growing, it is at the right margin on both lines. */
+.top > .action,
+.foot > .action {
+  align-items: center;
+}
+
+/* Identity: where it is, what it is, what qualifies it. Wraps within its own
+   column so a long customer name never pushes the figures out of alignment. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-2);
+  min-width: 0;
+}
+
+/* Figures, trailing. Right-aligned so the eye reads down a column of them. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--gap-1) var(--gap-3);
+}
+
+.action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.note {
+  min-width: 0;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-1) var(--gap-2);
+  min-width: 0;
+}
+
+/*
+ * A number and the word for what it counts, which break together or not at
+ * all. Written inline as two elements, a flex row wraps between them and a
+ * walk reads "14" on one line and "on hand" on the next — which happened on
+ * every screen that showed a quantity, because every screen wrote it by hand.
+ */
+.fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  white-space: nowrap;
+}
+
+.factValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--face-steel);
+  font-weight: 600;
+}
+
+.factLabel {
+  color: var(--face-faint);
+  font-size: 0.86em;
+}
+
+/*
+ * A list of records: separated by a line, not by a card each.
+ *
+ * Seven cards is seven borders, seven backgrounds and six gaps. Seven records
+ * is six hairlines, which is most of the difference between a screen that
+ * looks dense and one that looks padded.
+ */
+.records {
+  display: flex;
+  flex-direction: column;
+}
+
+.records > * + * {
+  border-top: 1px solid var(--face-rule);
+}
+
+.records > * {
+  padding: var(--gap-3) 0;
+}
+
+.records > *:first-child {
+  padding-top: 0;
+}
+
+.records > *:last-child {
+  padding-bottom: 0;
+}
+
+
+/* With a thumbnail: the photograph holds its size and the record takes what is
+   left. `minmax(0, 1fr)` rather than `1fr`, or a long unbroken code pushes the
+   column wider than the screen instead of wrapping inside it. */
+.withMedia {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--gap-3);
+  align-items: start;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  min-width: 0;
+}

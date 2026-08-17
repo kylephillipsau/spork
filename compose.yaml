@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: nylonite
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: nylonite
+    ports:
+      # 55432 rather than 5432 so this never fights a Postgres already running
+      # on the host.
+      - "55432:5432"
+    volumes:
+      # Postgres 18 moved the recommended mount from /var/lib/postgresql/data to
+      # its parent, so the data lives in a subdirectory and pg_upgrade --link can
+      # work without crossing a mount boundary. Mounting the old path against the
+      # 18 image makes it refuse to start, naming the volume as unused.
+      - nylonite-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nylonite"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Thin Actix API. DATABASE_URL uses postgres then SET ROLE nylonite_app
+  # (nylonite_app is NOLOGIN). Migrations must already be applied.
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # 18080 on the host so this does not fight other local :8080 services.
+      - "18080:8080"
+    environment:
+      DATABASE_URL: postgres://postgres:nylonite@postgres:5432/nylonite
+      # **The relying party, and it must match the address in the browser.**
+      # A passkey is bound to the rp_id it was created against, and the browser
+      # enforces that before the request is sent. Change the hostname and every
+      # key registered against the old one is dead — which is why the demo needs
+      # a stable name rather than a quick tunnel's random one.
+      NYLONITE_RP_ID: dev.nylonite.com
+      NYLONITE_RP_ORIGIN: https://dev.nylonite.com
+      BIND: 0.0.0.0:8080
+      RUST_LOG: info
+    restart: unless-stopped
+
+  # Drains projection_dirty via projection_run_dirty (D107). Connects as
+  # postgres and SET ROLEs to nylonite_scheduler.
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:nylonite@postgres:5432/nylonite
+      SCHEDULER_INTERVAL_SECS: "5"
+      RUST_LOG: info
+    restart: unless-stopped
+
+volumes:
+  nylonite-pgdata:

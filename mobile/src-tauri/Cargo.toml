@@ -1,0 +1,35 @@
+# **Its own workspace, deliberately.** The root manifest lists three crates and
+# CI's `check` job builds them; adding the shell there would put Tauri's whole
+# dependency tree — and, on a Linux runner, its system libraries — into the job
+# that gates every server commit. The shell is built by the Tauri CLI on a Mac
+# with Xcode, which is a different machine and a different question.
+[workspace]
+
+[package]
+name = "nylonite-mobile"
+version = "0.1.0"
+description = "The Nylonite floor app"
+edition = "2021"
+rust-version = "1.77.2"
+
+# `staticlib`/`cdylib` are what the iOS and Android shells link against; `rlib`
+# is what `main.rs` uses on a desktop build. All three, or one of the targets
+# has nothing to link.
+[lib]
+name = "nylonite_mobile_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+# **The reason this crate exists at all, more or less.** From a `tauri://`
+# origin every call to the API is cross-origin, and a mobile WebView's CORS
+# behaviour is not a thing to discover in an aisle. This issues the request
+# from Rust instead. Scoped to HTTPS by `capabilities/default.json`.
+tauri-plugin-http = "2"
+tauri-plugin-log = "2"

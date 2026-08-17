@@ -1,0 +1,36 @@
+/*
+ * A NOTICE THAT KEEPS ITS KEY ON THE RIGHT (D167).
+ *
+ * The first version was `Row` + `Spacer`, which is what all fifteen screens had
+ * been writing. At 430px the sentence fills the line, the key wraps, and
+ * `margin-left: auto` puts it at the *left* of the second line — the same
+ * failure the record row had, in the same place, for the same reason.
+ *
+ * So the same remedy, which D124 names: a growing sibling. The message takes
+ * the slack and the key end-aligns inside its own growing box, so it lands on
+ * the right margin whether it shares the line or takes one.
+ */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-2) var(--gap-3);
+  min-width: 0;
+}
+
+/* Lamp, sentence and any qualifications, as one group that wraps internally. */
+.said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-2) var(--gap-3);
+  flex: 1 1 auto;
+  min-width: min(14rem, 100%);
+}
+
+.act {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex: 1 1 auto;
+}

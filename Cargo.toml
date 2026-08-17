@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/invariants", "crates/policy", "crates/server"]
+# The mobile shell is its own workspace: it is built by the Tauri CLI on a Mac,
+# and its dependency tree has no business in the job that gates the server.
+exclude = ["mobile/src-tauri"]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+nylonite-policy = { path = "crates/policy" }
+postgres = "0.19"

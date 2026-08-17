@@ -1,0 +1,56 @@
+/* The rail. No margin anywhere — spacing is the parent's `gap` (D124, law 3). */
+
+.rail {
+  flex: 0 0 auto;
+  width: 13rem;
+}
+
+.page {
+  width: 100%;
+}
+
+/* A group heading is a legend stamped into the chassis: small, spaced, and
+   quiet enough that the destinations under it are what the eye lands on. */
+.group {
+  display: block;
+  padding-inline: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--legend-dim);
+}
+
+.item {
+  display: flex;
+}
+
+.item > a {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+
+/*
+ * In the sheet, the rail is the screen.
+ *
+ * 13rem of a 390px phone leaves two thirds of an opaque sheet doing nothing
+ * and every destination as a target half the width of the thumb pressing it.
+ * The same rows the landing screen draws full width (`layout="page"`), reached
+ * by the stylesheet rather than by a second element — one rail in the document
+ * at every width is the rule the sheet is built on.
+ *
+ * 62rem: repeated in `nav-sheet.module.css`, both shells and `useNavSheet.ts`,
+ * because a media query cannot read a custom property.
+ */
+@media (max-width: 61.9375rem) {
+  .rail {
+    width: 100%;
+  }
+
+  /* Sign out is an act rather than a destination and stays a key, but a key
+     that stops halfway across the sheet reads as unfinished. */
+  .item > button {
+    flex: 1 1 auto;
+  }
+}

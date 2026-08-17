@@ -1,0 +1,16 @@
+{
+  "name": "nylonite-mobile",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "ios:dev": "tauri ios dev",
+    "ios:build": "tauri ios build --debug --export-method debugging",
+    "android:build": "tauri android build --debug"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "typescript": "^5.7.0"
+  }
+}

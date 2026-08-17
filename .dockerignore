@@ -1,0 +1,23 @@
+target
+.git
+.grok
+
+# CI's own definition. It is read by the forge, never by a build, and a change
+# to it should not invalidate a layer.
+.forgejo
+**/*.md
+fixtures
+scripts
+docs
+
+# ...except the migrator, which the migrate stage runs. The rest of `scripts`
+# is a developer's harness — verify-migrations, the smoke, measure — and none
+# of it belongs in an image. This one is the deploy's first step.
+!scripts/migrate.sh
+
+# The client's own build outputs. node_modules is hundreds of megabytes of
+# build context that the image reinstalls from the lockfile anyway, and dist
+# is rebuilt in the client stage — shipping either would make the context the
+# slowest part of the build.
+client/node_modules
+client/dist

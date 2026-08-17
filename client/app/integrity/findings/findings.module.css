@@ -1,0 +1,83 @@
+/*
+ * The selected row.
+ *
+ * A finding already carries the only amber in the interface (D115), so the
+ * selection cannot be a colour without competing with the thing the colour is
+ * for. It is an edge instead: occlusion rather than paint, which is D128's rule
+ * and the reason nothing else here has a coloured border either.
+ */
+.row {
+  border-radius: var(--r-face);
+}
+
+/*
+ * **An outline, not an inset shadow.** The first version used
+ * `box-shadow: inset` on this wrapper, and it was invisible: the finding inside
+ * paints an opaque background across the whole box, and an inset shadow is
+ * drawn under it. The screenshot showed a selected row identical to its
+ * neighbours, and the only reason anybody could tell was the button label.
+ *
+ * `outline` draws outside the border box, so nothing paints over it, and it
+ * takes no space in layout — the row does not resize when chosen, which is what
+ * the inset was for. A selection that reflows the list moves the next row
+ * before it is clicked.
+ */
+.rowSelected {
+  border-radius: var(--r-face);
+  outline: 2px solid var(--face-steel);
+  outline-offset: 2px;
+}
+
+/* The camera control, as the capture screen dresses it: a `Key` renders a
+   button and a button cannot open a camera, and `input[type=file]` renders
+   chrome no stylesheet may replace. So the input leaves the visual layer and
+   the label around it is dressed as a key — operable by keyboard, findable by
+   a screen reader.
+
+   Copied in shape rather than shared, because the two screens are different
+   surfaces at different densities and a shared control would have to know
+   which. If a third one appears it becomes a primitive. */
+.camera {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target);
+  padding: 0 var(--gap-4);
+  border-radius: var(--r-control);
+  background: var(--key);
+  color: var(--key-ink);
+  box-shadow:
+    0 1px 2px rgba(var(--lo), 0.3),
+    inset 0 1px 0 rgba(var(--hi), 0.16);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.camera:focus-within {
+  outline: 2px solid var(--lamp-scan);
+  outline-offset: 2px;
+}
+
+.camera input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Visually hidden, still in the accessibility tree. Not `display: none` and
+   not `visibility: hidden`: both remove it from that tree, and a control an
+   assistive technology cannot name is a control it cannot offer. */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

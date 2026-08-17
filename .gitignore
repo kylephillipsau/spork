@@ -1,0 +1,7 @@
+target/
+node_modules/
+dist/
+dist-review/
+.svelte-kit/
+.render/
+.DS_Store

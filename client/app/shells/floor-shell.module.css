@@ -1,0 +1,72 @@
+/*
+ * The Floor chassis: a column that fills the device and never scrolls itself.
+ *
+ * The page is the viewport. The body scrolls inside it and the dock stays put,
+ * because the primary action on a handheld may not be something you scroll to
+ * find — a worklist of two hundred subjects would otherwise put "Record" two
+ * hundred rows down.
+ */
+.page {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  /* `dvh` rather than `vh`: a mobile browser's toolbars change the visible
+     height, and `100vh` is the tall one — so a docked footer sits under the
+     chrome exactly when the operator reaches for it. */
+  min-height: 100dvh;
+  gap: var(--gap-3);
+  padding: var(--gap-3) var(--gap-3) var(--gap-2);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Momentum scrolling with a gloved thumb, and no scroll chaining into the
+     page behind a long list. */
+  overscroll-behavior: contain;
+}
+
+/*
+ * The reachable third.
+ *
+ * `sticky` rather than `fixed`: fixed positioning is resolved against the
+ * viewport and leaves the last row of the body underneath it, which on a
+ * handheld is the row somebody is about to press. Sticky keeps the dock in
+ * flow, so the body ends where the dock begins.
+ */
+/* Nothing docked. Always in the document so the screen has somewhere to draw
+   into, and out of the layout — padding, shadow and all — until it does. */
+.dock:empty {
+  display: none;
+}
+
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding-top: var(--gap-2);
+  /* Clear of the home indicator on a device that has one. Zero elsewhere. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* **Opaque, and the chassis rather than a face.**
+   *
+   * A transparent dock lets a long worklist scroll underneath it, which is not
+   * a subtle failure: the row passing behind the primary key collides with the
+   * label beside it and both become unreadable. It was visible the moment the
+   * gate rendered this at handheld width and invisible at 1600px, which is the
+   * argument for rendering it at the size it will be used.
+   *
+   * `--ano-950` and not a face token because the chassis is a fixed material
+   * that does not change with the time of day (D118) — the dock is part of the
+   * device, not part of the paper laid on it. Depth comes from the ground and
+   * an occluding edge, never from a blur. */
+  background: var(--ano-950);
+  box-shadow: inset 0 1px 0 rgba(var(--hi), 0.05);
+}
+
+

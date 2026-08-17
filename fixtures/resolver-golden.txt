@@ -1,0 +1,12 @@
+# The answers this resolver gives, recorded so that a change to what ships
+# cannot happen quietly. J22. Regenerate only with a RESOLVER_VERSION bump,
+# and read the diff.
+RESOLVER_VERSION 1
+
+allocation/glove+gloveco = no policy applies
+observation_precedence/tenant-wide = tenant precedence, any scope on sole
+receiving/glove+gloveco = tenant receiving, counterparty class on tenancy, clamped require_lot:0->1 respond_by_hours:72->48 tolerance_over_pct:25->10 tolerance_under_pct:25->10
+receiving/no-item+no-party = platform receiving ceiling on sole
+shelf_life/glove+gloveco = tenant binding, counterparty class on counterparty, clamped min_shelf_life_days:60->120
+shelf_life/glove+gloveco@february = platform default, any scope on sole
+shelf_life/glove+no-party = tenant binding, class and item on product
