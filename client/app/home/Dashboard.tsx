@@ -12,7 +12,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Badge, Button, DataTable, EmptyState, Link, PageHeader, Skeleton, cx, type Column, type Tone } from "@ui/index";
+import { Button, DataTable, EmptyState, Link, PageHeader, Skeleton, cx, type Column } from "@ui/index";
+import { orderTotals } from "@app/outbound/orders/OrdersPage";
+import { DueBadge, Progress, StageBadge, StateBadge, ago, sentence, shortDate, signed } from "@app/common/cells";
 import { href } from "@app/routing/location";
 import type { DiscrepancyRow, OrderMatch, PackJob } from "@domain/types";
 
@@ -199,13 +201,6 @@ function ReadBody<T>({ read, rows, children }: { read: Read<T>; rows: number; ch
 
 /* ---- packing queue ---- */
 
-const STAGE: Record<PackJob["stage"], { label: string; tone: Tone }> = {
-  ready: { label: "Ready to pack", tone: "accent" },
-  on_the_bench: { label: "On the bench", tone: "info" },
-  packed: { label: "Packed", tone: "success" },
-  nothing_committed: { label: "Nothing committed", tone: "neutral" },
-};
-
 const QUEUE_COLUMNS: Column<PackJob>[] = [
   {
     key: "ref",
@@ -228,37 +223,18 @@ const QUEUE_COLUMNS: Column<PackJob>[] = [
   {
     key: "due",
     header: "Due",
-    cell: (j) =>
-      j.due ? <Badge tone={j.due === "overdue" ? "danger" : "neutral"}>{sentence(j.due)}</Badge> : <span className={s.faint}>—</span>,
+    cell: (j) => <DueBadge due={j.due} />,
     sort: (j) => (j.due === "overdue" ? 0 : j.due ? 1 : 2),
     width: "130px",
   },
   {
     key: "stage",
     header: "Stage",
-    cell: (j) => (
-      <Badge tone={STAGE[j.stage].tone} dot>
-        {STAGE[j.stage].label}
-      </Badge>
-    ),
+    cell: (j) => <StageBadge stage={j.stage} />,
     sort: (j) => ["ready", "on_the_bench", "packed", "nothing_committed"].indexOf(j.stage),
     width: "140px",
   },
 ];
-
-function Progress({ done, of }: { done: number; of: number }) {
-  const pct = of > 0 ? Math.min(100, Math.round((done / of) * 100)) : 0;
-  return (
-    <span className={s.progress} title={`${done} of ${of} picked`}>
-      <span className={s.bar} aria-hidden>
-        <span className={cx(s.fill, pct === 100 && s.full)} style={{ width: `${pct}%` }} />
-      </span>
-      <span className={s.progressText}>
-        {done}/{of}
-      </span>
-    </span>
-  );
-}
 
 /* ---- findings ---- */
 
@@ -280,27 +256,6 @@ function FindingRow({ f }: { f: DiscrepancyRow }) {
 }
 
 /* ---- orders ---- */
-
-const ORDER_STATE_TONE: Record<string, Tone> = {
-  placed: "info",
-  open: "info",
-  fulfilled: "success",
-  despatched: "success",
-  cancelled: "neutral",
-  superseded: "neutral",
-};
-
-function orderTotals(o: OrderMatch) {
-  return o.fulfilments.reduce(
-    (t, f) => ({
-      lines: t.lines + f.line_count,
-      committed: t.committed + f.committed_quantity,
-      picked: t.picked + f.picked_quantity,
-      packed: t.packed + f.packed_quantity,
-    }),
-    { lines: 0, committed: 0, picked: 0, packed: 0 },
-  );
-}
 
 const ORDER_COLUMNS: Column<OrderMatch>[] = [
   {
@@ -334,11 +289,7 @@ const ORDER_COLUMNS: Column<OrderMatch>[] = [
   {
     key: "state",
     header: "Status",
-    cell: (o) => (
-      <Badge tone={ORDER_STATE_TONE[o.state] ?? "neutral"} dot>
-        {sentence(o.state)}
-      </Badge>
-    ),
+    cell: (o) => <StateBadge state={o.state} />,
     sort: (o) => o.state,
     width: "130px",
   },
@@ -352,26 +303,3 @@ const ORDER_COLUMNS: Column<OrderMatch>[] = [
   },
 ];
 
-/* ---- formatting (D114: the client formats) ---- */
-
-function sentence(s: string): string {
-  const t = s.replace(/_/g, " ").trim();
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
-function signed(v: string): string {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? `+${v}` : v;
-}
-
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
-
-function ago(iso: string): string {
-  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 60) return `${mins} min`;
-  const h = Math.round(mins / 60);
-  if (h < 48) return `${h} h`;
-  return `${Math.round(h / 24)} d`;
-}

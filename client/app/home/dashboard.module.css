@@ -152,38 +152,6 @@
   color: var(--ui-text-faint);
 }
 
-/* ---- progress ---- */
-.progress {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  width: 100%;
-}
-.bar {
-  flex: 1;
-  height: 6px;
-  min-width: 48px;
-  overflow: hidden;
-  border-radius: var(--ui-radius-full);
-  background: var(--ui-surface-active);
-}
-.fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--ui-accent);
-}
-.full {
-  background: var(--ui-success);
-}
-.progressText {
-  min-width: 44px;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-text-sm);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
 /* ---- findings list ---- */
 .findings {
   margin: 0;

@@ -12,7 +12,7 @@
  */
 import { useCallback, type ReactElement } from "react";
 
-import { Dock, Evidence } from "@app/shells/slots";
+import { Dock } from "@app/shells/slots";
 
 import "@design/tokens.css";
 import "@design/layers.css";
@@ -31,7 +31,7 @@ import { Putaway, PutawayDock } from "@app/inbound/putaway/Putaway";
 import { usePutaway } from "@app/inbound/putaway/usePutaway";
 import { Receiving, ReceivingDock } from "@app/inbound/receiving/Receiving";
 import { useReceiving } from "@app/inbound/receiving/useReceiving";
-import { Findings, FindingsRail } from "@app/integrity/findings/Findings";
+import { FindingsPage } from "@app/integrity/findings/FindingsPage";
 import { useFindings } from "@app/integrity/findings/useFindings";
 import { Weigh } from "@app/measurement/weigh/Weigh";
 import { useWeigh } from "@app/measurement/weigh/useWeigh";
@@ -59,8 +59,8 @@ import { useSessionBench } from "@app/session/SessionContext";
 import { useNavigate } from "@app/routing/Router";
 import { SignInPage } from "@app/session/SignInPage";
 import { useSignIn } from "@app/session/useSignIn";
-import { Orders } from "@app/outbound/orders/Orders";
-import { PackQueue } from "@app/outbound/pack/PackQueue";
+import { OrdersPage } from "@app/outbound/orders/OrdersPage";
+import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
 import { useQueue } from "@app/outbound/pack/useQueue";
 import { useOrders } from "@app/outbound/orders/useOrders";
 import { Dashboard } from "@app/home/Dashboard";
@@ -87,7 +87,7 @@ import type { Screen } from "./Router";
  * those pages got right.
  */
 function LiveQueue() {
-  return <PackQueue bench={useQueue()} />;
+  return <LivePackQueue bench={useQueue()} />;
 }
 
 function LivePack({ fulfilment }: { fulfilment: string }) {
@@ -163,17 +163,7 @@ function LiveFindings({ at }: { at: string | null }) {
     (id: string | null) => navigate(id === null ? "/findings" : `/findings/${id}`),
     [navigate],
   );
-  const desk = useFindings(at, place);
-  return (
-    <>
-      <Findings desk={desk} />
-      {desk.selected ? (
-        <Evidence>
-          <FindingsRail desk={desk} />
-        </Evidence>
-      ) : null}
-    </>
-  );
+  return <FindingsPage desk={useFindings(at, place)} />;
 }
 
 /** Weigh is a Bench surface: standing at a scale, several hundred a day. */
@@ -280,7 +270,7 @@ function LiveTokens() {
  */
 function LiveOrders() {
   const reference = new URLSearchParams(window.location.search).get("reference") ?? "";
-  return <Orders desk={useOrders(reference)} />;
+  return <OrdersPage desk={useOrders(reference)} />;
 }
 
 /** The dashboard (D171): counts, the packing queue, findings and orders. */
