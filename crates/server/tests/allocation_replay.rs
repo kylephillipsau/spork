@@ -15,7 +15,7 @@
 //! Rolls back. Reaches the fixture through the stable purchase order line.
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, PriorAllocation};
+use spork_server::client_events::{self, PriorAllocation};
 use uuid::Uuid;
 
 mod common;
@@ -69,7 +69,7 @@ async fn a_resubmitted_claim_does_not_commit_the_cell_twice() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -177,7 +177,7 @@ async fn a_retry_of_a_fully_covering_claim_is_not_read_as_over_cover() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

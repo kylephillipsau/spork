@@ -17,7 +17,7 @@
 //! database and a barcode left bound is a barcode the next run cannot bind.
 
 use actix_web::{http::StatusCode, test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 
 mod common;
@@ -59,11 +59,11 @@ async fn a_barcode_says_which_box_it_is_on_and_who_said_so() {
     // These tables force row-level security and their policies read
     // `current_tenant()`, which is unset on a fresh connection: the inserts are
     // refused outright and the deletes match nothing while reporting success.
-    // The setting's name is `nylonite.tenant_id`, which is a thing to be told
+    // The setting's name is `spork.tenant_id`, which is a thing to be told
     // rather than guessed.
     let db = state.pool.get().await.expect("a connection");
     db.execute(
-        "SELECT set_config('nylonite.tenant_id', $1, false)",
+        "SELECT set_config('spork.tenant_id', $1, false)",
         &[&TENANT],
     )
     .await
@@ -203,7 +203,7 @@ async fn a_barcode_says_which_box_it_is_on_and_who_said_so() {
     // row needs `is_platform()`. The pooled connection is carrying whatever
     // role the last request left on it, which the handover records as a thing
     // that bites; resetting it puts this back on the superuser, who bypasses
-    // RLS. `nylonite.tenant_id` is session-level and survives.
+    // RLS. `spork.tenant_id` is session-level and survives.
     //
     // That the app role *cannot* write a shared row is the property being
     // relied on rather than worked around: it is why a tenant binding can

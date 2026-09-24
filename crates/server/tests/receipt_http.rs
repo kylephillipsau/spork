@@ -33,7 +33,7 @@
 
 use actix_web::{test, web, App};
 use chrono::Utc;
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -70,7 +70,7 @@ fn is_replay(response: &Value) -> bool {
 
 /// A connection that is not the pool's, for reading facts back and removing them.
 ///
-/// Deliberately the superuser rather than `nylonite_app`: this asserts what was
+/// Deliberately the superuser rather than `spork_app`: this asserts what was
 /// written rather than what a tenant may see, and the cleanup deletes from
 /// append-only tables the application holds no DELETE on.
 async fn raw(u: &str) -> tokio_postgres::Client {

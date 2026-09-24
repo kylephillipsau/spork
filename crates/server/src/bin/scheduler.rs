@@ -2,7 +2,7 @@
 //!
 //! Calls `projection_run_dirty` on an interval so tenants marked dirty by floor
 //! writes (D107) get a full rebuild without the app holding EXECUTE on
-//! `projection_run_all`. Connects as a role that can become `nylonite_scheduler`
+//! `projection_run_all`. Connects as a role that can become `spork_scheduler`
 //! (or already is that role). Superuser connections SET ROLE once and refuse to
 //! run maintainers as a role that bypasses RLS.
 
@@ -13,7 +13,7 @@ use tokio_postgres::NoTls;
 
 fn database_url() -> String {
     std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://postgres:nylonite@localhost:55432/nylonite".to_string()
+        "postgres://postgres:spork@localhost:55432/spork".to_string()
     })
 }
 
@@ -71,33 +71,33 @@ async fn main() {
         let superuser: bool = row.get(1);
         let bypass: bool = row.get(2);
         if superuser || bypass {
-            conn.batch_execute("SET ROLE nylonite_scheduler")
+            conn.batch_execute("SET ROLE spork_scheduler")
                 .await
-                .expect("SET ROLE nylonite_scheduler");
+                .expect("SET ROLE spork_scheduler");
             tracing::info!(
                 from = %user,
-                "assumed nylonite_scheduler (connection bypassed RLS)"
+                "assumed spork_scheduler (connection bypassed RLS)"
             );
-        } else if user != "nylonite_scheduler" {
+        } else if user != "spork_scheduler" {
             // A login role that is a member of the scheduler may still need SET ROLE.
-            match conn.batch_execute("SET ROLE nylonite_scheduler").await {
-                Ok(()) => tracing::info!(from = %user, "assumed nylonite_scheduler"),
+            match conn.batch_execute("SET ROLE spork_scheduler").await {
+                Ok(()) => tracing::info!(from = %user, "assumed spork_scheduler"),
                 Err(e) => {
                     tracing::error!(
                         role = %user,
                         error = %e,
-                        "connect as nylonite_scheduler or a superuser that can SET ROLE it"
+                        "connect as spork_scheduler or a superuser that can SET ROLE it"
                     );
                     std::process::exit(1);
                 }
             }
         } else {
-            tracing::info!(role = %user, "running as nylonite_scheduler");
+            tracing::info!(role = %user, "running as spork_scheduler");
         }
     }
 
     let period = interval();
-    tracing::info!(?period, "nylonite scheduler draining projection_dirty");
+    tracing::info!(?period, "spork scheduler draining projection_dirty");
 
     loop {
         match drain_once(&pool).await {
@@ -118,7 +118,7 @@ async fn drain_once(pool: &deadpool_postgres::Pool) -> Result<i64, Box<dyn std::
     let conn = pool.get().await?;
     // Role is session-level on pooled connections; re-assert so a recycled
     // connection that somehow reset still runs as the scheduler.
-    let _ = conn.batch_execute("SET ROLE nylonite_scheduler").await;
+    let _ = conn.batch_execute("SET ROLE spork_scheduler").await;
     let n: i64 = conn
         .query_one("SELECT projection_run_dirty()", &[])
         .await?

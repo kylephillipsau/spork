@@ -1,10 +1,10 @@
 //! WP1: client_event act idempotency — double-submit must not double facts.
 //!
-//! Exercises [`nylonite_server::client_events`] against a live DB the same way
+//! Exercises [`spork_server::client_events`] against a live DB the same way
 //! handlers claim the envelope and short-circuit on replay.
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, ActInsert, NewClientEvent};
+use spork_server::client_events::{self, ActInsert, NewClientEvent};
 use uuid::Uuid;
 
 mod common;
@@ -31,7 +31,7 @@ async fn claim_act_second_submit_is_replay() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -74,7 +74,7 @@ async fn double_movement_insert_blocked_by_replay_path() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -168,7 +168,7 @@ async fn incomplete_act_is_hard() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

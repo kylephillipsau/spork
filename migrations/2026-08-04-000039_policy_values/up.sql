@@ -78,7 +78,7 @@ COMMENT ON FUNCTION policy_value(policy_kind, uuid[], timestamptz) IS
     'winner whole. D22, D83.';
 
 GRANT EXECUTE ON FUNCTION policy_value(policy_kind, uuid[], timestamptz)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
+    TO spork_app, spork_platform, spork_scheduler;
 
 -- ---------------------------------------------------------------------------
 -- 2. What decides which fields clamp, and in which direction

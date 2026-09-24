@@ -23,7 +23,7 @@ async fn a_tenant_sees_only_its_own_rows() {
     for (tenant, expected) in [(ALPHA, "MEL"), (BETA, "SYD")] {
         let tx = client.transaction().await.unwrap();
         tx.execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+            "SELECT set_config('spork.tenant_id', $1::text, true)",
             &[&tenant],
         )
         .await
@@ -54,7 +54,7 @@ async fn a_tenant_cannot_outlive_its_transaction() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -68,7 +68,7 @@ async fn a_tenant_cannot_outlive_its_transaction() {
 
     // Same connection, no transaction, no tenant.
     let after: String = client
-        .query_one("SELECT current_setting('nylonite.tenant_id', true)", &[])
+        .query_one("SELECT current_setting('spork.tenant_id', true)", &[])
         .await
         .unwrap()
         .get::<_, Option<String>>(0)
@@ -98,7 +98,7 @@ async fn the_application_role_cannot_rewrite_history() {
     let mut client = connect(&u, assume_role).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -124,7 +124,7 @@ async fn the_application_role_cannot_rewrite_history() {
 /// **This is the assumption `setup.rs` documents and does not have.** Its
 /// comment says the identity path runs on "a raw connection, as `postgres`",
 /// and that is true only of a connection which has never served a tenant
-/// request. `ensure_app_role` issues a session-level `SET ROLE nylonite_app`,
+/// request. `ensure_app_role` issues a session-level `SET ROLE spork_app`,
 /// deadpool's default recycling is `Fast` — which runs no cleanup statement at
 /// all, not `DISCARD ALL`, not `RESET ROLE` — so the role is still in place
 /// when the next checkout gets that connection back.
@@ -161,7 +161,7 @@ async fn set_role_survives_the_pool() {
 
     let first: String = {
         let conn = pool.get().await.expect("a connection");
-        conn.batch_execute("SET ROLE nylonite_app")
+        conn.batch_execute("SET ROLE spork_app")
             .await
             .expect("become the application role");
         conn.query_one("SELECT current_user::text", &[])
@@ -169,7 +169,7 @@ async fn set_role_survives_the_pool() {
             .unwrap()
             .get(0)
     };
-    assert_eq!(first, "nylonite_app");
+    assert_eq!(first, "spork_app");
 
     // A different checkout, which believes it is the login role.
     let conn = pool.get().await.expect("a connection");
@@ -179,7 +179,7 @@ async fn set_role_survives_the_pool() {
         .unwrap()
         .get(0);
     assert_eq!(
-        second, "nylonite_app",
+        second, "spork_app",
         "a recycled connection reset its role, so the identity paths really do \
          run as the login role and this note can be deleted"
     );
@@ -195,6 +195,6 @@ async fn set_role_survives_the_pool() {
         .await;
     assert!(
         refused.is_err(),
-        "nylonite_app wrote person_credential, which D25 forbids by grant"
+        "spork_app wrote person_credential, which D25 forbids by grant"
     );
 }

@@ -13,7 +13,7 @@
 --
 -- `asserted_unit_content_resolve` is not `SECURITY DEFINER`, so it runs with the
 -- caller's rights and the caller is the role we just took the rights from. Called
--- as `nylonite_app` it fails on its own first statement:
+-- as `spork_app` it fails on its own first statement:
 --
 --   ERROR:  permission denied for table asserted_unit_content
 --   CONTEXT:  SQL statement "SELECT 1 FROM asserted_unit_content
@@ -43,7 +43,7 @@
 -- handed on purpose.
 --
 -- The safe shape already exists here: all fifteen `SECURITY DEFINER` projection
--- functions are owned by `nylonite_projection_owner`, which has neither SUPERUSER
+-- functions are owned by `spork_projection_owner`, which has neither SUPERUSER
 -- nor BYPASSRLS, and every table they touch has FORCE ROW LEVEL SECURITY, which
 -- applies RLS to the table owner as well. The owner is inside the fence.
 --
@@ -54,31 +54,31 @@
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nylonite_mediation_owner') THEN
-        CREATE ROLE nylonite_mediation_owner NOLOGIN;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'spork_mediation_owner') THEN
+        CREATE ROLE spork_mediation_owner NOLOGIN;
     END IF;
 END $$;
 
-COMMENT ON ROLE nylonite_mediation_owner IS
+COMMENT ON ROLE spork_mediation_owner IS
     'Owns the SECURITY DEFINER functions that mediate a write the application is '
     'not allowed to make directly. Never SUPERUSER and never BYPASSRLS: the '
     'functions must stay inside row-level security, or the mediation buys a '
     'tenancy hole. D89, D90, D94.';
 
-GRANT USAGE ON SCHEMA public TO nylonite_mediation_owner;
+GRANT USAGE ON SCHEMA public TO spork_mediation_owner;
 
 -- Exactly the columns the two functions write, and the reads they need to decide.
 GRANT SELECT ON asserted_unit_content, assertion_check, goods_receipt_line
-    TO nylonite_mediation_owner;
-GRANT SELECT, INSERT ON discrepancy TO nylonite_mediation_owner;
+    TO spork_mediation_owner;
+GRANT SELECT, INSERT ON discrepancy TO spork_mediation_owner;
 
 GRANT UPDATE (resolved_item_id, resolved_purchase_order_line_id,
               resolved_at, resolved_by_id, resolution_method)
-    ON asserted_unit_content TO nylonite_mediation_owner;
+    ON asserted_unit_content TO spork_mediation_owner;
 
 GRANT UPDATE (accepted_at, accepted_by_id, rejected_at, rejected_by_id,
               rejected_reason_id, receiving_policy_id)
-    ON goods_receipt_line TO nylonite_mediation_owner;
+    ON goods_receipt_line TO spork_mediation_owner;
 
 -- ---------------------------------------------------------------------------
 -- 2. The functions become definers, owned by that role
@@ -90,18 +90,18 @@ GRANT UPDATE (accepted_at, accepted_by_id, rejected_at, rejected_by_id,
 ALTER FUNCTION asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text)
     SECURITY DEFINER;
 ALTER FUNCTION asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text)
-    OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
 
 ALTER FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
     SECURITY DEFINER;
 ALTER FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
-    OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
 
 -- **J37 caught this on the first run after the ALTERs above**, which is the suite
 -- doing precisely what it is for. Postgres grants EXECUTE to PUBLIC by default,
 -- which is harmless on an invoker function and is a privilege escalation on a
 -- definer: every role in the cluster could call it and write as the owner. The
--- explicit grants to `nylonite_app` from migrations 43 and 44 survive the revoke.
+-- explicit grants to `spork_app` from migrations 43 and 44 survive the revoke.
 
 REVOKE EXECUTE ON FUNCTION
     asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text) FROM PUBLIC;
@@ -119,7 +119,7 @@ REVOKE EXECUTE ON FUNCTION
 
 REVOKE UPDATE (accepted_at, accepted_by_id, rejected_at, rejected_by_id,
                rejected_reason_id, receiving_policy_id)
-    ON goods_receipt_line FROM nylonite_app;
+    ON goods_receipt_line FROM spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 4. The registry, so the property is checkable rather than remembered
@@ -158,4 +158,4 @@ INSERT INTO mediated_write (table_name, column_name, function_name) VALUES
     ('goods_receipt_line',    'receiving_policy_id',             'goods_receipt_line_dispose');
 
 GRANT SELECT ON mediated_write
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;

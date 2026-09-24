@@ -16,7 +16,7 @@
 //! fold follow; nothing here UPDATEs a projected column, and the database holds
 //! that rule rather than this comment.
 
-use nylonite_server::{routes, tenancy, AppState};
+use spork_server::{routes, tenancy, AppState};
 
 use actix_web::{web, App, HttpServer};
 use deadpool_postgres::{Config, Runtime};
@@ -24,10 +24,10 @@ use std::str::FromStr;
 
 fn database_url() -> String {
     std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        // The default names nylonite_app rather than postgres on purpose. A
+        // The default names spork_app rather than postgres on purpose. A
         // developer who runs this without thinking gets the role the design
         // assumes, not the one that silently disables row level security.
-        "postgres://nylonite_app@localhost:55432/nylonite".to_string()
+        "postgres://spork_app@localhost:55432/spork".to_string()
     })
 }
 
@@ -72,7 +72,7 @@ async fn main() -> std::io::Result<()> {
     // **Fail here rather than at the first sign-in.** A relying party whose
     // origin disagrees with its id yields credentials no browser will offer
     // back, and the symptom is a button that silently does nothing.
-    match nylonite_server::passkeys::shared() {
+    match spork_server::passkeys::shared() {
         Ok(r) => tracing::info!(rp_id = %r.rp_id, origin = %r.origin, "passkeys enabled"),
         Err(e) => {
             tracing::error!("{e}");
@@ -85,19 +85,19 @@ async fn main() -> std::io::Result<()> {
     // failure worth avoiding is a mount that exists and serves nothing. An
     // absence that announces itself is the difference between "not built" and
     // "built and broken", and only one of those is a five-minute problem.
-    let client_dir = nylonite_server::assets::directory();
-    let serve_client = nylonite_server::assets::present(&client_dir);
+    let client_dir = spork_server::assets::directory();
+    let serve_client = spork_server::assets::present(&client_dir);
     if serve_client {
         tracing::info!(
             dir = %client_dir.display(),
-            mount = nylonite_server::assets::MOUNT,
+            mount = spork_server::assets::MOUNT,
             "client bundle found"
         );
     } else {
         tracing::info!(
             dir = %client_dir.display(),
             "no client bundle; {} will 404",
-            nylonite_server::assets::MOUNT
+            spork_server::assets::MOUNT
         );
     }
 
@@ -108,12 +108,12 @@ async fn main() -> std::io::Result<()> {
     // has somebody in it gets any leftover token deleted, which is what stops a
     // restored backup leaving a live setup credential on disk.
     match state.pool.get().await {
-        Ok(conn) => nylonite_server::setup::reconcile(&conn).await,
+        Ok(conn) => spork_server::setup::reconcile(&conn).await,
         Err(e) => tracing::warn!(error = %e, "could not reach the database to reconcile the setup token"),
     }
 
     let bind = std::env::var("BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
-    tracing::info!(%bind, "nylonite server listening");
+    tracing::info!(%bind, "spork server listening");
 
     let server = HttpServer::new(move || {
         let app = App::new()
@@ -125,7 +125,7 @@ async fn main() -> std::io::Result<()> {
         // service the harness has to know about to ignore.
         if serve_client {
             let dir = client_dir.clone();
-            app.configure(move |cfg| nylonite_server::assets::configure(cfg, &dir))
+            app.configure(move |cfg| spork_server::assets::configure(cfg, &dir))
         } else {
             app
         }
@@ -140,25 +140,14 @@ async fn main() -> std::io::Result<()> {
 
     let handle = server.handle();
     tokio::spawn(async move {
-        // SIGTERM is what Docker sends on `stop`; SIGINT is a person with a
-        // terminal. Both mean the same thing to us.
-        let mut term = match tokio::signal::unix::signal(
-            tokio::signal::unix::SignalKind::terminate(),
-        ) {
-            Ok(s) => s,
-            // A process that cannot install a handler should still be killable.
-            // Falling back to actix's own behaviour is worse than nothing only
-            // if it is silent, so it says so.
-            Err(e) => {
-                tracing::error!(error = %e, "no SIGTERM handler; shutdown will not drain");
-                return;
-            }
-        };
-        tokio::select! {
-            _ = term.recv() => {}
-            _ = tokio::signal::ctrl_c() => {}
+        // A process that cannot install a handler should still be killable.
+        // Falling back to actix's own behaviour is worse than nothing only if it
+        // is silent, so it says so.
+        if let Err(e) = stop_requested().await {
+            tracing::error!(error = %e, "no shutdown handler; shutdown will not drain");
+            return;
         }
-        nylonite_server::health::begin_shutdown();
+        spork_server::health::begin_shutdown();
         tracing::info!("draining: readiness now reports 503");
 
         // **Shorter than Docker's grace period, deliberately.** Compose sends
@@ -172,4 +161,23 @@ async fn main() -> std::io::Result<()> {
     });
 
     server.await
+}
+
+/// SIGTERM is what Docker sends on `stop`; SIGINT is a person with a terminal.
+/// Both mean the same thing to us.
+#[cfg(unix)]
+async fn stop_requested() -> std::io::Result<()> {
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut term = signal(SignalKind::terminate())?;
+    tokio::select! {
+        _ = term.recv() => {}
+        _ = tokio::signal::ctrl_c() => {}
+    }
+    Ok(())
+}
+
+/// Windows has no SIGTERM; a native run is stopped from its console.
+#[cfg(not(unix))]
+async fn stop_requested() -> std::io::Result<()> {
+    tokio::signal::ctrl_c().await
 }

@@ -90,7 +90,7 @@ DECLARE
     n bigint;
     m bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- D78's rule as a row, so "nobody resolved anything" and "the resolver said
     -- exactly this" travel the same path and there is one code path rather than
@@ -195,10 +195,10 @@ $$;
 
 ALTER FUNCTION projection_observation_current_rebuild(
         uuid, observation_precedence_decision[])
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_observation_current_rebuild(
         uuid, observation_precedence_decision[]) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_observation_current_rebuild(
         uuid, observation_precedence_decision[])
-    TO nylonite_scheduler, nylonite_platform;
-GRANT SELECT ON observation_precedence_policy TO nylonite_projection_owner;
+    TO spork_scheduler, spork_platform;
+GRANT SELECT ON observation_precedence_policy TO spork_projection_owner;

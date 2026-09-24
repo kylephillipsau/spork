@@ -111,8 +111,8 @@ CREATE POLICY projection_freshness_tenant_scoped ON projection_freshness
     USING (tenant_id = current_tenant());
 
 GRANT SELECT ON projection_freshness
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
-GRANT SELECT, INSERT, UPDATE ON projection_freshness TO nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler;
+GRANT SELECT, INSERT, UPDATE ON projection_freshness TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The orchestrator records itself
@@ -185,4 +185,4 @@ COMMENT ON FUNCTION projection_age(uuid, text) IS
     'has, which is not the same answer as a large interval. D95.';
 
 GRANT EXECUTE ON FUNCTION projection_age(uuid, text)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
+    TO spork_app, spork_platform, spork_scheduler;

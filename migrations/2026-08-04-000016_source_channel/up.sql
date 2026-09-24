@@ -69,7 +69,7 @@ ALTER TABLE source_channel FORCE ROW LEVEL SECURITY;
 CREATE POLICY source_channel_shared_reference ON source_channel
     USING (tenant_id IS NULL OR tenant_id = current_tenant());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON source_channel TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON source_channel TO spork_app;
 
 -- Manual entry: somebody types an order in. Every deployment has it, it is
 -- necessarily ours, and it is the fallback D39's "an operation running nothing
@@ -136,14 +136,14 @@ ALTER TABLE "order" DROP COLUMN source_channel;
 -- statement that creates it. D50's "one order, one currency" is a claim about the
 -- row rather than about immutability.
 
-REVOKE INSERT, UPDATE ON "order" FROM nylonite_app;
+REVOKE INSERT, UPDATE ON "order" FROM spork_app;
 
 GRANT INSERT (id, tenant_id, site_id, customer_party_id, confirmation_number,
               source_channel_id, external_ref, supersedes_order_id, placed_at,
               promised_from, promised_to, required_by, state, currency),
       UPDATE (site_id, customer_party_id, confirmation_number, external_ref,
               supersedes_order_id, currency)
-    ON "order" TO nylonite_app;
+    ON "order" TO spork_app;
 
 CREATE INDEX order_source_channel_idx ON "order" (source_channel_id);
 

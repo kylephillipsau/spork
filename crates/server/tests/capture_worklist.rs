@@ -21,7 +21,7 @@
 //! suite runs against a database other tests have already written to.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::Value;
 use std::collections::BTreeSet;
 

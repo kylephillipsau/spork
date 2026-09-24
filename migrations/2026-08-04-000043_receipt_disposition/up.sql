@@ -83,4 +83,4 @@ COMMENT ON FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, 
 
 GRANT EXECUTE ON FUNCTION
     goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
-    TO nylonite_app;
+    TO spork_app;

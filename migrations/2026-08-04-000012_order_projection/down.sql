@@ -1,7 +1,7 @@
 -- Reverse of 2026-08-04-000012_order_projection.
 
-REVOKE INSERT, UPDATE ON "order" FROM nylonite_app;
-GRANT SELECT, INSERT, UPDATE ON "order" TO nylonite_app;
+REVOKE INSERT, UPDATE ON "order" FROM spork_app;
+GRANT SELECT, INSERT, UPDATE ON "order" TO spork_app;
 
 COMMENT ON COLUMN "order".promised_from IS NULL;
 COMMENT ON COLUMN "order".promised_to IS NULL;

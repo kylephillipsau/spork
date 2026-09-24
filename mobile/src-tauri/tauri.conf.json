@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Nylonite",
+  "productName": "Spork",
   "version": "0.1.0",
-  "identifier": "com.nylonite.floor",
+  "identifier": "com.warehouseutilities.spork",
   "build": {
     "frontendDist": "../../client/dist-mobile",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Nylonite",
+        "title": "Spork",
         "width": 430,
         "height": 932,
         "resizable": true,

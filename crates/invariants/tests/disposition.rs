@@ -5,8 +5,8 @@
 //!
 //! Skips rather than fails without `DATABASE_URL`.
 
-use nylonite_policy::{apply_clamps, resolve, Candidate, PolicyKind};
-use nylonite_server::receiving::{disposition, CountedLine, ReceivingPolicy};
+use spork_policy::{apply_clamps, resolve, Candidate, PolicyKind};
+use spork_server::receiving::{disposition, CountedLine, ReceivingPolicy};
 use uuid::Uuid;
 
 const TENANT: &str = "11111111-1111-1111-1111-111111111111";
@@ -118,7 +118,7 @@ fn a_line_is_disposed_of_under_the_policy_that_governed_it() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     // **D94 made this line necessary and that is the point of it.**
     // `goods_receipt_line_dispose` is now a definer owned by a role with neither
@@ -127,7 +127,7 @@ fn a_line_is_disposed_of_under_the_policy_that_governed_it() {
     // and this test passed without ever naming a tenant — which is exactly how a
     // definer owned by `postgres` would have passed too, while quietly being a
     // tenancy escape.
-    c.execute("SET nylonite.tenant_id = '11111111-1111-1111-1111-111111111111'", &[])
+    c.execute("SET spork.tenant_id = '11111111-1111-1111-1111-111111111111'", &[])
         .expect("a caller names its tenant");
 
     let policy = resolved(&mut c);

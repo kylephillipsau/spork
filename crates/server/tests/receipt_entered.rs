@@ -1,6 +1,6 @@
 //! Q173: receipt lines preserve entered packaging and convert to base units.
 
-use nylonite_server::receiving::{self, PackingConfig, PackagingLevel};
+use spork_server::receiving::{self, PackingConfig, PackagingLevel};
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
@@ -23,12 +23,12 @@ async fn packing_factor_matches_sql() {
         let _ = connection.await;
     });
     if assume {
-        client.batch_execute("SET ROLE nylonite_app").await.unwrap();
+        client.batch_execute("SET ROLE spork_app").await.unwrap();
     }
     let mut client = client;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -133,12 +133,12 @@ async fn the_line_insert_binds_every_packaging_level() {
         let _ = connection.await;
     });
     if assume {
-        client.batch_execute("SET ROLE nylonite_app").await.unwrap();
+        client.batch_execute("SET ROLE spork_app").await.unwrap();
     }
     let mut client = client;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

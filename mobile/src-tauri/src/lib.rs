@@ -1,4 +1,4 @@
-//! The Nylonite floor app: a Tauri shell around the React client.
+//! The Spork floor app: a Tauri shell around the React client.
 //!
 //! # There is no second interface
 //!
@@ -29,5 +29,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running the Nylonite shell");
+        .expect("error while running the Spork shell");
 }

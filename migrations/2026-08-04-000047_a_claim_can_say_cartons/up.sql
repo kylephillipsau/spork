@@ -115,9 +115,9 @@ CREATE INDEX asserted_unit_content_config_idx
 -- `asserted_unit_content_resolve` under D90's freeze.
 GRANT INSERT (raw_unit_code, resolved_packaging_level, item_packing_config_id),
       SELECT (raw_unit_code, resolved_packaging_level, item_packing_config_id)
-    ON asserted_unit_content TO nylonite_app;
+    ON asserted_unit_content TO spork_app;
 GRANT SELECT (raw_unit_code, resolved_packaging_level, item_packing_config_id)
-    ON asserted_unit_content TO nylonite_projection_owner;
+    ON asserted_unit_content TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The variance quotes their word rather than ours

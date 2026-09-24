@@ -34,7 +34,7 @@ ALTER TABLE item_packing_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item_packing_config FORCE ROW LEVEL SECURITY;
 CREATE POLICY item_packing_config_tenant_scoped ON item_packing_config
     USING (tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON item_packing_config TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON item_packing_config TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- The subject registry (D23)
@@ -107,7 +107,7 @@ ALTER TABLE observable ENABLE ROW LEVEL SECURITY;
 ALTER TABLE observable FORCE ROW LEVEL SECURITY;
 CREATE POLICY observable_tenant_scoped ON observable
     USING (tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON observable TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON observable TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- The metric vocabulary (D23)
@@ -169,10 +169,10 @@ ALTER TABLE metric ENABLE ROW LEVEL SECURITY;
 ALTER TABLE metric FORCE ROW LEVEL SECURITY;
 CREATE POLICY metric_shared_reference ON metric
     USING (tenant_id IS NULL OR tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON metric TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON metric TO nylonite_platform;
-GRANT SELECT ON metric_code TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON metric_code TO nylonite_platform;
+GRANT SELECT, INSERT, UPDATE, DELETE ON metric TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON metric TO spork_platform;
+GRANT SELECT ON metric_code TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON metric_code TO spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- The facts (D23)
@@ -325,7 +325,7 @@ CREATE POLICY observation_tenant_scoped ON observation
     USING (tenant_id = current_tenant());
 
 -- S6: facts take INSERT and SELECT and nothing else.
-GRANT SELECT, INSERT ON observation_event, observation TO nylonite_app;
+GRANT SELECT, INSERT ON observation_event, observation TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- The reserved seed (D23, S21)

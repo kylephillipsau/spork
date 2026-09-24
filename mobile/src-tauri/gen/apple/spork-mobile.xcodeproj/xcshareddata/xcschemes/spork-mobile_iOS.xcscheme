@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8A50407A75F773A0DDA9FDB9"
-               BuildableName = "Nylonite.app"
-               BlueprintName = "nylonite-mobile_iOS"
-               ReferencedContainer = "container:nylonite-mobile.xcodeproj">
+               BuildableName = "Spork.app"
+               BlueprintName = "spork-mobile_iOS"
+               ReferencedContainer = "container:spork-mobile.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -31,9 +31,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8A50407A75F773A0DDA9FDB9"
-            BuildableName = "Nylonite.app"
-            BlueprintName = "nylonite-mobile_iOS"
-            ReferencedContainer = "container:nylonite-mobile.xcodeproj">
+            BuildableName = "Spork.app"
+            BlueprintName = "spork-mobile_iOS"
+            ReferencedContainer = "container:spork-mobile.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <EnvironmentVariables>
@@ -66,9 +66,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8A50407A75F773A0DDA9FDB9"
-            BuildableName = "Nylonite.app"
-            BlueprintName = "nylonite-mobile_iOS"
-            ReferencedContainer = "container:nylonite-mobile.xcodeproj">
+            BuildableName = "Spork.app"
+            BlueprintName = "spork-mobile_iOS"
+            ReferencedContainer = "container:spork-mobile.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <EnvironmentVariables>
@@ -95,9 +95,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8A50407A75F773A0DDA9FDB9"
-            BuildableName = "Nylonite.app"
-            BlueprintName = "nylonite-mobile_iOS"
-            ReferencedContainer = "container:nylonite-mobile.xcodeproj">
+            BuildableName = "Spork.app"
+            BlueprintName = "spork-mobile_iOS"
+            ReferencedContainer = "container:spork-mobile.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <EnvironmentVariables>

@@ -97,7 +97,7 @@ DECLARE
     n bigint;
     total bigint := 0;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- Last writer per class, in D24's register order, exactly as J46 folds an
     -- amendment. Verbatim rather than coalesced: a reparented row always states
@@ -186,7 +186,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 4. What the editor must show before it does this
@@ -245,7 +245,7 @@ COMMENT ON FUNCTION party_class_retire_impact(uuid) IS
 
 GRANT EXECUTE ON FUNCTION item_class_retire_impact(uuid),
     party_class_retire_impact(uuid)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 5. What is not enforced, and why it cannot be
@@ -269,4 +269,4 @@ GRANT EXECUTE ON FUNCTION item_class_retire_impact(uuid),
 -- becomes an act with a moment, which it is not today and which no question has
 -- yet asked for. Naming it here rather than implying coverage.
 
-GRANT SELECT ON policy_change TO nylonite_projection_owner;
+GRANT SELECT ON policy_change TO spork_projection_owner;

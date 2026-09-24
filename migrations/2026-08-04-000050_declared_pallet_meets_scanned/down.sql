@@ -17,9 +17,9 @@ DELETE FROM mediated_write WHERE function_name = 'asserted_unit_collapse';
 
 DROP FUNCTION IF EXISTS asserted_unit_collapse(uuid, uuid, uuid);
 
-REVOKE ALL ON package FROM nylonite_mediation_owner;
-REVOKE ALL ON package_event FROM nylonite_mediation_owner;
-REVOKE ALL ON asserted_unit FROM nylonite_mediation_owner;
+REVOKE ALL ON package FROM spork_mediation_owner;
+REVOKE ALL ON package_event FROM spork_mediation_owner;
+REVOKE ALL ON asserted_unit FROM spork_mediation_owner;
 
 DROP INDEX IF EXISTS asserted_unit_package_idx;
 

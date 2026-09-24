@@ -7,4 +7,4 @@ DROP FUNCTION IF EXISTS asserted_unit_content_resolve(uuid, uuid, uuid, uuid, te
 
 GRANT UPDATE (resolved_item_id, resolved_purchase_order_line_id, resolved_at,
               resolved_by_id, resolution_method)
-    ON asserted_unit_content TO nylonite_app;
+    ON asserted_unit_content TO spork_app;

@@ -45,34 +45,34 @@ COPY crates/ crates/
 # Empty in a local build, which `option_env!` reads as None and the endpoint
 # reports as null rather than inventing a version.
 ARG GIT_SHA=""
-ENV NYLONITE_GIT_SHA=$GIT_SHA
+ENV SPORK_GIT_SHA=$GIT_SHA
 
-RUN cargo build -p nylonite-server --release \
-        --bin nylonite-server \
-        --bin nylonite-scheduler \
- && strip target/release/nylonite-server target/release/nylonite-scheduler
+RUN cargo build -p spork-server --release \
+        --bin spork-server \
+        --bin spork-scheduler \
+ && strip target/release/spork-server target/release/spork-scheduler
 
 FROM debian:bookworm-slim AS runtime-base
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates libssl3 \
  && rm -rf /var/lib/apt/lists/*
 ENV RUST_LOG=info
-ENV DATABASE_URL=postgres://postgres:nylonite@postgres:5432/nylonite
+ENV DATABASE_URL=postgres://postgres:spork@postgres:5432/spork
 
 FROM runtime-base AS server
-COPY --from=build /src/target/release/nylonite-server /usr/local/bin/nylonite-server
-COPY --from=client /client/dist /usr/local/share/nylonite/client
-ENV NYLONITE_CLIENT_DIR=/usr/local/share/nylonite/client
+COPY --from=build /src/target/release/spork-server /usr/local/bin/spork-server
+COPY --from=client /client/dist /usr/local/share/spork/client
+ENV SPORK_CLIENT_DIR=/usr/local/share/spork/client
 # Listen on all interfaces inside the container (host maps 8080).
 ENV BIND=0.0.0.0:8080
 EXPOSE 8080
-ENTRYPOINT ["nylonite-server"]
+ENTRYPOINT ["spork-server"]
 
 # The scheduler serves nothing and carries no bundle.
 FROM runtime-base AS scheduler
-COPY --from=build /src/target/release/nylonite-scheduler /usr/local/bin/nylonite-scheduler
+COPY --from=build /src/target/release/spork-scheduler /usr/local/bin/spork-scheduler
 ENV SCHEDULER_INTERVAL_SECS=5
-ENTRYPOINT ["nylonite-scheduler"]
+ENTRYPOINT ["spork-scheduler"]
 
 # ---------------------------------------------------------------------------
 # The migrator, which runs to completion before the server starts.

@@ -2,12 +2,12 @@
 //!
 //!     docker compose up -d
 //!     psql "$DATABASE_URL" -f migrations/2026-08-04-000001_reference/up.sql
-//!     DATABASE_URL=postgres://postgres:nylonite@localhost:55432/nylonite cargo test -- --nocapture
+//!     DATABASE_URL=postgres://postgres:spork@localhost:55432/spork cargo test -- --nocapture
 //!
 //! Skips rather than fails when DATABASE_URL is unset, so `cargo test` on a
 //! machine with no database still compiles and runs the checks that need none.
 
-use nylonite_invariants::{reason, run, spec, Check, Verdict, ALL};
+use spork_invariants::{reason, run, spec, Check, Verdict, ALL};
 
 fn database_url() -> Option<String> {
     std::env::var("DATABASE_URL").ok()
@@ -48,7 +48,7 @@ fn structural_invariants_hold() {
         eprintln!("DATABASE_URL unset: skipping the checks that need a database");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     let (mut passed, mut vacuous, mut pending, mut failed) = (0, 0, 0, 0);
     let mut failures: Vec<String> = vec![];

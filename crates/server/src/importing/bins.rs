@@ -179,7 +179,7 @@ pub struct Loaded {
 
 /// Write the bin list, or find out what writing it would do.
 ///
-/// The transaction must already carry the tenant: this runs as `nylonite_app`
+/// The transaction must already carry the tenant: this runs as `spork_app`
 /// under row-level security, so `site` and `location` are reached on the same
 /// terms as every other write in the server rather than on a privileged
 /// connection. The examples arrange that themselves; handlers get it from
@@ -192,7 +192,7 @@ pub async fn load(
     assume_kind: Option<&str>,
     apply: bool,
 ) -> Result<Loaded, String> {
-    tx.batch_execute("SAVEPOINT nylonite_import")
+    tx.batch_execute("SAVEPOINT spork_import")
         .await
         .map_err(|e| e.to_string())?;
 
@@ -307,11 +307,11 @@ pub async fn load(
     }
 
     if apply {
-        tx.batch_execute("RELEASE SAVEPOINT nylonite_import")
+        tx.batch_execute("RELEASE SAVEPOINT spork_import")
             .await
             .map_err(|e| e.to_string())?;
     } else {
-        tx.batch_execute("ROLLBACK TO SAVEPOINT nylonite_import")
+        tx.batch_execute("ROLLBACK TO SAVEPOINT spork_import")
             .await
             .map_err(|e| e.to_string())?;
     }

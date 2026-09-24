@@ -51,4 +51,4 @@ CREATE INDEX stock_allocation_origin_idx
     WHERE origin_expected_supply_id IS NOT NULL;
 
 GRANT INSERT (origin_expected_supply_id), UPDATE (origin_expected_supply_id)
-    ON stock_allocation TO nylonite_app;
+    ON stock_allocation TO spork_app;

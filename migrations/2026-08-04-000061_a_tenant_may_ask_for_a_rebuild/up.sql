@@ -36,10 +36,10 @@ CREATE POLICY projection_dirty_tenant_scoped ON projection_dirty
     USING (tenant_id = current_tenant());
 
 -- App marks itself dirty after a floor write. Scheduler/platform may scan all.
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO nylonite_scheduler;
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO nylonite_platform;
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO nylonite_projection_owner;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO spork_scheduler;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO spork_platform;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_dirty TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION projection_mark_dirty(p_tenant uuid, p_reason text DEFAULT NULL)
     RETURNS void
@@ -58,9 +58,9 @@ $$;
 COMMENT ON FUNCTION projection_mark_dirty(uuid, text) IS
     'Upsert this tenant into the dirty set. Callable by the app after a write. D107.';
 
-GRANT EXECUTE ON FUNCTION projection_mark_dirty(uuid, text) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION projection_mark_dirty(uuid, text) TO nylonite_scheduler;
-GRANT EXECUTE ON FUNCTION projection_mark_dirty(uuid, text) TO nylonite_platform;
+GRANT EXECUTE ON FUNCTION projection_mark_dirty(uuid, text) TO spork_app;
+GRANT EXECUTE ON FUNCTION projection_mark_dirty(uuid, text) TO spork_scheduler;
+GRANT EXECUTE ON FUNCTION projection_mark_dirty(uuid, text) TO spork_platform;
 
 -- Scheduler drain: rebuild every dirty tenant, clear on success.
 CREATE OR REPLACE FUNCTION projection_run_dirty()
@@ -86,16 +86,16 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_run_dirty() OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_run_dirty() OWNER TO spork_projection_owner;
 
 COMMENT ON FUNCTION projection_run_dirty() IS
     'Scheduler entry: run projection_run_all for every dirty tenant, oldest first, '
-    'and clear each on success. Owned by nylonite_projection_owner. D107.';
+    'and clear each on success. Owned by spork_projection_owner. D107.';
 
 REVOKE ALL ON FUNCTION projection_run_dirty() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION projection_run_dirty() TO nylonite_scheduler;
-GRANT EXECUTE ON FUNCTION projection_run_dirty() TO nylonite_platform;
-GRANT EXECUTE ON FUNCTION projection_run_dirty() TO nylonite_projection_owner;
+GRANT EXECUTE ON FUNCTION projection_run_dirty() TO spork_scheduler;
+GRANT EXECUTE ON FUNCTION projection_run_dirty() TO spork_platform;
+GRANT EXECUTE ON FUNCTION projection_run_dirty() TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- C. Rate-limited on-demand refresh for the current tenant
@@ -124,9 +124,9 @@ DECLARE
     min_gap     interval := interval '5 seconds';
 BEGIN
     -- last changed: migration 61 (D107)
-    current_t := nullif(current_setting('nylonite.tenant_id', true), '')::uuid;
+    current_t := nullif(current_setting('spork.tenant_id', true), '')::uuid;
     IF current_t IS NULL THEN
-        RAISE EXCEPTION 'projection_refresh_tenant requires nylonite.tenant_id'
+        RAISE EXCEPTION 'projection_refresh_tenant requires spork.tenant_id'
             USING ERRCODE = '42501';
     END IF;
 
@@ -161,16 +161,16 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_refresh_tenant(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_refresh_tenant(uuid) OWNER TO spork_projection_owner;
 
 COMMENT ON FUNCTION projection_refresh_tenant(uuid) IS
     'App-callable full-tenant rebuild for current_tenant() only, rate-limited to '
-    'one accepted call per 5 seconds. Owned by nylonite_projection_owner — the '
+    'one accepted call per 5 seconds. Owned by spork_projection_owner — the '
     'app does not become the maintainer; it may request a rebuild. D95 forbade '
     'EXECUTE on projection_run_all; this wrapper is the allowed path. D107.';
 
 REVOKE ALL ON FUNCTION projection_refresh_tenant(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO nylonite_scheduler;
-GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO nylonite_platform;
-GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO nylonite_projection_owner;
+GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO spork_app;
+GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO spork_scheduler;
+GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO spork_platform;
+GRANT EXECUTE ON FUNCTION projection_refresh_tenant(uuid) TO spork_projection_owner;

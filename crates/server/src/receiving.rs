@@ -36,7 +36,7 @@
 //! performed by the wrong person.
 
 use chrono::{DateTime, Utc};
-use nylonite_policy::{apply_clamps, explain, resolve, Candidate, PolicyKind};
+use spork_policy::{apply_clamps, explain, resolve, Candidate, PolicyKind};
 use tokio_postgres::Transaction;
 use uuid::Uuid;
 

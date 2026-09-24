@@ -3,7 +3,7 @@
 DROP FUNCTION IF EXISTS policy_next_boundary(uuid, timestamptz);
 DROP FUNCTION IF EXISTS policy_epoch(uuid);
 
-REVOKE SELECT, UPDATE ON projection_step FROM nylonite_projection_owner;
+REVOKE SELECT, UPDATE ON projection_step FROM spork_projection_owner;
 
 -- Migration 24's orchestrator, without the stamp.
 CREATE OR REPLACE FUNCTION public.projection_run_all(p_tenant uuid)
@@ -26,6 +26,6 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_run_all(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_run_all(uuid) OWNER TO spork_projection_owner;
 
 ALTER TABLE projection_step DROP COLUMN IF EXISTS last_changed_at;

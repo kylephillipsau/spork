@@ -56,7 +56,7 @@ ALTER TABLE adjustment_reason ENABLE ROW LEVEL SECURITY;
 ALTER TABLE adjustment_reason FORCE ROW LEVEL SECURITY;
 CREATE POLICY adjustment_reason_shared_reference ON adjustment_reason
     USING (tenant_id IS NULL OR tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON adjustment_reason TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON adjustment_reason TO spork_app;
 
 INSERT INTO adjustment_reason (tenant_id, code, name, class) VALUES
     (NULL, 'miscount',        'Counted wrong',                        'record_error'),

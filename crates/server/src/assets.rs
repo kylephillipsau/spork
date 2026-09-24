@@ -52,8 +52,8 @@ pub const MOUNT: &str = "/";
 /// Where the bundle is, in the image. Overridable so `cargo run` beside a
 /// `vite build` works without an image.
 pub fn directory() -> PathBuf {
-    std::env::var("NYLONITE_CLIENT_DIR")
-        .unwrap_or_else(|_| "/usr/local/share/nylonite/client".to_string())
+    std::env::var("SPORK_CLIENT_DIR")
+        .unwrap_or_else(|_| "/usr/local/share/spork/client".to_string())
         .into()
 }
 

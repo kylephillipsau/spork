@@ -6,7 +6,7 @@
 //!
 //! `POST /receipts` takes an `expected_supply_id` and nothing said what to call
 //! it about. `requires_lot` is on the wire because
-//! [`nylonite_server::receiving::disposition`] **refuses** a line whose policy
+//! [`spork_server::receiving::disposition`] **refuses** a line whose policy
 //! wants a lot and has none — a screen that did not know would find out from a
 //! refusal with the pallet already broken down.
 //!
@@ -38,7 +38,7 @@
 
 use actix_web::{test, web, App};
 use chrono::Utc;
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::json;
 use uuid::Uuid;
 

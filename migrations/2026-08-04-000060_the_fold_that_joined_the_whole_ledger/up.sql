@@ -46,7 +46,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 60 (D106)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         SELECT l.id AS line_id, l.tenant_id, po.site_id, l.item_id,
@@ -152,7 +152,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 
 COMMENT ON FUNCTION projection_expected_supply_rebuild(uuid) IS
     'Folds promises from purchase orders, allocations and arrivals. quantity_received '
@@ -173,7 +173,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 60 (D106)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- D99 shape rules over D103's effective quantity, rooted only at movements
     -- that name a fulfilment line. Corrections hang off those roots; the root's
@@ -249,7 +249,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO spork_projection_owner;
 
 COMMENT ON FUNCTION projection_fulfilment_rebuild(uuid) IS
     'Maintainer for fulfilment_line coverage and progress. Progress uses D103''s '

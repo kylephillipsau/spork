@@ -21,5 +21,5 @@ DROP FUNCTION IF EXISTS credential_for_login(text);
 DROP TABLE IF EXISTS session;
 DROP TABLE IF EXISTS person_credential;
 
-REVOKE SELECT ON person_tenant FROM nylonite_app;
-REVOKE SELECT ON person, person_tenant FROM nylonite_mediation_owner;
+REVOKE SELECT ON person_tenant FROM spork_app;
+REVOKE SELECT ON person, person_tenant FROM spork_mediation_owner;

@@ -10,7 +10,7 @@
 //! missing, and the assertions at the bottom name what — in S42's idiom, so that
 //! building the missing piece makes this file fail and demand to be extended.
 //!
-//! Everything runs after `SET LOCAL ROLE nylonite_app`, inside one transaction
+//! Everything runs after `SET LOCAL ROLE spork_app`, inside one transaction
 //! that is rolled back. Skips rather than fails without `DATABASE_URL`.
 
 use postgres::Transaction;
@@ -48,10 +48,10 @@ fn a_delivery_reaches_stock_without_leaving_the_application_role() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     let mut tx = c.transaction().expect("begin");
-    tx.batch_execute("SET LOCAL ROLE nylonite_app").expect("become the app");
-    tx.execute("SELECT set_config('nylonite.tenant_id', $1, true)", &[&TENANT])
+    tx.batch_execute("SET LOCAL ROLE spork_app").expect("become the app");
+    tx.execute("SELECT set_config('spork.tenant_id', $1, true)", &[&TENANT])
         .expect("name the tenant");
 
     // ---------------------------------------------------------------------
@@ -241,7 +241,7 @@ fn the_walk_stops_where_the_schema_stops() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     // 1. **This guard was wrong and said nothing for a whole decision.**
     //
@@ -281,7 +281,7 @@ fn the_walk_stops_where_the_schema_stops() {
     // yet.
     let app_may_fold: bool = c
         .query_one(
-            "SELECT has_function_privilege('nylonite_app', 'projection_run_all(uuid)', 'EXECUTE')",
+            "SELECT has_function_privilege('spork_app', 'projection_run_all(uuid)', 'EXECUTE')",
             &[],
         )
         .expect("catalogue")

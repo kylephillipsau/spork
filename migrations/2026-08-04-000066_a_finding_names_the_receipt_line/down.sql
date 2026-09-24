@@ -81,12 +81,12 @@ END
 $$;
 
 ALTER FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
-    OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
 REVOKE EXECUTE ON FUNCTION
     goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
     goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
-    TO nylonite_app;
+    TO spork_app;
 
 COMMENT ON FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid) IS
     'Applies a decision D88 made under a policy D82 resolved and D83 clamped: the '

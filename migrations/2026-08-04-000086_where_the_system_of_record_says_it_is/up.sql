@@ -115,6 +115,6 @@ CREATE POLICY reported_stock_own ON reported_stock FOR ALL
 -- that source. That is the one place where deleting is right in a system that
 -- otherwise keeps everything — because this is not a record of what happened,
 -- it is a copy of what somebody else currently believes.
-GRANT SELECT, INSERT, UPDATE, DELETE ON reported_stock TO nylonite_app;
-GRANT SELECT ON reported_stock TO nylonite_platform;
-GRANT SELECT ON reported_stock TO nylonite_scheduler;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reported_stock TO spork_app;
+GRANT SELECT ON reported_stock TO spork_platform;
+GRANT SELECT ON reported_stock TO spork_scheduler;

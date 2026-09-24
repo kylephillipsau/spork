@@ -42,7 +42,7 @@ CREATE INDEX fulfilment_reference_idx
 --
 -- Updatable as well as insertable. A number assigned upstream after the
 -- fulfilment reached us has to be able to land on the row that is already here.
-GRANT INSERT (reference), UPDATE (reference) ON fulfilment TO nylonite_app;
+GRANT INSERT (reference), UPDATE (reference) ON fulfilment TO spork_app;
 
 COMMENT ON INDEX fulfilment_reference_idx IS
     'What the pack queue is searched by. Not unique -- D44 makes '

@@ -82,7 +82,7 @@ CREATE INDEX asserted_unit_package_idx
 -- our annotation on it freezes on first use (D21).
 GRANT INSERT (resolved_physical), SELECT (resolved_physical, resolved_package_id,
        collapsed_at, collapsed_by_id)
-    ON asserted_unit TO nylonite_app;
+    ON asserted_unit TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 3. The collapse, as a mediated write
@@ -90,7 +90,7 @@ GRANT INSERT (resolved_physical), SELECT (resolved_physical, resolved_package_id
 --
 -- **The first use of D94's pattern since D94 made it work.** The application has
 -- no UPDATE on this table and cannot acquire one; the function owns exactly the
--- three columns it writes; and it is a definer owned by `nylonite_mediation_owner`,
+-- three columns it writes; and it is a definer owned by `spork_mediation_owner`,
 -- which has neither SUPERUSER nor BYPASSRLS, so it stays inside row-level
 -- security. S54 checks all of that from the registry rather than from memory.
 --
@@ -158,7 +158,7 @@ END
 $$;
 
 ALTER FUNCTION asserted_unit_collapse(uuid, uuid, uuid)
-    OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
 
 COMMENT ON FUNCTION asserted_unit_collapse(uuid, uuid, uuid) IS
     'Records that a declared unit and a scanned package are the same pallet. '
@@ -167,13 +167,13 @@ COMMENT ON FUNCTION asserted_unit_collapse(uuid, uuid, uuid) IS
 
 -- J37: a definer must not grant EXECUTE to PUBLIC.
 REVOKE EXECUTE ON FUNCTION asserted_unit_collapse(uuid, uuid, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION asserted_unit_collapse(uuid, uuid, uuid) TO nylonite_app;
+GRANT EXECUTE ON FUNCTION asserted_unit_collapse(uuid, uuid, uuid) TO spork_app;
 
-GRANT SELECT ON package TO nylonite_mediation_owner;
-GRANT SELECT ON package_event TO nylonite_mediation_owner;
-GRANT SELECT ON asserted_unit TO nylonite_mediation_owner;
+GRANT SELECT ON package TO spork_mediation_owner;
+GRANT SELECT ON package_event TO spork_mediation_owner;
+GRANT SELECT ON asserted_unit TO spork_mediation_owner;
 GRANT UPDATE (resolved_package_id, collapsed_at, collapsed_by_id)
-    ON asserted_unit TO nylonite_mediation_owner;
+    ON asserted_unit TO spork_mediation_owner;
 
 -- The declared side of S54's diff, so the mediation is checkable rather than
 -- remembered. D94 built this registry for the next use of the pattern; this is it.

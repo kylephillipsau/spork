@@ -58,7 +58,7 @@ export const SIGNED_IN: Session = {
     person_id: "77770000-0000-0000-0000-000000000001",
     display_name: "Kyle Phillips",
     tenant_id: "11111111-1111-1111-1111-111111111111",
-    tenant_name: "Nylonite Pty Ltd",
+    tenant_name: "Spork Pty Ltd",
     site_id: MEL.id,
     site_code: "MEL",
   },

@@ -13,7 +13,7 @@
 //! once as the pick and once as its correction, in the wrong direction.
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, NewClientEvent};
+use spork_server::client_events::{self, NewClientEvent};
 use uuid::Uuid;
 
 mod common;
@@ -83,7 +83,7 @@ async fn a_carton_says_what_is_in_it_and_who_it_is_for() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -219,7 +219,7 @@ async fn a_fully_reversed_pick_leaves_no_line_on_the_list() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

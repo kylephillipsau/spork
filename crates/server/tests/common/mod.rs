@@ -85,7 +85,7 @@ pub async fn connect(u: &str, assume_role: bool) -> tokio_postgres::Client {
     });
     if assume_role {
         client
-            .batch_execute("SET ROLE nylonite_app")
+            .batch_execute("SET ROLE spork_app")
             .await
             .expect("become the application role");
     }

@@ -1,6 +1,6 @@
 -- Migration 62 down: restore the broken scan (no tenant set in the loop).
 
-REVOKE SELECT ON tenant FROM nylonite_projection_owner;
+REVOKE SELECT ON tenant FROM spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION projection_run_dirty()
     RETURNS bigint
@@ -25,13 +25,13 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_run_dirty() OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_run_dirty() OWNER TO spork_projection_owner;
 
 COMMENT ON FUNCTION projection_run_dirty() IS
     'Scheduler entry: run projection_run_all for every dirty tenant, oldest first, '
-    'and clear each on success. Owned by nylonite_projection_owner. D107.';
+    'and clear each on success. Owned by spork_projection_owner. D107.';
 
 REVOKE ALL ON FUNCTION projection_run_dirty() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION projection_run_dirty() TO nylonite_scheduler;
-GRANT EXECUTE ON FUNCTION projection_run_dirty() TO nylonite_platform;
-GRANT EXECUTE ON FUNCTION projection_run_dirty() TO nylonite_projection_owner;
+GRANT EXECUTE ON FUNCTION projection_run_dirty() TO spork_scheduler;
+GRANT EXECUTE ON FUNCTION projection_run_dirty() TO spork_platform;
+GRANT EXECUTE ON FUNCTION projection_run_dirty() TO spork_projection_owner;

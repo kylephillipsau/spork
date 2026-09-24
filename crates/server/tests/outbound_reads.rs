@@ -27,7 +27,7 @@ async fn the_shipped_line_reads_the_fold_numbers() {
     let mut client = connect(&u, assume_role).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -73,7 +73,7 @@ async fn a_fulfilment_lists_its_lines_and_a_stranger_sees_none() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -91,7 +91,7 @@ async fn a_fulfilment_lists_its_lines_and_a_stranger_sees_none() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&BETA],
     )
     .await
@@ -122,7 +122,7 @@ async fn the_carton_reads_despatched_and_still_holds_five() {
     let mut client = connect(&u, assume_role).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -163,7 +163,7 @@ async fn open_lines_at_the_site_include_the_unfinished_commitment() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -250,14 +250,14 @@ async fn recording_a_pick_writes_the_ledger_and_not_the_projection() {
 
     if assume_role {
         client
-            .batch_execute("SET ROLE nylonite_app")
+            .batch_execute("SET ROLE spork_app")
             .await
             .expect("app role");
     }
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -382,7 +382,7 @@ async fn stock_includes_the_package_held_cell() {
     let mut client = connect(&u, assume_role).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -428,7 +428,7 @@ async fn the_app_can_create_a_package_with_a_created_event() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -530,7 +530,7 @@ async fn sealing_writes_an_event_and_not_status() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -652,7 +652,7 @@ async fn opening_writes_opened_event_and_clears_sealed_at() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -779,7 +779,7 @@ async fn despatch_writes_event_and_movement_without_to_side() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -896,7 +896,7 @@ async fn live_ledger_progress_matches_the_shipped_line_fold() {
     let line = Uuid::parse_str(LINE_SHIPPED).unwrap();
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -971,7 +971,7 @@ async fn package_status_ledger_reads_the_winning_event() {
     let carton = Uuid::parse_str(CARTON_D).unwrap();
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1009,7 +1009,7 @@ async fn mark_dirty_and_refresh_tenant_as_the_app() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1096,7 +1096,7 @@ async fn the_app_cannot_execute_projection_run_all() {
     let tenant = Uuid::parse_str(ALPHA).unwrap();
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1131,7 +1131,7 @@ async fn correction_mirrors_and_does_not_update_the_target() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1262,7 +1262,7 @@ async fn move_writes_ledger_and_marks_dirty() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1354,12 +1354,12 @@ async fn scheduler_role_drains_dirty_tenants() {
     let tenant = Uuid::parse_str(ALPHA).unwrap();
 
     client
-        .batch_execute("SET ROLE nylonite_app")
+        .batch_execute("SET ROLE spork_app")
         .await
         .expect("app");
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, false)",
+            "SELECT set_config('spork.tenant_id', $1::text, false)",
             &[&ALPHA],
         )
         .await
@@ -1374,7 +1374,7 @@ async fn scheduler_role_drains_dirty_tenants() {
 
     client.batch_execute("RESET ROLE").await.ok();
     client
-        .batch_execute("SET ROLE nylonite_scheduler")
+        .batch_execute("SET ROLE spork_scheduler")
         .await
         .expect("scheduler");
 
@@ -1388,12 +1388,12 @@ async fn scheduler_role_drains_dirty_tenants() {
 
     client.batch_execute("RESET ROLE").await.ok();
     client
-        .batch_execute("SET ROLE nylonite_app")
+        .batch_execute("SET ROLE spork_app")
         .await
         .expect("app again");
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, false)",
+            "SELECT set_config('spork.tenant_id', $1::text, false)",
             &[&ALPHA],
         )
         .await
@@ -1443,7 +1443,7 @@ async fn allocating_claims_a_cell_and_does_not_write_covered() {
     let mut client = connect(&u, assume_role).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1539,7 +1539,7 @@ async fn allocating_claims_a_cell_and_does_not_write_covered() {
 
 #[tokio::test]
 async fn over_cover_is_refused_by_the_pure_check() {
-    use nylonite_server::allocating::{self, ProposedAllocation};
+    use spork_server::allocating::{self, ProposedAllocation};
 
     let line = allocating::FulfilmentLine {
         id: Uuid::nil(),
@@ -1590,7 +1590,7 @@ async fn releasing_an_allocated_claim_sets_released_and_not_covered() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1675,7 +1675,7 @@ async fn releasing_an_allocated_claim_sets_released_and_not_covered() {
 
 #[tokio::test]
 async fn firm_release_requires_force_in_pure_check() {
-    use nylonite_server::allocating::{self, Allocation, ProposedRelease};
+    use spork_server::allocating::{self, Allocation, ProposedRelease};
 
     let a = Allocation {
         id: Uuid::nil(),
@@ -1742,7 +1742,7 @@ async fn placing_writes_a_placed_event_and_not_resolved_location() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -1887,7 +1887,7 @@ async fn containing_writes_contained_event_with_parent() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -2002,7 +2002,7 @@ async fn inventory_adjust_posts_delta_as_world_event_movement() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -2099,7 +2099,7 @@ async fn inventory_adjust_posts_delta_as_world_event_movement() {
     );
 
     // Pure check: counted match is soft no-op.
-    use nylonite_server::adjusting::{self, ProposedAdjustment};
+    use spork_server::adjusting::{self, ProposedAdjustment};
     let (problems, dir) = adjusting::check(
         &ProposedAdjustment {
             tenant_id: tenant,
@@ -2165,7 +2165,7 @@ async fn stock_count_raises_variance_finding_without_ledger_write() {
     }
 
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -2317,7 +2317,7 @@ async fn open_discrepancies_list_is_tenant_scoped() {
     let mut client = connect(&u, assume_role).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -2347,7 +2347,7 @@ async fn open_discrepancies_list_is_tenant_scoped() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&BETA],
     )
     .await

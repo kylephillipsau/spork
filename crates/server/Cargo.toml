@@ -1,16 +1,16 @@
 [package]
-name = "nylonite-server"
+name = "spork-server"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
 description = "The API server. Actix on Postgres, with tenancy enforced by the database."
 
 [[bin]]
-name = "nylonite-server"
+name = "spork-server"
 path = "src/main.rs"
 
 [[bin]]
-name = "nylonite-scheduler"
+name = "spork-scheduler"
 path = "src/bin/scheduler.rs"
 
 [dependencies]
@@ -29,7 +29,7 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-nylonite-policy = { workspace = true }
+spork-policy = { workspace = true }
 
 # Authentication (Q171 / D11). Pinned to the stable line: argon2 0.6 is at
 # release-candidate 8 and a password hash is not where to run one.

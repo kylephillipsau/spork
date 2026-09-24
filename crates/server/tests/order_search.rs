@@ -47,7 +47,7 @@ async fn an_order_is_found_by_the_number_a_customer_quotes() {
     let mut client = connect(&u, assume).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -98,7 +98,7 @@ async fn an_unknown_reference_finds_nothing() {
     let mut client = connect(&u, assume).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -127,7 +127,7 @@ async fn another_tenants_order_is_not_findable() {
     // the point: row-level security applies the predicate, and a handler that
     // forgets it returns nothing rather than everything.
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&"22222222-2222-2222-2222-222222222222"],
     )
     .await
@@ -151,7 +151,7 @@ async fn the_lookup_uses_its_index() {
     let mut client = connect(&u, assume).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

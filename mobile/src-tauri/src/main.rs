@@ -3,5 +3,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    nylonite_mobile_lib::run()
+    spork_mobile_lib::run()
 }

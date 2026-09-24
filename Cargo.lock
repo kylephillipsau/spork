@@ -1376,48 +1376,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nylonite-invariants"
-version = "0.1.0"
-dependencies = [
- "nylonite-policy",
- "nylonite-server",
- "postgres",
- "uuid",
-]
-
-[[package]]
-name = "nylonite-policy"
-version = "0.1.0"
-
-[[package]]
-name = "nylonite-server"
-version = "0.1.0"
-dependencies = [
- "actix-files",
- "actix-http",
- "actix-web",
- "argon2",
- "chrono",
- "csv",
- "deadpool-postgres",
- "futures-util",
- "maud",
- "nylonite-policy",
- "rand 0.8.7",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.19",
- "tokio",
- "tokio-postgres",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "webauthn-rs",
- "webauthn-rs-proto",
-]
-
-[[package]]
 name = "objc2-core-foundation"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2008,6 +1966,48 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "spork-invariants"
+version = "0.1.0"
+dependencies = [
+ "postgres",
+ "spork-policy",
+ "spork-server",
+ "uuid",
+]
+
+[[package]]
+name = "spork-policy"
+version = "0.1.0"
+
+[[package]]
+name = "spork-server"
+version = "0.1.0"
+dependencies = [
+ "actix-files",
+ "actix-http",
+ "actix-web",
+ "argon2",
+ "chrono",
+ "csv",
+ "deadpool-postgres",
+ "futures-util",
+ "maud",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "spork-policy",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "webauthn-rs",
+ "webauthn-rs-proto",
 ]
 
 [[package]]

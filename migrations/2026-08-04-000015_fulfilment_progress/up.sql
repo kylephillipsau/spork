@@ -142,7 +142,7 @@ CREATE FUNCTION projection_fulfilment_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH folded AS (
         SELECT fulfilment_line_id,
@@ -183,18 +183,18 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_fulfilment_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_fulfilment_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 COMMENT ON FUNCTION projection_fulfilment_rebuild(uuid) IS
     'Maintainer for fulfilment_line''s four coverage quantities. D53. There is no '
     'fulfilment arm: progress was dropped rather than defined, because a fulfilment '
     'has few lines and a stored label can disagree with them.';
 
-GRANT SELECT, UPDATE ON fulfilment_line TO nylonite_projection_owner;
-GRANT SELECT ON stock_allocation TO nylonite_projection_owner;
+GRANT SELECT, UPDATE ON fulfilment_line TO spork_projection_owner;
+GRANT SELECT ON stock_allocation TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 5. A registered maintainer that maintained nothing
@@ -225,7 +225,7 @@ CREATE OR REPLACE FUNCTION projection_stock_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT to_location_id AS holder_location_id, to_package_id AS holder_package_id,
@@ -299,4 +299,4 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO spork_projection_owner;

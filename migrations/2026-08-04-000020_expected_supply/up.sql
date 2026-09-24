@@ -149,8 +149,8 @@ CREATE POLICY expected_supply_tenant_scoped ON expected_supply
 -- A projection: the application reads it and the maintainer writes it. S45 is
 -- satisfied because the table appears in no application write grant at all, which
 -- is the honest way to say the application never writes it.
-GRANT SELECT ON expected_supply TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE ON expected_supply TO nylonite_projection_owner;
+GRANT SELECT ON expected_supply TO spork_app;
+GRANT SELECT, INSERT, UPDATE ON expected_supply TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The second supply arm on an allocation
@@ -176,7 +176,7 @@ CREATE INDEX stock_allocation_expected_supply_idx
     ON stock_allocation (expected_supply_id) WHERE expected_supply_id IS NOT NULL;
 
 GRANT INSERT (expected_supply_id), UPDATE (expected_supply_id)
-    ON stock_allocation TO nylonite_app;
+    ON stock_allocation TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 4. The maintainer
@@ -204,7 +204,7 @@ CREATE FUNCTION projection_expected_supply_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         -- Only an issued order promises anything. A draft is a document somebody
@@ -271,12 +271,12 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_expected_supply_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_expected_supply_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
-GRANT SELECT ON purchase_order, purchase_order_line TO nylonite_projection_owner;
+GRANT SELECT ON purchase_order, purchase_order_line TO spork_projection_owner;
 
 COMMENT ON COLUMN expected_supply.quantity_expected IS
     '@projection of the source line via projection_expected_supply_rebuild (D24, D60).';

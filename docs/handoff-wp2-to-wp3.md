@@ -10,8 +10,8 @@ three signatures moved and one habit needs to stop.
 
 ```sh
 git checkout main && git merge --ff-only review/wp1-wp2-repairs
-DATABASE_URL=postgres://postgres:nylonite@localhost:55432/nylonite \
-  PGPASSWORD=nylonite scripts/verify-migrations.sh
+DATABASE_URL=postgres://postgres:spork@localhost:55432/spork \
+  PGPASSWORD=spork scripts/verify-migrations.sh
 docker compose up -d --build
 ```
 
@@ -30,10 +30,10 @@ that difference is the single most useful thing in this note.
 **Do not run the suites against the compose database.** Build one:
 
 ```sh
-createdb nylonite_x
-DATABASE_URL=postgres://.../nylonite_x PGPASSWORD=nylonite scripts/verify-migrations.sh
-DATABASE_URL=postgres://.../nylonite_x cargo test --workspace
-dropdb nylonite_x
+createdb spork_x
+DATABASE_URL=postgres://.../spork_x PGPASSWORD=spork scripts/verify-migrations.sh
+DATABASE_URL=postgres://.../spork_x cargo test --workspace
+dropdb spork_x
 ```
 
 Three of the five failures found in review came from this, in both directions.
@@ -113,7 +113,7 @@ only `stock_allocation` may hold the key.
    the act, return early on replay, then resolve.
 2. **An equal-specificity tie writes a `policy_ambiguous` discrepancy** naming
    the line, instead of a warning string that vanished with the response. Use
-   `nylonite_policy::explain()` for the text — it exists under question 79 so the
+   `spork_policy::explain()` for the text — it exists under question 79 so the
    explanation ships with the ordering it describes. **Any endpoint you add that
    resolves a policy owes the same row.** D22 raises the tie; J16 counts it.
 3. **The version lookup uses `query_opt`**, so a database error stays a 500

@@ -30,7 +30,7 @@ ALTER TABLE package_type ENABLE ROW LEVEL SECURITY;
 ALTER TABLE package_type FORCE ROW LEVEL SECURITY;
 CREATE POLICY package_type_shared_reference ON package_type
     USING (tenant_id IS NULL OR tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON package_type TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON package_type TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- What the customer asked for (D15, D39, D42, D44)
@@ -309,7 +309,7 @@ GRANT INSERT (id, tenant_id, fulfilment_id, package_type_id, sequence, length_mm
               width_mm, height_mm, gross_weight_g, dimensions_source, sealed_at),
       UPDATE (fulfilment_id, package_type_id, sequence, length_mm, width_mm,
               height_mm, gross_weight_g, dimensions_source, sealed_at)
-    ON package TO nylonite_app;
+    ON package TO spork_app;
 
 COMMENT ON COLUMN package.dimensions_source IS
     'computed | confirmed | corrected. Whether the carton was measured, agreed '
@@ -355,35 +355,35 @@ ALTER TABLE consignment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consignment FORCE ROW LEVEL SECURITY;
 CREATE POLICY consignment_tenant_scoped ON consignment USING (tenant_id = current_tenant());
 
-GRANT SELECT, INSERT, UPDATE ON "order", order_line TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE ON "order", order_line TO spork_app;
 
 -- Column-level wherever a table carries a projection, per D25 and J36. A
 -- table-wide UPDATE here would let the application write the very columns the
 -- maintainer exists to own, and the guard would still read as though it were on.
-GRANT SELECT ON fulfilment TO nylonite_app;
+GRANT SELECT ON fulfilment TO spork_app;
 GRANT INSERT (id, tenant_id, order_id, site_id, state, picked_by_id, packed_by_id,
               picked_at, packed_at),
       UPDATE (state, site_id, picked_by_id, packed_by_id, picked_at, packed_at)
-    ON fulfilment TO nylonite_app;
+    ON fulfilment TO spork_app;
 
-GRANT SELECT ON fulfilment_line TO nylonite_app;
+GRANT SELECT ON fulfilment_line TO spork_app;
 GRANT INSERT (id, tenant_id, fulfilment_id, order_line_id, quantity),
       UPDATE (quantity)
-    ON fulfilment_line TO nylonite_app;
+    ON fulfilment_line TO spork_app;
 
-GRANT SELECT ON consignment TO nylonite_app;
+GRANT SELECT ON consignment TO spork_app;
 GRANT INSERT (id, tenant_id, carrier_id, freight_provider_id, carrier_service_id,
               provider_consignment_id, carrier_consignment_number, despatch_at, currency),
       UPDATE (carrier_id, freight_provider_id, carrier_service_id,
               provider_consignment_id, carrier_consignment_number,
-              despatch_at, currency) ON consignment TO nylonite_app;
+              despatch_at, currency) ON consignment TO spork_app;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON carrier, freight_provider, carrier_service,
-    consignment_package TO nylonite_app;
+    consignment_package TO spork_app;
 
 -- intention_amendment is a fact: SELECT and INSERT, and no verb for changing
 -- what happened.
-GRANT SELECT, INSERT ON intention_amendment TO nylonite_app;
+GRANT SELECT, INSERT ON intention_amendment TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- The amendment fold (D42, J46)
@@ -398,7 +398,7 @@ CREATE FUNCTION projection_order_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- Last writer per covered column, in register order. Not one winning row:
     -- an amendment that changed only the promised window must not clear a state
@@ -432,9 +432,9 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_order_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_order_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
-GRANT SELECT, UPDATE ON "order" TO nylonite_projection_owner;
-GRANT SELECT ON intention_amendment TO nylonite_projection_owner;
+    TO spork_scheduler, spork_platform;
+GRANT SELECT, UPDATE ON "order" TO spork_projection_owner;
+GRANT SELECT ON intention_amendment TO spork_projection_owner;

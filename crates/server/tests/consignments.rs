@@ -13,7 +13,7 @@
 //! carton with no weight, which a carrier will weigh and invoice for.
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, NewClientEvent};
+use spork_server::client_events::{self, NewClientEvent};
 use uuid::Uuid;
 
 mod common;
@@ -115,7 +115,7 @@ async fn the_carton_count_is_a_fold_not_a_number_somebody_retypes() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -185,7 +185,7 @@ async fn cartons_that_differ_are_reported_rather_than_averaged() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -239,7 +239,7 @@ async fn a_carton_cannot_be_put_on_two_trucks() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

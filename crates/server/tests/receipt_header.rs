@@ -5,7 +5,7 @@
 //! permanent store.
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, ActInsert, NewClientEvent};
+use spork_server::client_events::{self, ActInsert, NewClientEvent};
 use uuid::Uuid;
 
 mod common;
@@ -41,7 +41,7 @@ async fn two_lines_share_one_header() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -239,7 +239,7 @@ async fn omit_header_id_still_opens_one_line_receipt() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -331,7 +331,7 @@ async fn a_second_line_joins_a_header_it_raced_to_open() {
 
     // A opens the delivery and commits, which is what makes B's insert conflict.
     let ta = a.transaction().await.unwrap();
-    ta.execute("SELECT set_config('nylonite.tenant_id', $1::text, true)", &[&ALPHA])
+    ta.execute("SELECT set_config('spork.tenant_id', $1::text, true)", &[&ALPHA])
         .await
         .unwrap();
     let (sql, ce) = act(ce_a);
@@ -347,7 +347,7 @@ async fn a_second_line_joins_a_header_it_raced_to_open() {
 
     // B names the same header. Before the fix this was a duplicate-key error.
     let tb = b.transaction().await.unwrap();
-    tb.execute("SELECT set_config('nylonite.tenant_id', $1::text, true)", &[&ALPHA])
+    tb.execute("SELECT set_config('spork.tenant_id', $1::text, true)", &[&ALPHA])
         .await
         .unwrap();
     let (sql, ce) = act(ce_b);

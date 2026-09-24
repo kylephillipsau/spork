@@ -225,7 +225,7 @@ DECLARE
     n bigint;
     m bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     CREATE TEMP TABLE winner ON COMMIT DROP AS
     WITH eligible AS (
@@ -314,15 +314,15 @@ END
 $$;
 
 ALTER FUNCTION projection_observation_current_rebuild(uuid)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_observation_current_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_observation_current_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON observation_current
-    TO nylonite_projection_owner;
+    TO spork_projection_owner;
 GRANT SELECT ON observation, observation_event, observation_acceptance, observable
-    TO nylonite_projection_owner;
+    TO spork_projection_owner;
 
 INSERT INTO projection_step (function_name, ordinal, note) VALUES
     ('projection_observation_current_rebuild', 45,
@@ -350,11 +350,11 @@ CREATE POLICY observation_current_tenant_scoped ON observation_current
 
 -- An acceptance is a fact and is appended, never revised: withdrawing acceptance
 -- is a retraction of the observation, not an edit of our adoption of it.
-GRANT SELECT, INSERT ON observation_acceptance TO nylonite_app;
+GRANT SELECT, INSERT ON observation_acceptance TO spork_app;
 
 -- A projection. J36's rule: no login role may UPDATE a projection column or
 -- DELETE from the table carrying one.
-GRANT SELECT ON observation_current TO nylonite_app;
+GRANT SELECT ON observation_current TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 6. What this does not build

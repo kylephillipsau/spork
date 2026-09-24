@@ -173,7 +173,7 @@ INSERT INTO projection_rebuild (table_name, column_name, function_name) VALUES
 -- `order_line` has carried a table-wide INSERT and UPDATE since migration 9, on
 -- the same grant statement as `order`, which is why migration 12 found one and
 -- not the other.
-REVOKE INSERT, UPDATE ON order_line FROM nylonite_app;
+REVOKE INSERT, UPDATE ON order_line FROM spork_app;
 
 -- INSERT covers the original values, because the fold coalesces onto the row
 -- rather than replacing it, so an order line's first quantity and price are the
@@ -192,7 +192,7 @@ REVOKE INSERT, UPDATE ON order_line FROM nylonite_app;
 GRANT INSERT (id, tenant_id, order_id, item_id, quantity_ordered, line_number,
               unit_price_minor, price_basis_quantity),
       UPDATE (line_number)
-    ON order_line TO nylonite_app;
+    ON order_line TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 5. The fold, extended to the second subject
@@ -217,7 +217,7 @@ DECLARE
     touched bigint;
     touched_lines bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- Last writer per covered column, in register order. Not one winning row:
     -- an amendment that changed only the promised window must not clear a state
@@ -284,11 +284,11 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_order_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_order_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 -- The maintainer could read `order_line` and not write it, which would have made
 -- the rebuild fail at the first amended line rather than at deploy.
-GRANT SELECT, UPDATE ON order_line TO nylonite_projection_owner;
+GRANT SELECT, UPDATE ON order_line TO spork_projection_owner;

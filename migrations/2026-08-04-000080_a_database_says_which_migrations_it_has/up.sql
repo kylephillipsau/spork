@@ -52,7 +52,7 @@ COMMENT ON TABLE schema_migration IS
 -- is the same for all of them — so `current_tenant()` has nothing to say about
 -- it and a policy would be a policy over a constant.
 --
--- The application roles get nothing at all. `nylonite_app` has no reason to read
+-- The application roles get nothing at all. `spork_app` has no reason to read
 -- which migrations exist and every reason not to be able to write it: a role
 -- that can insert into this table can make a pending migration look applied,
 -- which is the one lie that would defeat the whole mechanism. The migrator

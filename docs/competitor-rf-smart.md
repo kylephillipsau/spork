@@ -23,7 +23,7 @@ rather than guessed: offline behaviour, and per-seat list pricing.
 2026-07-30 — NetSuite WMS, Manhattan Active WM, CartonCloud, ShipHero, Odoo,
 Descartes Peoplevox — and did not cover RF-SMART.
 
-That is the wrong gap to have. **Nylonite replaces the warehouse side of
+That is the wrong gap to have. **Spork replaces the warehouse side of
 NetSuite. RF-SMART is the incumbent answer to exactly that problem**, it is the
 #1 reviewed WMS on the SuiteApp marketplace, and it has roughly 100 customers in
 Australia and New Zealand with a dedicated ANZ team. If this project has a direct
@@ -50,7 +50,7 @@ parcel and LTL shipping, licence plating, cycle counting with ABC scheduling,
 labour tracking, cloud printing, and integrations to AMR, ASRS and VLM
 automation. Vendor material cites "35+ workflows".
 
-**On feature count it is far ahead of Nylonite and will remain so.** That is not
+**On feature count it is far ahead of Spork and will remain so.** That is not
 the interesting comparison.
 
 ---
@@ -82,7 +82,7 @@ moved, you must create or edit a transaction that owns that movement. There is n
 row that means "40 units left bin A at 09:14, recorded by Kyle, from client event
 X".
 
-Nylonite's entire spine is that row. `stock_movement` is a fact with its own
+Spork's entire spine is that row. `stock_movement` is a fact with its own
 identity, its own `occurred_at` and `recorded_at`, its own `recorded_by_id`, and
 its own `client_event_id` for act-idempotency (D5). `stock` is a fold of it.
 Corrections are new movements pointing at the ones they reverse, and D103's
@@ -124,7 +124,7 @@ disagreement*, and those are different products.
 
 ### 3. Provenance is not in the model
 
-Nylonite's `observation` carries `method` (instrument, scan, keyed, derived,
+Spork's `observation` carries `method` (instrument, scan, keyed, derived,
 estimated, transcribed, asserted) and `ingestion_channel` (edi, portal, csv,
 email, api, keyed, scale, scanner, derived), and stores the entered value beside
 the canonical one so what somebody typed survives conversion (Principle 5).
@@ -160,7 +160,7 @@ products tend to hit a wall at high pick volumes: independent comparisons put
 native NetSuite WMS at under ~500 orders/day and RF-SMART comfortable to ~2,000,
 above which the advice is to leave the ERP entirely for Deposco or Logiwa.
 
-Nylonite runs on Postgres with maintainers it owns and a scheduler it controls.
+Spork runs on Postgres with maintainers it owns and a scheduler it controls.
 That is a much smaller product with a much higher ceiling on this specific axis.
 
 ### 6. One account is one business
@@ -168,7 +168,7 @@ That is a much smaller product with a much higher ceiling on this specific axis.
 A NetSuite account is one company's account (OneWorld adds subsidiaries within
 it). RF-SMART is deployed into that account.
 
-Nylonite is multi-tenant from migration 1, enforced by row-level security per
+Spork is multi-tenant from migration 1, enforced by row-level security per
 transaction, with the server refusing to start if connected in a way that turns
 it off. **One deployment can serve more than one company.** For a product that
 might serve several distributors, that is a structural difference RF-SMART cannot
@@ -183,15 +183,15 @@ research.
 
 - **Feature breadth.** Cartonisation, labour management, wave and cluster
   picking, AMR/ASRS/VLM integration, parcel and LTL rating, cloud printing.
-  Nylonite has none of these.
+  Spork has none of these.
 - **It exists.** 2,800 customers, 40+ countries, forty years of the company.
 - **Mobile-first execution.** Reviewers consistently praise the scanning
   workflows and the ease of training warehouse staff. This is the part of a WMS
   that is hardest to get right and easiest to underestimate.
-- **No integration to own.** The native bet's honest upside. Nylonite replacing
+- **No integration to own.** The native bet's honest upside. Spork replacing
   the warehouse side of NetSuite means somebody owns an integration boundary, and
   that is a permanent cost this project has taken on and must not pretend away.
-- **Shipping.** 450+ customers on RF-SMART Shipping. Nylonite has `consignment`
+- **Shipping.** 450+ customers on RF-SMART Shipping. Spork has `consignment`
   and a carrier/service split and no rating, labelling or manifesting.
 
 ---
@@ -264,7 +264,7 @@ rather than inferred from documentation.
 2. **Licence plating.** A pallet identifier that survives movement and is scanned
    as one unit. `package` and `package_event` are close to this already; the gap
    is workflow, not schema.
-3. **Directed putaway.** Nylonite has locations and a policy resolver and nothing
+3. **Directed putaway.** Spork has locations and a policy resolver and nothing
    that says where to put something.
 4. **Labour visibility.** Every act already carries `recorded_by_id` from the
    session (D11) and a `client_event`. Productivity reporting is a read away, and

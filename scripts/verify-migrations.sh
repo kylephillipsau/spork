@@ -23,7 +23,7 @@
 #   DATABASE_URL=... scripts/verify-migrations.sh
 set -eu
 
-DB="${DATABASE_URL:-postgres://postgres:nylonite@localhost:55432/nylonite}"
+DB="${DATABASE_URL:-postgres://postgres:spork@localhost:55432/spork}"
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
 
@@ -33,7 +33,7 @@ reset() {
     psql_q -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;' >/dev/null 2>&1 || true
 }
 
-# The reset used to GRANT USAGE ON SCHEMA public to the four nylonite roles
+# The reset used to GRANT USAGE ON SCHEMA public to the four spork roles
 # here, and that grant is why this script passed for months against a schema
 # in which every projection maintainer was broken. Roles are cluster-wide, so
 # one run left the repair behind for every database on the machine, forever.

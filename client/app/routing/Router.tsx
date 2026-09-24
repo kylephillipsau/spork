@@ -106,9 +106,9 @@ export function Router({
   useIntercept(routes);
   const found = resolve(routes, path);
 
-  // The tab says which screen this is. It said "Pack · Nylonite" on all of them.
+  // The tab says which screen this is. It said "Pack · Spork" on all of them.
   useEffect(() => {
-    document.title = found ? `${found.route.title} · Nylonite` : "Not found · Nylonite";
+    document.title = found ? `${found.route.title} · Spork` : "Not found · Spork";
   }, [found]);
 
   // **One room, above the route switch.** `LightRoom` documents itself as

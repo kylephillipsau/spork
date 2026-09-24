@@ -23,7 +23,7 @@
 //! about a column with no consumer.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 
 mod common;
@@ -50,7 +50,7 @@ async fn admin(u: &str) -> tokio_postgres::Client {
     // after itself.
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1, false)",
+            "SELECT set_config('spork.tenant_id', $1, false)",
             &[&TENANT],
         )
         .await
@@ -459,7 +459,7 @@ async fn a_picture_inherits_from_the_style_and_says_so() {
         .query_opt(
             &format!(
                 "WITH {} SELECT digest, source FROM picture WHERE item_id = $1",
-                nylonite_server::pictures::PICTURE_CTE
+                spork_server::pictures::PICTURE_CTE
             ),
             &[&variant],
         )

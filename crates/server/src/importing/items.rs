@@ -103,7 +103,7 @@ pub async fn load(
     rows: &[Row],
     apply: bool,
 ) -> Result<ItemsLoaded, String> {
-    tx.batch_execute("SAVEPOINT nylonite_import")
+    tx.batch_execute("SAVEPOINT spork_import")
         .await
         .map_err(|e| e.to_string())?;
 
@@ -130,11 +130,11 @@ pub async fn load(
     }
 
     if apply {
-        tx.batch_execute("RELEASE SAVEPOINT nylonite_import")
+        tx.batch_execute("RELEASE SAVEPOINT spork_import")
             .await
             .map_err(|e| e.to_string())?;
     } else {
-        tx.batch_execute("ROLLBACK TO SAVEPOINT nylonite_import")
+        tx.batch_execute("ROLLBACK TO SAVEPOINT spork_import")
             .await
             .map_err(|e| e.to_string())?;
     }

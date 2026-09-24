@@ -113,7 +113,7 @@ COMMENT ON COLUMN stock_movement.fulfilment_line_id IS
 -- convention, and a cause that could be edited afterwards would make the fold
 -- rewritable, which is the property the whole outbound argument turns on.
 
-GRANT INSERT (fulfilment_line_id) ON stock_movement TO nylonite_app;
+GRANT INSERT (fulfilment_line_id) ON stock_movement TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 5. What this migration deliberately does not do

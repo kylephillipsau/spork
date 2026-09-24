@@ -24,7 +24,7 @@ UPDATE "order" o
 ALTER TABLE "order" ALTER COLUMN source_channel SET NOT NULL;
 ALTER TABLE "order" DROP COLUMN source_channel_id;
 
-REVOKE INSERT, UPDATE ON "order" FROM nylonite_app;
+REVOKE INSERT, UPDATE ON "order" FROM spork_app;
 
 -- Migration 12's list, plus the currency migration 13 added.
 GRANT INSERT (id, tenant_id, site_id, customer_party_id, confirmation_number,
@@ -32,7 +32,7 @@ GRANT INSERT (id, tenant_id, site_id, customer_party_id, confirmation_number,
               promised_from, promised_to, required_by, state, currency),
       UPDATE (site_id, customer_party_id, confirmation_number, external_ref,
               supersedes_order_id)
-    ON "order" TO nylonite_app;
+    ON "order" TO spork_app;
 
 DROP TABLE IF EXISTS source_channel;
 DROP TYPE IF EXISTS channel_authority;

@@ -1,4 +1,4 @@
-# nylonite-mobile
+# spork-mobile
 
 The Tauri 2 shell for the floor app. **There is no second interface**: this runs
 the same React client the browser runs, built in a mode that points the
@@ -32,8 +32,8 @@ browser ignores this and uses the cookie."* D165.
 ## Signing: which account
 
 Nothing here ties this app to any developer account. The bundle identifier is
-`com.nylonite.floor`, the team ID is never committed, and both are independent
-of whatever else you ship — so putting Nylonite on its own developer account
+`com.warehouseutilities.spork`, the team ID is never committed, and both are independent
+of whatever else you ship — so putting Spork on its own developer account
 later costs one environment variable and nothing else.
 
 Two ways to sign for a device, and the difference is how often you rebuild:
@@ -71,11 +71,11 @@ npm --prefix mobile run ios:build              # --debug --export-method debuggi
 
 xcrun devicectl list devices
 xcrun devicectl device install app --device <UUID> \
-  mobile/src-tauri/gen/apple/build/arm64/Nylonite.ipa
+  mobile/src-tauri/gen/apple/build/arm64/Spork.ipa
 ```
 
-The bundle is named after `productName` in `tauri.conf.json` — `Nylonite.ipa`,
-not `nylonite-mobile.ipa`, which is the Cargo package and the Xcode project.
+The bundle is named after `productName` in `tauri.conf.json` — `Spork.ipa`,
+not `spork-mobile.ipa`, which is the Cargo package and the Xcode project.
 Installing does not need a signature, so that last step runs from anywhere.
 
 `--export-method debugging` produces a standalone app. `tauri ios dev` instead
@@ -87,10 +87,10 @@ origin for `/api` and gets nothing.
 
 ## Pointing it at a different server
 
-The default is `https://app.nylonite.com`. For a laptop build:
+The default is `https://spork.warehouseutilities.com`. For a laptop build:
 
 ```sh
-VITE_NYLONITE_SERVER=https://dev.nylonite.com npm --prefix client run build:mobile
+VITE_SPORK_SERVER=https://spork.warehouseutilities.com npm --prefix client run build:mobile
 ```
 
 One constant and one override, because there is one deployment. When there are

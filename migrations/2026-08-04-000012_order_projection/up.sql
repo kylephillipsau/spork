@@ -65,15 +65,15 @@ COMMENT ON COLUMN "order".state IS
 -- there rather than replacing it, so the original is the base of the fold and not
 -- an amendment. After that they move only through intention_amendment.
 
-REVOKE UPDATE ON "order" FROM nylonite_app;
-REVOKE INSERT ON "order" FROM nylonite_app;
+REVOKE UPDATE ON "order" FROM spork_app;
+REVOKE INSERT ON "order" FROM spork_app;
 
 GRANT INSERT (id, tenant_id, site_id, customer_party_id, confirmation_number,
               source_channel, external_ref, supersedes_order_id, placed_at,
               promised_from, promised_to, required_by, state),
       UPDATE (site_id, customer_party_id, confirmation_number, external_ref,
               supersedes_order_id)
-    ON "order" TO nylonite_app;
+    ON "order" TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 4. The two states the marker was conflating

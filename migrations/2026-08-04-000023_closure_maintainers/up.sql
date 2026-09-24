@@ -50,7 +50,7 @@ CREATE FUNCTION projection_item_class_closure_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH RECURSIVE tree AS (
         -- Every node is its own ancestor at depth zero. That row is what makes
@@ -101,7 +101,7 @@ CREATE FUNCTION projection_party_class_closure_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH RECURSIVE tree AS (
         SELECT c.tenant_id, c.id AS ancestor_id, c.id AS descendant_id, 0 AS depth
@@ -140,22 +140,22 @@ END
 $$;
 
 ALTER FUNCTION projection_item_class_closure_rebuild(uuid)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 ALTER FUNCTION projection_party_class_closure_rebuild(uuid)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_item_class_closure_rebuild(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION projection_party_class_closure_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_item_class_closure_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 GRANT EXECUTE ON FUNCTION projection_party_class_closure_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 -- DELETE is granted here and nowhere near the application. S30 asserts the app
 -- holds no DELETE on a projection; a total rebuild needs one, and the maintainer
 -- role is the only thing that has it.
 GRANT SELECT, INSERT, UPDATE, DELETE ON item_class_closure, party_class_closure
-    TO nylonite_projection_owner;
-GRANT SELECT ON item_class, party_class TO nylonite_projection_owner;
+    TO spork_projection_owner;
+GRANT SELECT ON item_class, party_class TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 2. Mark and register, which is the half D49 exists to enforce

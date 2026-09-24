@@ -180,7 +180,7 @@ GRANT EXECUTE ON FUNCTION
     party_class_move_affected(uuid, uuid, timestamptz),
     item_class_move_impact(uuid, uuid, timestamptz),
     party_class_move_impact(uuid, uuid, timestamptz)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The number the approver saw, frozen on the fact
@@ -224,7 +224,7 @@ COMMENT ON COLUMN policy_change.affected_binding_count IS
     'D22 called this affected_resolution_count; it counts bindings, and the '
     'rename is question 95''s answer. D73.';
 
-GRANT INSERT (affected_binding_count) ON policy_change TO nylonite_app;
+GRANT INSERT (affected_binding_count) ON policy_change TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 4. What this does not solve

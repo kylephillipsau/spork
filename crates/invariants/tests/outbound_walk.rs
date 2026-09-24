@@ -17,7 +17,7 @@
 //! come from. `covered_quantity` still folds the allocation, because coverage is an
 //! intention and the other three are claims about what happened.
 //!
-//! Everything runs after `SET LOCAL ROLE nylonite_app`, inside one transaction
+//! Everything runs after `SET LOCAL ROLE spork_app`, inside one transaction
 //! that is rolled back. Skips rather than fails without `DATABASE_URL`.
 
 use postgres::Transaction;
@@ -61,10 +61,10 @@ fn an_order_reaches_the_truck_without_leaving_the_application_role() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     let mut tx = c.transaction().expect("begin");
-    tx.batch_execute("SET LOCAL ROLE nylonite_app").expect("become the app");
-    tx.execute("SELECT set_config('nylonite.tenant_id', $1, true)", &[&TENANT])
+    tx.batch_execute("SET LOCAL ROLE spork_app").expect("become the app");
+    tx.execute("SELECT set_config('spork.tenant_id', $1, true)", &[&TENANT])
         .expect("name the tenant");
 
     // ---------------------------------------------------------------------
@@ -295,7 +295,7 @@ fn the_ledger_names_both_causes_and_the_check_means_something() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     let causes: i64 = c
         .query_one(

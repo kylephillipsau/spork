@@ -89,8 +89,8 @@ COMMENT ON VIEW stock_movement_effective IS
     'Rows exist for roots only. The single definition behind quantity_received, the '
     'three fulfilment progress quantities, J26, J51 and J68.';
 
-GRANT SELECT ON stock_movement_effective TO nylonite_projection_owner;
-GRANT SELECT ON stock_movement_effective TO nylonite_app;
+GRANT SELECT ON stock_movement_effective TO spork_projection_owner;
+GRANT SELECT ON stock_movement_effective TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 3. Outbound
@@ -105,7 +105,7 @@ CREATE OR REPLACE FUNCTION projection_fulfilment_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT m.fulfilment_line_id,
@@ -156,7 +156,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 4. Inbound
@@ -176,7 +176,7 @@ CREATE OR REPLACE FUNCTION projection_expected_supply_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         SELECT l.id AS line_id, l.tenant_id, po.site_id, l.item_id,
@@ -269,7 +269,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 5. The column comments

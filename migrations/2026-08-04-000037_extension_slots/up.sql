@@ -294,17 +294,17 @@ CREATE POLICY record_scheme_field_own_write ON record_scheme_field
 
 -- **A tenant may read its ceiling and may not raise it.** Issuing slots is a
 -- platform act, which is the whole point of making the ceiling data.
-GRANT SELECT ON extension_slot TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON extension_slot TO nylonite_platform;
+GRANT SELECT ON extension_slot TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON extension_slot TO spork_platform;
 
 -- Declaring a scheme runs DDL, so it is the compiler's act and the compiler is
 -- platform. The application reads what has been declared.
-GRANT SELECT ON record_scheme, record_scheme_field TO nylonite_app;
+GRANT SELECT ON record_scheme, record_scheme_field TO spork_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON record_scheme, record_scheme_field
-    TO nylonite_platform;
+    TO spork_platform;
 
 GRANT EXECUTE ON FUNCTION extension_slot_claim(uuid, extension_slot_kind, text)
-    TO nylonite_platform;
+    TO spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- 6. What this does not build

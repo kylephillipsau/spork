@@ -147,14 +147,14 @@ async fn outbound_happy_path_create_place_allocate_pick_seal_despatch() {
 
     if assume_role {
         client
-            .batch_execute("SET ROLE nylonite_app")
+            .batch_execute("SET ROLE spork_app")
             .await
             .expect("app role");
     }
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

@@ -1,4 +1,4 @@
-# Nylonite
+# Spork
 
 A warehouse management system for pallet operations: receiving, put away,
 picking and despatch, recorded from handheld scanners. Rust and PostgreSQL on
@@ -9,6 +9,12 @@ Every scan writes an event holding what was scanned, the location, the operator
 and the time. Those events are the stock record. The movement ledger is append
 only, and a scan that disagrees with the record raises a finding with evidence
 attached instead of overwriting it.
+
+Spork is built on [Nylonite](https://github.com/kylephillipsau/nylonite), a base
+for warehouse systems. Spork's own direction is a local, decentralised system:
+every warehouse PC runs a full node, the nodes sync with each other on the site's
+network, and it connects to NetSuite through a userscript. See D170 in
+[docs/domain-model.md](docs/domain-model.md).
 
 ## Requirements
 
@@ -23,14 +29,17 @@ docker compose up -d postgres              # PostgreSQL on :55432
 scripts/migrate.sh                         # apply pending migrations
 psql "$DATABASE_URL" -f fixtures/seed.sql  # a small synthetic tenant
 
-cargo run -p nylonite-server               # API on :8080
-cargo run -p nylonite-scheduler            # drains dirty projections
+cargo run -p spork-server                  # API on :8080
+cargo run -p spork-scheduler               # drains dirty projections
 
 cd client && npm ci && npm run dev         # client on :5173
 ```
 
 `DATABASE_URL` defaults to
-`postgres://postgres:nylonite@localhost:55432/nylonite`.
+`postgres://postgres:spork@localhost:55432/spork`.
+
+On Windows without Docker, `scripts\local.ps1` does all of this natively. See
+[docs/local.md](docs/local.md).
 
 ## Testing
 

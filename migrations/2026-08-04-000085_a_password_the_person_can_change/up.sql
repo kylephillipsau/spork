@@ -3,7 +3,7 @@
 -- D142 shipped the way *into* a deployment and said plainly what it did not
 -- ship:
 --
---   **Still owed.** There is no change-password path: `nylonite_app` cannot
+--   **Still owed.** There is no change-password path: `spork_app` cannot
 --   write `person_credential` at all, so it wants a `SECURITY DEFINER` function
 --   scoped to the caller's own row.
 --
@@ -143,21 +143,21 @@ COMMENT ON FUNCTION session_revoke_others(uuid, bytea) IS
 -- PUBLIC — Postgres grants EXECUTE to PUBLIC on a new function by default, so
 -- without these revokes a definer that reaches credentials is callable by every
 -- role. S53 wants an owner that is neither SUPERUSER nor BYPASSRLS, which
--- `nylonite_mediation_owner` already is.
+-- `spork_mediation_owner` already is.
 --
 -- **No table grants below**, and that is not an oversight: migration 70 already
 -- gave the owner SELECT, UPDATE on `person_credential` and SELECT, INSERT,
 -- UPDATE on `session`, which is everything these three bodies touch.
 
-ALTER FUNCTION credential_phc(uuid) OWNER TO nylonite_mediation_owner;
+ALTER FUNCTION credential_phc(uuid) OWNER TO spork_mediation_owner;
 ALTER FUNCTION credential_change_password(uuid, text, text)
-    OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION session_revoke_others(uuid, bytea) OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
+ALTER FUNCTION session_revoke_others(uuid, bytea) OWNER TO spork_mediation_owner;
 
 REVOKE EXECUTE ON FUNCTION credential_phc(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION credential_change_password(uuid, text, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION session_revoke_others(uuid, bytea) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION credential_phc(uuid) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION credential_change_password(uuid, text, text) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION session_revoke_others(uuid, bytea) TO nylonite_app;
+GRANT EXECUTE ON FUNCTION credential_phc(uuid) TO spork_app;
+GRANT EXECUTE ON FUNCTION credential_change_password(uuid, text, text) TO spork_app;
+GRANT EXECUTE ON FUNCTION session_revoke_others(uuid, bytea) TO spork_app;

@@ -82,8 +82,8 @@ ALTER TABLE package_containment FORCE ROW LEVEL SECURITY;
 CREATE POLICY package_containment_tenant_scoped ON package_containment
     USING (tenant_id = current_tenant());
 
-GRANT SELECT ON package_containment TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON package_containment TO nylonite_projection_owner;
+GRANT SELECT ON package_containment TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON package_containment TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- The maintainer, extended (D35)
@@ -98,7 +98,7 @@ CREATE FUNCTION projection_package_containment_rebuild(p_tenant uuid)
 DECLARE
     built bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- This one is rebuilt rather than upserted, and that is a real difference
     -- from stock. Nothing holds a durable foreign key to a containment interval,
@@ -134,10 +134,10 @@ END
 $$;
 
 ALTER FUNCTION projection_package_containment_rebuild(uuid)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_package_containment_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_package_containment_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 INSERT INTO projection_rebuild (table_name, column_name, function_name) VALUES
     ('package_containment', 'valid', 'projection_package_containment_rebuild');
@@ -153,7 +153,7 @@ CREATE OR REPLACE FUNCTION projection_package_stamp(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH winner AS (
         SELECT DISTINCT ON (package_id) package_id, id, occurred_at
@@ -171,7 +171,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_package_stamp(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_package_stamp(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_package_stamp(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_package_stamp(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;

@@ -30,7 +30,7 @@
 //! `capture_worklist.rs` classifies.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -82,8 +82,8 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
     };
 
     // Somewhere to put the bytes that is not an image's directory.
-    let images = std::env::temp_dir().join(format!("nylonite-capture-{}", Uuid::new_v4()));
-    std::env::set_var("NYLONITE_IMAGE_DIR", &images);
+    let images = std::env::temp_dir().join(format!("spork-capture-{}", Uuid::new_v4()));
+    std::env::set_var("SPORK_IMAGE_DIR", &images);
 
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(

@@ -31,7 +31,7 @@ DECLARE
     m bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     CREATE TEMP TABLE decision ON COMMIT DROP AS
     SELECT * FROM unnest(coalesce(p_decisions,

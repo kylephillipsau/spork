@@ -40,7 +40,7 @@ CREATE INDEX goods_receipt_line_asserted_content_idx
     WHERE asserted_unit_content_id IS NOT NULL;
 
 GRANT INSERT (asserted_unit_content_id), UPDATE (asserted_unit_content_id)
-    ON goods_receipt_line TO nylonite_app;
+    ON goods_receipt_line TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 2. D21's freeze, both halves
@@ -165,4 +165,4 @@ COMMENT ON FUNCTION goods_receipt_variance(uuid) IS
     'vocabulary and is not, because a packaging level is not a unit. D21, D91.';
 
 GRANT EXECUTE ON FUNCTION goods_receipt_variance(uuid)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
+    TO spork_app, spork_platform, spork_scheduler;

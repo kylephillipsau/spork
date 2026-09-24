@@ -65,7 +65,7 @@ ALTER TABLE item_style ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item_style FORCE ROW LEVEL SECURITY;
 CREATE POLICY item_style_tenant_scoped ON item_style
     USING (tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON item_style TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON item_style TO spork_app;
 
 ALTER TABLE item
     ADD COLUMN style_id uuid,
@@ -139,8 +139,8 @@ CREATE UNIQUE INDEX observable_item_style_idx ON observable
     WHERE item_style_id IS NOT NULL;
 
 -- S45: a column the application cannot write is a column nothing can fill.
-GRANT INSERT (item_style_id), UPDATE (item_style_id) ON observable TO nylonite_app;
-GRANT INSERT (style_id), UPDATE (style_id) ON item TO nylonite_app;
+GRANT INSERT (item_style_id), UPDATE (item_style_id) ON observable TO spork_app;
+GRANT INSERT (style_id), UPDATE (style_id) ON item TO spork_app;
 
 -- The metrics that may be asserted about a style are the ones that may be
 -- asserted about an item: it is the same physical claim, made one level up.

@@ -8,7 +8,7 @@ DELETE FROM projection_rebuild WHERE function_name = 'projection_expected_supply
 
 DROP FUNCTION IF EXISTS projection_expected_supply_rebuild(uuid);
 
-REVOKE SELECT ON purchase_order, purchase_order_line FROM nylonite_projection_owner;
+REVOKE SELECT ON purchase_order, purchase_order_line FROM spork_projection_owner;
 
 DROP INDEX IF EXISTS stock_allocation_expected_supply_idx;
 ALTER TABLE stock_allocation DROP CONSTRAINT IF EXISTS stock_allocation_supply_ck;

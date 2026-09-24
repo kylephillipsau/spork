@@ -138,7 +138,7 @@ COMMENT ON FUNCTION policy_candidate(uuid, policy_kind, uuid, uuid, uuid, uuid,
 
 GRANT EXECUTE ON FUNCTION policy_candidate(uuid, policy_kind, uuid, uuid, uuid,
                                            uuid, uuid, uuid, timestamptz)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
+    TO spork_app, spork_platform, spork_scheduler;
 
 -- ---------------------------------------------------------------------------
 -- 2. What this does not do

@@ -1,13 +1,13 @@
 # Uncomment the next line to define a global platform for your project
 
-target 'nylonite-mobile_iOS' do
+target 'spork-mobile_iOS' do
 platform :ios, '15.0'
-  # Pods for nylonite-mobile_iOS
+  # Pods for spork-mobile_iOS
 end
 
-target 'nylonite-mobile_macOS' do
+target 'spork-mobile_macOS' do
 platform :osx, '11.0'
-  # Pods for nylonite-mobile_macOS
+  # Pods for spork-mobile_macOS
 end
 
 # Delete the deployment target for iOS and macOS, causing it to be inherited from the Podfile

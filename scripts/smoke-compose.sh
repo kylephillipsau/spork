@@ -2,7 +2,7 @@
 # Compose-integrated smoke: findings path (investigate→resolve, and accept).
 set -eu
 API="${API:-http://127.0.0.1:18080}"
-DB="${DATABASE_URL:-postgres://postgres:nylonite@127.0.0.1:55432/nylonite}"
+DB="${DATABASE_URL:-postgres://postgres:spork@127.0.0.1:55432/spork}"
 TENANT=11111111-1111-1111-1111-111111111111
 PERSON=77770000-0000-0000-0000-000000000001
 SITE=a5170000-0000-0000-0000-000000000001
@@ -29,7 +29,7 @@ curl -sf -H "x-tenant-id: $TENANT" \
 echo ok
 
 ROW=$(psql "$DB" -tAc "
-SELECT set_config('nylonite.tenant_id', '$TENANT', false);
+SELECT set_config('spork.tenant_id', '$TENANT', false);
 SELECT id::text || '|' || quantity::text FROM stock
  WHERE quantity >= 10 AND holder_location_id IS NOT NULL
  ORDER BY quantity DESC LIMIT 1;
@@ -63,7 +63,7 @@ assert d['stock_count_id'] == os.environ['SC1']
 assert str(d.get('discrepancy_id') or '') == str(os.environ.get('DISC') or '')
 "
 N_COUNTS=$(psql "$DB" -tAc "
-SELECT set_config('nylonite.tenant_id', '$TENANT', false);
+SELECT set_config('spork.tenant_id', '$TENANT', false);
 SELECT count(*) FROM stock_count WHERE client_event_id='$CE1';" | tail -1)
 test "$N_COUNTS" = "1"
 echo "stock_count rows for act=$N_COUNTS"
@@ -80,7 +80,7 @@ INV2=$(curl -sf -X POST "$API/discrepancies/$DISC/investigate" \
   -d '{}')
 echo "$INV2" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['state']=='investigating'; assert d.get('warnings'); assert d['id']=='$DISC'"
 STATE=$(psql "$DB" -tAc "
-SELECT set_config('nylonite.tenant_id', '$TENANT', false);
+SELECT set_config('spork.tenant_id', '$TENANT', false);
 SELECT state::text FROM discrepancy WHERE id='$DISC';" | tail -1)
 test "$STATE" = "investigating"
 echo "finding state=$STATE"
@@ -93,14 +93,14 @@ echo "$ADJ"
 echo "$ADJ" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('resolved_discrepancy_id'); assert d.get('movement_id')"
 
 STATE=$(psql "$DB" -tAc "
-SELECT set_config('nylonite.tenant_id', '$TENANT', false);
+SELECT set_config('spork.tenant_id', '$TENANT', false);
 SELECT state::text FROM discrepancy WHERE id='$DISC';" | tail -1)
 test "$STATE" = "resolved"
 echo "finding state=$STATE"
 
 # Second cell: accept without ledger write (no adjust).
 ROW2=$(psql "$DB" -tAc "
-SELECT set_config('nylonite.tenant_id', '$TENANT', false);
+SELECT set_config('spork.tenant_id', '$TENANT', false);
 SELECT id::text || '|' || quantity::text FROM stock
  WHERE quantity >= 5 AND holder_location_id IS NOT NULL AND id <> '$STOCK_ID'
  ORDER BY quantity DESC LIMIT 1;
@@ -134,7 +134,7 @@ code=$(curl -s -o /tmp/acc_rej.json -w "%{http_code}" -X POST "$API/discrepancie
   -d "{\"recorded_by_id\":\"$PERSON\",\"reason\":\"nope\"}")
 test "$code" = "400"
 STATE2=$(psql "$DB" -tAc "
-SELECT set_config('nylonite.tenant_id', '$TENANT', false);
+SELECT set_config('spork.tenant_id', '$TENANT', false);
 SELECT state::text || '|' || COALESCE(resolving_movement_id::text,'') FROM discrepancy WHERE id='$DISC2';" | tail -1)
 test "$(echo "$STATE2" | cut -d'|' -f1)" = "accepted"
 test -z "$(echo "$STATE2" | cut -d'|' -f2)"

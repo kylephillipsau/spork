@@ -2,19 +2,19 @@
 -- they were built to work in.
 --
 -- Migration 3 creates both roles and grants them neither. Migration 1 grants
--- USAGE to nylonite_app and nylonite_platform, migration 48 to
--- nylonite_mediation_owner, and these two were never added to either list —
+-- USAGE to spork_app and spork_platform, migration 48 to
+-- spork_mediation_owner, and these two were never added to either list —
 -- so on a cluster where they have only ever existed as these migrations made
 -- them, they cannot see a single table.
 --
--- **Seventeen SECURITY DEFINER functions are owned by nylonite_projection_owner**
+-- **Seventeen SECURITY DEFINER functions are owned by spork_projection_owner**
 -- — every projection maintainer, plus record_finding — and a definer function
 -- runs as its owner. Without USAGE the whole schema is invisible to it, and
 -- PostgreSQL reports that as `relation "projection_step" does not exist`
 -- rather than as a permission error, which points the reader at a missing
 -- table that is sitting right there.
 --
--- nylonite_scheduler is the same defect with a different symptom: D107's drain
+-- spork_scheduler is the same defect with a different symptom: D107's drain
 -- connects and SET ROLEs to it, and on a fresh deployment it would find
 -- nothing to drain because it can see nothing at all.
 --
@@ -26,4 +26,4 @@
 -- is removed from the script in the same commit as this migration: a fixture
 -- that repairs what it is checking is worse than no fixture.
 
-GRANT USAGE ON SCHEMA public TO nylonite_projection_owner, nylonite_scheduler;
+GRANT USAGE ON SCHEMA public TO spork_projection_owner, spork_scheduler;

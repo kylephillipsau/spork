@@ -1,11 +1,11 @@
 //! Load the item master and the prepack list.
 //!
 //! ```sh
-//! cargo run -p nylonite-server --example import_prepack -- \
+//! cargo run -p spork-server --example import_prepack -- \
 //!     --items ~/Downloads/items.csv \
 //!     --prepack ~/Downloads/prepack.csv
 //! # then, once the report reads right:
-//! cargo run -p nylonite-server --example import_prepack -- ... --apply
+//! cargo run -p spork-server --example import_prepack -- ... --apply
 //! ```
 //!
 //! **Dry run by default.** It prints what it would write and writes nothing.
@@ -47,8 +47,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
-use nylonite_server::observing;
-use nylonite_server::prepack::{decide, Catalogue, Subject};
+use spork_server::observing;
+use spork_server::prepack::{decide, Catalogue, Subject};
 use tokio_postgres::{Client, NoTls};
 use uuid::Uuid;
 
@@ -219,7 +219,7 @@ async fn main() -> Result<(), String> {
     println!("\n  {} items, {} prepack rows\n", items.len(), rows.len());
 
     // ---- classify, and find the rows that disagree with each other ----
-    let mut plans: Vec<(Row, nylonite_server::prepack::Decision)> = vec![];
+    let mut plans: Vec<(Row, spork_server::prepack::Decision)> = vec![];
     for row in rows {
         let d = decide(&row.name, &catalogue);
         plans.push((row, d));
@@ -303,12 +303,12 @@ async fn main() -> Result<(), String> {
         let _ = connection.await;
     });
     client
-        .batch_execute("SET ROLE nylonite_app")
+        .batch_execute("SET ROLE spork_app")
         .await
         .map_err(|e| format!("SET ROLE: {e}"))?;
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, false)",
+            "SELECT set_config('spork.tenant_id', $1::text, false)",
             &[&args.tenant.to_string()],
         )
         .await
@@ -395,7 +395,7 @@ async fn main() -> Result<(), String> {
     let mut codes: Vec<String> = vec![];
     let mut styles: Vec<Uuid> = vec![];
     for i in &items {
-        if let Some(style) = nylonite_server::prepack::style_of(&i.code) {
+        if let Some(style) = spork_server::prepack::style_of(&i.code) {
             if let Some(id) = style_ids.get(&style) {
                 codes.push(i.code.clone());
                 styles.push(*id);

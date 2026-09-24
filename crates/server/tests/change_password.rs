@@ -14,7 +14,7 @@
 //! credential cannot borrow a credential the rest of the suite signs on with.
 
 use actix_web::{test, web, App};
-use nylonite_server::{auth, routes, AppState};
+use spork_server::{auth, routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -361,7 +361,7 @@ async fn an_unauthenticated_caller_cannot_change_anything() {
 ///
 /// **The check that would have caught the grant being forgotten.** A definer
 /// Postgres left executable by PUBLIC is the failure migration 75's comment
-/// records seven of; this asserts the other direction, that `nylonite_app` has
+/// records seven of; this asserts the other direction, that `spork_app` has
 /// what it needs and the tables stay shut.
 #[actix_web::test]
 async fn the_app_gained_three_functions_and_no_table() {
@@ -375,7 +375,7 @@ async fn the_app_gained_three_functions_and_no_table() {
     tokio::spawn(async move {
         let _ = connection.await;
     });
-    client.batch_execute("SET ROLE nylonite_app").await.unwrap();
+    client.batch_execute("SET ROLE spork_app").await.unwrap();
 
     let err = client
         .query("UPDATE person_credential SET phc = 'x'", &[])
@@ -394,7 +394,7 @@ async fn the_app_gained_three_functions_and_no_table() {
     ] {
         let ok: bool = client
             .query_one(
-                "SELECT has_function_privilege('nylonite_app', p.oid, 'EXECUTE')
+                "SELECT has_function_privilege('spork_app', p.oid, 'EXECUTE')
                    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                   WHERE p.proname = $1 AND n.nspname = 'public'",
                 &[&f],

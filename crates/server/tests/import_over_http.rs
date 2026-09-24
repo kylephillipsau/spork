@@ -7,7 +7,7 @@
 //! capability, and neither claim is visible in the schema.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -227,7 +227,7 @@ async fn an_import_token_loads_bins_and_nothing_else_can() {
 
     // Leave the fixture as it was found.
     let conn = pool(&u).get().await.unwrap();
-    conn.execute("SELECT set_config('nylonite.tenant_id', $1, false)", &[&TENANT])
+    conn.execute("SELECT set_config('spork.tenant_id', $1, false)", &[&TENANT])
         .await
         .unwrap();
     conn.execute("DELETE FROM location WHERE code = $1", &[&code]).await.unwrap();
@@ -270,7 +270,7 @@ async fn an_import_files_the_export_before_it_reads_it() {
         .as_nanos();
     let code = format!("ZF-{}-01", nonce % 1_000_000);
     let body = csv(&[&code]);
-    let hash = nylonite_server::importing::received::digest(body.as_bytes());
+    let hash = spork_server::importing::received::digest(body.as_bytes());
 
     let arrivals = |h: Vec<u8>| {
         let pool = pool(&u);

@@ -147,7 +147,7 @@ COMMENT ON TABLE webauthn_challenge IS
 -- ---------------------------------------------------------------------------
 --
 -- D89's pattern, and migration 70's: no login role holds SELECT on either table,
--- and every path in is a definer owned by `nylonite_mediation_owner` with a
+-- and every path in is a definer owned by `spork_mediation_owner` with a
 -- pinned `search_path`. `person` is global under D19, so a passkey readable by
 -- the application role would be readable by every tenant's connection.
 
@@ -264,17 +264,17 @@ AS $$
 $$;
 
 ALTER FUNCTION webauthn_challenge_open(uuid, text, text, interval)
-    OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION webauthn_challenge_claim(uuid, text) OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
+ALTER FUNCTION webauthn_challenge_claim(uuid, text) OWNER TO spork_mediation_owner;
 ALTER FUNCTION passkey_register(uuid, bytea, text, uuid, bigint, boolean, boolean,
-    text[], text) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION passkeys_for_person(uuid) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION passkey_by_credential(bytea) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION passkey_record_use(uuid, bigint, boolean) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION passkey_disable(uuid, uuid) OWNER TO nylonite_mediation_owner;
+    text[], text) OWNER TO spork_mediation_owner;
+ALTER FUNCTION passkeys_for_person(uuid) OWNER TO spork_mediation_owner;
+ALTER FUNCTION passkey_by_credential(bytea) OWNER TO spork_mediation_owner;
+ALTER FUNCTION passkey_record_use(uuid, bigint, boolean) OWNER TO spork_mediation_owner;
+ALTER FUNCTION passkey_disable(uuid, uuid) OWNER TO spork_mediation_owner;
 
-GRANT SELECT, INSERT, UPDATE ON person_passkey TO nylonite_mediation_owner;
-GRANT SELECT, INSERT, UPDATE ON webauthn_challenge TO nylonite_mediation_owner;
+GRANT SELECT, INSERT, UPDATE ON person_passkey TO spork_mediation_owner;
+GRANT SELECT, INSERT, UPDATE ON webauthn_challenge TO spork_mediation_owner;
 
 -- **PUBLIC first, and this was nearly missed.** Postgres grants EXECUTE on a
 -- new function to PUBLIC by default, so a definer that bypasses row-level
@@ -290,14 +290,14 @@ REVOKE EXECUTE ON FUNCTION passkey_by_credential(bytea) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION passkey_record_use(uuid, bigint, boolean) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION passkey_disable(uuid, uuid) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION webauthn_challenge_open(uuid, text, text, interval) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION webauthn_challenge_claim(uuid, text) TO nylonite_app;
+GRANT EXECUTE ON FUNCTION webauthn_challenge_open(uuid, text, text, interval) TO spork_app;
+GRANT EXECUTE ON FUNCTION webauthn_challenge_claim(uuid, text) TO spork_app;
 GRANT EXECUTE ON FUNCTION passkey_register(uuid, bytea, text, uuid, bigint, boolean,
-    boolean, text[], text) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION passkeys_for_person(uuid) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION passkey_by_credential(bytea) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION passkey_record_use(uuid, bigint, boolean) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION passkey_disable(uuid, uuid) TO nylonite_app;
+    boolean, text[], text) TO spork_app;
+GRANT EXECUTE ON FUNCTION passkeys_for_person(uuid) TO spork_app;
+GRANT EXECUTE ON FUNCTION passkey_by_credential(bytea) TO spork_app;
+GRANT EXECUTE ON FUNCTION passkey_record_use(uuid, bigint, boolean) TO spork_app;
+GRANT EXECUTE ON FUNCTION passkey_disable(uuid, uuid) TO spork_app;
 
 -- A person may hold a passkey and no password, which is the point.
 ALTER TABLE person_credential ALTER COLUMN phc DROP NOT NULL;

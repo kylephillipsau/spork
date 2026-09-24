@@ -78,7 +78,7 @@ CREATE TABLE api_token (
 COMMENT ON TABLE api_token IS
     'A bearer credential held by a program rather than a person. Scoped by kind '
     'rather than by permission: it reaches the import endpoints and nothing '
-    'else. Unreachable to nylonite_app; the definers are the interface. D158.';
+    'else. Unreachable to spork_app; the definers are the interface. D158.';
 
 -- ---------------------------------------------------------------------------
 -- The interface
@@ -185,29 +185,29 @@ $$;
 -- ---------------------------------------------------------------------------
 --
 -- J37 wants a pinned `search_path` and no EXECUTE to PUBLIC; S53 wants an owner
--- that is neither SUPERUSER nor BYPASSRLS, which `nylonite_mediation_owner`
--- already satisfies. **No table grant to `nylonite_app` at any point**, which
+-- that is neither SUPERUSER nor BYPASSRLS, which `spork_mediation_owner`
+-- already satisfies. **No table grant to `spork_app` at any point**, which
 -- is what makes J73 exempt this table and what makes the exemption meaningful.
 
 ALTER FUNCTION api_token_open(uuid, uuid, text, bytea, interval)
-    OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION api_token_resolve(bytea) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION api_token_revoke(uuid, uuid) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION api_tokens_for_tenant(uuid) OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
+ALTER FUNCTION api_token_resolve(bytea) OWNER TO spork_mediation_owner;
+ALTER FUNCTION api_token_revoke(uuid, uuid) OWNER TO spork_mediation_owner;
+ALTER FUNCTION api_tokens_for_tenant(uuid) OWNER TO spork_mediation_owner;
 
 REVOKE EXECUTE ON FUNCTION api_token_open(uuid, uuid, text, bytea, interval) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION api_token_resolve(bytea) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION api_token_revoke(uuid, uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION api_tokens_for_tenant(uuid) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION api_token_open(uuid, uuid, text, bytea, interval) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION api_token_resolve(bytea) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION api_token_revoke(uuid, uuid) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION api_tokens_for_tenant(uuid) TO nylonite_app;
+GRANT EXECUTE ON FUNCTION api_token_open(uuid, uuid, text, bytea, interval) TO spork_app;
+GRANT EXECUTE ON FUNCTION api_token_resolve(bytea) TO spork_app;
+GRANT EXECUTE ON FUNCTION api_token_revoke(uuid, uuid) TO spork_app;
+GRANT EXECUTE ON FUNCTION api_tokens_for_tenant(uuid) TO spork_app;
 
 -- The owner needs what its functions touch. `person_tenant` it already has,
 -- from migration 70.
-GRANT SELECT, INSERT, UPDATE ON api_token TO nylonite_mediation_owner;
+GRANT SELECT, INSERT, UPDATE ON api_token TO spork_mediation_owner;
 
 -- Provisioning is the platform's business too, on the same terms as credentials.
-GRANT SELECT ON api_token TO nylonite_platform;
+GRANT SELECT ON api_token TO spork_platform;

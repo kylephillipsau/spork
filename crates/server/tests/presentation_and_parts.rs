@@ -31,7 +31,7 @@
 //! suite runs against a database other tests have already written to.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 
 mod common;
@@ -56,7 +56,7 @@ async fn admin(u: &str) -> tokio_postgres::Client {
     // after itself.
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1, false)",
+            "SELECT set_config('spork.tenant_id', $1, false)",
             &[&TENANT],
         )
         .await

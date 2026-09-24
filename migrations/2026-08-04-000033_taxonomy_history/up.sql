@@ -73,7 +73,7 @@ DECLARE
     n bigint;
     total bigint := 0;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH folded AS (
         SELECT DISTINCT ON (item_class_id)
@@ -157,7 +157,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The shape at a past instant, derived rather than stored
@@ -245,7 +245,7 @@ COMMENT ON FUNCTION party_class_closure_as_at(uuid, timestamptz, timestamptz) IS
 GRANT EXECUTE ON FUNCTION
     item_class_closure_as_at(uuid, timestamptz, timestamptz),
     party_class_closure_as_at(uuid, timestamptz, timestamptz)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 4. What is deliberately not built, and the trigger for revisiting it

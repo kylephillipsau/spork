@@ -15,7 +15,7 @@
 //! is what *establishes* attribution, so it cannot require it, and the same is
 //! true one step earlier.
 //!
-//! Nor does it widen the privilege boundary. `nylonite_app` holds SELECT on
+//! Nor does it widen the privilege boundary. `spork_app` holds SELECT on
 //! `tenant` and `person` and nothing at all on `person_credential`, which is
 //! deliberate — the tenant-scoped role may not mint identities. But identity
 //! acts already run on a raw pooled connection as `postgres`: that is how
@@ -61,8 +61,8 @@ use crate::error::ApiError;
 /// case in one is not a way into the other — the convention PocketBase and
 /// GitLab arrived at the same way.
 pub fn state_directory() -> PathBuf {
-    std::env::var("NYLONITE_STATE_DIR")
-        .unwrap_or_else(|_| "/var/lib/nylonite/state".to_string())
+    std::env::var("SPORK_STATE_DIR")
+        .unwrap_or_else(|_| "/var/lib/spork/state".to_string())
         .into()
 }
 
@@ -76,7 +76,7 @@ fn token_path() -> PathBuf {
 /// scraped from a log line goes stale before it is useful. Overridable for a
 /// deployment where somebody has to walk to another building.
 fn ttl() -> Duration {
-    let secs = std::env::var("NYLONITE_SETUP_TOKEN_TTL_SECONDS")
+    let secs = std::env::var("SPORK_SETUP_TOKEN_TTL_SECONDS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(30 * 60);
@@ -86,7 +86,7 @@ fn ttl() -> Duration {
 /// Whether this deployment has anybody in it.
 ///
 /// Zero persons is the whole predicate. It is read on a raw connection because
-/// `nylonite_app` can see `person` but this runs before any tenant is set, and
+/// `spork_app` can see `person` but this runs before any tenant is set, and
 /// `current_tenant()` has nothing to say about a table that is global (D19).
 pub async fn deployment_is_empty(
     client: &tokio_postgres::Client,
@@ -333,7 +333,7 @@ pub async fn create_first_administrator(
         .map_err(|_| ApiError::Rejected("that password could not be stored".into()))?;
 
     // **A raw connection, as the login role.** Identity acts do not run as
-    // `nylonite_app`, which holds no grant on `person_credential` at all; this
+    // `spork_app`, which holds no grant on `person_credential` at all; this
     // is the same connection shape `sign_on` uses to write a session.
     //
     // The reset is not ceremony. A pooled connection keeps its `SET ROLE`, and
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn a_slug_is_a_machine_name_for_a_human_one() {
-        assert_eq!(slugify("Nylonite Pty Ltd"), "nylonite-pty-ltd");
+        assert_eq!(slugify("Spork Pty Ltd"), "spork-pty-ltd");
         assert_eq!(slugify("  Acme   &   Co.  "), "acme-co");
         assert_eq!(slugify("Ångström"), "ngstr-m");
         // Nothing usable in it at all, which the caller refuses rather than

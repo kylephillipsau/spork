@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION projection_fulfilment_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT m.fulfilment_line_id,
@@ -80,7 +80,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- Migration 27's body, restored -- which is the latest, not migration 21's. D65's
 -- received_in_full close and D68's idempotency guard both live here, and rebuilding
@@ -94,7 +94,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         SELECT l.id AS line_id, l.tenant_id, po.site_id, l.item_id,
@@ -180,7 +180,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 
 COMMENT ON COLUMN expected_supply.quantity_received IS
     '@projection of stock_movement grouped by the receipt line''s supply row, via projection_expected_supply_rebuild (D45, D61, J26).';

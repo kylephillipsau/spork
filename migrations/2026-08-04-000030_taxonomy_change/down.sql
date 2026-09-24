@@ -72,14 +72,14 @@ COMMENT ON COLUMN party_class.parent_id IS NULL;
 -- looked complete.
 
 REVOKE INSERT (id, tenant_id, parent_id, code, name), UPDATE (code, name)
-    ON item_class FROM nylonite_app;
+    ON item_class FROM spork_app;
 REVOKE INSERT (id, tenant_id, parent_id, code, name), UPDATE (code, name)
-    ON party_class FROM nylonite_app;
+    ON party_class FROM spork_app;
 
-GRANT INSERT, UPDATE, DELETE ON item_class TO nylonite_app;
-GRANT INSERT, UPDATE, DELETE ON party_class TO nylonite_app;
+GRANT INSERT, UPDATE, DELETE ON item_class TO spork_app;
+GRANT INSERT, UPDATE, DELETE ON party_class TO spork_app;
 
-REVOKE SELECT, UPDATE ON item_class, party_class FROM nylonite_projection_owner;
+REVOKE SELECT, UPDATE ON item_class, party_class FROM spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 4. policy_change goes back to being about bindings only

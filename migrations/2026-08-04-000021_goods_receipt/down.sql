@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION projection_expected_supply_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         -- Only an issued order promises anything. A draft is a document somebody
@@ -83,15 +83,15 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- The received quantity had a source and now does not. Zeroing it is the honest
 -- reversal: leaving the folded numbers behind would leave a projection standing
 -- with nothing that could ever reproduce it.
 UPDATE expected_supply SET quantity_received = 0 WHERE quantity_received <> 0;
 
-REVOKE SELECT ON goods_receipt_line FROM nylonite_projection_owner;
-REVOKE INSERT (goods_receipt_line_id) ON stock_movement FROM nylonite_app;
+REVOKE SELECT ON goods_receipt_line FROM spork_projection_owner;
+REVOKE INSERT (goods_receipt_line_id) ON stock_movement FROM spork_app;
 
 DROP INDEX IF EXISTS stock_movement_receipt_line_idx;
 ALTER TABLE stock_movement

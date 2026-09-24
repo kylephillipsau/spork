@@ -15,7 +15,7 @@
 //! # The relying party is the domain, and that has consequences
 //!
 //! A credential is bound to the `rp_id` it was created against. A passkey made
-//! on `nylonite.example.com` will not work on `something-else.example.com`, and
+//! on `spork.example.com` will not work on `something-else.example.com`, and
 //! the browser enforces that rather than the server. So:
 //!
 //! - **The demo needs a stable hostname.** A quick tunnel's random name changes
@@ -23,7 +23,7 @@
 //! - `localhost` is a secure context by specification, so development works with
 //!   no certificate and no tunnel.
 //!
-//! `NYLONITE_RP_ID` and `NYLONITE_RP_ORIGIN` configure it, defaulting to
+//! `SPORK_RP_ID` and `SPORK_RP_ORIGIN` configure it, defaulting to
 //! localhost. Getting them wrong is not a subtle failure: the browser refuses
 //! before the request is sent.
 
@@ -66,8 +66,8 @@ impl Relying {
     /// and the symptom is a sign-in button that silently does nothing. Better to
     /// refuse to start.
     pub fn from_env() -> Result<Self, Problem> {
-        let rp_id = std::env::var("NYLONITE_RP_ID").unwrap_or_else(|_| "localhost".into());
-        let origin = std::env::var("NYLONITE_RP_ORIGIN")
+        let rp_id = std::env::var("SPORK_RP_ID").unwrap_or_else(|_| "localhost".into());
+        let origin = std::env::var("SPORK_RP_ORIGIN")
             .unwrap_or_else(|_| "http://localhost:18080".into());
         Self::new(&rp_id, &origin)
     }
@@ -77,7 +77,7 @@ impl Relying {
             .map_err(|e| Problem::Configuration(format!("{origin} is not a URL: {e}")))?;
         let webauthn = WebauthnBuilder::new(rp_id, &url)
             .map_err(|e| Problem::Configuration(e.to_string()))?
-            .rp_name("Nylonite")
+            .rp_name("Spork")
             .build()
             .map_err(|e| Problem::Configuration(e.to_string()))?;
         Ok(Self {
@@ -162,13 +162,13 @@ mod tests {
     /// that id produces credentials the browser will never offer back.
     #[test]
     fn an_origin_that_does_not_match_the_id_is_refused() {
-        assert!(Relying::new("nylonite.example.com", "https://something-else.test").is_err());
+        assert!(Relying::new("spork.example.com", "https://something-else.test").is_err());
         assert!(Relying::new("localhost", "not a url").is_err());
     }
 
     #[test]
     fn a_real_domain_configures() {
-        let r = Relying::new("kyle.au", "https://nylonite.kyle.au").expect("subdomain origin");
+        let r = Relying::new("kyle.au", "https://spork.kyle.au").expect("subdomain origin");
         assert_eq!(r.rp_id, "kyle.au");
     }
 }

@@ -11,10 +11,10 @@
  * screen. When there are two, this is where `setServer()` goes and
  * `mobile/README.md` says so.
  */
-const DEFAULT_SERVER = "https://app.nylonite.com";
+const DEFAULT_SERVER = "https://spork.warehouseutilities.com";
 
-/** Overridden at build time for a laptop build: `NYLONITE_SERVER=... npm run build:mobile`. */
-const CONFIGURED = import.meta.env["VITE_NYLONITE_SERVER"] as string | undefined;
+/** Overridden at build time for a laptop build: `SPORK_SERVER=... npm run build:mobile`. */
+const CONFIGURED = import.meta.env["VITE_SPORK_SERVER"] as string | undefined;
 
 /** No trailing slash: the API path is appended to it. */
 export function serverUrl(): string {

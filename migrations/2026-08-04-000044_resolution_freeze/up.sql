@@ -30,7 +30,7 @@
 
 REVOKE UPDATE (resolved_item_id, resolved_purchase_order_line_id, resolved_at,
                resolved_by_id, resolution_method)
-    ON asserted_unit_content FROM nylonite_app;
+    ON asserted_unit_content FROM spork_app;
 
 CREATE FUNCTION asserted_unit_content_resolve(
         p_content   uuid,
@@ -80,7 +80,7 @@ COMMENT ON FUNCTION asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text) 
     'D21, D90.';
 
 GRANT EXECUTE ON FUNCTION
-    asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text) TO nylonite_app;
+    asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text) TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 2. The half that cannot be expressed yet, named rather than implied

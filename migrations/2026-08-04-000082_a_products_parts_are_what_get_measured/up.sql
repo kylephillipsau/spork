@@ -97,7 +97,7 @@ ALTER TABLE item_part FORCE ROW LEVEL SECURITY;
 CREATE POLICY item_part_tenant_scoped ON item_part
     USING (tenant_id = current_tenant())
     WITH CHECK (tenant_id = current_tenant());
-GRANT SELECT, INSERT, UPDATE, DELETE ON item_part TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON item_part TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- The sixth arm
@@ -134,7 +134,7 @@ CREATE UNIQUE INDEX observable_item_part_idx ON observable (tenant_id, item_part
     WHERE item_part_id IS NOT NULL;
 
 -- S45: a column the application cannot write is a column nothing can fill.
-GRANT INSERT (item_part_id), UPDATE (item_part_id) ON observable TO nylonite_app;
+GRANT INSERT (item_part_id), UPDATE (item_part_id) ON observable TO spork_app;
 
 -- The metrics that may be asserted about a part are the ones that may be
 -- asserted about an item: it is the same physical claim about a smaller object.

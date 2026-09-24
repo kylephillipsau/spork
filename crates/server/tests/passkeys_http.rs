@@ -11,7 +11,7 @@
 //! replay lives.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -58,7 +58,7 @@ async fn drop_session(u: &str, token: &str) {
     client
         .execute(
             "DELETE FROM session WHERE token_sha256 = $1",
-            &[&nylonite_server::auth::token_digest(token)],
+            &[&spork_server::auth::token_digest(token)],
         )
         .await
         .expect("the test removes the session it opened");

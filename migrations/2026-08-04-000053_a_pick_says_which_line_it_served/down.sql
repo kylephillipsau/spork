@@ -6,7 +6,7 @@
 --
 -- The cause CHECK returns to its one-argument form, which is always true.
 
-REVOKE INSERT (fulfilment_line_id) ON stock_movement FROM nylonite_app;
+REVOKE INSERT (fulfilment_line_id) ON stock_movement FROM spork_app;
 
 DROP INDEX IF EXISTS stock_movement_fulfilment_line_idx;
 

@@ -24,7 +24,7 @@
 
 use actix_web::{http::StatusCode, test, web, App};
 use chrono::Utc;
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 

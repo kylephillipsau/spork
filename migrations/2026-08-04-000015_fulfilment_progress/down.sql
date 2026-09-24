@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION projection_stock_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT to_location_id AS holder_location_id, to_package_id AS holder_package_id,
@@ -69,10 +69,10 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO spork_projection_owner;
 
-REVOKE SELECT ON stock_allocation FROM nylonite_projection_owner;
-REVOKE SELECT, UPDATE ON fulfilment_line FROM nylonite_projection_owner;
+REVOKE SELECT ON stock_allocation FROM spork_projection_owner;
+REVOKE SELECT, UPDATE ON fulfilment_line FROM spork_projection_owner;
 
 DROP FUNCTION IF EXISTS projection_fulfilment_rebuild(uuid);
 

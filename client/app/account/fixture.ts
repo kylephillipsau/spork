@@ -15,7 +15,7 @@ const who = {
   person_id: "77770000-0000-0000-0000-000000000001",
   display_name: "Kyle Phillips",
   tenant_id: "11111111-1111-1111-1111-111111111111",
-  tenant_name: "Nylonite Pty Ltd",
+  tenant_name: "Spork Pty Ltd",
   site_id: "a5170000-0000-0000-0000-000000000001",
   site_code: "MEL",
 };

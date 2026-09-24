@@ -26,9 +26,9 @@
 //! three times. It also makes the two `observable` rows the fixture has no
 //! carton arm for, and removes those too.
 
-use nylonite_server::auth::Caller;
-use nylonite_server::baseline::{self, Source};
-use nylonite_server::AppState;
+use spork_server::auth::Caller;
+use spork_server::baseline::{self, Source};
+use spork_server::AppState;
 use uuid::Uuid;
 
 use actix_web::web;
@@ -261,7 +261,7 @@ async fn what_a_thing_has_weighed_resolves_by_specificity_and_reaches_both_scree
     // Asserted here rather than after the next block: a second case pack for
     // the glove exists from that point on, and `levels_of` takes the newest
     // config, so the carton figure would legitimately be the other box's.
-    let dock = nylonite_server::receiving_list::screen(&state, &who, SITE.parse().unwrap(), 50)
+    let dock = spork_server::receiving_list::screen(&state, &who, SITE.parse().unwrap(), 50)
         .await
         .expect("the receiving read runs");
     let line = dock
@@ -351,7 +351,7 @@ async fn what_a_thing_has_weighed_resolves_by_specificity_and_reaches_both_scree
     // holding twenty gloves, so once the glove has an `each` baseline the
     // carton has an expected weight — and `stock_movement.quantity` is base
     // units by migration 46, which is what makes `each` the right level.
-    let cartons = nylonite_server::bench::cartons_on(&state, &who, PACKED_FULFILMENT.parse().unwrap())
+    let cartons = spork_server::bench::cartons_on(&state, &who, PACKED_FULFILMENT.parse().unwrap())
         .await
         .expect("the bench read runs");
     let carton = cartons

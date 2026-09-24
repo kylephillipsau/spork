@@ -19,7 +19,7 @@ CREATE OR REPLACE FUNCTION projection_stock_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT to_location_id AS holder_location_id, to_package_id AS holder_package_id,
@@ -100,7 +100,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- The unguarded container-arm update, restored.
 CREATE OR REPLACE FUNCTION projection_stock_resolve_locations(p_tenant uuid)
@@ -112,7 +112,7 @@ CREATE OR REPLACE FUNCTION projection_stock_resolve_locations(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     UPDATE stock s
        SET resolved_location_id = COALESCE(s.holder_location_id, pkg.resolved_location_id)
@@ -132,4 +132,4 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_stock_resolve_locations(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_resolve_locations(uuid) OWNER TO spork_projection_owner;

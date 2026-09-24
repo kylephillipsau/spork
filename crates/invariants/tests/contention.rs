@@ -78,7 +78,7 @@ fn a_batched_decrement_costs_less_than_one_per_line() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     let Some(promise) = a_promise(&mut c) else {
         eprintln!("no open promise: this has nothing to contend over");
         return;
@@ -160,7 +160,7 @@ fn the_allocator_waits_exactly_as_long_as_the_ingester_holds_the_gate() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     let Some(promise) = a_promise(&mut c) else {
         eprintln!("no open promise: this has nothing to contend over");
         return;
@@ -233,7 +233,7 @@ fn the_gate_serialises_and_the_cost_is_linear() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     let Some(promise) = a_promise(&mut c) else {
         eprintln!("no open promise: this has nothing to contend over");
         return;

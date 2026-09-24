@@ -564,7 +564,7 @@ CREATE FUNCTION projection_inbound_shipment_rebuild(p_tenant uuid)
 DECLARE
     n bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH latest_stance AS (
         SELECT DISTINCT ON (s.assertion_id)
@@ -624,13 +624,13 @@ END
 $$;
 
 ALTER FUNCTION projection_inbound_shipment_rebuild(uuid)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_inbound_shipment_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_inbound_shipment_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
-GRANT SELECT, UPDATE ON inbound_shipment TO nylonite_projection_owner;
+    TO spork_scheduler, spork_platform;
+GRANT SELECT, UPDATE ON inbound_shipment TO spork_projection_owner;
 GRANT SELECT ON assertion, assertion_stance, despatch_advice, asserted_unit,
-    asserted_unit_content TO nylonite_projection_owner;
+    asserted_unit_content TO spork_projection_owner;
 
 -- 95, between fulfilment and expected_supply. D24's supply side has assertions
 -- refining a promise, so the in-force claim must be settled before
@@ -722,32 +722,32 @@ CREATE POLICY inbound_shipment_tenant_scoped ON inbound_shipment
 -- resolvable when the item is created tomorrow, and refusing that would discard a
 -- claim because our catalogue was behind."
 
-GRANT SELECT, INSERT ON party_message TO nylonite_app;
+GRANT SELECT, INSERT ON party_message TO spork_app;
 GRANT UPDATE (parse_status, parser_version, acknowledges_party_message_id,
-              acknowledgement_outcome) ON party_message TO nylonite_app;
+              acknowledgement_outcome) ON party_message TO spork_app;
 
-GRANT SELECT, INSERT ON assertion TO nylonite_app;
-GRANT SELECT, INSERT ON assertion_stance TO nylonite_app;
-GRANT SELECT, INSERT ON assertion_check TO nylonite_app;
-GRANT SELECT, INSERT ON document_response TO nylonite_app;
-GRANT SELECT, INSERT ON asserted_unit TO nylonite_app;
+GRANT SELECT, INSERT ON assertion TO spork_app;
+GRANT SELECT, INSERT ON assertion_stance TO spork_app;
+GRANT SELECT, INSERT ON assertion_check TO spork_app;
+GRANT SELECT, INSERT ON document_response TO spork_app;
+GRANT SELECT, INSERT ON asserted_unit TO spork_app;
 
-GRANT SELECT, INSERT ON despatch_advice TO nylonite_app;
+GRANT SELECT, INSERT ON despatch_advice TO spork_app;
 GRANT UPDATE (inbound_shipment_id, resolved_purchase_order_id, resolved_at,
-              resolved_by_id, resolution_method) ON despatch_advice TO nylonite_app;
+              resolved_by_id, resolution_method) ON despatch_advice TO spork_app;
 
-GRANT SELECT, INSERT ON asserted_unit_content TO nylonite_app;
+GRANT SELECT, INSERT ON asserted_unit_content TO spork_app;
 GRANT UPDATE (resolved_item_id, resolved_purchase_order_line_id, resolved_at,
               resolved_by_id, resolution_method)
-    ON asserted_unit_content TO nylonite_app;
+    ON asserted_unit_content TO spork_app;
 
 -- A subject, not a claim: the application creates and edits it, except the five
 -- columns the maintainer owns.
-GRANT SELECT, INSERT ON inbound_shipment TO nylonite_app;
+GRANT SELECT, INSERT ON inbound_shipment TO spork_app;
 GRANT UPDATE (site_id, supplier_party_id, owner_party_id, vendor_shipment_ref,
-              granularity, estimated_arrival_at) ON inbound_shipment TO nylonite_app;
+              granularity, estimated_arrival_at) ON inbound_shipment TO spork_app;
 
-GRANT UPDATE (assertion_check_id) ON discrepancy TO nylonite_app;
+GRANT UPDATE (assertion_check_id) ON discrepancy TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 13. What this does not build

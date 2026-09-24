@@ -5,15 +5,15 @@ FROM rust:1-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
-RUN cargo build -p nylonite-server --bin nylonite-scheduler --release \
- && strip target/release/nylonite-scheduler
+RUN cargo build -p spork-server --bin spork-scheduler --release \
+ && strip target/release/spork-scheduler
 
 FROM debian:bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates libssl3 \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=build /src/target/release/nylonite-scheduler /usr/local/bin/nylonite-scheduler
+COPY --from=build /src/target/release/spork-scheduler /usr/local/bin/spork-scheduler
 ENV RUST_LOG=info
 ENV SCHEDULER_INTERVAL_SECS=5
-ENV DATABASE_URL=postgres://postgres:nylonite@postgres:5432/nylonite
-ENTRYPOINT ["nylonite-scheduler"]
+ENV DATABASE_URL=postgres://postgres:spork@postgres:5432/spork
+ENTRYPOINT ["spork-scheduler"]

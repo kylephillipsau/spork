@@ -1,8 +1,8 @@
 //! Load the bin list: sites and the shelves inside them.
 //!
 //! ```sh
-//! cargo run -p nylonite-server --example import_bins -- --bins bins.csv
-//! cargo run -p nylonite-server --example import_bins -- --bins bins.csv --apply
+//! cargo run -p spork-server --example import_bins -- --bins bins.csv
+//! cargo run -p spork-server --example import_bins -- --bins bins.csv --apply
 //! ```
 //!
 //! Dry run by default, like [the prepack importer](import_prepack), and for the
@@ -11,7 +11,7 @@
 //! # This is a front end, and the importer is in the crate
 //!
 //! The reading, the survey and the writing all live in
-//! [`nylonite_server::importing`], because `POST /api/import/bins` loads the
+//! [`spork_server::importing`], because `POST /api/import/bins` loads the
 //! same file and D158 would otherwise have shipped a second implementation of
 //! this one. What is left here is argument parsing, a connection, and printing
 //! — the parts a terminal needs and an HTTP request does not.
@@ -61,7 +61,7 @@
 
 use std::path::PathBuf;
 
-use nylonite_server::{bins, importing};
+use spork_server::{bins, importing};
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
@@ -196,10 +196,10 @@ async fn main() -> Result<(), String> {
     tokio::spawn(async move {
         let _ = connection.await;
     });
-    client.batch_execute("SET ROLE nylonite_app").await.map_err(|e| e.to_string())?;
+    client.batch_execute("SET ROLE spork_app").await.map_err(|e| e.to_string())?;
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, false)",
+            "SELECT set_config('spork.tenant_id', $1::text, false)",
             &[&args.tenant.to_string()],
         )
         .await

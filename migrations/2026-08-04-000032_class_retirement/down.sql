@@ -33,7 +33,7 @@ DECLARE
     touched bigint;
     n bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH folded AS (
         SELECT DISTINCT ON (item_class_id)
@@ -75,7 +75,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO spork_projection_owner;
 
 ALTER TABLE item_class  DROP COLUMN IF EXISTS retired_at;
 ALTER TABLE party_class DROP COLUMN IF EXISTS retired_at;

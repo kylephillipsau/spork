@@ -7,7 +7,7 @@
 //! than an overwrite.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -50,7 +50,7 @@ async fn cleanup(u: &str, acts: &[Uuid], token: &str) {
     )).await.expect("the test removes what it recorded");
     c.execute(
         "DELETE FROM session WHERE token_sha256 = $1",
-        &[&nylonite_server::auth::token_digest(token)],
+        &[&spork_server::auth::token_digest(token)],
     ).await.expect("and the session it opened");
 }
 
@@ -60,7 +60,7 @@ async fn the_worklist_puts_the_unmeasured_first() {
     let Some(u) = url() else { eprintln!("no DATABASE_URL: skipping"); return };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
     let (bearer, token) = sign_in(&app).await;
 
     let r = test::call_service(&app, test::TestRequest::get()
@@ -97,7 +97,7 @@ async fn a_first_weighing_raises_nothing() {
     let Some(u) = url() else { eprintln!("no DATABASE_URL: skipping"); return };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
     let (bearer, token) = sign_in(&app).await;
 
     // The gumboot's `each` level carries one weight in the fixture, 1.9 kg.
@@ -128,7 +128,7 @@ async fn a_disagreeing_scale_raises_a_finding_and_keeps_both() {
     let Some(u) = url() else { eprintln!("no DATABASE_URL: skipping"); return };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
     let (bearer, token) = sign_in(&app).await;
 
     let act = Uuid::now_v7();
@@ -188,7 +188,7 @@ async fn a_weighing_names_exactly_one_subject() {
     let Some(u) = url() else { eprintln!("no DATABASE_URL: skipping"); return };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
     let (bearer, token) = sign_in(&app).await;
 
     for body in [

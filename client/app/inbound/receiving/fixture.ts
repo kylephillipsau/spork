@@ -90,7 +90,7 @@ const LINES: ReceivingScreen["lines"] = [
     owner_id: null,
     owners: [
       { owner_id: "9a247000-0000-0000-0000-000000000001", name: "Alpha Foods" },
-      { owner_id: "9a247000-0000-0000-0000-000000000003", name: "Nylonite Operating" },
+      { owner_id: "9a247000-0000-0000-0000-000000000003", name: "Spork Operating" },
     ],
     picture: null,
   },

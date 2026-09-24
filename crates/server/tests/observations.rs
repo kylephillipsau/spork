@@ -11,8 +11,8 @@
 //! recorded observation fails exactly as loudly as one carrying a wrong number.
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, NewClientEvent};
-use nylonite_server::observing::{self, Factor};
+use spork_server::client_events::{self, NewClientEvent};
+use spork_server::observing::{self, Factor};
 use uuid::Uuid;
 
 mod common;
@@ -86,7 +86,7 @@ async fn measuring_an_unsealed_package_agrees_with_the_dimension_cache() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -324,7 +324,7 @@ async fn an_uncached_measurement_is_exactly_what_j12_reports() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await
@@ -449,7 +449,7 @@ async fn package_types_return_shipped_and_tenant_presets() {
     let mut client = connect(&u, assume).await;
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

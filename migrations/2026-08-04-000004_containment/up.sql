@@ -84,8 +84,8 @@ ALTER TABLE package_event FORCE ROW LEVEL SECURITY;
 CREATE POLICY package_event_tenant_scoped ON package_event
     USING (tenant_id = current_tenant());
 
-GRANT SELECT, INSERT ON package_event TO nylonite_app;
-GRANT SELECT ON package_event TO nylonite_projection_owner;
+GRANT SELECT, INSERT ON package_event TO spork_app;
+GRANT SELECT ON package_event TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- The projections (D24, J6)
@@ -146,7 +146,7 @@ DECLARE
 BEGIN
     -- FORCE RLS applies to the definer, so the rebuild scopes itself to its
     -- argument or reads nothing. Same reason as projection_stock_rebuild.
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH winning_placement AS (
         -- The last placement assertion in register order wins. DISTINCT ON with
@@ -214,12 +214,12 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_package_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_package_rebuild(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_package_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_package_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
-GRANT SELECT, UPDATE ON package TO nylonite_projection_owner;
+GRANT SELECT, UPDATE ON package TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- stock resolves through the package arm now (J5)
@@ -236,7 +236,7 @@ CREATE OR REPLACE FUNCTION projection_stock_resolve_locations(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     UPDATE stock s
        SET resolved_location_id = COALESCE(s.holder_location_id, pkg.resolved_location_id)
@@ -255,12 +255,12 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_stock_resolve_locations(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_resolve_locations(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_stock_resolve_locations(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_stock_resolve_locations(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
-GRANT SELECT ON package TO nylonite_projection_owner;
+GRANT SELECT ON package TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- The grant narrows when the projections arrive (D25, J36)
@@ -279,4 +279,4 @@ GRANT SELECT ON package TO nylonite_projection_owner;
 -- fold of package_event, so there is nothing here the application should write.
 -- Migration 9 grants back the despatch columns it adds, which are the
 -- application's.
-REVOKE INSERT, UPDATE, DELETE ON package FROM nylonite_app;
+REVOKE INSERT, UPDATE, DELETE ON package FROM spork_app;

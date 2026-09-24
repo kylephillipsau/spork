@@ -15,12 +15,12 @@ import { blankDetails } from "./useSetup";
 const filled = {
   ...blankDetails(),
   token: "9f2c41d7a0b3e58c6d1f0a2b4c7e8d93f1a05b6c2d3e4f50617283940a1b2c3d",
-  organisation: "Nylonite Pty Ltd",
+  organisation: "Spork Pty Ltd",
   siteName: "Melbourne",
   siteCode: "MEL",
   timezone: "Australia/Melbourne",
   displayName: "Kyle Phillips",
-  email: "kyle@nylonite.com",
+  email: "kyle@example.test",
   password: "a-long-enough-password",
 };
 

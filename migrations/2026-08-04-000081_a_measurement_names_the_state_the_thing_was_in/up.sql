@@ -122,8 +122,8 @@ BEGIN
 END
 $$;
 
-GRANT SELECT ON presentation TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON presentation TO nylonite_platform;
+GRANT SELECT ON presentation TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON presentation TO spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- 2. The act says what it was looking at
@@ -177,7 +177,7 @@ DECLARE
     m bigint;
 BEGIN
     -- last changed: migration 81 (D138)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- D78's rule as a row, so "nobody resolved anything" and "the resolver said
     -- exactly this" travel the same path and there is one code path rather than

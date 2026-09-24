@@ -264,16 +264,16 @@ fn the_invariant_register_counts_itself() {
     // once something does, which in the code is exactly `Check::Pending` against
     // everything else. Sixth number to drift, and the first to be caught before
     // somebody else needed the file.
-    let implemented = nylonite_invariants::ALL
+    let implemented = spork_invariants::ALL
         .iter()
-        .filter(|&&id| !matches!(nylonite_invariants::spec(id).check, nylonite_invariants::Check::Pending(_)))
+        .filter(|&&id| !matches!(spork_invariants::spec(id).check, spork_invariants::Check::Pending(_)))
         .count()
-        + nylonite_invariants::jobs::ALL
+        + spork_invariants::jobs::ALL
             .iter()
             .filter(|&&id| {
                 !matches!(
-                    nylonite_invariants::jobs::spec(id).check,
-                    nylonite_invariants::jobs::Check::Pending(_)
+                    spork_invariants::jobs::spec(id).check,
+                    spork_invariants::jobs::Check::Pending(_)
                 )
             })
             .count();
@@ -303,12 +303,12 @@ fn the_invariant_register_counts_itself() {
     // behind it.
     assert_eq!(
         job as usize,
-        nylonite_invariants::jobs::ALL.len(),
+        spork_invariants::jobs::ALL.len(),
         "job-asserted rows against jobs::ALL"
     );
     assert_eq!(
         structural as usize,
-        nylonite_invariants::ALL.len(),
+        spork_invariants::ALL.len(),
         "structural rows against ALL"
     );
 }

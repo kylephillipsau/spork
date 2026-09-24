@@ -1,7 +1,7 @@
 -- Reverse of 2026-08-04-000022_receipt_handover.
 
 REVOKE INSERT (origin_expected_supply_id), UPDATE (origin_expected_supply_id)
-    ON stock_allocation FROM nylonite_app;
+    ON stock_allocation FROM spork_app;
 
 DROP INDEX IF EXISTS stock_allocation_origin_idx;
 

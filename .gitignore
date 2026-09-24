@@ -5,3 +5,4 @@ dist-review/
 .svelte-kit/
 .render/
 .DS_Store
+.local/

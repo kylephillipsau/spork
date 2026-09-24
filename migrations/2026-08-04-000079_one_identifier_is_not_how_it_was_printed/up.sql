@@ -185,10 +185,10 @@ CREATE POLICY item_barcode_own_write ON item_barcode FOR ALL
 -- `effective` range is an UPDATE and not a DELETE, and D31 retains the closed
 -- row indefinitely: it is the evidence for what a historical scan meant, and
 -- truncating it makes historical resolution quietly start returning nothing.
-GRANT SELECT, INSERT, UPDATE, DELETE ON item_barcode TO nylonite_app;
-GRANT SELECT ON item_barcode TO nylonite_platform;
-GRANT SELECT ON item_barcode TO nylonite_projection_owner;
-GRANT SELECT ON item_barcode TO nylonite_scheduler;
+GRANT SELECT, INSERT, UPDATE, DELETE ON item_barcode TO spork_app;
+GRANT SELECT ON item_barcode TO spork_platform;
+GRANT SELECT ON item_barcode TO spork_projection_owner;
+GRANT SELECT ON item_barcode TO spork_scheduler;
 
 -- ---------------------------------------------------------------------------
 -- What this does not do, said here so the next reader does not go looking

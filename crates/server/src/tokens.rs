@@ -2,7 +2,7 @@
 //!
 //! The table and the reasoning live in migration 88. This is the application
 //! side, and it holds one rule worth stating here because it is invisible in the
-//! SQL: **`nylonite_app` has no privilege on `api_token` at all**, so everything
+//! SQL: **`spork_app` has no privilege on `api_token` at all**, so everything
 //! below goes through a `SECURITY DEFINER`. That is migration 70's arrangement
 //! for the identity tables, and as of migration 87 it is the arrangement for all
 //! of them — J73 asks Postgres whether the application can reach a table
@@ -163,7 +163,7 @@ pub async fn revoke(scope: &mut TenantScope, id: Uuid) -> Result<bool, ApiError>
 
 /// Resolve a bearer that carries the import prefix.
 ///
-/// Runs on a raw checkout as `nylonite_app` and reaches the definer, which is
+/// Runs on a raw checkout as `spork_app` and reaches the definer, which is
 /// the same shape `caller` uses for sessions — and for the same reason. There
 /// is no tenant yet, because the token is what names one.
 pub async fn machine(

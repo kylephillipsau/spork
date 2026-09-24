@@ -92,8 +92,8 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_run_all(uuid) OWNER TO nylonite_projection_owner;
-GRANT SELECT, UPDATE ON projection_step TO nylonite_projection_owner;
+ALTER FUNCTION projection_run_all(uuid) OWNER TO spork_projection_owner;
+GRANT SELECT, UPDATE ON projection_step TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 2. The epoch, derived rather than stored
@@ -135,8 +135,8 @@ COMMENT ON FUNCTION policy_epoch(uuid) IS
     'was written. Read once per unit of work, never per resolution -- the same '
     'discipline S23 imposes on the resolver itself. D22, D70.';
 
-GRANT EXECUTE ON FUNCTION policy_epoch(uuid) TO nylonite_app, nylonite_platform,
-    nylonite_scheduler, nylonite_projection_owner;
+GRANT EXECUTE ON FUNCTION policy_epoch(uuid) TO spork_app, spork_platform,
+    spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The half no write announces
@@ -186,8 +186,8 @@ COMMENT ON FUNCTION policy_next_boundary(uuid, timestamptz) IS
     'effective range opens or closes. A cache entry is valid until exactly this. '
     'NULL means nothing is scheduled. D22, D70.';
 
-GRANT EXECUTE ON FUNCTION policy_next_boundary(uuid, timestamptz) TO nylonite_app,
-    nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+GRANT EXECUTE ON FUNCTION policy_next_boundary(uuid, timestamptz) TO spork_app,
+    spork_platform, spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 4. What is not built here

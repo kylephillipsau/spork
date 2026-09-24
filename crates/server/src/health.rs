@@ -66,7 +66,7 @@ use crate::AppState;
 /// question only the person with SSH can answer — which is the state this was
 /// added from, having watched a deploy queue and been unable to tell from
 /// outside whether it had landed.
-pub const BUILD: Option<&str> = option_env!("NYLONITE_GIT_SHA");
+pub const BUILD: Option<&str> = option_env!("SPORK_GIT_SHA");
 
 /// Set once the process is shutting down. While set, readiness reports 503 so
 /// anything routing conditionally drains this instance *before* it stops

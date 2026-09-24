@@ -62,7 +62,7 @@ fn document(title: &str, body: Markup) -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { (title) " · Nylonite" }
+                title { (title) " · Spork" }
                 link rel="stylesheet" href="/print/style.css";
             }
             body {

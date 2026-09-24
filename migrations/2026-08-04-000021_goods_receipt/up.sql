@@ -196,13 +196,13 @@ ALTER TABLE goods_receipt_line FORCE ROW LEVEL SECURITY;
 CREATE POLICY goods_receipt_line_tenant_scoped ON goods_receipt_line
     USING (tenant_id = current_tenant());
 
-GRANT SELECT ON goods_receipt TO nylonite_app;
+GRANT SELECT ON goods_receipt TO spork_app;
 GRANT INSERT (id, tenant_id, site_id, purchase_order_id, received_at, recorded_at,
               client_event_id, recorded_by_id, automation_key, note),
       UPDATE (note)
-    ON goods_receipt TO nylonite_app;
+    ON goods_receipt TO spork_app;
 
-GRANT SELECT ON goods_receipt_line TO nylonite_app;
+GRANT SELECT ON goods_receipt_line TO spork_app;
 GRANT INSERT (id, tenant_id, goods_receipt_id, item_id, expected_supply_id,
               expected_quantity, entered_quantity, entered_packaging_level,
               item_packing_config_id, lot_id, accepted_at, accepted_by_id,
@@ -214,10 +214,10 @@ GRANT INSERT (id, tenant_id, goods_receipt_id, item_id, expected_supply_id,
       -- quantity is not one of them.
       UPDATE (accepted_at, accepted_by_id, rejected_at, rejected_by_id,
               rejected_reason_id, matched_at, matched_by_id, expected_supply_id)
-    ON goods_receipt_line TO nylonite_app;
+    ON goods_receipt_line TO spork_app;
 
-GRANT INSERT (goods_receipt_line_id) ON stock_movement TO nylonite_app;
-GRANT SELECT ON goods_receipt_line TO nylonite_projection_owner;
+GRANT INSERT (goods_receipt_line_id) ON stock_movement TO spork_app;
+GRANT SELECT ON goods_receipt_line TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 5. quantity_received finally has a source
@@ -237,7 +237,7 @@ CREATE OR REPLACE FUNCTION projection_expected_supply_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         SELECT l.id AS line_id, l.tenant_id, po.site_id, l.item_id,
@@ -310,7 +310,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 
 COMMENT ON COLUMN expected_supply.quantity_received IS
     '@projection of stock_movement grouped by the receipt line''s supply row, via projection_expected_supply_rebuild (D45, D61, J26).';

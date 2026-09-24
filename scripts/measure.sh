@@ -11,7 +11,7 @@
 #   DATABASE_URL=... scripts/measure.sh
 set -eu
 
-DB="${DATABASE_URL:-postgres://postgres:nylonite@localhost:55432/nylonite}"
+DB="${DATABASE_URL:-postgres://postgres:spork@localhost:55432/spork}"
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
 GAMMA='33333333-3333-3333-3333-333333333333'
@@ -21,8 +21,8 @@ qq() { psql "$DB" -q -v ON_ERROR_STOP=1 "$@" >/dev/null; }
 
 rebuild() {
     psql "$DB" -q -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;' >/dev/null 2>&1 || true
-    psql "$DB" -q -c 'GRANT USAGE ON SCHEMA public TO nylonite_app, nylonite_platform,
-                        nylonite_scheduler, nylonite_projection_owner;' >/dev/null 2>&1 || true
+    psql "$DB" -q -c 'GRANT USAGE ON SCHEMA public TO spork_app, spork_platform,
+                        spork_scheduler, spork_projection_owner;' >/dev/null 2>&1 || true
     for m in migrations/*/up.sql; do qq -f "$m"; done
     qq -f fixtures/seed.sql
     qq -f fixtures/history.sql
@@ -77,7 +77,7 @@ q "SELECT '    ' || rpad(coalesce(closed_reason::text, 'still open'), 20) || c
 
 echo
 echo "  D24 query B: the line list for one delivery"
-psql "$DB" -tAc "SET nylonite.tenant_id = '$GAMMA';
+psql "$DB" -tAc "SET spork.tenant_id = '$GAMMA';
 EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY ON)
 SELECT es.id, es.quantity_outstanding, i.code
   FROM expected_supply es
@@ -91,7 +91,7 @@ SELECT es.id, es.quantity_outstanding, i.code
 
 echo
 echo "  what is still outstanding, by site: the open-work read"
-psql "$DB" -tAc "SET nylonite.tenant_id = '$GAMMA';
+psql "$DB" -tAc "SET spork.tenant_id = '$GAMMA';
 EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY ON)
 SELECT site_id, count(*), sum(quantity_outstanding)
   FROM expected_supply

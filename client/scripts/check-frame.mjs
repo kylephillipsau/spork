@@ -598,7 +598,7 @@ await cdp.send("WebAuthn.addCredential", {
   // WebAuthn *wire* uses, and mixing the two is the exact confusion this
   // client's `webauthn.ts` exists to keep in one place.
   credential: {
-    credentialId: Buffer.from("nylonite-frame-gate").toString("base64"),
+    credentialId: Buffer.from("spork-frame-gate").toString("base64"),
     isResidentCredential: true,
     rpId: "localhost",
     userHandle: Buffer.from("01a0-p").toString("base64"),

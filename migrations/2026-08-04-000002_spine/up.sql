@@ -302,17 +302,17 @@ CREATE POLICY stock_tenant_scoped ON stock USING (tenant_id = current_tenant());
 -- Grants (D25)
 -- ---------------------------------------------------------------------------
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON party, lot, package TO nylonite_app;
-GRANT SELECT ON inventory_status TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON inventory_status TO nylonite_platform;
+GRANT SELECT, INSERT, UPDATE, DELETE ON party, lot, package TO spork_app;
+GRANT SELECT ON inventory_status TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON inventory_status TO spork_platform;
 
 -- S6. Fact tables take INSERT and SELECT and nothing else. A movement is what
 -- happened; there is no verb for changing what happened.
-GRANT SELECT, INSERT ON client_event TO nylonite_app;
-GRANT SELECT, INSERT ON stock_movement TO nylonite_app;
+GRANT SELECT, INSERT ON client_event TO spork_app;
+GRANT SELECT, INSERT ON stock_movement TO spork_app;
 
 -- S28 and D25. stock is a projection: the application reads it and the
 -- maintainer function writes it. A table-wide GRANT UPDATE here would silently
 -- disarm every projection guard in the schema.
-GRANT SELECT ON stock TO nylonite_app;
-GRANT SELECT ON package_content TO nylonite_app;
+GRANT SELECT ON stock TO spork_app;
+GRANT SELECT ON package_content TO spork_app;

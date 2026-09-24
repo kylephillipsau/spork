@@ -1,8 +1,8 @@
 //! Load sales order lines: customers, orders, lines, and the work to pick.
 //!
 //! ```sh
-//! cargo run -p nylonite-server --example import_orders -- --orders orders.csv
-//! cargo run -p nylonite-server --example import_orders -- --orders … --apply
+//! cargo run -p spork-server --example import_orders -- --orders orders.csv
+//! cargo run -p spork-server --example import_orders -- --orders … --apply
 //! ```
 //!
 //! Dry run by default, like the other two.
@@ -36,7 +36,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 
-use nylonite_server::orders::{customer_code, customer_name, item_code, outstanding, parse_date};
+use spork_server::orders::{customer_code, customer_name, item_code, outstanding, parse_date};
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
@@ -148,12 +148,12 @@ async fn main() -> Result<(), String> {
         let _ = connection.await;
     });
     client
-        .batch_execute("SET ROLE nylonite_app")
+        .batch_execute("SET ROLE spork_app")
         .await
         .map_err(|e| e.to_string())?;
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, false)",
+            "SELECT set_config('spork.tenant_id', $1::text, false)",
             &[&args.tenant.to_string()],
         )
         .await
@@ -182,7 +182,7 @@ async fn main() -> Result<(), String> {
 
     let site_of = |csv_name: &str| -> Option<Uuid> {
         site_ids
-            .get(&nylonite_server::bins::site_name(csv_name))
+            .get(&spork_server::bins::site_name(csv_name))
             .copied()
     };
 
@@ -209,7 +209,7 @@ async fn main() -> Result<(), String> {
     // made — and with them two entire orders. The report and the write have to
     // agree about what is loadable, so they compute it the same way.
     let will_have_site = |l: &Line| {
-        site_of(&l.location).is_some() || nylonite_server::bins::timezone_for(&l.location).is_some()
+        site_of(&l.location).is_some() || spork_server::bins::timezone_for(&l.location).is_some()
     };
     let loadable: Vec<&Line> = lines
         .iter()
@@ -247,7 +247,7 @@ async fn main() -> Result<(), String> {
     if !unknown_sites.is_empty() {
         println!("\n  warehouses with no site yet:");
         for (s, n) in &unknown_sites {
-            let known = nylonite_server::bins::timezone_for(s).is_some();
+            let known = spork_server::bins::timezone_for(s).is_some();
             println!(
                 "      {s} ×{n}  {}",
                 if known { "clock known, will be created" } else { "clock unknown, left out" }
@@ -332,14 +332,14 @@ async fn main() -> Result<(), String> {
         .map(|l| l.location.as_str())
         .collect::<std::collections::BTreeSet<_>>()
     {
-        let short = nylonite_server::bins::site_name(name);
+        let short = spork_server::bins::site_name(name);
         if site_ids.contains_key(&short) {
             continue;
         }
-        let Some(tz) = nylonite_server::bins::timezone_for(name) else {
+        let Some(tz) = spork_server::bins::timezone_for(name) else {
             continue;
         };
-        let code = nylonite_server::bins::site_code(name);
+        let code = spork_server::bins::site_code(name);
         let id: Uuid = tx
             .query_one(
                 "INSERT INTO site (tenant_id, code, name, timezone, active)
@@ -363,7 +363,7 @@ async fn main() -> Result<(), String> {
     for l in &loadable {
         // Re-resolved: the map has grown since `loadable` was computed.
         let Some(site) = site_ids
-            .get(&nylonite_server::bins::site_name(&l.location))
+            .get(&spork_server::bins::site_name(&l.location))
             .copied()
         else {
             continue;

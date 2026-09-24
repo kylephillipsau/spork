@@ -55,4 +55,4 @@ CREATE INDEX location_pick_sequence_idx
     WHERE pick_sequence IS NOT NULL AND active;
 
 -- S45: a column the application cannot write is a column nothing can fill.
-GRANT INSERT (pick_sequence), UPDATE (pick_sequence) ON location TO nylonite_app;
+GRANT INSERT (pick_sequence), UPDATE (pick_sequence) ON location TO spork_app;

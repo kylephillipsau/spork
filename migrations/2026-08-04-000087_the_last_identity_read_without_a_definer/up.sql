@@ -11,7 +11,7 @@
 -- needs no policy, which is now what the check itself asks.
 --
 -- `person_tenant` was neither. It carries a `tenant_id`, has no policy, and
--- `nylonite_app` holds `SELECT` on it. With a tenant set, the application role
+-- `spork_app` holds `SELECT` on it. With a tenant set, the application role
 -- can read every membership row of every other tenant: which people work for
 -- which company, across the whole deployment. That is not a large secret and it
 -- is not nothing, and it is the one identity table the pattern skipped.
@@ -65,15 +65,15 @@ COMMENT ON FUNCTION memberships_of(uuid) IS
     'before a tenant is set and no policy can be written for that moment. '
     'Migration 87.';
 
-ALTER FUNCTION memberships_of(uuid) OWNER TO nylonite_mediation_owner;
+ALTER FUNCTION memberships_of(uuid) OWNER TO spork_mediation_owner;
 REVOKE EXECUTE ON FUNCTION memberships_of(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION memberships_of(uuid) TO nylonite_app;
+GRANT EXECUTE ON FUNCTION memberships_of(uuid) TO spork_app;
 
 -- **The owner needs what its function reads**, which is the sentence migration
 -- 70 already wrote for `person` and `person_tenant`. The join adds `tenant`.
-GRANT SELECT ON tenant TO nylonite_mediation_owner;
+GRANT SELECT ON tenant TO spork_mediation_owner;
 
 -- And the grant this replaces. Migration 70 gave it with a reason -- "so a
 -- sign-on can offer the choice when there is more than one" -- and the reason
 -- survives; it is the whole table being readable to satisfy it that does not.
-REVOKE SELECT ON person_tenant FROM nylonite_app;
+REVOKE SELECT ON person_tenant FROM spork_app;

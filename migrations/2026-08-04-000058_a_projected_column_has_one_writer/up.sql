@@ -33,7 +33,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         SELECT l.id AS line_id, l.tenant_id, po.site_id, l.item_id,
@@ -137,7 +137,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT m.fulfilment_line_id,
@@ -199,7 +199,7 @@ DECLARE
     n bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH latest_stance AS (
         SELECT DISTINCT ON (s.assertion_id)
@@ -269,7 +269,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH RECURSIVE tree AS (
         -- Every node is its own ancestor at depth zero. That row is what makes
@@ -324,7 +324,7 @@ DECLARE
     m bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- D78's rule as a row, so "nobody resolved anything" and "the resolver said
     -- exactly this" travel the same path and there is one code path rather than
@@ -439,7 +439,7 @@ DECLARE
     touched_lines bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- Last writer per covered column, in register order. Not one winning row:
     -- an amendment that changed only the promised window must not clear a state
@@ -531,7 +531,7 @@ DECLARE
     built bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- This one is rebuilt rather than upserted, and that is a real difference
     -- from stock. Nothing holds a durable foreign key to a containment interval,
@@ -615,7 +615,7 @@ BEGIN
     -- last changed: migration 58 (D104)
     -- FORCE RLS applies to the definer, so the rebuild scopes itself to its
     -- argument or reads nothing. Same reason as projection_stock_rebuild.
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH winning_placement AS (
         -- The last placement assertion in register order wins. DISTINCT ON with
@@ -705,7 +705,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH winner AS (
         SELECT DISTINCT ON (package_id) package_id, id, occurred_at
@@ -736,7 +736,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH RECURSIVE tree AS (
         SELECT c.tenant_id, c.id AS ancestor_id, c.id AS descendant_id, 0 AS depth
@@ -856,7 +856,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT to_location_id AS holder_location_id, to_package_id AS holder_package_id,
@@ -961,7 +961,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     UPDATE stock s
        SET resolved_location_id = COALESCE(s.holder_location_id, pkg.resolved_location_id)
@@ -996,7 +996,7 @@ DECLARE
     total bigint := 0;
 BEGIN
     -- last changed: migration 58 (D104)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH folded AS (
         SELECT DISTINCT ON (item_class_id)

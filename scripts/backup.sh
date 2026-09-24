@@ -53,11 +53,11 @@ fi
 
 mkdir -p "$OUT"
 STAMP=$(date -u +%Y%m%d-%H%M%SZ)
-FILE="$OUT/nylonite-$STAMP.sql.gz"
+FILE="$OUT/spork-$STAMP.sql.gz"
 
 echo "  dumping from $CONTAINER"
 # No `-t`: a cron job has no terminal, and asking for one makes docker refuse.
-docker exec "$CONTAINER" pg_dump -U postgres -d nylonite \
+docker exec "$CONTAINER" pg_dump -U postgres -d spork \
   | gzip -9 > "$FILE"
 
 # ── the checks, before this counts as a backup ──────────────────────────────
@@ -77,7 +77,7 @@ if ! gzip -dc "$FILE" | tail -5 | grep -q "PostgreSQL database dump complete"; t
 fi
 
 TABLES=$(gzip -dc "$FILE" | grep -c "^CREATE TABLE" || true)
-MIGRATIONS=$(docker exec "$CONTAINER" psql -U postgres -d nylonite -tAc \
+MIGRATIONS=$(docker exec "$CONTAINER" psql -U postgres -d spork -tAc \
   "SELECT count(*) FROM schema_migration" 2>/dev/null || echo "?")
 SIZE=$(du -h "$FILE" | cut -f1)
 
@@ -90,12 +90,12 @@ echo "    $SIZE · $TABLES tables · schema at $MIGRATIONS migrations"
 # the job not running, where "delete older than fourteen days" quietly empties
 # the folder on the day somebody notices it stopped.
 
-KEPT=$(ls -1t "$OUT"/nylonite-*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+KEPT=$(ls -1t "$OUT"/spork-*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
 if [ "$KEPT" -gt "$KEEP" ]; then
-  ls -1t "$OUT"/nylonite-*.sql.gz | tail -n "+$((KEEP + 1))" | while read -r old; do
+  ls -1t "$OUT"/spork-*.sql.gz | tail -n "+$((KEEP + 1))" | while read -r old; do
     echo "    pruning $(basename "$old")"
     rm -f "$old"
   done
 fi
 
-echo "    $(ls -1 "$OUT"/nylonite-*.sql.gz 2>/dev/null | wc -l | tr -d ' ') kept"
+echo "    $(ls -1 "$OUT"/spork-*.sql.gz 2>/dev/null | wc -l | tr -d ' ') kept"

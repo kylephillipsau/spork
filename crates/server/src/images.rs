@@ -69,8 +69,8 @@ pub const MAX_BYTES: usize = 12 * 1024 * 1024;
 /// Where the files go. Overridable so `cargo run` and the tests do not write
 /// into an image's directory.
 pub fn directory() -> PathBuf {
-    std::env::var("NYLONITE_IMAGE_DIR")
-        .unwrap_or_else(|_| "/var/lib/nylonite/images".to_string())
+    std::env::var("SPORK_IMAGE_DIR")
+        .unwrap_or_else(|_| "/var/lib/spork/images".to_string())
         .into()
 }
 

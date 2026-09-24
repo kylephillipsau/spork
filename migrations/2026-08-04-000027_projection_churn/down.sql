@@ -13,7 +13,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT to_location_id AS holder_location_id, to_package_id AS holder_package_id,
@@ -87,7 +87,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_expected_supply_rebuild(p_tenant uuid)
  RETURNS bigint
@@ -98,7 +98,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ordered AS (
         SELECT l.id AS line_id, l.tenant_id, po.site_id, l.item_id,
@@ -177,7 +177,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_expected_supply_rebuild(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_order_rebuild(p_tenant uuid)
  RETURNS bigint
@@ -189,7 +189,7 @@ DECLARE
     touched bigint;
     touched_lines bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- Last writer per covered column, in register order. Not one winning row:
     -- an amendment that changed only the promised window must not clear a state
@@ -256,7 +256,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_package_stamp(p_tenant uuid)
  RETURNS bigint
@@ -267,7 +267,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH winner AS (
         SELECT DISTINCT ON (package_id) package_id, id, occurred_at
@@ -285,7 +285,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_package_stamp(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_package_stamp(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_stock_resolve_locations(p_tenant uuid)
  RETURNS bigint
@@ -296,7 +296,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     UPDATE stock s
        SET resolved_location_id = COALESCE(s.holder_location_id, pkg.resolved_location_id)
@@ -315,7 +315,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_stock_resolve_locations(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_resolve_locations(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_item_class_closure_rebuild(p_tenant uuid)
  RETURNS bigint
@@ -326,7 +326,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH RECURSIVE tree AS (
         -- Every node is its own ancestor at depth zero. That row is what makes
@@ -368,7 +368,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_item_class_closure_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_item_class_closure_rebuild(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_party_class_closure_rebuild(p_tenant uuid)
  RETURNS bigint
@@ -379,7 +379,7 @@ AS $function$
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH RECURSIVE tree AS (
         SELECT c.tenant_id, c.id AS ancestor_id, c.id AS descendant_id, 0 AS depth
@@ -417,7 +417,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_party_class_closure_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_party_class_closure_rebuild(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_package_rebuild(p_tenant uuid)
  RETURNS bigint
@@ -430,7 +430,7 @@ DECLARE
 BEGIN
     -- FORCE RLS applies to the definer, so the rebuild scopes itself to its
     -- argument or reads nothing. Same reason as projection_stock_rebuild.
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH winning_placement AS (
         -- The last placement assertion in register order wins. DISTINCT ON with
@@ -498,7 +498,7 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_package_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_package_rebuild(uuid) OWNER TO spork_projection_owner;
 
 CREATE OR REPLACE FUNCTION public.projection_package_containment_rebuild(p_tenant uuid)
  RETURNS bigint
@@ -509,7 +509,7 @@ AS $function$
 DECLARE
     built bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- This one is rebuilt rather than upserted, and that is a real difference
     -- from stock. Nothing holds a durable foreign key to a containment interval,
@@ -544,4 +544,4 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION projection_package_containment_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_package_containment_rebuild(uuid) OWNER TO spork_projection_owner;

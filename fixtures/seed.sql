@@ -1095,7 +1095,7 @@ SELECT projection_run_all('11111111-1111-1111-1111-111111111111');
 -- it as us, which is question 153.
 INSERT INTO party (id, tenant_id, name, code) VALUES
     ('9a247000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
-     'Nylonite Operating', 'SELF');
+     'Spork Operating', 'SELF');
 
 INSERT INTO client_event (tenant_id, client_event_id, site_id, recorded_by_id,
     submitted_at, received_at) VALUES

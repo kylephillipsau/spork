@@ -87,10 +87,10 @@ CREATE POLICY stock_count_tenant_scoped ON stock_count
     USING (tenant_id = current_tenant());
 
 -- Fact: INSERT only for the app (S6).
-GRANT SELECT, INSERT ON stock_count TO nylonite_app;
-GRANT SELECT ON stock_count TO nylonite_scheduler;
-GRANT SELECT ON stock_count TO nylonite_platform;
-GRANT SELECT ON stock_count TO nylonite_projection_owner;
+GRANT SELECT, INSERT ON stock_count TO spork_app;
+GRANT SELECT ON stock_count TO spork_scheduler;
+GRANT SELECT ON stock_count TO spork_platform;
+GRANT SELECT ON stock_count TO spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- Discrepancy source arm

@@ -133,7 +133,7 @@ pub async fn line_progress_projection(
             "SELECT f.last_run_at
                FROM projection_freshness f
               WHERE f.function_name = 'projection_fulfilment_rebuild'
-                AND f.tenant_id = nullif(current_setting('nylonite.tenant_id', true), '')::uuid",
+                AND f.tenant_id = nullif(current_setting('spork.tenant_id', true), '')::uuid",
             &[],
         )
         .await?

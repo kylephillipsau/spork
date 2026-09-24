@@ -35,7 +35,7 @@ DECLARE
     touched bigint;
 BEGIN
     -- last changed: migration 91 (D166)
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT m.fulfilment_line_id,

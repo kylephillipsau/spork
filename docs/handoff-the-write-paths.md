@@ -22,22 +22,22 @@ git pull
 
 # A database that has never seen this project. Not the compose one, and not
 # the dev one either — see "the fixture has a two-day shelf life" below.
-docker exec -e PGPASSWORD=nylonite nylonite-postgres-1 \
-  psql -U postgres -d postgres -c 'DROP DATABASE IF EXISTS nylonite_verify' \
-                               -c 'CREATE DATABASE nylonite_verify'
+docker exec -e PGPASSWORD=spork spork-postgres-1 \
+  psql -U postgres -d postgres -c 'DROP DATABASE IF EXISTS spork_verify' \
+                               -c 'CREATE DATABASE spork_verify'
 
 # What CI's database actually is: every up.sql in order, then seed.sql. This is
 # the tail of verify-migrations.sh, without the four phases before it.
 for m in $(ls -1 migrations | sort); do
   grep -qiE 'ALTER +TYPE.*ADD +VALUE' "migrations/$m/up.sql" && F="" || F="-1"
-  docker exec -i -e PGPASSWORD=nylonite nylonite-postgres-1 \
-    psql -U postgres -d nylonite_verify -q -v ON_ERROR_STOP=1 $F -f - \
+  docker exec -i -e PGPASSWORD=spork spork-postgres-1 \
+    psql -U postgres -d spork_verify -q -v ON_ERROR_STOP=1 $F -f - \
     < "migrations/$m/up.sql" || { echo "FAIL $m"; break; }
 done
-docker exec -i -e PGPASSWORD=nylonite nylonite-postgres-1 \
-  psql -U postgres -d nylonite_verify -q -v ON_ERROR_STOP=1 -f - < fixtures/seed.sql
+docker exec -i -e PGPASSWORD=spork spork-postgres-1 \
+  psql -U postgres -d spork_verify -q -v ON_ERROR_STOP=1 -f - < fixtures/seed.sql
 
-DATABASE_URL=postgres://postgres:nylonite@localhost:55432/nylonite_verify \
+DATABASE_URL=postgres://postgres:spork@localhost:55432/spork_verify \
   cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
@@ -314,7 +314,7 @@ CI on `b2a270e` is green across all three jobs. The working tree at the time of
 writing has `receipt_http.rs` untracked and edits to `architecture.md` and
 `main.rs` uncommitted; nothing else is touched.
 
-The **dev database** (`nylonite`, port 55432) was three migrations behind and is
+The **dev database** (`spork`, port 55432) was three migrations behind and is
 now at eighty-eight, applied forward-only by `migrate.sh`'s own method. Its
 leaked observable has been purged twice and will come back the next time a test
 in `pack_walk_http.rs` panics — which, until the fixture is reseeded, is every

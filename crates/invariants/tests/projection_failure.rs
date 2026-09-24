@@ -63,7 +63,7 @@ fn one_maintainer_that_raises_does_not_cost_the_others() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     // A clean baseline, so "was not run" means what it says.
     c.execute("SELECT projection_run_all(($1)::text::uuid)", &[&TENANT])

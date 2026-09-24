@@ -645,7 +645,7 @@ pub mod checks {
             if !tables.contains(k) {
                 violations.push(format!("policy_kind '{k}' has no {k}_policy table"));
             }
-            if !nylonite_policy::ALL.iter().any(|p| p.as_str() == k) {
+            if !spork_policy::ALL.iter().any(|p| p.as_str() == k) {
                 violations.push(format!("policy_kind '{k}' is not in the Rust registry"));
             }
         }
@@ -659,7 +659,7 @@ pub mod checks {
         // that is designed and unbuilt, which is the state the register
         // records elsewhere as pending. What would be a violation is the reverse, and
         // that is checked above: an enum value the registry has never heard of.
-        for k in nylonite_policy::ALL {
+        for k in spork_policy::ALL {
             if !enum_vals.iter().any(|e| e == k.as_str()) {
                 declared_unbuilt += 1;
             }
@@ -977,7 +977,7 @@ pub mod checks {
         // and S6 covers fact tables, so widening this one duplicates them and
         // then disagrees with them.
         //
-        // nylonite_projection_owner holds INSERT and UPDATE on stock, and that
+        // spork_projection_owner holds INSERT and UPDATE on stock, and that
         // is the design rather than a violation: D35 puts every write to a
         // projection inside a SECURITY DEFINER function owned by a role with no
         // members. It is NOLOGIN, which is what keeps it outside J36's "no login
@@ -988,7 +988,7 @@ pub mod checks {
             let g = c.query(
                 "SELECT grantee, privilege_type FROM information_schema.role_table_grants
                   WHERE table_name = $1 AND privilege_type = 'DELETE'
-                    AND grantee = 'nylonite_app'",
+                    AND grantee = 'spork_app'",
                 &[&t],
             )?;
             for row in &g {
@@ -1653,12 +1653,12 @@ pub mod checks {
     /// present as a tie rather than as a missing declaration.
     pub fn s15_tenancy_outranks_everything(_c: &mut Client) -> Result<Outcome, postgres::Error> {
         let mut violations = vec![];
-        for &k in nylonite_policy::ALL {
-            if let Err(e) = nylonite_policy::ordering_is_well_formed(k) {
+        for &k in spork_policy::ALL {
+            if let Err(e) = spork_policy::ordering_is_well_formed(k) {
                 violations.push(e);
             }
         }
-        Ok(Outcome::new(nylonite_policy::ALL.len(), violations))
+        Ok(Outcome::new(spork_policy::ALL.len(), violations))
     }
 
     /// S52. The resolver knows every value table.
@@ -1887,11 +1887,11 @@ pub mod checks {
     ///
     /// The first draft asked whether *any* role could write the column. It
     /// reported eleven things and none of them was `order.currency`, because
-    /// `nylonite_projection_owner` holds table-wide UPDATE on `order` and a
+    /// `spork_projection_owner` holds table-wide UPDATE on `order` and a
     /// table-wide grant covers every column including ones added later. It would
     /// never have caught the defect it was written for.
     ///
-    /// The second draft asked whether `nylonite_app` could write it, and reported
+    /// The second draft asked whether `spork_app` could write it, and reported
     /// thirty-eight columns the application is deliberately not allowed to touch:
     /// `dimension`, `metric_code`, `person_tenant`, the registry itself. Most of
     /// this schema is read-only to the application on purpose.
@@ -1922,15 +1922,15 @@ pub mod checks {
                -- Only tables the application may write at all.
                AND EXISTS (SELECT 1 FROM information_schema.column_privileges cp
                             WHERE cp.table_schema = $1 AND cp.table_name = c.relname
-                              AND cp.grantee = 'nylonite_app'
+                              AND cp.grantee = 'spork_app'
                               AND cp.privilege_type IN ('INSERT','UPDATE'))
                -- A projection is owned by a maintainer and must not be granted.
                AND coalesce(col_description(c.oid, a.attnum), '') NOT LIKE '@projection%'
                AND NOT EXISTS (SELECT 1 FROM projection_rebuild pr
                                 WHERE pr.table_name = c.relname
                                   AND pr.column_name = a.attname)
-               AND NOT has_column_privilege('nylonite_app', c.oid, a.attnum, 'INSERT')
-               AND NOT has_column_privilege('nylonite_app', c.oid, a.attnum, 'UPDATE')
+               AND NOT has_column_privilege('spork_app', c.oid, a.attnum, 'INSERT')
+               AND NOT has_column_privilege('spork_app', c.oid, a.attnum, 'UPDATE')
              ORDER BY c.relname, a.attnum";
 
         let rows = c.query(UNGRANTED, &[&APP_SCHEMA])?;
@@ -1944,7 +1944,7 @@ pub mod checks {
                   WHERE n.nspname = $1 AND c.relkind = 'r' AND a.attgenerated = ''
                     AND EXISTS (SELECT 1 FROM information_schema.column_privileges cp
                                  WHERE cp.table_schema = $1 AND cp.table_name = c.relname
-                                   AND cp.grantee = 'nylonite_app'
+                                   AND cp.grantee = 'spork_app'
                                    AND cp.privilege_type IN ('INSERT','UPDATE'))",
                 &[&APP_SCHEMA],
             )?
@@ -2374,8 +2374,8 @@ pub mod checks {
     ///    except as a NULL nobody thought to look at.
     ///
     /// What this cannot do is prove the predicate is right; it proves the pair is
-    /// shaped as declared. The behaviour — that `nylonite_app` cannot insert,
-    /// update or delete a row with a NULL tenant, and that `nylonite_platform`
+    /// shaped as declared. The behaviour — that `spork_app` cannot insert,
+    /// update or delete a row with a NULL tenant, and that `spork_platform`
     /// can — is verified by the negative controls, which is where behaviour is
     /// checked in this repository.
     pub fn s46_shared_tables_guard_their_writes(
@@ -2494,7 +2494,7 @@ pub mod checks {
     /// safety.
     ///
     /// The safe shape was already here before anything checked it: fifteen
-    /// projection definers owned by `nylonite_projection_owner`, which is neither,
+    /// projection definers owned by `spork_projection_owner`, which is neither,
     /// against tables with FORCE ROW LEVEL SECURITY so RLS applies to the owner
     /// too. This asserts that nobody takes the shortcut next time.
     pub fn s53_a_definer_stays_inside_row_security(c: &mut Client) -> Result<Outcome, postgres::Error> {
@@ -2548,12 +2548,12 @@ pub mod checks {
                     EXISTS (SELECT 1 FROM information_schema.column_privileges g
                              WHERE g.table_name = m.table_name
                                AND g.column_name = m.column_name
-                               AND g.grantee = 'nylonite_app'
+                               AND g.grantee = 'spork_app'
                                AND g.privilege_type = 'UPDATE') AS app_may_write,
                     EXISTS (SELECT 1 FROM information_schema.column_privileges g
                              WHERE g.table_name = m.table_name
                                AND g.column_name = m.column_name
-                               AND g.grantee = 'nylonite_mediation_owner'
+                               AND g.grantee = 'spork_mediation_owner'
                                AND g.privilege_type = 'UPDATE') AS owner_may_write,
                     EXISTS (SELECT 1 FROM pg_proc p
                               JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -2565,7 +2565,7 @@ pub mod checks {
                              WHERE n.nspname = 'public'
                                AND p.proname = m.function_name
                                AND p.prosecdef
-                               AND r.rolname = 'nylonite_mediation_owner') AS properly_owned
+                               AND r.rolname = 'spork_mediation_owner') AS properly_owned
                FROM mediated_write m",
             &[],
         )?;
@@ -2587,7 +2587,7 @@ pub mod checks {
                 violations.push(format!("{t}.{col} names {f}, which does not exist"));
             } else if !r.get::<_, bool>(6) {
                 violations.push(format!(
-                    "{f} guards {t}.{col} and is not a SECURITY DEFINER owned by nylonite_mediation_owner, so it runs with the caller's rights -- which are the rights it exists to withhold"
+                    "{f} guards {t}.{col} and is not a SECURITY DEFINER owned by spork_mediation_owner, so it runs with the caller's rights -- which are the rights it exists to withhold"
                 ));
             }
         }

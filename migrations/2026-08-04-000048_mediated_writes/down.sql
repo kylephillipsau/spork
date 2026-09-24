@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS mediated_write;
 -- bypassable.
 GRANT UPDATE (accepted_at, accepted_by_id, rejected_at, rejected_by_id,
               rejected_reason_id, receiving_policy_id)
-    ON goods_receipt_line TO nylonite_app;
+    ON goods_receipt_line TO spork_app;
 
 GRANT EXECUTE ON FUNCTION
     asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text) TO PUBLIC;
@@ -28,11 +28,11 @@ ALTER FUNCTION asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text)
 ALTER FUNCTION asserted_unit_content_resolve(uuid, uuid, uuid, uuid, text)
     SECURITY INVOKER;
 
-REVOKE ALL ON discrepancy FROM nylonite_mediation_owner;
-REVOKE ALL ON asserted_unit_content FROM nylonite_mediation_owner;
-REVOKE ALL ON assertion_check FROM nylonite_mediation_owner;
-REVOKE ALL ON goods_receipt_line FROM nylonite_mediation_owner;
-REVOKE USAGE ON SCHEMA public FROM nylonite_mediation_owner;
+REVOKE ALL ON discrepancy FROM spork_mediation_owner;
+REVOKE ALL ON asserted_unit_content FROM spork_mediation_owner;
+REVOKE ALL ON assertion_check FROM spork_mediation_owner;
+REVOKE ALL ON goods_receipt_line FROM spork_mediation_owner;
+REVOKE USAGE ON SCHEMA public FROM spork_mediation_owner;
 
 -- The role itself is left in place, as migration 1 and 3 leave theirs: a role is
 -- cluster-wide and another database on the same cluster may hold objects owned by

@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION projection_order_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH folded AS (
         SELECT order_id,
@@ -44,12 +44,12 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_order_rebuild(uuid) OWNER TO spork_projection_owner;
 
-REVOKE SELECT, UPDATE ON order_line FROM nylonite_projection_owner;
+REVOKE SELECT, UPDATE ON order_line FROM spork_projection_owner;
 
-REVOKE INSERT, UPDATE ON order_line FROM nylonite_app;
-GRANT SELECT, INSERT, UPDATE ON order_line TO nylonite_app;
+REVOKE INSERT, UPDATE ON order_line FROM spork_app;
+GRANT SELECT, INSERT, UPDATE ON order_line TO spork_app;
 
 DELETE FROM projection_rebuild
  WHERE table_name = 'order_line' AND function_name = 'projection_order_rebuild';

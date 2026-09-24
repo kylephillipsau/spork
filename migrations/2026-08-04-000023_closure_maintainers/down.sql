@@ -33,9 +33,9 @@ COMMENT ON COLUMN party_class_closure.descendant_id IS
 COMMENT ON COLUMN party_class_closure.depth IS
     '@projection(pending) of party_class; no maintainer exists. Question 140.';
 
-REVOKE SELECT ON item_class, party_class FROM nylonite_projection_owner;
+REVOKE SELECT ON item_class, party_class FROM spork_projection_owner;
 REVOKE SELECT, INSERT, UPDATE, DELETE ON item_class_closure, party_class_closure
-    FROM nylonite_projection_owner;
+    FROM spork_projection_owner;
 
 DROP FUNCTION IF EXISTS projection_party_class_closure_rebuild(uuid);
 DROP FUNCTION IF EXISTS projection_item_class_closure_rebuild(uuid);

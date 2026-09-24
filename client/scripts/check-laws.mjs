@@ -13,11 +13,15 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, relative, extname } from "node:path";
+import { dirname, join, relative, extname, sep } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
 const DESIGN = join(ROOT, "design");
+
+// The laws name files with forward slashes; on Windows `relative` returns
+// backslashes, and every allowlist would silently stop matching.
+const posix = (p) => p.split(sep).join("/");
 
 function walk(dir) {
   const out = [];
@@ -39,7 +43,7 @@ function exists(dir) {
 
 const designFiles = walk(DESIGN).map((path) => ({
   path,
-  rel: relative(ROOT, path),
+  rel: posix(relative(ROOT, path)),
   ext: extname(path),
   text: readFileSync(path, "utf8"),
 }));
@@ -47,7 +51,7 @@ const designFiles = walk(DESIGN).map((path) => ({
 const appFiles = exists(join(ROOT, "app"))
   ? walk(join(ROOT, "app")).map((path) => ({
       path,
-      rel: relative(ROOT, path),
+      rel: posix(relative(ROOT, path)),
       ext: extname(path),
       text: readFileSync(path, "utf8"),
     }))

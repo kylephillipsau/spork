@@ -58,13 +58,13 @@ COMMENT ON COLUMN discrepancy.goods_receipt_line_id IS
 -- pointed away from. The same four roles that hold the rest of this table.
 GRANT INSERT (goods_receipt_line_id), SELECT (goods_receipt_line_id),
       UPDATE (goods_receipt_line_id)
-    ON discrepancy TO nylonite_app;
+    ON discrepancy TO spork_app;
 GRANT INSERT (goods_receipt_line_id), SELECT (goods_receipt_line_id)
-    ON discrepancy TO nylonite_mediation_owner;
+    ON discrepancy TO spork_mediation_owner;
 GRANT INSERT (goods_receipt_line_id), SELECT (goods_receipt_line_id)
-    ON discrepancy TO nylonite_projection_owner;
+    ON discrepancy TO spork_projection_owner;
 GRANT INSERT (goods_receipt_line_id), SELECT (goods_receipt_line_id)
-    ON discrepancy TO nylonite_scheduler;
+    ON discrepancy TO spork_scheduler;
 
 -- ---------------------------------------------------------------------------
 -- The disposition writes the arm
@@ -139,12 +139,12 @@ END
 $$;
 
 ALTER FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
-    OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
 REVOKE EXECUTE ON FUNCTION
     goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
     goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid)
-    TO nylonite_app;
+    TO spork_app;
 
 COMMENT ON FUNCTION goods_receipt_line_dispose(uuid, uuid, boolean, text, uuid, uuid) IS
     'Applies a decision D88 made under a policy D82 resolved and D83 clamped: the '

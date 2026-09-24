@@ -143,4 +143,4 @@ CREATE POLICY evidence_tenant_scoped ON evidence
 -- blurred retake. If mis-attachment turns out to be common rather than
 -- hypothetical, the answer is a retraction row naming what it retracts, not a
 -- DELETE grant.
-GRANT SELECT, INSERT ON evidence TO nylonite_app;
+GRANT SELECT, INSERT ON evidence TO spork_app;

@@ -2,13 +2,13 @@
 //! wrong.
 //!
 //! Every tenant-scoped table carries an RLS policy reading `current_tenant()`,
-//! which reads the `nylonite.tenant_id` setting. That makes the setting the
+//! which reads the `spork.tenant_id` setting. That makes the setting the
 //! whole of the tenancy boundary: a query with the wrong value returns another
 //! tenant's rows, and a query with no value returns none.
 //!
 //! # Why this is a transaction and not a connection setting
 //!
-//! The obvious implementation is `SET nylonite.tenant_id` after checking out a
+//! The obvious implementation is `SET spork.tenant_id` after checking out a
 //! pooled connection. It is also a cross-tenant leak, and a quiet one. A pooled
 //! connection outlives the request that borrowed it, so a handler that returns
 //! early, panics, or simply forgets to reset leaves the setting in place for
@@ -21,7 +21,7 @@
 //! connection cannot escape the pool carrying a tenant, because the only way to
 //! set one is inside a transaction that ends.
 //!
-//! # Why the server connects as `nylonite_app`
+//! # Why the server connects as `spork_app`
 //!
 //! D25 gives the application role no UPDATE on a projection and no UPDATE or
 //! DELETE on a fact. Connecting as the owner or a superuser would make those
@@ -29,9 +29,9 @@
 //! tenancy boundary would be off as well. The role in the connection string is
 //! part of the design rather than a deployment detail.
 //!
-//! Compose (and other deploys where `nylonite_app` is NOLOGIN) may connect as
+//! Compose (and other deploys where `spork_app` is NOLOGIN) may connect as
 //! `postgres` and then [`ensure_app_role`] — the same pattern as the scheduler's
-//! `SET ROLE nylonite_scheduler`. After that, every request runs as the app.
+//! `SET ROLE spork_scheduler`. After that, every request runs as the app.
 
 use deadpool_postgres::{Object, Pool};
 use tokio_postgres::Transaction;
@@ -39,7 +39,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 
-/// If the session bypasses RLS, assume `nylonite_app`. No-op when already the app.
+/// If the session bypasses RLS, assume `spork_app`. No-op when already the app.
 ///
 /// Call on every pooled checkout that will serve tenant data: pool connections
 /// start as the login role, and a recycled connection that never assumed the
@@ -57,8 +57,8 @@ pub async fn ensure_app_role(conn: &Object) -> Result<(), ApiError> {
     let bypass: bool = row.get(2);
 
     if superuser || bypass {
-        conn.batch_execute("SET ROLE nylonite_app").await?;
-        tracing::debug!(from = %user, "assumed nylonite_app");
+        conn.batch_execute("SET ROLE spork_app").await?;
+        tracing::debug!(from = %user, "assumed spork_app");
     }
 
     let row = conn
@@ -74,7 +74,7 @@ pub async fn ensure_app_role(conn: &Object) -> Result<(), ApiError> {
     if superuser || bypass {
         return Err(ApiError::Configuration(format!(
             "connected as {user}, which still bypasses row level security after \
-             SET ROLE nylonite_app. Connect as nylonite_app or a login that can \
+             SET ROLE spork_app. Connect as spork_app or a login that can \
              become it."
         )));
     }
@@ -87,7 +87,7 @@ pub async fn ensure_app_role(conn: &Object) -> Result<(), ApiError> {
 /// `SET ROLE` is session state, and deadpool's default recycling runs no
 /// cleanup statement at all — not `DISCARD ALL`, not `RESET ROLE` — so a
 /// connection that served one tenant request comes back out of the pool still
-/// as `nylonite_app`. `assert_not_superuser` assumes the app role at boot, so
+/// as `spork_app`. `assert_not_superuser` assumes the app role at boot, so
 /// this is true of a connection before the first request as well.
 ///
 /// Almost nothing needs this: every other raw checkout in the server calls
@@ -99,7 +99,7 @@ pub async fn ensure_app_role(conn: &Object) -> Result<(), ApiError> {
 /// connection and of no other, which made the failure depend on which
 /// connection the pool happened to hand over.
 ///
-/// Where the login role is itself `nylonite_app` — a deployment that grants it
+/// Where the login role is itself `spork_app` — a deployment that grants it
 /// LOGIN — this changes nothing and the writes are refused, which is correct:
 /// that deployment cannot mint identities and should say so rather than half
 /// succeed.
@@ -150,7 +150,7 @@ impl TenantScope {
         // input, and this is a SET, which is exactly where string building goes
         // wrong.
         tx.execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+            "SELECT set_config('spork.tenant_id', $1::text, true)",
             &[&self.tenant.to_string()],
         )
         .await?;
@@ -174,7 +174,7 @@ impl TenantScope {
 ///
 /// A superuser bypasses row level security entirely, so serving as one has no
 /// tenancy boundary while every policy still reads as though it does. Compose
-/// may log in as `postgres` and assume `nylonite_app`; that is checked here.
+/// may log in as `postgres` and assume `spork_app`; that is checked here.
 /// Loud at startup.
 pub async fn assert_not_superuser(pool: &Pool) -> Result<(), ApiError> {
     let conn = pool.get().await?;

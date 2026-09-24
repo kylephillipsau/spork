@@ -1,13 +1,13 @@
 //! The two halves of D22's resolver, joined.
 //!
 //! `policy_candidate` matches over the closures and returns a depth vector;
-//! `nylonite_policy::resolve` orders it in the kind's declared precedence order.
+//! `spork_policy::resolve` orders it in the kind's declared precedence order.
 //! Neither half is the resolver, and a test of either alone would pass while the
 //! join was wrong — which is the only way this can fail in practice.
 //!
 //! Skips rather than fails without `DATABASE_URL`, like the rest of the suite.
 
-use nylonite_policy::{explain, resolve, Candidate, Dimension, PolicyKind};
+use spork_policy::{explain, resolve, Candidate, Dimension, PolicyKind};
 use postgres::Client;
 
 const TENANT: &str = "11111111-1111-1111-1111-111111111111";
@@ -52,7 +52,7 @@ fn the_customer_contract_beats_the_catalogue_default() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     let found = candidates(&mut c, "shelf_life", "2026-08-04T12:00:00Z");
     assert!(
@@ -87,7 +87,7 @@ fn the_same_request_under_a_different_kind_answers_differently() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     let only: Vec<Candidate> = candidates(&mut c, "shelf_life", "2026-08-04T12:00:00Z")
         .into_iter()
@@ -110,7 +110,7 @@ fn a_binding_whose_version_has_expired_is_not_a_candidate() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
 
     // Before any tenant version came into force, only the platform default
     // applies. This is the half D70 said no epoch can see: nothing was written
@@ -134,7 +134,7 @@ fn the_customer_wins_and_is_still_raised_by_a_floor_it_did_not_set() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     const AT: &str = "2026-08-04T12:00:00Z";
 
     let found = candidates(&mut c, "shelf_life", AT);
@@ -180,7 +180,7 @@ fn the_customer_wins_and_is_still_raised_by_a_floor_it_did_not_set() {
         .expect("the winner has a shelf life");
     assert_eq!(winner_said, 60.0, "the counterparty binding is the one that won");
 
-    let moved = nylonite_policy::apply_clamps(PolicyKind::ShelfLife, r.winner.binding, &values);
+    let moved = spork_policy::apply_clamps(PolicyKind::ShelfLife, r.winner.binding, &values);
     assert_eq!(moved.len(), 1, "the floor should have moved exactly one field");
     assert_eq!(moved[0].field, "min_shelf_life_days");
     assert_eq!(moved[0].winner_said, 60.0);
@@ -206,7 +206,7 @@ fn a_resolved_precedence_policy_decides_whose_number_is_current() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut c = nylonite_invariants::connect_exclusive(&url);
+    let mut c = spork_invariants::connect_exclusive(&url);
     const AT: &str = "2026-08-04T12:00:00Z";
 
     let rows = c

@@ -22,7 +22,7 @@
 --
 -- Postgres uses the USING expression as the WITH CHECK when none is given, so
 -- that clause authorised writes as well as reads. Verified against the live
--- schema as nylonite_app with a tenant context set:
+-- schema as spork_app with a tenant context set:
 --
 --   INSERT INTO source_channel (tenant_id, ...) VALUES (NULL, 'evil_shared', ...)
 --   -> INSERT 0 1
@@ -63,7 +63,7 @@
 -- Who the platform is
 -- ---------------------------------------------------------------------------
 --
--- `nylonite_platform` is not a superuser and does not carry BYPASSRLS, so it is
+-- `spork_platform` is not a superuser and does not carry BYPASSRLS, so it is
 -- subject to these policies like anything else and needs an arm that admits it.
 -- Migrations run as the owner, which is a superuser and bypasses RLS entirely,
 -- so seeding shared rows from a migration is unaffected either way.
@@ -74,14 +74,14 @@
 CREATE FUNCTION is_platform() RETURNS boolean
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public
-    AS $$ SELECT pg_has_role(current_user, 'nylonite_platform', 'MEMBER') $$;
+    AS $$ SELECT pg_has_role(current_user, 'spork_platform', 'MEMBER') $$;
 
 COMMENT ON FUNCTION is_platform() IS
     'Whether the caller may write shared rows. The platform ships the catalogue; '
     'a tenant may read it and may not edit it. D19, D55.';
 
-GRANT EXECUTE ON FUNCTION is_platform() TO nylonite_app, nylonite_platform,
-    nylonite_scheduler, nylonite_projection_owner;
+GRANT EXECUTE ON FUNCTION is_platform() TO spork_app, spork_platform,
+    spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- The split, derived rather than listed

@@ -1,15 +1,15 @@
 [package]
-name = "nylonite-invariants"
+name = "spork-invariants"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
 description = "The rules the design must always satisfy, as a suite rather than a document."
 
 [dependencies]
-nylonite-policy.workspace = true
+spork-policy.workspace = true
 postgres.workspace = true
 
 
 [dev-dependencies]
-nylonite-server = { path = "../server" }
+spork-server = { path = "../server" }
 uuid = { version = "1" }

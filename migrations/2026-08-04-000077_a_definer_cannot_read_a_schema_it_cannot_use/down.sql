@@ -4,4 +4,4 @@
 -- is what the state before this migration was. A down migration returns the
 -- database to the shape it had, defects included.
 
-REVOKE USAGE ON SCHEMA public FROM nylonite_projection_owner, nylonite_scheduler;
+REVOKE USAGE ON SCHEMA public FROM spork_projection_owner, spork_scheduler;

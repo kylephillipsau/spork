@@ -15,14 +15,14 @@
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nylonite_projection_owner') THEN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spork_projection_owner') THEN
         -- NOLOGIN and no members, ever. J-class asserts zero rows in
         -- pg_auth_members for it: the point of a definer role is that its
         -- privileges are reachable only through the functions it owns.
-        CREATE ROLE nylonite_projection_owner NOLOGIN;
+        CREATE ROLE spork_projection_owner NOLOGIN;
     END IF;
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nylonite_scheduler') THEN
-        CREATE ROLE nylonite_scheduler NOLOGIN;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spork_scheduler') THEN
+        CREATE ROLE spork_scheduler NOLOGIN;
     END IF;
 END
 $$;
@@ -94,7 +94,7 @@ ALTER TABLE stock_allocation FORCE ROW LEVEL SECURITY;
 CREATE POLICY stock_allocation_tenant_scoped ON stock_allocation
     USING (tenant_id = current_tenant());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON stock_allocation TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON stock_allocation TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- The maintainer (D25, D35)
@@ -126,7 +126,7 @@ BEGIN
     -- tenant" structural rather than a convention someone remembers. The scope
     -- is the argument, and a rebuild cannot reach past it even by accident.
     -- Local to the transaction, so it does not leak to the caller's session.
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         -- The signed two-sided fold. Every movement subtracts from one cell and
@@ -194,14 +194,14 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_stock_rebuild(uuid) OWNER TO spork_projection_owner;
 
 -- D35: EXECUTE is granted to PUBLIC on every new function, which on a SECURITY
 -- DEFINER function is the whole privilege. The REVOKE goes in the same migration
 -- that creates it, never a later one.
 REVOKE EXECUTE ON FUNCTION projection_stock_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_stock_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 COMMENT ON FUNCTION projection_stock_rebuild(uuid) IS
     'Maintainer for stock. SECURITY DEFINER, owned by a role with no members, '
@@ -211,7 +211,7 @@ COMMENT ON FUNCTION projection_stock_rebuild(uuid) IS
 -- stock is written by the maintainer and read by everyone else. The application
 -- role already holds only SELECT from migration 2; this makes the intent
 -- explicit for the projection owner.
-GRANT SELECT, INSERT, UPDATE ON stock TO nylonite_projection_owner;
-GRANT SELECT ON stock_movement, location TO nylonite_projection_owner;
-GRANT SELECT ON projection_rebuild TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_rebuild TO nylonite_platform;
+GRANT SELECT, INSERT, UPDATE ON stock TO spork_projection_owner;
+GRANT SELECT ON stock_movement, location TO spork_projection_owner;
+GRANT SELECT ON projection_rebuild TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_rebuild TO spork_platform;

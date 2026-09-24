@@ -10,9 +10,9 @@
 -- deploy land* is answerable from outside the machine — which is the question
 -- that could not be answered at all a week ago, when a deploy was queued and
 -- nothing reachable could say whether it had finished. The endpoint runs as
--- `nylonite_app`, so without this it silently omitted the field.
+-- `spork_app`, so without this it silently omitted the field.
 --
 -- SELECT only. The migrator still owns the writing, and an application that
 -- could record a migration it had not run is the single lie the whole mechanism
 -- exists to prevent.
-GRANT SELECT ON schema_migration TO nylonite_app;
+GRANT SELECT ON schema_migration TO spork_app;

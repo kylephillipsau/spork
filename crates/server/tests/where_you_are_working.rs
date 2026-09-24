@@ -20,8 +20,8 @@
 //! and reissues, through the same `issue_session` every other way in uses.
 
 use actix_web::{test, web, App};
-use nylonite_server::auth::token_digest;
-use nylonite_server::{routes, AppState};
+use spork_server::auth::token_digest;
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 

@@ -213,7 +213,7 @@ pub fn spec(id: Id) -> Invariant {
             statement: "relforcerowsecurity is true on every table carrying an @projection column",
             check: Check::Run(checks::j38_projection_tables_force_rls) },
         J73 => Invariant { id, owners: "D19", asserts_absence: false,
-            statement: "Every table with a tenant_id column that nylonite_app can reach forces row \
+            statement: "Every table with a tenant_id column that spork_app can reach forces row \
                     level security. Tables it holds no privilege on are closed by grant \
                     instead, and the exemption is asked of Postgres rather than named, so \
                     granting the application a column re-arms the check",
@@ -661,7 +661,7 @@ pub mod checks {
               WHERE n.nspname = $1
                 AND col_description(c.oid, a.attnum) LIKE '@projection%'
                 -- Owning the projection is the maintainer's whole job.
-                AND r.rolname <> 'nylonite_projection_owner'
+                AND r.rolname <> 'spork_projection_owner'
                 AND (has_column_privilege(r.oid, c.oid, a.attname, p.priv)
                      OR has_table_privilege(r.oid, c.oid, 'DELETE'))",
             &[&APP_SCHEMA],
@@ -680,7 +680,7 @@ pub mod checks {
                    JOIN pg_roles r ON NOT r.rolsuper AND r.rolname NOT LIKE 'pg\\_%'
                   WHERE n.nspname = $1
                     AND col_description(c.oid, a.attnum) LIKE '@projection%'
-                    AND r.rolname <> 'nylonite_projection_owner'",
+                    AND r.rolname <> 'spork_projection_owner'",
                 &[&APP_SCHEMA],
             )?
             .get(0);
@@ -760,7 +760,7 @@ pub mod checks {
     ///
     /// Row-level security is not the only way to close a table, and this schema
     /// uses the other one. `session` carries a `tenant_id` and has no policy at
-    /// all, because `nylonite_app` holds no privilege on it whatsoever: the
+    /// all, because `spork_app` holds no privilege on it whatsoever: the
     /// `SECURITY DEFINER` functions of migration 70 are its only interface. A
     /// check that demanded RLS there would be demanding a second lock on a door
     /// that is already welded shut.
@@ -770,7 +770,7 @@ pub mod checks {
     /// after it has stopped being true in the database. The exemption is
     /// instead the reason itself — *the application cannot reach this table* —
     /// asked of Postgres at check time. So the exemption audits itself. Grant
-    /// `nylonite_app` a single column of `session` and this check fires on the
+    /// `spork_app` a single column of `session` and this check fires on the
     /// next run, which is exactly when somebody should hear about it.
     ///
     /// Column privileges rather than table privileges: this schema grants by
@@ -788,10 +788,10 @@ pub mod checks {
                JOIN pg_namespace n ON n.oid = c.relnamespace
                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id'
               WHERE c.relkind = 'r' AND n.nspname = 'public' AND NOT a.attisdropped
-                AND (has_any_column_privilege('nylonite_app', c.oid, 'SELECT')
-                  OR has_any_column_privilege('nylonite_app', c.oid, 'INSERT')
-                  OR has_any_column_privilege('nylonite_app', c.oid, 'UPDATE')
-                  OR has_table_privilege('nylonite_app', c.oid, 'DELETE'))
+                AND (has_any_column_privilege('spork_app', c.oid, 'SELECT')
+                  OR has_any_column_privilege('spork_app', c.oid, 'INSERT')
+                  OR has_any_column_privilege('spork_app', c.oid, 'UPDATE')
+                  OR has_table_privilege('spork_app', c.oid, 'DELETE'))
               ORDER BY c.relname",
             &[],
         )?;
@@ -2418,14 +2418,14 @@ pub mod checks {
         let observed = crate::golden::observe(c)?;
         let mut findings = vec![];
 
-        if recorded.version != nylonite_policy::RESOLVER_VERSION {
+        if recorded.version != spork_policy::RESOLVER_VERSION {
             findings.push(finding(
                 Id::J22,
                 "projection_drift",
                 format!(
                     "the snapshot was taken under RESOLVER_VERSION {} and the code is {}: regenerate it and read the diff, which is what the bump is for",
                     recorded.version,
-                    nylonite_policy::RESOLVER_VERSION
+                    spork_policy::RESOLVER_VERSION
                 ),
             ));
             return Ok((observed.len(), findings));

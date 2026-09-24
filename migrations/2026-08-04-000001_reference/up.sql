@@ -24,11 +24,11 @@
 -- role already exists is a migration nobody can run twice.
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nylonite_app') THEN
-        CREATE ROLE nylonite_app NOLOGIN;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spork_app') THEN
+        CREATE ROLE spork_app NOLOGIN;
     END IF;
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nylonite_platform') THEN
-        CREATE ROLE nylonite_platform NOLOGIN;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spork_platform') THEN
+        CREATE ROLE spork_platform NOLOGIN;
     END IF;
 END
 $$;
@@ -39,10 +39,10 @@ $$;
 -- planner push it past a policy.
 CREATE FUNCTION current_tenant() RETURNS uuid
     LANGUAGE sql STABLE
-    AS $$ SELECT nullif(current_setting('nylonite.tenant_id', true), '')::uuid $$;
+    AS $$ SELECT nullif(current_setting('spork.tenant_id', true), '')::uuid $$;
 
 COMMENT ON FUNCTION current_tenant() IS
-    'The session tenant, from the nylonite.tenant_id GUC. NULL outside a tenant '
+    'The session tenant, from the spork.tenant_id GUC. NULL outside a tenant '
     'context, which every tenant-scoped policy treats as matching nothing.';
 
 -- ---------------------------------------------------------------------------
@@ -366,28 +366,28 @@ CREATE POLICY item_classification_tenant_scoped ON item_classification
 -- Grants (D25)
 -- ---------------------------------------------------------------------------
 
-GRANT USAGE ON SCHEMA public TO nylonite_app, nylonite_platform;
+GRANT USAGE ON SCHEMA public TO spork_app, spork_platform;
 
 -- Reference data the application may maintain within its own tenant. RLS
 -- decides which rows; the grant decides which verbs.
 GRANT SELECT, INSERT, UPDATE, DELETE ON
     site, zone, location, item_class, item_classification
-    TO nylonite_app;
+    TO spork_app;
 
 -- Shared rows belong to the platform. The application may read the shared
 -- catalogue and write only its own rows, which RLS enforces per row; the
 -- platform role is what writes tenant_id IS NULL.
-GRANT SELECT, INSERT, UPDATE, DELETE ON item TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON item TO nylonite_platform;
+GRANT SELECT, INSERT, UPDATE, DELETE ON item TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON item TO spork_platform;
 
-GRANT SELECT ON tenant, person, person_tenant, dimension, unit TO nylonite_app;
+GRANT SELECT ON tenant, person, person_tenant, dimension, unit TO spork_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON
     tenant, person, person_tenant, dimension, unit
-    TO nylonite_platform;
+    TO spork_platform;
 
 -- The closure is a projection. J36 asserts no login role holds INSERT, UPDATE
 -- or DELETE on a projection, so the application reads it and the maintainer
 -- function writes it.
-GRANT SELECT ON item_class_closure TO nylonite_app;
+GRANT SELECT ON item_class_closure TO spork_app;
 
-GRANT EXECUTE ON FUNCTION current_tenant() TO nylonite_app, nylonite_platform;
+GRANT EXECUTE ON FUNCTION current_tenant() TO spork_app, spork_platform;

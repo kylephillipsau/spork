@@ -16,7 +16,7 @@
 # This one is for a database somebody is keeping.
 set -eu
 
-DB="${DATABASE_URL:-postgres://postgres:nylonite@localhost:55432/nylonite}"
+DB="${DATABASE_URL:-postgres://postgres:spork@localhost:55432/spork}"
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
 

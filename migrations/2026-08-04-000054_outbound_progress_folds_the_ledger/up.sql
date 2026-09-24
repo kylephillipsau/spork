@@ -91,7 +91,7 @@ CREATE OR REPLACE FUNCTION projection_fulfilment_rebuild(p_tenant uuid)
 DECLARE
     touched bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     WITH ledger AS (
         SELECT m.fulfilment_line_id,
@@ -155,7 +155,7 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_fulfilment_rebuild(uuid) OWNER TO spork_projection_owner;
 
 COMMENT ON FUNCTION projection_fulfilment_rebuild(uuid) IS
     'Maintainer for fulfilment_line''s four coverage quantities, from two sources '

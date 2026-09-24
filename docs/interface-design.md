@@ -244,7 +244,7 @@ and that is where the design effort goes.
 above and slightly left. The finish on a machine-tool spindle: matte,
 near-black, isotropic, expensive without being shiny. Beside it one textile —
 **ripstop nylon** — because the company sells protective equipment and is called
-Nylonite.
+Spork.
 
 And one reconciliation the whole thing turns on: **the chassis is metal and the
 data is paper.** The enclosure can be as rich as we like because nobody reads
@@ -851,7 +851,7 @@ appears where the system is padded, carried or tagged — boots, straps, woven t
 and never carries a number.
 
 **Why.** The company sells nitrile gloves, hair nets and protective equipment and
-is called Nylonite; a textile in the system is the trade rather than a flourish.
+is called Spork; a textile in the system is the trade rather than a flourish.
 What keeps it from becoming decoration is a boundary with no exceptions. Sharing the
 lamp is what makes them read as two finishes in one room rather than two unrelated
 textures, and their different sheen behaviour — a fibre bundle is a cylinder, a
@@ -1820,4 +1820,4 @@ and takes it anyway for a stated reason. There is no such reason here — a
 working pair of lanes is one directory away when there is an account to point
 them at. Nothing committed ties the app to a developer account: the bundle
 identifier is its own and the team ID is never in the repository, so moving
-Nylonite onto a separate account later costs one environment variable.
+Spork onto a separate account later costs one environment variable.

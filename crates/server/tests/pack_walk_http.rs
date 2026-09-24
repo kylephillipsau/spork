@@ -25,7 +25,7 @@
 
 use actix_web::{test, web, App};
 use chrono::Utc;
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -55,7 +55,7 @@ async fn the_pack_walkthrough_runs_end_to_end_over_http() {
             // The binary's own registration. A route added to routes.rs and not
             // wired here would fail below rather than in production.
             .configure(routes::configure)
-            .configure(nylonite_server::web::configure),
+            .configure(spork_server::web::configure),
     )
     .await;
 
@@ -458,7 +458,7 @@ async fn an_unauthenticated_request_is_refused_and_a_header_no_longer_helps() {
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     // No session at all.
     let resp = test::call_service(&app, test::TestRequest::get().uri("/stock").to_request()).await;
@@ -578,7 +578,7 @@ async fn the_printable_packing_list_renders() {
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     // The stylesheet is served from the binary; there is no asset pipeline.
     let css = test::call_service(
@@ -790,7 +790,7 @@ async fn a_packer_can_change_their_mind() {
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     let bearer = common::bearer(&app).await;
     let get = |uri: String, b: String| {
@@ -1028,7 +1028,7 @@ async fn what_a_carton_of_something_measures_is_a_fact_about_the_kind() {
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     let bearer = common::bearer(&app).await;
 
@@ -1259,7 +1259,7 @@ async fn the_bench_reads_the_same_figures_the_page_draws() {
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     let bearer = common::bearer(&app).await;
 
@@ -1323,7 +1323,7 @@ async fn the_despatch_bench_puts_each_carton_on_one_list() {
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     let bearer = common::bearer(&app).await;
 
@@ -1415,12 +1415,12 @@ async fn a_photograph_hangs_off_the_look_that_produced_it() {
         return;
     };
 
-    let store = std::env::temp_dir().join(format!("nylonite-images-{}", Uuid::now_v7()));
-    std::env::set_var("NYLONITE_IMAGE_DIR", &store);
+    let store = std::env::temp_dir().join(format!("spork-images-{}", Uuid::now_v7()));
+    std::env::set_var("SPORK_IMAGE_DIR", &store);
 
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)
-            .configure(nylonite_server::web::configure)).await;
+            .configure(spork_server::web::configure)).await;
 
     let bearer = common::bearer(&app).await;
 

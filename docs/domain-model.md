@@ -6,6 +6,9 @@ Companion to [warehouse-data-model.md](./warehouse-data-model.md) (which covers
 Working document. Table sketches are indicative — enough to argue with, not a
 migration.
 
+Decisions up to D169 were made for Nylonite, the base Spork is built on, and are
+Spork's inheritance. D170 onward are Spork's own.
+
 ## Design principles
 
 These are the rules we hold ourselves to. They exist because the failure mode is
@@ -447,7 +450,8 @@ straight into pickable inventory with no inspection state.
 **Decision.** Real-time synchronisation, with the movement ledger given
 **operation-CRDT semantics** so that a dropout degrades gracefully instead of
 triggering a separate offline code path. We do **not** build an offline-first
-handheld app with a queue-and-replay design.
+handheld app with a queue-and-replay design. *(Amended by D170: a durable outbox
+of the same acts is not a separate path.)*
 
 **The reframe.** The scanner is observing physical reality; the database is a
 model of it. **When they disagree the scanner is usually right.** A scan is
@@ -6971,8 +6975,8 @@ silent, because everything that could have noticed was pointed the other way.
 
 Finding the rule that matched the design took two wrong drafts, and both are worth
 recording. *Can any role write it* reported eleven columns and not `currency`,
-because `nylonite_projection_owner` holds table-wide UPDATE on `order` and a
-table-wide grant covers columns added later. *Can `nylonite_app` write it*
+because `spork_projection_owner` holds table-wide UPDATE on `order` and a
+table-wide grant covers columns added later. *Can `spork_app` write it*
 reported thirty-eight the application is deliberately forbidden. **The rule is per
 table: on a table the application may write, every non-projection column is in one
 of its grant lists.** That is the state a column-level grant is meant to leave a
@@ -7038,7 +7042,7 @@ CREATE POLICY item_shared_reference ON item
 
 Postgres uses the `USING` expression as the `WITH CHECK` when none is given, so
 that clause authorised writes as well as reads. Verified against the live schema
-as `nylonite_app` with a tenant context set: an `INSERT` naming
+as `spork_app` with a tenant context set: an `INSERT` naming
 `tenant_id = NULL` succeeded, and an `UPDATE` renamed a platform-shipped row.
 
 **The reach is the shared catalogue itself.** `item` is D19's thin shared item.
@@ -7072,7 +7076,7 @@ So the shape splits into the pair it always meant:
 Permissive policies are OR'd per command, so `SELECT` sees both and gets the
 union, while `INSERT`, `UPDATE` and `DELETE` see only the write policy.
 
-`is_platform()` exists because `nylonite_platform` carries neither superuser nor
+`is_platform()` exists because `spork_platform` carries neither superuser nor
 `BYPASSRLS`, so it is subject to these policies and needs an arm that admits it.
 Migrations run as the owner, which is a superuser and bypasses RLS entirely, so
 seeding shared rows from a migration is unaffected.
@@ -7105,7 +7109,7 @@ migration was written, because a fix aimed at the wrong shape is worse than none
   half, and the write half declares an explicit `WITH CHECK`.
 
 **Rejects.** Adding `WITH CHECK` to the existing single policy, which leaves
-`DELETE` governed by a `USING` that admits shared rows. Giving `nylonite_platform`
+`DELETE` governed by a `USING` that admits shared rows. Giving `spork_platform`
 `BYPASSRLS`, which buys the platform arm by removing tenant isolation from the
 role that most needs it. Revoking `DELETE` from the application, which would take
 its own rows with it. Listing the affected tables in the migration instead of
@@ -9285,7 +9289,7 @@ Ordering is *lexicographic over a per-kind precedence order*, which D22 puts
 kind's Rust type"** and D81 justified one kind at a time.
 
 So `policy_candidate` returns every binding whose declared axes are at-or-above
-the request, each with its depth vector, and `nylonite_policy::resolve` decides
+the request, each with its depth vector, and `spork_policy::resolve` decides
 which wins. **Neither half is the resolver**, and a test of either alone passes
 while the join is wrong — which is the only way this fails in practice, so the
 end-to-end test is the one that matters.
@@ -9563,7 +9567,7 @@ change is opt-in per caller rather than a silent flip.
 **A hole in a whole table class.** The first draft gave the new value table a
 row-level policy and S9 rejected the shape. Checking why turned up the real
 problem: `allocation_policy`, `receiving_policy` and `shelf_life_policy` had
-**row-level security disabled entirely**, with `nylonite_app` holding SELECT,
+**row-level security disabled entirely**, with `spork_app` holding SELECT,
 INSERT and UPDATE. Any tenant's connection could read and rewrite another tenant's
 policy values. **D79 missed it**: value tables carry no `tenant_id` column, so an
 audit that classified every table as strictly-owned or shared-reference skipped
@@ -10213,7 +10217,7 @@ application, hand it a function that refuses when the rule says refuse.
 | D89 | the function refuses a second disposition | the app kept UPDATE on the columns | mediation **optional** |
 
 `asserted_unit_content_resolve` ran with the caller's rights, and the caller is
-the role whose rights had just been removed. As `nylonite_app` it failed on its
+the role whose rights had just been removed. As `spork_app` it failed on its
 own first statement — `SELECT 1 ... FOR UPDATE`, which needs UPDATE privilege —
 before reaching the freeze it exists to enforce. D90's measured refusals were
 genuine, because the refusal path raises before touching a row. **The success
@@ -10239,14 +10243,14 @@ through a function the application is handed on purpose. That is D55's write hol
 reopened through a door built for safety.
 
 The safe shape was already in the schema before anything checked it: fifteen
-`SECURITY DEFINER` projection functions owned by `nylonite_projection_owner`,
+`SECURITY DEFINER` projection functions owned by `spork_projection_owner`,
 which has neither SUPERUSER nor BYPASSRLS, against tables with FORCE ROW LEVEL
-SECURITY so RLS applies to the owner too. `nylonite_mediation_owner` is that
+SECURITY so RLS applies to the owner too. `spork_mediation_owner` is that
 shape for a different concern, and separate from the projection owner because the
 grants should be: a projection owner rewrites whole projection columns, a
 mediation owner writes exactly the columns its functions govern.
 
-Measured as `nylonite_app` after the change: the unfrozen claim re-resolves; the
+Measured as `spork_app` after the change: the unfrozen claim re-resolves; the
 frozen one is refused *with the freeze message rather than a privilege error*; the
 direct UPDATE on either table is denied; and **another tenant asking to resolve
 this tenant's claim is told the row does not exist**, which is RLS still holding
@@ -10273,7 +10277,7 @@ reporting success — because every role here is NOLOGIN and that variable names
 connection nobody had made. A suite whose entire premise is that a vacuous pass is
 not a pass had three tests passing vacuously for as long as they had existed.
 
-They now fall back to `DATABASE_URL` and `SET ROLE nylonite_app`, which is
+They now fall back to `DATABASE_URL` and `SET ROLE spork_app`, which is
 faithful for everything they assert: RLS and column grants are decided by the
 current role rather than the session role. All three pass. `mediated_write.rs`
 is new and tests the behaviour S53 and S54 test structurally, because the
@@ -10281,7 +10285,7 @@ structure was right in the register and wrong in the database for four
 migrations.
 
 **Rejects.** `SECURITY DEFINER` owned by `postgres`. Reusing
-`nylonite_projection_owner`, which would hand a resolution function every
+`spork_projection_owner`, which would hand a resolution function every
 projection privilege. Granting the app UPDATE on the five resolution columns and
 calling the function advisory, which is D89's failure adopted deliberately.
 Dropping the role in the down migration: a role is cluster-wide and another
@@ -10449,7 +10453,7 @@ structural suite's pending count drops for the first time in this run of decisio
 
 The application has no UPDATE on `asserted_unit` and must not get one — a claim is
 immutable (D77) and our annotation on it freezes on first use (D21). So the link is
-set through `asserted_unit_collapse`, a definer owned by `nylonite_mediation_owner`
+set through `asserted_unit_collapse`, a definer owned by `spork_mediation_owner`
 with UPDATE on exactly the three columns it writes, registered in `mediated_write`
 so S54 checks the arrangement rather than trusting it.
 
@@ -11335,7 +11339,7 @@ before the next scheduler run moves the cache.
 `projection_dirty` is one row per tenant (upsert). After a floor write the app
 calls `projection_mark_dirty(tenant, reason)`. The scheduler drains with
 `projection_run_dirty`, which runs `projection_run_all` for each dirty tenant
-oldest-first and clears on success. Owned by `nylonite_projection_owner`; only
+oldest-first and clears on success. Owned by `spork_projection_owner`; only
 scheduler/platform may execute the drain. Full-tenant folds remain (D106);
 this only prioritises who runs next.
 
@@ -11345,7 +11349,7 @@ this only prioritises who runs next.
 
 | Rule | How |
 |---|---|
-| Current tenant only | Requires `nylonite.tenant_id`; rejects any other `p_tenant` |
+| Current tenant only | Requires `spork.tenant_id`; rejects any other `p_tenant` |
 | Not `projection_run_all` | App still has no EXECUTE on the orchestrator (D95) |
 | One accepted rebuild per 5 s | `projection_freshness.last_on_demand_at`, independent of scheduler stamps |
 | Rate-limit ≠ warm rebuild | Returns `NULL` when limited; `0` when accepted and D68 touched nothing |
@@ -11374,7 +11378,7 @@ Migration 61's `projection_run_dirty` selected from `projection_dirty` without a
 tenant setting. FORCE RLS applies to the projection owner, so the tenant-scoped
 policy hid every row and the drain was a no-op. Migration 62 loops tenants,
 `SET LOCAL` each id, then sees and clears that tenant's dirty row under the same
-RLS shape S9 already permits — no `USING (true)`. The `nylonite-scheduler`
+RLS shape S9 already permits — no `USING (true)`. The `spork-scheduler`
 binary is the process that calls the drain on an interval.
 
 ## Open questions
@@ -12403,7 +12407,7 @@ never null and never editable. Setup writes no facts about goods. Sign-on is
 what *establishes* attribution and therefore cannot require it; the same is true
 one step earlier. There is nothing being excepted.
 
-**Nor does it widen the privilege boundary.** `nylonite_app` holds SELECT on
+**Nor does it widen the privilege boundary.** `spork_app` holds SELECT on
 `tenant` and `person` and nothing at all on `person_credential` — the
 tenant-scoped role may not mint identities, deliberately. But identity acts
 already run on a raw pooled connection as the owner: that is how `sign_on`
@@ -12419,7 +12423,7 @@ project's deployment for hours. It is the shape of CVE-2024-31218, the
 PocketBase installer race, and the answer is theirs: a token only somebody who
 can read the server's log or its filesystem has.
 
-The token lives in `NYLONITE_STATE_DIR`, **not beside the images**. The image
+The token lives in `SPORK_STATE_DIR`, **not beside the images**. The image
 directory holds bytes a stranger uploaded, and a path-traversal bug in that
 handler must not also be a way to read a credential. Thirty minutes, mode 0600,
 reused rather than rotated while somebody is halfway through the form, deleted
@@ -12464,7 +12468,7 @@ the one that made the request. The write is `credential_change_password`, a
 handed.
 
 **The problem.** D142 shipped the way into a deployment and named this as what
-it owed. `nylonite_app` holds no grant on `person_credential` at all — a
+it owed. `spork_app` holds no grant on `person_credential` at all — a
 deliberate boundary, and it meant nobody could change a password through
 anything. On this project's own deployment that was not an inconvenience:
 `app.nylonite.com` ran on `fixtures/seed.sql`, whose password is committed in
@@ -12501,7 +12505,7 @@ and that oracle is not on this side of the door.
   set by a path claiming to *change* one. Structural rather than a branch
   somebody has to remember;
 * it narrows what the application can do at all. A bare
-  `credential_set_password(person, phc)` would hand `nylonite_app` the ability to
+  `credential_set_password(person, phc)` would hand `spork_app` the ability to
   write anybody's password. This hands it the ability to write a row whose
   current digest it has already been given, which is migration 70's mediation
   argument rather than a restatement of the check above it.
@@ -12821,7 +12825,7 @@ this, and a translation is a place for bugs neither side can see — while the
 importer already knows how to read the export.
 
 **The table is unreachable, and that is now checked rather than intended.**
-`nylonite_app` holds no privilege on `api_token`; the `SECURITY DEFINER`
+`spork_app` holds no privilege on `api_token`; the `SECURITY DEFINER`
 functions are the only interface, which is migration 70's arrangement. J73,
 added the same day, asks Postgres whether the application can reach any table
 carrying a `tenant_id` and exempts only the ones it cannot — so the day somebody
@@ -13313,3 +13317,134 @@ goods arriving against no purchase order have no path through this screen or any
 other. That is a real gap on a real dock. It needs an ad-hoc supply write, and it
 circles question 26 — who the goods are for — which has not been answered. Named
 here so it is a known hole rather than a surprise.
+
+### D170 — Every PC is a full node, and facts sync the way git fetches
+
+*Proposed 2026-09-24 for the local fork. Nothing is built yet; this records the
+shape so the pieces are built toward it. It replaces a first draft of this
+decision — one database on two machines, a primary and a hot standby — which is
+kept below under Rejects as the fallback.*
+
+**Decision.** Every PC at a site runs the whole stack and **accepts writes**.
+There is no primary. Peers find each other on the LAN and each **pulls the facts
+it does not have** from every peer it can reach, keeping a cursor per peer the
+way git keeps a remote-tracking branch. Handhelds, phones and desk browsers are
+clients of whichever peer answers, and hold a durable outbox of acts.
+
+**Why this is D5 carried through rather than a new idea.** D5 made a scan a
+uniquely-identified delta whose arrival order does not matter and whose replay is
+a no-op, so that a dropout becomes a few late arrivals. A fact synced from
+another peer *is* a late arrival. It goes through the same insert path a late
+scan does, `client_event` makes the second copy a no-op, and the projections
+already rebuild from facts (`projection_mark_dirty` → `projection_run_dirty`)
+rather than being edited by the write. So a peer receiving facts is a peer
+receiving scans, and nothing downstream can tell the difference.
+
+| git | here |
+|---|---|
+| a commit: immutable, globally unique id | a `client_event` and the facts it carries |
+| `git fetch` | pull what this peer lacks, per peer, from a cursor |
+| a commit fetched twice changes nothing | `client_event_id` is unique; replay is a no-op |
+| the working tree, checked out from history | projections, rebuilt from facts |
+| a merge conflict, shown to a person | a finding, raised with evidence (D8) |
+
+**Exclusivity becomes detection, and that is the trade being made.** A single
+writer can *prevent* two operators claiming the same order. Peers cannot: within
+the sync delay — under a second on a working LAN, the length of the split during
+a partition — two peers can each accept a claim that is valid locally. The
+merged result is a finding (a double pick, an over-allocation), not a refused
+write. D5 already accepted this for the last unit on a shelf; this decision
+accepts it for work as well, knowingly.
+
+**What has to change for it to hold.**
+
+- **A fact carries where it was first recorded.** An origin peer and a per-origin
+  position, so a cursor means something, alongside the device, person and clocks
+  `client_event` already holds. **The origin is the peer that first received it,
+  never the device** — see *Devices hold slices, not the log*, below.
+- **Rows that are updated in place become facts.** `stock_allocation.state`,
+  `lot`'s expiry fill, the taxonomy moves on `item_class` and `party_class`, and
+  `reported_stock`'s replace-on-import each become an appended event whose fold
+  gives today's value. Derived tables (`stock`, `expected_supply`,
+  `fulfilment_line` progress, `package` status, `"order"`) are not synced at all:
+  each peer rebuilds them.
+- **Reference data takes a rule per table.** Items, bins, zones and policies are
+  written rarely and by few people; the review chooses event history or
+  last-writer-wins on a hybrid logical clock, table by table.
+- **Identity syncs, and revocation is only as fast as sync.** Sessions, tokens,
+  credentials and passkeys replicate like anything else. A revoked token stays
+  usable on a peer that has not yet heard, which is bounded by the sync delay
+  and stated rather than hidden. A `webauthn_challenge` is local to the peer
+  that issued it and is never synced.
+- **Peers refuse each other across schemas.** `schema_migration` is exchanged at
+  the start of every pull; a peer on a different migration is not synced with,
+  the way git refuses a repository format it does not know.
+- **The invariant review decides the rest.** Each rule the database enforces at
+  write time is either kept (it only ever sees one peer's writes) or restated as
+  a finding over the merged facts. That includes the natural-key uniques —
+  `item_barcode (tenant_id, barcode)`, `lot (tenant_id, item_id, code)`, the
+  `(tenant_id, code)` family — which two peers can each satisfy locally with
+  different ids: git's add/add conflict. Each gets a merge rule (collapse to the
+  earliest by origin and position, keeping the other as an alias) or becomes a
+  finding.
+
+**Devices hold slices, not the log.** A device needs no history to append: a
+fact is a delta, identified by an id the device mints, referring to things by
+uuid. To *read* without a connection it holds a **slice** — the folded state a
+task needs (a walk's lines, their bins, the stock in those cells, the site's item
+and bin codes), stamped with the point it was taken at. That is git's shallow,
+sparse checkout: the files in hand, none of the history. `picking_list.rs`
+already computes one; a slice is that answer kept on the device. It is kilobytes
+for a task and megabytes for a site's reference codes, and never grows with the
+ledger. Three rules keep it correct:
+
+1. **A device asserts deltas, never totals derived from its slice.** "Picked 3
+   from X", not "X now holds 4", because the slice may be stale. Counts remain
+   observations (D8).
+2. **An act records the slice it was based on**, as a commit records its parent.
+   A pick against a bin the slice said held five, landing where the ledger
+   already says zero, is then distinguishable: *the device's view was stale*
+   rather than *the shelf disagrees with the record*. Two findings that today
+   would be one.
+3. **Devices are not origins.** An act is positioned by the peer that receives
+   it, at the moment it arrives. A frontier therefore names peers only, and an
+   act held twenty hours in an outbox lands *after* every checkpoint already
+   taken — never inside one.
+
+**Peers hold checkpoints, so rebuilding does not read everything ever recorded.**
+`projection_stock_rebuild` folds every `stock_movement` the tenant has, so a
+peer's rebuild time and a joining peer's first pull both grow with the ledger for
+ever. A **checkpoint** is the folded state at a frontier — a consistent cut, one
+position per peer. A rebuild is a checkpoint plus the facts after it; a new peer
+joins from the latest checkpoint and backfills history behind it. Checkpoints
+make history *optional* on a peer, never absent from the site: **at least two
+peers keep the full archive**, because the ledger is the record.
+
+**Why the device keeps what it sent.** A peer can die holding facts nobody has
+pulled yet. Each device keeps its acknowledged acts for **24 hours** and resends
+them to whichever peer it reaches next; D5 makes the duplicates free. The device
+is the second copy of anything it recorded.
+
+**What it does not change.** The schema is still PostgreSQL's, row level
+security still holds on every peer, and handhelds are still clients: the rules
+live in the database, and a phone-sized copy of it would be a rewrite.
+
+#### Amendments to earlier decisions
+
+- **D5** — "no offline mode" is kept in its intent and narrowed in its wording.
+  What D5 rejects is a *separate* offline code path. A durable outbox is not one:
+  it is the same act, carrying the same `client_event_id`, sent later, and it
+  also resends acts already acknowledged. The same argument makes peer sync
+  legitimate: a synced fact is a late scan.
+
+**Rejects.** *One database on two machines* — a primary and a hot standby by
+streaming replication, promoted by hand. It is cheaper and prevents what this
+design only detects, and it is the fallback if fact sync proves harder than it
+looks; it is rejected because it keeps a single writer, which is the thing this
+fork exists to remove. *Bidirectional logical replication* between PostgreSQL
+instances — replicated rows bypass the write path, so projections need replica
+triggers and nothing about a merge is visible to the application. Handhelds as
+database peers. Distributed SQL — consensus needs three nodes and prevents
+partitions from writing at all, the opposite of the goal. Synchronising derived
+tables. A device holding the ledger, or any part of it, to read from. Devices as
+origins in a frontier.

@@ -15,7 +15,7 @@
 use std::fs;
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use std::str::FromStr;
 
@@ -25,7 +25,7 @@ use common::{pool, url};
 fn body(token: &str) -> Value {
     json!({
         "token": token,
-        "organisation": "Nylonite Test Co",
+        "organisation": "Spork Test Co",
         "site_name": "Melbourne",
         "site_code": "MEL2",
         "timezone": "Australia/Melbourne",
@@ -41,7 +41,7 @@ fn body(token: &str) -> Value {
 /// the reason CI sat red for three commits. This was
 /// `u.replace(u.rsplit('/').next().unwrap(), &name)`, which replaces the
 /// database name *everywhere it appears in the URL* — and on the CI runner the
-/// URL is `postgres://postgres:nylonite@postgres:5432/nylonite`, where it also
+/// URL is `postgres://postgres:spork@postgres:5432/spork`, where it also
 /// appears as the password. The scoped URL came out with the generated database
 /// name in the password field, `migrate.sh` failed with `password
 /// authentication failed for user "postgres"`, `check` failed, `images` was
@@ -49,10 +49,10 @@ fn body(token: &str) -> Value {
 /// redeploy looked like it worked.
 ///
 /// It never failed locally because the development database is called
-/// `nylonite` and the password happens to be the same word — so the URL is
-/// `.../nylonite` with `nylonite` as the password, and the test only passes when
+/// `spork` and the password happens to be the same word — so the URL is
+/// `.../spork` with `spork` as the password, and the test only passes when
 /// the two differ, which is the case a scratch database called
-/// `nylonite_check` accidentally created.
+/// `spork_check` accidentally created.
 fn with_database(url: &str, name: &str) -> String {
     let (prefix, _) = url.rsplit_once('/').expect("a URL with a database in it");
     format!("{prefix}/{name}")
@@ -72,8 +72,8 @@ fn with_database(url: &str, name: &str) -> String {
 async fn isolate_state() -> (std::path::PathBuf, tokio::sync::MutexGuard<'static, ()>) {
     static GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let held = GATE.lock().await;
-    let dir = std::env::temp_dir().join(format!("nylonite-setup-{}", uuid::Uuid::new_v4()));
-    std::env::set_var("NYLONITE_STATE_DIR", &dir);
+    let dir = std::env::temp_dir().join(format!("spork-setup-{}", uuid::Uuid::new_v4()));
+    std::env::set_var("SPORK_STATE_DIR", &dir);
     (dir, held)
 }
 
@@ -89,7 +89,7 @@ async fn a_deployment_is_set_up_once_and_refuses_every_other_attempt() {
     // deployment — zero persons anywhere — so it cannot be tested against the
     // shared fixture, which has two.
     let admin = pool(&u);
-    let name = format!("nylonite_setup_{}", uuid::Uuid::new_v4().simple());
+    let name = format!("spork_setup_{}", uuid::Uuid::new_v4().simple());
     {
         let c = admin.get().await.expect("connect");
         c.execute(&format!("CREATE DATABASE {name}"), &[]).await.expect("create");
@@ -144,7 +144,7 @@ async fn a_deployment_is_set_up_once_and_refuses_every_other_attempt() {
     // Mint one the way boot does.
     {
         let c = pool.get().await.expect("connect");
-        nylonite_server::setup::reconcile(&c).await;
+        spork_server::setup::reconcile(&c).await;
     }
     let token = fs::read_to_string(state_dir.join("setup.token")).expect("a token was minted");
     let token = token.trim().to_string();
@@ -267,7 +267,7 @@ async fn a_deployment_is_set_up_once_and_refuses_every_other_attempt() {
     fs::write(state_dir.join("setup.token"), "left-over-from-before").expect("write");
     {
         let c = pool.get().await.expect("connect");
-        nylonite_server::setup::reconcile(&c).await;
+        spork_server::setup::reconcile(&c).await;
     }
     assert!(
         !state_dir.join("setup.token").exists(),
@@ -287,7 +287,7 @@ async fn a_deployment_is_set_up_once_and_refuses_every_other_attempt() {
 /// nothing the operator could see.** `SET ROLE` is session state and deadpool's
 /// default recycling issues no cleanup statement, so a connection comes back
 /// out of the pool as whatever role it was left as. `assert_not_superuser`
-/// assumes `nylonite_app` at boot, which means the very first connection is in
+/// assumes `spork_app` at boot, which means the very first connection is in
 /// that state before any request arrives — and setup writes `person_credential`
 /// directly, which that role holds no grant on at all. Whether setup worked was
 /// decided by which connection the pool happened to hand over.
@@ -304,7 +304,7 @@ async fn setup_survives_a_connection_that_already_served() {
     let (state_dir, _gate) = isolate_state().await;
 
     let admin = pool(&u);
-    let name = format!("nylonite_setup_{}", uuid::Uuid::new_v4().simple());
+    let name = format!("spork_setup_{}", uuid::Uuid::new_v4().simple());
     {
         let c = admin.get().await.expect("connect");
         c.execute(&format!("CREATE DATABASE {name}"), &[]).await.expect("create");
@@ -336,13 +336,13 @@ async fn setup_survives_a_connection_that_already_served() {
         .expect("pool");
 
     // Exactly what `main` does before it serves anything.
-    nylonite_server::tenancy::assert_not_superuser(&pool)
+    spork_server::tenancy::assert_not_superuser(&pool)
         .await
         .expect("the boot check passes");
     {
         let c = pool.get().await.expect("connect");
         let role: String = c.query_one("SELECT current_user::text", &[]).await.unwrap().get(0);
-        assert_eq!(role, "nylonite_app", "boot left the connection as the app role");
+        assert_eq!(role, "spork_app", "boot left the connection as the app role");
     }
 
     let state = web::Data::new(AppState { pool: pool.clone() });
@@ -350,7 +350,7 @@ async fn setup_survives_a_connection_that_already_served() {
 
     {
         let c = pool.get().await.expect("connect");
-        nylonite_server::setup::reconcile(&c).await;
+        spork_server::setup::reconcile(&c).await;
     }
     let token = fs::read_to_string(state_dir.join("setup.token")).expect("a token");
     let token = token.trim().to_string();

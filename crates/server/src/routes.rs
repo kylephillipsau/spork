@@ -46,7 +46,7 @@ use webauthn_rs::prelude::{
 //
 // **The header was the whole tenancy boundary and nothing verified it.** Every
 // guard underneath was exact about a value any caller could type: `SET LOCAL`
-// per transaction, RLS forced, `nylonite_app` refused a bypass role at startup,
+// per transaction, RLS forced, `spork_app` refused a bypass role at startup,
 // S51 and J64 keeping references inside a tenant. Deleting the function rather
 // than leaving it unused is the point — a helper that reads a tenant from a
 // header is one somebody reaches for again. The tenant comes from the session

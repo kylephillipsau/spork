@@ -63,7 +63,7 @@ CREATE FUNCTION goods_receipt_variance(p_receipt uuid)
 $$;
 
 GRANT EXECUTE ON FUNCTION goods_receipt_variance(uuid)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
+    TO spork_app, spork_platform, spork_scheduler;
 
 DROP FUNCTION IF EXISTS packing_factor(uuid, packaging_level);
 

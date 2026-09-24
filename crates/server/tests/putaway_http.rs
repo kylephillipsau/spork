@@ -17,7 +17,7 @@
 //! Nothing here writes.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use uuid::Uuid;
 
 mod common;

@@ -21,7 +21,7 @@
 //! the first line. Text rather than JSON because the point is that a human reads
 //! the diff: **the snapshot's whole value is in being reviewed when it changes.**
 
-use nylonite_policy::{apply_clamps, resolve, Candidate, PolicyKind};
+use spork_policy::{apply_clamps, resolve, Candidate, PolicyKind};
 use postgres::Client;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -184,7 +184,7 @@ pub fn render(c: &mut Client) -> Result<String, postgres::Error> {
          # cannot happen quietly. J22. Regenerate only with a RESOLVER_VERSION bump,\n\
          # and read the diff.\n",
     );
-    s.push_str(&format!("RESOLVER_VERSION {}\n\n", nylonite_policy::RESOLVER_VERSION));
+    s.push_str(&format!("RESOLVER_VERSION {}\n\n", spork_policy::RESOLVER_VERSION));
     let mut answers: Vec<(String, String)> = observe(c)?;
     answers.sort();
     for (case, answer) in answers {

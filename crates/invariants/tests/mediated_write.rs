@@ -7,7 +7,7 @@
 //! function with no privileges of its own works, a function the caller could have
 //! skipped looks mediated, and a definer that escapes tenancy looks safe.
 //!
-//! Every assertion here therefore runs after `SET ROLE nylonite_app`. S53 and S54
+//! Every assertion here therefore runs after `SET ROLE spork_app`. S53 and S54
 //! assert the structure; this asserts the behaviour, because the structure was
 //! right in the register and wrong in the database for four migrations.
 //!
@@ -24,7 +24,7 @@ const FROZEN_CLAIM: &str = "a5c00000-0000-0000-0000-000000000002";
 
 fn client() -> Option<Client> {
     let url = std::env::var("DATABASE_URL").ok()?;
-    Some(nylonite_invariants::connect_exclusive(&url))
+    Some(spork_invariants::connect_exclusive(&url))
 }
 
 /// The server's own message rather than `db error`, which is all Display gives.
@@ -35,8 +35,8 @@ fn db_message(e: &postgres::Error) -> String {
 /// Everything here writes, so every test runs inside a transaction it rolls back.
 fn as_app(c: &mut Client, tenant: &str, body: impl FnOnce(&mut postgres::Transaction)) {
     let mut tx = c.transaction().expect("begin");
-    tx.batch_execute("SET LOCAL ROLE nylonite_app").expect("become the app");
-    tx.execute("SELECT set_config('nylonite.tenant_id', $1, true)", &[&tenant])
+    tx.batch_execute("SET LOCAL ROLE spork_app").expect("become the app");
+    tx.execute("SELECT set_config('spork.tenant_id', $1, true)", &[&tenant])
         .expect("name the tenant");
     body(&mut tx);
     tx.rollback().expect("rollback");
@@ -63,8 +63,8 @@ fn the_app_can_perform_the_write_the_function_mediates() {
     )
     .expect("an unfrozen claim");
 
-    tx.batch_execute("SET LOCAL ROLE nylonite_app").expect("become the app");
-    tx.execute("SELECT set_config('nylonite.tenant_id', $1, true)", &[&TENANT])
+    tx.batch_execute("SET LOCAL ROLE spork_app").expect("become the app");
+    tx.execute("SELECT set_config('spork.tenant_id', $1, true)", &[&TENANT])
         .expect("name the tenant");
 
     // Before D94 this raised `permission denied for table asserted_unit_content`

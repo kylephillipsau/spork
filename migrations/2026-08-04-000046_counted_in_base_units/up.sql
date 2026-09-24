@@ -59,7 +59,7 @@ COMMENT ON COLUMN goods_receipt_line.quantity IS
 -- The counted quantity is not one of the things that legitimately moves after the
 -- fact, which is the argument D45 already made for the entered columns. INSERT
 -- only, and the app never gets UPDATE.
-GRANT INSERT (quantity) ON goods_receipt_line TO nylonite_app;
+GRANT INSERT (quantity) ON goods_receipt_line TO spork_app;
 
 -- Existing rows, where the ledger can answer for them. A line that landed stock
 -- has its base quantity in the movement it caused; a rejected line has nothing to
@@ -128,7 +128,7 @@ COMMENT ON FUNCTION packing_factor(uuid, packaging_level) IS
     'the conversion independently. D58, D92.';
 
 GRANT EXECUTE ON FUNCTION packing_factor(uuid, packaging_level)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 3. The variance reads the line, and the ledger separately
@@ -199,4 +199,4 @@ COMMENT ON FUNCTION goods_receipt_variance(uuid) IS
     'reached the ledger; they differ by the disposition. D21, D91, D92.';
 
 GRANT EXECUTE ON FUNCTION goods_receipt_variance(uuid)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler;
+    TO spork_app, spork_platform, spork_scheduler;

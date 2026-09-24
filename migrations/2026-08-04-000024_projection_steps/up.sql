@@ -43,9 +43,9 @@ COMMENT ON COLUMN projection_step.note IS
     'because the alternative is a graph, and ten functions in one order do not '
     'need one.';
 
-GRANT SELECT ON projection_step TO nylonite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON projection_step TO nylonite_platform;
-GRANT SELECT ON projection_step TO nylonite_projection_owner;
+GRANT SELECT ON projection_step TO spork_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON projection_step TO spork_platform;
+GRANT SELECT ON projection_step TO spork_projection_owner;
 
 INSERT INTO projection_step (function_name, ordinal, note) VALUES
     ('projection_item_class_closure_rebuild', 10,
@@ -107,9 +107,9 @@ COMMENT ON FUNCTION projection_run_all(uuid) IS
     'scheduler calls this and nothing else, so skipping a step stops being '
     'something a caller can do by omission. D64.';
 
-ALTER FUNCTION projection_run_all(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_run_all(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_run_all(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION projection_run_all(uuid) TO nylonite_scheduler, nylonite_platform;
+GRANT EXECUTE ON FUNCTION projection_run_all(uuid) TO spork_scheduler, spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- 3. What S49 adds that S5 could not

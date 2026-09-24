@@ -258,14 +258,14 @@ $$;
 -- The tables are unreachable and the functions are the interface. J37 wants
 -- every definer to have `search_path` pinned and no EXECUTE to PUBLIC, which is
 -- what the revokes below are; S53 wants the owner to be neither SUPERUSER nor
--- BYPASSRLS, which `nylonite_mediation_owner` already satisfies.
+-- BYPASSRLS, which `spork_mediation_owner` already satisfies.
 
-ALTER FUNCTION credential_for_login(text) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION credential_record_attempt(uuid, boolean) OWNER TO nylonite_mediation_owner;
+ALTER FUNCTION credential_for_login(text) OWNER TO spork_mediation_owner;
+ALTER FUNCTION credential_record_attempt(uuid, boolean) OWNER TO spork_mediation_owner;
 ALTER FUNCTION session_open(uuid, uuid, uuid, bytea, interval, uuid, text)
-    OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION session_resolve(bytea, interval) OWNER TO nylonite_mediation_owner;
-ALTER FUNCTION session_revoke(bytea) OWNER TO nylonite_mediation_owner;
+    OWNER TO spork_mediation_owner;
+ALTER FUNCTION session_resolve(bytea, interval) OWNER TO spork_mediation_owner;
+ALTER FUNCTION session_revoke(bytea) OWNER TO spork_mediation_owner;
 
 REVOKE EXECUTE ON FUNCTION credential_for_login(text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION credential_record_attempt(uuid, boolean) FROM PUBLIC;
@@ -274,26 +274,26 @@ REVOKE EXECUTE ON FUNCTION session_open(uuid, uuid, uuid, bytea, interval, uuid,
 REVOKE EXECUTE ON FUNCTION session_resolve(bytea, interval) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION session_revoke(bytea) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION credential_for_login(text) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION credential_record_attempt(uuid, boolean) TO nylonite_app;
+GRANT EXECUTE ON FUNCTION credential_for_login(text) TO spork_app;
+GRANT EXECUTE ON FUNCTION credential_record_attempt(uuid, boolean) TO spork_app;
 GRANT EXECUTE ON FUNCTION session_open(uuid, uuid, uuid, bytea, interval, uuid, text)
-    TO nylonite_app;
-GRANT EXECUTE ON FUNCTION session_resolve(bytea, interval) TO nylonite_app;
-GRANT EXECUTE ON FUNCTION session_revoke(bytea) TO nylonite_app;
+    TO spork_app;
+GRANT EXECUTE ON FUNCTION session_resolve(bytea, interval) TO spork_app;
+GRANT EXECUTE ON FUNCTION session_revoke(bytea) TO spork_app;
 
 -- **The owner needs what its functions read.** A definer runs its body as its
--- owner, so `nylonite_mediation_owner` -- which owns nothing else and logs in
+-- owner, so `spork_mediation_owner` -- which owns nothing else and logs in
 -- nowhere -- must be able to reach `person`, `person_tenant` and the two tables
 -- above. Without this the functions parse, deploy, and fail at the first call
 -- with `permission denied for table person`, which is what happened.
-GRANT SELECT ON person, person_tenant TO nylonite_mediation_owner;
-GRANT SELECT, UPDATE ON person_credential TO nylonite_mediation_owner;
-GRANT SELECT, INSERT, UPDATE ON session TO nylonite_mediation_owner;
+GRANT SELECT ON person, person_tenant TO spork_mediation_owner;
+GRANT SELECT, UPDATE ON person_credential TO spork_mediation_owner;
+GRANT SELECT, INSERT, UPDATE ON session TO spork_mediation_owner;
 
 -- Provisioning a credential is the platform's job, not the floor's.
-GRANT SELECT, INSERT, UPDATE ON person_credential TO nylonite_platform;
-GRANT SELECT ON session TO nylonite_platform;
+GRANT SELECT, INSERT, UPDATE ON person_credential TO spork_platform;
+GRANT SELECT ON session TO spork_platform;
 
 -- The app may read which tenants a person belongs to, so a sign-on can offer the
 -- choice when there is more than one.
-GRANT SELECT ON person_tenant TO nylonite_app;
+GRANT SELECT ON person_tenant TO spork_app;

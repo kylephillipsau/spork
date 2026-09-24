@@ -119,7 +119,7 @@ DECLARE
     touched bigint;
     n bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     -- Last writer per class, in D24's register order, exactly as J46 folds an
     -- amendment. Verbatim rather than coalesced: a reparented row always states
@@ -164,12 +164,12 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO nylonite_projection_owner;
+ALTER FUNCTION projection_taxonomy_rebuild(uuid) OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION projection_taxonomy_rebuild(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION projection_taxonomy_rebuild(uuid)
-    TO nylonite_scheduler, nylonite_platform;
-GRANT SELECT, UPDATE ON item_class, party_class TO nylonite_projection_owner;
-GRANT SELECT ON policy_change TO nylonite_projection_owner;
+    TO spork_scheduler, spork_platform;
+GRANT SELECT, UPDATE ON item_class, party_class TO spork_projection_owner;
+GRANT SELECT ON policy_change TO spork_projection_owner;
 
 -- Before the closures, which read what this writes. D64 exists so that ordering
 -- is a row rather than something the fixture happens to get right.
@@ -188,13 +188,13 @@ INSERT INTO projection_rebuild (table_name, column_name, function_name) VALUES
 
 -- The grant that makes it true. Everything else about a class stays the
 -- application's; its position in the tree does not.
-REVOKE INSERT, UPDATE, DELETE ON item_class FROM nylonite_app;
-REVOKE INSERT, UPDATE, DELETE ON party_class FROM nylonite_app;
+REVOKE INSERT, UPDATE, DELETE ON item_class FROM spork_app;
+REVOKE INSERT, UPDATE, DELETE ON party_class FROM spork_app;
 
 GRANT INSERT (id, tenant_id, parent_id, code, name), UPDATE (code, name)
-    ON item_class TO nylonite_app;
+    ON item_class TO spork_app;
 GRANT INSERT (id, tenant_id, parent_id, code, name), UPDATE (code, name)
-    ON party_class TO nylonite_app;
+    ON party_class TO spork_app;
 
 -- INSERT keeps `parent_id`, for D42's reason and with D51's caveat: a class is
 -- created somewhere, that original is the base of the fold, and question 137
@@ -293,7 +293,7 @@ COMMENT ON FUNCTION party_class_move_impact(uuid, uuid) IS
 
 GRANT EXECUTE ON FUNCTION item_class_move_impact(uuid, uuid),
     party_class_move_impact(uuid, uuid)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;
 
 -- ---------------------------------------------------------------------------
 -- 4. What this does not solve

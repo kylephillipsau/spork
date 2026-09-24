@@ -126,7 +126,7 @@ CREATE POLICY observation_image_tenant_scoped ON observation_image
 -- Fact: INSERT only for the app (S6). A photograph of what was in front of
 -- somebody is not editable afterwards; a better picture is another row, and
 -- which one is current is a question the fold answers.
-GRANT SELECT, INSERT ON observation_image TO nylonite_app;
-GRANT SELECT ON observation_image TO nylonite_platform;
-GRANT SELECT ON observation_image TO nylonite_projection_owner;
-GRANT SELECT ON observation_image TO nylonite_scheduler;
+GRANT SELECT, INSERT ON observation_image TO spork_app;
+GRANT SELECT ON observation_image TO spork_platform;
+GRANT SELECT ON observation_image TO spork_projection_owner;
+GRANT SELECT ON observation_image TO spork_scheduler;

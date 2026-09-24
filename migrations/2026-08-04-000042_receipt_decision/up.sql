@@ -45,7 +45,7 @@ CREATE INDEX goods_receipt_line_receiving_policy_idx
     WHERE receiving_policy_id IS NOT NULL;
 
 GRANT INSERT (receiving_policy_id), UPDATE (receiving_policy_id)
-    ON goods_receipt_line TO nylonite_app;
+    ON goods_receipt_line TO spork_app;
 
 -- ---------------------------------------------------------------------------
 -- 2. What is not enforced here

@@ -60,10 +60,10 @@ COMMENT ON TABLE observation_precedence_policy IS
     'accept_counterparty is "trust supplier dimensions for items we have never '
     'measured". D22, D23, D85.';
 
-GRANT SELECT ON observation_precedence_policy TO nylonite_app, nylonite_scheduler,
-    nylonite_projection_owner;
+GRANT SELECT ON observation_precedence_policy TO spork_app, spork_scheduler,
+    spork_projection_owner;
 GRANT SELECT, INSERT, UPDATE, DELETE ON observation_precedence_policy
-    TO nylonite_platform;
+    TO spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- 1a. A hole this migration walked into, and closes for the whole class
@@ -72,7 +72,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON observation_precedence_policy
 -- The first draft gave this table a row-level policy and **S9 rejected the
 -- shape**. Checking why turned up the actual problem: `allocation_policy`,
 -- `receiving_policy` and `shelf_life_policy` have **row-level security disabled
--- entirely**, and `nylonite_app` holds SELECT, INSERT and UPDATE on all three.
+-- entirely**, and `spork_app` holds SELECT, INSERT and UPDATE on all three.
 -- Any tenant's connection could read -- and rewrite -- another tenant's policy
 -- values.
 --
@@ -142,7 +142,7 @@ DECLARE
     n bigint;
     m bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     CREATE TEMP TABLE winner ON COMMIT DROP AS
     WITH eligible AS (
@@ -224,12 +224,12 @@ END
 $$;
 
 ALTER FUNCTION projection_observation_current_rebuild(uuid, boolean, boolean)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION
     projection_observation_current_rebuild(uuid, boolean, boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
     projection_observation_current_rebuild(uuid, boolean, boolean)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- 3. What J10 now has to know

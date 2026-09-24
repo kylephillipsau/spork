@@ -2,9 +2,9 @@
 //! dispose via mediated function (no app-stamped accepted_at).
 
 use chrono::Utc;
-use nylonite_server::client_events::{self, NewClientEvent};
-use nylonite_server::receiving::{self, CountedLine};
-use nylonite_server::tenancy::TenantScope;
+use spork_server::client_events::{self, NewClientEvent};
+use spork_server::receiving::{self, CountedLine};
+use spork_server::tenancy::TenantScope;
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
@@ -104,7 +104,7 @@ async fn over_receipt_disposes_with_finding() {
     });
     if assume {
         client
-            .batch_execute("SET ROLE nylonite_app")
+            .batch_execute("SET ROLE spork_app")
             .await
             .expect("role");
     }
@@ -121,7 +121,7 @@ async fn over_receipt_disposes_with_finding() {
 
     let tx = client.transaction().await.unwrap();
     tx.execute(
-        "SELECT set_config('nylonite.tenant_id', $1::text, true)",
+        "SELECT set_config('spork.tenant_id', $1::text, true)",
         &[&ALPHA],
     )
     .await

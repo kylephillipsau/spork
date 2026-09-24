@@ -6,7 +6,7 @@
 //! subtly wrong: what the server says when the answer is no.
 
 use actix_web::{test, web, App};
-use nylonite_server::{auth, routes, AppState};
+use spork_server::{auth, routes, AppState};
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 use tokio::sync::{Mutex, MutexGuard};
@@ -282,7 +282,7 @@ async fn the_app_role_cannot_read_the_tables_behind_the_functions() {
     tokio::spawn(async move {
         let _ = connection.await;
     });
-    client.batch_execute("SET ROLE nylonite_app").await.unwrap();
+    client.batch_execute("SET ROLE spork_app").await.unwrap();
 
     for table in ["person_credential", "session"] {
         let err = client
@@ -306,7 +306,7 @@ async fn the_app_role_cannot_read_the_tables_behind_the_functions() {
     ] {
         let ok: bool = client
             .query_one(
-                "SELECT has_function_privilege('nylonite_app', p.oid, 'EXECUTE')
+                "SELECT has_function_privilege('spork_app', p.oid, 'EXECUTE')
                    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                   WHERE p.proname = $1 AND n.nspname = 'public'",
                 &[&f],

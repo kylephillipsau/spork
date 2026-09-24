@@ -14,7 +14,7 @@ import { normalise, stripBase } from "@domain/routing";
 export const BASE: string = import.meta.env.BASE_URL || "/";
 
 /** A private event, because `pushState` fires nothing of its own. */
-const CHANGED = "nylonite:navigate";
+const CHANGED = "spork:navigate";
 
 let snapshot = read();
 

@@ -1,7 +1,7 @@
 //! What should go on the scale, and why.
 //!
 //! ```sh
-//! cargo run -p nylonite-server --example what_to_reweigh
+//! cargo run -p spork-server --example what_to_reweigh
 //! ```
 //!
 //! **Reads only.** No migration, no new table, nothing written. Age and trust
@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use nylonite_server::revalidation::{ever_measured, priority, staleness, trust_of, Trust};
+use spork_server::revalidation::{ever_measured, priority, staleness, trust_of, Trust};
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
@@ -36,10 +36,10 @@ async fn main() -> Result<(), String> {
     tokio::spawn(async move {
         let _ = connection.await;
     });
-    client.batch_execute("SET ROLE nylonite_app").await.map_err(|e| e.to_string())?;
+    client.batch_execute("SET ROLE spork_app").await.map_err(|e| e.to_string())?;
     client
         .execute(
-            "SELECT set_config('nylonite.tenant_id', $1::text, false)",
+            "SELECT set_config('spork.tenant_id', $1::text, false)",
             &[&tenant.to_string()],
         )
         .await

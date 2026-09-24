@@ -10,5 +10,5 @@ edition = "2021"
 publish = false
 
 [workspace.dependencies]
-nylonite-policy = { path = "crates/policy" }
+spork-policy = { path = "crates/policy" }
 postgres = "0.19"

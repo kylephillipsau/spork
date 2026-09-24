@@ -188,19 +188,19 @@ CREATE POLICY purchase_order_line_tenant_scoped ON purchase_order_line
 -- is migration 12's lesson applied on the way in. Every non-projection column is
 -- in a list, which S45 checks; `source_channel_id` is INSERT-only for D54's
 -- reason, that the system of record is declared at creation.
-GRANT SELECT ON purchase_order TO nylonite_app;
+GRANT SELECT ON purchase_order TO spork_app;
 GRANT INSERT (id, tenant_id, site_id, supplier_party_id, order_number,
               source_channel_id, external_ref, currency, state, issued_at,
               cancelled_at, created_at),
       UPDATE (site_id, supplier_party_id, order_number, external_ref, currency,
               state, issued_at, cancelled_at)
-    ON purchase_order TO nylonite_app;
+    ON purchase_order TO spork_app;
 
-GRANT SELECT ON purchase_order_line TO nylonite_app;
+GRANT SELECT ON purchase_order_line TO spork_app;
 GRANT INSERT (id, tenant_id, purchase_order_id, item_id, quantity_ordered,
               line_number, unit_price_minor, price_basis_quantity,
               expected_from, expected_to, owner_party_id, status_id),
       UPDATE (quantity_ordered, line_number, unit_price_minor,
               price_basis_quantity, expected_from, expected_to,
               owner_party_id, status_id)
-    ON purchase_order_line TO nylonite_app;
+    ON purchase_order_line TO spork_app;

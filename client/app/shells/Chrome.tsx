@@ -62,7 +62,7 @@ export function Chrome({
       {nav && <NavKey nav={nav} />}
       <span className={styles.mark}>
         <Link href={href("/")} on="chassis">
-          Nylonite
+          Spork
         </Link>
       </span>
       <span className={styles.title}>{title}</span>

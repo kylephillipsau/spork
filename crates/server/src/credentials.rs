@@ -2,7 +2,7 @@
 //!
 //! D142 built the way into a deployment and named this as the thing it owed:
 //! the password chosen at setup could not be changed by anybody, through
-//! anything, because `nylonite_app` holds no grant on `person_credential` at
+//! anything, because `spork_app` holds no grant on `person_credential` at
 //! all. On a deployment reachable from the internet that is not an inconvenience
 //! — this project's own ran for a day on `fixtures/seed.sql`, whose password is
 //! committed in this repository.

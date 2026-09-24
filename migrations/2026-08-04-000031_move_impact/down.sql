@@ -71,4 +71,4 @@ COMMENT ON FUNCTION party_class_move_impact(uuid, uuid) IS
 
 GRANT EXECUTE ON FUNCTION item_class_move_impact(uuid, uuid),
     party_class_move_impact(uuid, uuid)
-    TO nylonite_app, nylonite_platform, nylonite_scheduler, nylonite_projection_owner;
+    TO spork_app, spork_platform, spork_scheduler, spork_projection_owner;

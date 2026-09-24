@@ -10,7 +10,7 @@
 //! bindings that exercise them.
 
 use actix_web::{test, web, App};
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::Value;
 
 mod common;

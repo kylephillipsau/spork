@@ -29,7 +29,7 @@ DECLARE
     n bigint;
     m bigint;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
 
     CREATE TEMP TABLE winner ON COMMIT DROP AS
     WITH eligible AS (
@@ -103,9 +103,9 @@ END
 $$;
 
 ALTER FUNCTION projection_observation_current_rebuild(uuid, boolean, boolean)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION
     projection_observation_current_rebuild(uuid, boolean, boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
     projection_observation_current_rebuild(uuid, boolean, boolean)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;

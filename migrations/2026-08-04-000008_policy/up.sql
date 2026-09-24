@@ -52,8 +52,8 @@ ALTER TABLE party_class_closure FORCE ROW LEVEL SECURITY;
 CREATE POLICY party_class_closure_tenant_scoped ON party_class_closure
     USING (tenant_id = current_tenant());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON party_class TO nylonite_app;
-GRANT SELECT ON party_class_closure TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON party_class TO spork_app;
+GRANT SELECT ON party_class_closure TO spork_app;
 
 COMMENT ON TABLE party_class_closure IS
     'PROJECTION of party_class. The closure is what makes the matching language '
@@ -239,16 +239,16 @@ ALTER TABLE policy_change FORCE ROW LEVEL SECURITY;
 CREATE POLICY policy_change_shared_reference ON policy_change
     USING (tenant_id IS NULL OR tenant_id = current_tenant());
 
-GRANT SELECT, INSERT, UPDATE ON policy_binding TO nylonite_app;
-GRANT SELECT, INSERT ON policy_change TO nylonite_app;
+GRANT SELECT, INSERT, UPDATE ON policy_binding TO spork_app;
+GRANT SELECT, INSERT ON policy_change TO spork_app;
 GRANT SELECT, INSERT, UPDATE ON allocation_policy, receiving_policy, shelf_life_policy
-    TO nylonite_app;
+    TO spork_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON policy_binding,
-    allocation_policy, receiving_policy, shelf_life_policy TO nylonite_platform;
+    allocation_policy, receiving_policy, shelf_life_policy TO spork_platform;
 -- S6: policy_change is a fact. There is no verb for changing what happened, and
 -- that holds for the platform role too. The bulk grant that swept it in with the
 -- configuration tables was the mistake.
-GRANT SELECT, INSERT ON policy_change TO nylonite_platform;
+GRANT SELECT, INSERT ON policy_change TO spork_platform;
 
 -- ---------------------------------------------------------------------------
 -- The resolver (D22)
@@ -341,4 +341,4 @@ CREATE VIEW policy_binding_scope AS
            b.note
       FROM policy_binding b;
 
-GRANT SELECT ON policy_binding_scope TO nylonite_app;
+GRANT SELECT ON policy_binding_scope TO spork_app;

@@ -42,8 +42,8 @@ disagree and that disagreement is the finding.
 |---|---|
 | `stock_movement` cause arms | **one** — `goods_receipt_line_id`, migration 21 |
 | `stock_movement_cause_ck` | `CHECK (num_nonnulls(goods_receipt_line_id) <= 1)` |
-| `stock_movement` grants to `nylonite_app` | `SELECT, INSERT` — no UPDATE, no DELETE (S6) |
-| `stock_allocation` grants to `nylonite_app` | `SELECT, INSERT, UPDATE, DELETE` |
+| `stock_movement` grants to `spork_app` | `SELECT, INSERT` — no UPDATE, no DELETE (S6) |
+| `stock_allocation` grants to `spork_app` | `SELECT, INSERT, UPDATE, DELETE` |
 | `stock_allocation` history | none — no event table, no append-only log |
 | `stock_movement.reason` | `text NOT NULL`, **no CHECK at all** |
 | `fulfilment_line`'s four quantities | all four `@projection of stock_allocation`, J31 |
@@ -187,7 +187,7 @@ the ledger at all.**
 Not a style preference. Four specific costs.
 
 1. **The source is mutable and deletable, and the thing it measures is not.**
-   `nylonite_app` holds `UPDATE, DELETE` on `stock_allocation`, and there is no
+   `spork_app` holds `UPDATE, DELETE` on `stock_allocation`, and there is no
    allocation event log. So `despatched_quantity` — the number that answers *what did we
    actually ship* — is folded from rows the application can rewrite or remove, with no
    record that it did. The inbound equivalent is folded from a table with no UPDATE and

@@ -41,7 +41,7 @@ export function Gallery() {
         <Panel elevation="lifted" frame="bezel" as="header">
           <div className={styles.pad}>
             <Row gap={4} wrap>
-              <Tag dyed>Nylonite · design</Tag>
+              <Tag dyed>Spork · design</Tag>
               <Tag>Draft 5</Tag>
               <Spacer />
               <Key size="small" onClick={() => setDensity("floor")}>

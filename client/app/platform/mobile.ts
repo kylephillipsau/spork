@@ -40,7 +40,7 @@ import { serverUrl } from "./server";
  * Named here rather than in a document nobody opens: the next person to read
  * this file is the person who should move it.
  */
-const TOKEN = "nylonite.session-token";
+const TOKEN = "spork.session-token";
 
 function held(): string | null {
   try {

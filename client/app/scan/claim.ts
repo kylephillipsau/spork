@@ -24,7 +24,7 @@
 
 export type Holder = "screen" | "chrome" | null;
 
-const CHANGED = "nylonite:scan-claim";
+const CHANGED = "spork:scan-claim";
 
 let holder: Holder = null;
 

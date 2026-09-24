@@ -6,8 +6,8 @@
 //! the run. In production the same findings become rows in a queue and the floor
 //! keeps moving.
 
-use nylonite_invariants::jobs::{run, spec, Check, Verdict, ALL};
-use nylonite_invariants::reason;
+use spork_invariants::jobs::{run, spec, Check, Verdict, ALL};
+use spork_invariants::reason;
 use postgres::Client;
 
 fn database_url() -> Option<String> {
@@ -32,7 +32,7 @@ fn job_asserted_invariants_hold() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     let (mut passed, mut vacuous, mut pending, mut flagged) = (0, 0, 0, 0);
     let mut findings = vec![];
@@ -95,7 +95,7 @@ fn package_fold_is_independent_of_arrival_order() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     let tenants: Vec<uuid_str::Uuid> = client
         .query("SELECT DISTINCT tenant_id::text FROM package_event", &[])
@@ -172,7 +172,7 @@ fn order_fold_is_independent_of_arrival_order() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     let tenants: Vec<String> = client
         .query("SELECT DISTINCT tenant_id::text FROM intention_amendment", &[])
@@ -259,7 +259,7 @@ fn expected_supply_rebuild_preserves_identity() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     let tenants: Vec<String> = client
         .query("SELECT DISTINCT tenant_id::text FROM expected_supply", &[])
@@ -331,7 +331,7 @@ fn a_rebuild_that_changes_nothing_writes_nothing() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     let tenants: Vec<String> = client
         .query("SELECT id::text FROM tenant ORDER BY slug", &[])
@@ -412,7 +412,7 @@ fn j47_finds_a_pallet_that_spans_two_purchase_orders() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     const TENANT: &str = "11111111-1111-1111-1111-111111111111";
     const PALLET: &str = "a5010000-0000-0000-0000-000000000002";
@@ -439,7 +439,7 @@ fn j47_finds_a_pallet_that_spans_two_purchase_orders() {
         ))
         .expect("a pallet carrying goods for a second purchase order");
 
-    let outcome = run(&mut client, nylonite_invariants::jobs::Id::J47);
+    let outcome = run(&mut client, spork_invariants::jobs::Id::J47);
 
     // Clean up before asserting, so a failure here does not leave the fixture
     // carrying a violation every later check would trip over.
@@ -489,7 +489,7 @@ fn j68_finds_progress_that_disagrees_with_the_ledger() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     const TENANT: &str = "11111111-1111-1111-1111-111111111111";
     const LINE: &str = "f11e0000-0000-0000-0000-000000000002";
@@ -532,7 +532,7 @@ fn j68_finds_progress_that_disagrees_with_the_ledger() {
         ))
         .expect("a pick and a despatch that name the line they served");
 
-    let outcome = run(&mut client, nylonite_invariants::jobs::Id::J68);
+    let outcome = run(&mut client, spork_invariants::jobs::Id::J68);
 
     // Cleaned up before asserting, so a failure here does not leave the fixture
     // carrying movements every later check would fold.
@@ -572,7 +572,7 @@ fn a_correction_to_a_correction_returns_the_original() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     const TENANT: &str = "11111111-1111-1111-1111-111111111111";
     const SUPPLY_LINE: &str = "901e0000-0000-0000-0000-000000000001";
@@ -615,13 +615,13 @@ fn a_correction_to_a_correction_returns_the_original() {
         .expect("a third level of correction");
 
     let with_depth_three = received(&mut client);
-    let verdicts: Vec<(nylonite_invariants::jobs::Id, Verdict)> =
+    let verdicts: Vec<(spork_invariants::jobs::Id, Verdict)> =
         [
-            nylonite_invariants::jobs::Id::J26,
-            nylonite_invariants::jobs::Id::J50,
-            nylonite_invariants::jobs::Id::J51,
-            nylonite_invariants::jobs::Id::J52,
-            nylonite_invariants::jobs::Id::J68,
+            spork_invariants::jobs::Id::J26,
+            spork_invariants::jobs::Id::J50,
+            spork_invariants::jobs::Id::J51,
+            spork_invariants::jobs::Id::J52,
+            spork_invariants::jobs::Id::J68,
         ]
         .into_iter()
         .map(|id| (id, run(&mut client, id).expect("run").0))
@@ -674,7 +674,7 @@ fn j71_finds_two_bins_at_one_walking_position() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     const TENANT: &str = "11111111-1111-1111-1111-111111111111";
     const SITE: &str = "a5170000-0000-0000-0000-000000000001";
@@ -688,7 +688,7 @@ fn j71_finds_two_bins_at_one_walking_position() {
         ))
         .expect("the rival bin");
 
-    let outcome = nylonite_invariants::jobs::run(&mut client, nylonite_invariants::jobs::Id::J71);
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J71);
 
     client
         .batch_execute(&format!("DELETE FROM location WHERE id = '{RIVAL}';"))
@@ -723,7 +723,7 @@ fn j72_finds_a_size_with_no_arrangement_behind_it() {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
-    let mut client = nylonite_invariants::connect_exclusive(&url);
+    let mut client = spork_invariants::connect_exclusive(&url);
 
     const TENANT: &str = "11111111-1111-1111-1111-111111111111";
     const GLOVE: &str = "17e10000-0000-0000-0000-000000000001";
@@ -773,7 +773,7 @@ fn j72_finds_a_size_with_no_arrangement_behind_it() {
         ))
         .expect("the unqualified length");
 
-    let outcome = nylonite_invariants::jobs::run(&mut client, nylonite_invariants::jobs::Id::J72);
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J72);
 
     // The registry row stays. It is one row per thing and something else has
     // almost certainly measured a glove already; removing it would be removing

@@ -142,13 +142,13 @@ ALTER TABLE discrepancy FORCE ROW LEVEL SECURITY;
 CREATE POLICY discrepancy_tenant_scoped ON discrepancy
     USING (tenant_id = current_tenant());
 
-GRANT SELECT, INSERT, UPDATE ON discrepancy TO nylonite_app;
-GRANT SELECT, INSERT ON discrepancy TO nylonite_scheduler;
+GRANT SELECT, INSERT, UPDATE ON discrepancy TO spork_app;
+GRANT SELECT, INSERT ON discrepancy TO spork_scheduler;
 
 -- record_finding is SECURITY DEFINER and owned by the projection owner, so the
 -- privilege that matters is the owner's, not the caller's. Granting EXECUTE
 -- without this produces a function anyone may call and nobody may complete.
-GRANT SELECT, INSERT ON discrepancy TO nylonite_projection_owner;
+GRANT SELECT, INSERT ON discrepancy TO spork_projection_owner;
 
 -- No DELETE, to anyone. A finding that can be deleted is a finding that can be
 -- made to go away, and the whole argument for raising them is that they are
@@ -175,7 +175,7 @@ CREATE FUNCTION record_finding(
 DECLARE
     new_id uuid;
 BEGIN
-    PERFORM set_config('nylonite.tenant_id', p_tenant::text, true);
+    PERFORM set_config('spork.tenant_id', p_tenant::text, true);
     INSERT INTO discrepancy (tenant_id, kind, detail, automation_key)
     VALUES (p_tenant, p_kind, p_detail, p_automation_key)
     RETURNING id INTO new_id;
@@ -184,10 +184,10 @@ END
 $$;
 
 ALTER FUNCTION record_finding(uuid, discrepancy_kind, text, text)
-    OWNER TO nylonite_projection_owner;
+    OWNER TO spork_projection_owner;
 REVOKE EXECUTE ON FUNCTION record_finding(uuid, discrepancy_kind, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION record_finding(uuid, discrepancy_kind, text, text)
-    TO nylonite_scheduler, nylonite_platform;
+    TO spork_scheduler, spork_platform;
 
 COMMENT ON FUNCTION record_finding(uuid, discrepancy_kind, text, text) IS
     'Files a finding from the rebuild-and-assert cycle. The model disagreeing '

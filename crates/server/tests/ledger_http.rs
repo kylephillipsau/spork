@@ -42,7 +42,7 @@
 
 use actix_web::{http::StatusCode, test, web, App};
 use chrono::Utc;
-use nylonite_server::{routes, AppState};
+use spork_server::{routes, AppState};
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 use tokio::sync::{Mutex, MutexGuard};
@@ -84,7 +84,7 @@ const SMALL_BOX: &str = "9a7e0000-0000-0000-0000-0000000000b1";
 
 /// A connection that is not the pool's, for reading facts back and removing them.
 ///
-/// The superuser rather than `nylonite_app`: this asserts what was *written*
+/// The superuser rather than `spork_app`: this asserts what was *written*
 /// rather than what a tenant may see, and the cleanup deletes from append-only
 /// tables the application holds no DELETE on.
 async fn raw(u: &str) -> tokio_postgres::Client {
