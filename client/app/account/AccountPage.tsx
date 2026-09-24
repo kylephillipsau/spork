@@ -34,13 +34,13 @@ export function AccountPage({ bench }: { bench: PasswordBench }) {
         )}
       </Card>
 
-      <Card title="Change password" description="Changing it signs out every other session.">
+      <Card title="Change password" description="Changing it signs out all other sessions.">
         {st.kind === "done" && (
           <div className={s.stack}>
             <Alert tone="success">
               Password changed.{" "}
               {st.result.other_sessions_ended === 0
-                ? "No other sessions were signed in."
+                ? "No other sessions were open."
                 : st.result.other_sessions_ended === 1
                   ? "1 other session was signed out."
                   : `${st.result.other_sessions_ended} other sessions were signed out.`}

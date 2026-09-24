@@ -71,7 +71,7 @@ export function useWeigh(): WeighBench {
       const queue = await api.toWeigh();
       if (live.current) setStatus({ kind: "ready", queue });
     } catch (error) {
-      const message = reason(error, "The worklist could not be read.");
+      const message = reason(error, "Could not load the worklist.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, []);

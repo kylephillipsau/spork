@@ -351,7 +351,7 @@ pub async fn create_first_administrator(
     let already: i64 = tx.query_one("SELECT count(*) FROM person", &[]).await?.get(0);
     if already > 0 {
         return Err(ApiError::Rejected(
-            "this deployment already has somebody in it, so it is already set up".into(),
+            "this deployment is already set up".into(),
         ));
     }
 

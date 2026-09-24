@@ -197,10 +197,10 @@ function Scanned({ bench }: { bench: CaptureBench }) {
         // Resolving an ambiguity per row is a real design question — whose
         // answer is probably `issuer_party_id` and a supplier on the screen —
         // and it is not answered by quietly adding a key.
-        "That code matches more than one thing."
+        "This code matches more than one item."
       : found.outcome === "identifier_unknown"
-        ? "Nothing here holds that code."
-        : "That is not a code.";
+        ? "No match for this code."
+        : "Not a recognised code.";
 
   return (
     <Face>
@@ -272,8 +272,8 @@ export function CaptureDock({ bench }: { bench: CaptureBench }) {
             and a full-width key share a line by overlapping, which is what the
             gate drew the first time this was a Row. */}
         <Faint>
-          {bench.taken.length} of {FACES.length} faces photographed. The figures
-          are already recorded.
+          {bench.taken.length} of {FACES.length} faces photographed. Measurements
+          saved.
         </Faint>
         <Key live block disabled={bench.busy} onClick={() => void bench.finish()}>
           Done
@@ -339,7 +339,7 @@ function Worklist({ bench, screen }: { bench: CaptureBench; screen: CaptureScree
           bench={bench}
           title="The walk"
           subjects={screen.walk}
-          empty="Nothing at this site wants measuring."
+          empty="Nothing at this site needs to be measured."
         />
       </Stack>
     </Panel>
@@ -478,7 +478,7 @@ function Figures({ bench, subject }: { bench: CaptureBench; subject: CaptureSubj
                   <Soft>No dimensions.</Soft>
                   <Spacer />
                   <Key size="small" onClick={bench.toggleNoDimensions}>
-                    Measure after all
+                    Add dimensions
                   </Key>
                 </Row>
               ) : (
@@ -518,7 +518,7 @@ function Figures({ bench, subject }: { bench: CaptureBench; subject: CaptureSubj
                 <Row gap={3} wrap align="end">
                   <Spacer />
                   <Key size="small" onClick={bench.toggleNoDimensions}>
-                    It has no dimensions
+                    No dimensions
                   </Key>
                 </Row>
               )}
@@ -537,7 +537,7 @@ function Figures({ bench, subject }: { bench: CaptureBench; subject: CaptureSubj
           <Face>
             <Row gap={3} wrap align="baseline">
               <Steel>{subject.parts}</Steel>
-              <Soft>parts are listed separately. Measure each one.</Soft>
+              <Soft>Parts are listed separately. Measure each one.</Soft>
             </Row>
           </Face>
         )}
@@ -607,7 +607,7 @@ function Barcodes({ bench, subject }: { bench: CaptureBench; subject: CaptureSub
               onChange={bench.typeBinding}
               onScan={() => void bench.bind()}
               busy={bench.busy}
-              hint="Scan the label on the box in your hand"
+              hint="Scan the box label"
             />
             {/* Blank on purpose, and it stays blank unless somebody knows.
                 Only a GTIN may carry no count, and the server says so rather
@@ -658,7 +658,7 @@ function Arrangement({
       <FaceWell>
         <Stack gap={3}>
           <Tabs
-            label="How it was arranged"
+            label="Arrangement"
             value={bench.figures.presentation}
             options={PRESENTATIONS.map((p) => ({ value: p.value, label: p.label }))}
             onChange={bench.choosePresentation}

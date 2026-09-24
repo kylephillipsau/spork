@@ -63,7 +63,7 @@ function KitGate({ children }: { children: ReactNode }): ReactElement {
   if (state === "open") return <>{children}</>;
   return (
     <div className={s.waiting}>
-      <Spinner size={22} label={state === "leaving" ? "Taking you to sign in" : "Loading"} />
+      <Spinner size={22} label={state === "leaving" ? "Redirecting to sign in" : "Loading"} />
     </div>
   );
 }

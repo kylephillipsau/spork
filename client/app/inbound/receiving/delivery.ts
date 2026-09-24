@@ -56,12 +56,12 @@ export function whatIsMissing(
   owner: string | null,
 ): string | null {
   const counted = Number.parseInt(entered.trim(), 10);
-  if (!Number.isFinite(counted) || counted <= 0) return "Say how many arrived.";
+  if (!Number.isFinite(counted) || counted <= 0) return "Enter the quantity received.";
   if (line.requires_lot && lotCode.trim() === "") {
-    return "This item is received by lot. Scan or type the lot on the carton.";
+    return "This item needs a lot. Scan or enter it.";
   }
   if (!line.owner_id && !owner) {
-    return "Say whose the goods are.";
+    return "Choose an owner.";
   }
   return null;
 }

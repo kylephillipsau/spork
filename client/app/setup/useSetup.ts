@@ -120,7 +120,7 @@ export function useSetup(): SetupBench {
         });
         if (live.current) setState({ kind: "done", result });
       } catch (error) {
-        const message = reason(error, "That did not work.");
+        const message = reason(error, "Request failed.");
         if (live.current) {
           setProblem(message);
           // **Re-ask, because the interesting failure is somebody else winning.**

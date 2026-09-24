@@ -70,7 +70,7 @@ export function Setup({ bench }: { bench: SetupBench }) {
               <Lamp kind="recorded" />
               <span>This deployment is already set up.</span>
               <Spacer />
-              <Pill tone="good">nothing to do</Pill>
+              <Pill tone="good">set up</Pill>
             </Row>
           </Face>
           <Face>
@@ -118,7 +118,7 @@ export function Setup({ bench }: { bench: SetupBench }) {
             {/* **Said once, here, because there is nowhere else to say it.**
                 The token is gone and this endpoint is shut; the only way to add
                 another person today is the database. */}
-            <Faint>The setup token is destroyed. Change your password at /account.</Faint>
+            <Faint>The setup token has been used. Change your password at /account.</Faint>
           </Face>
         </Stack>
       </Panel>
@@ -144,7 +144,7 @@ export function Setup({ bench }: { bench: SetupBench }) {
             <Row gap={3} align="baseline" wrap>
               <Soft>Set up this deployment</Soft>
               <Spacer />
-              <Pill tone="state">nobody here yet</Pill>
+              <Pill tone="state">new</Pill>
             </Row>
           </FaceWell>
         </Face>
@@ -154,16 +154,15 @@ export function Setup({ bench }: { bench: SetupBench }) {
           <FaceWell>
             <Stack gap={3}>
               <Faint>
-                Printed in the server's log when it starts: the window running{" "}
-                <Code>scripts\local.ps1 start</Code>. It lasts 30 minutes; restart the server
-                to print a new one.
+                Shown in the server log at startup (the window running{" "}
+                <Code>scripts\local.ps1 start</Code>). Valid for 30 minutes. Restart the server
+                for a new one.
               </Faint>
               {!bench.state.status.token_ready && (
                 <Row gap={3} wrap>
                   <Lamp kind="finding" />
                   <span>
-                    The server has no token right now — the last one expired.
-                    Restart it and read the log again.
+                    The setup token has expired. Restart the server for a new one.
                   </span>
                 </Row>
               )}
@@ -215,7 +214,7 @@ export function Setup({ bench }: { bench: SetupBench }) {
                 onChange={(v) => bench.type("timezone", v)}
                 disabled={bench.busy}
               />
-              <Faint>Decides when a day starts for despatch and counting. Guessed from this browser.</Faint>
+              <Faint>Sets when the working day starts for despatch and counts. Detected from this browser.</Faint>
             </Stack>
           </FaceWell>
         </Face>
@@ -247,7 +246,7 @@ export function Setup({ bench }: { bench: SetupBench }) {
                 disabled={bench.busy}
                 onSubmit={() => ready && void bench.submit()}
               />
-              <Faint>Twelve characters or more. Change it later at /account, which also signs out every other session.</Faint>
+              <Faint>At least 12 characters. You can change it later at /account.</Faint>
             </Stack>
           </FaceWell>
         </Face>

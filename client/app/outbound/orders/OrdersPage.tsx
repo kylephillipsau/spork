@@ -57,7 +57,7 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
 
   return (
     <Page>
-      <PageHeader title="Orders" description="Sales orders sent from NetSuite, and what has been committed against them." />
+      <PageHeader title="Orders" description="Sales orders from NetSuite and the stock committed to them." />
 
       <Card padded={false}>
         <Toolbar>
@@ -186,7 +186,7 @@ function OrderDetail({ order }: { order: OrderMatch }) {
 
       <Section title="Fulfilments" count={order.fulfilments.length}>
         {order.fulfilments.length === 0 ? (
-          <p className={s.none}>Nothing is committed against this order yet.</p>
+          <p className={s.none}>No stock committed to this order.</p>
         ) : (
           <Card padded={false}>
             <DataTable aria-label="Fulfilments" columns={FULFILMENT_COLUMNS} rows={order.fulfilments} rowKey={(f) => f.fulfilment_id} />

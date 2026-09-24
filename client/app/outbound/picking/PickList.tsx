@@ -152,7 +152,7 @@ function Where({ bench }: { bench: PickBench }) {
               </Key>
             </>
           ) : (
-            <Faint>nothing yet</Faint>
+            <Faint>Not set</Faint>
           )}
         </Row>
         <ScanInput
@@ -164,8 +164,8 @@ function Where({ bench }: { bench: PickBench }) {
           refocus={bench.scan.refocus}
           hint={
             to
-              ? "The row it matches is the one you are picking."
-              : "A pallet, a cage, or the packing station's bin label."
+              ? "Scan an item on the list."
+              : "Pallet, cage or packing station label."
           }
         />
       </Stack>
@@ -206,7 +206,7 @@ function Line({
         line.location_code ? (
           <Code>{line.location_code}</Code>
         ) : (
-          <Pill tone="state">no stock here</Pill>
+          <Pill tone="state">no stock</Pill>
         )
       }
       name={<Code>{line.item_code}</Code>}
@@ -233,7 +233,7 @@ function Line({
       meta={
         <>
           {line.reference && <Faint>{line.reference}</Faint>}
-          {confirmed && <Pill tone="good">in your hand</Pill>}
+          {confirmed && <Pill tone="good">picked</Pill>}
         </>
       }
       action={

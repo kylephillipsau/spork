@@ -31,7 +31,7 @@ export function PackQueuePage({ bench, onOpen }: { bench: QueueBench; onOpen?: (
 
   return (
     <Page>
-      <PageHeader title="Packing" description="Fulfilments at this site with work for the pack bench." />
+      <PageHeader title="Packing" description="Fulfilments ready to pack at this site." />
 
       <Card padded={false}>
         <Toolbar>

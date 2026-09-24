@@ -54,7 +54,7 @@ export function usePackBench(fulfilment: Uuid): PackBench {
       const screen = await api.bench(fulfilment);
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
-      const message = reason(error, "The bench could not be read.");
+      const message = reason(error, "Could not load the pack bench.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, [fulfilment]);
@@ -102,7 +102,7 @@ export function usePackBench(fulfilment: Uuid): PackBench {
         const dock = screen?.dock_id;
         // D97 wants somewhere for `created` to name. A site with no location is
         // a fixture problem, and saying so beats a 400 from the handler.
-        if (!dock) throw new ApiError("This site has no location to raise a carton at.", 409);
+        if (!dock) throw new ApiError("This site has no packing location.", 409);
         await api.startCarton({ fulfilment, preset, dock, act });
       }),
 
@@ -131,7 +131,7 @@ export function usePackBench(fulfilment: Uuid): PackBench {
       // intent, and the per-movement names inside it would be fresh with it.
       press(`takeout:${picks.map(([movement]) => movement).join(",")}:${quantity}`, async (act) => {
         const reason = screen?.wrong_box_reason_id;
-        if (!reason) throw new ApiError("No wrong_location reason is configured.", 409);
+        if (!reason) throw new ApiError("No 'wrong location' reason is configured.", 409);
         await api.takeOut({ picks, quantity, reason, act });
       }),
 

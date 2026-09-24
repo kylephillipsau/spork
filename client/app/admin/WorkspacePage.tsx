@@ -58,7 +58,7 @@ const COLUMNS: Column<WorkspaceSite>[] = [
     header: "Name",
     cell: (x) => (
       <>
-        {x.name} {x.current && <Badge tone="accent">You are here</Badge>}
+        {x.name} {x.current && <Badge tone="accent">Current</Badge>}
       </>
     ),
     sort: (x) => x.name,

@@ -20,15 +20,15 @@ export function NotFound({ path }: { path: string }) {
         <Face>
           <Row gap={3} wrap>
             <Lamp kind="finding" />
-            <span>There is no screen at</span>
+            <span>Page not found:</span>
             <Code>{path}</Code>
           </Row>
         </Face>
         <Face>
           <Stack gap={3}>
-            <Faint>The address is wrong, or the screen has moved.</Faint>
+            <Faint>Check the address and try again.</Faint>
             <Row gap={3}>
-              <Link href={href("/")}>Back to what is waiting</Link>
+              <Link href={href("/")}>Go to dashboard</Link>
             </Row>
           </Stack>
         </Face>

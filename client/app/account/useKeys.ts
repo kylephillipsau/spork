@@ -107,11 +107,11 @@ export function useKeys(): KeysBench {
         if (declined(error)) {
           // Said no. Nothing to report.
         } else if (alreadyEnrolled(error)) {
-          setProblem("This device already holds a key for you.");
+          setProblem("This device already has a passkey for you.");
         } else if (error instanceof ApiError) {
           setProblem(error.message);
         } else {
-          setProblem("That key was not accepted.");
+          setProblem("Passkey not accepted.");
         }
       }
     } finally {

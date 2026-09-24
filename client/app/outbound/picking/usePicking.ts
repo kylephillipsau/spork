@@ -105,7 +105,7 @@ export function usePicking(): PickBench {
       const screen = await api.picking(site);
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
-      const message = reason(error, "The walk list could not be read.");
+      const message = reason(error, "Could not load the pick list.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, [site, live]);
@@ -169,8 +169,8 @@ export function usePicking(): PickBench {
           if (!where) {
             throw new ApiError(
               found.subjects.length > 0
-                ? "That is an item. Scan the pallet, cage or station the goods are going onto."
-                : "Nothing here holds that code.",
+                ? "That is an item. Scan the pallet, cage or station."
+                : "No match for this code.",
               400,
             );
           }
@@ -183,7 +183,7 @@ export function usePicking(): PickBench {
         // from recording a pick against work that is not theirs to do.
         const item = found.subjects.find((s) => s.kind === "item");
         if (!item) {
-          throw new ApiError("That is not an item. Scan the thing you are picking.", 400);
+          throw new ApiError("Not an item. Scan the item.", 400);
         }
         const matches = lines.filter((l) => l.item_id === item.id);
         if (matches.length === 0) {
@@ -198,7 +198,7 @@ export function usePicking(): PickBench {
           : matches;
         if (onLot.length === 0) {
           throw new ApiError(
-            `${item.code} is on this walk, but lot ${found.lot} is not the one it wants.`,
+            `Wrong lot. Lot ${found.lot} of ${item.code} is not on this pick list.`,
             400,
           );
         }
@@ -220,15 +220,15 @@ export function usePicking(): PickBench {
       press(takeKey(confirmed, destination, quantity), async (act) => {
         if (!confirmed || !destination) return;
         if (!confirmed.stock_id) {
-          throw new ApiError("There is nothing at this site to pick that from.", 400);
+          throw new ApiError("No stock of this item at this site.", 400);
         }
         const asked = Number.parseInt(quantity.trim(), 10);
         if (!Number.isFinite(asked) || asked <= 0) {
-          throw new ApiError("Say how many are in your hand.", 400);
+          throw new ApiError("Enter a quantity.", 400);
         }
         if (asked > confirmed.remaining) {
           throw new ApiError(
-            `The line wants ${confirmed.remaining}, and this would pick ${asked}.`,
+            `The line needs ${confirmed.remaining}. Cannot pick ${asked}.`,
             400,
           );
         }

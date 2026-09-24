@@ -153,7 +153,7 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       )}
 
       <div className={s.split}>
-        <Card title="To pack" description={bench.openCarton ? "Add goes into the open carton." : "Start a carton to add to it."} padded={false}>
+        <Card title="To pack" description={bench.openCarton ? "Items are added to the open carton." : "Start a carton to add items."} padded={false}>
           <DataTable
             aria-label="Lines to pack"
             columns={lineColumns}

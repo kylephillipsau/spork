@@ -111,7 +111,7 @@ export function useWhere(onSettled?: () => void): WhereBench {
         await settle(site);
       } catch (error) {
         if (live.current) {
-          setProblem(reason(error, "That did not work."));
+          setProblem(reason(error, "Request failed."));
         }
       } finally {
         if (live.current) setBusy(false);

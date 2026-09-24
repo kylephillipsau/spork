@@ -212,7 +212,7 @@ export function useCapture(): CaptureBench {
       const screen = await api.capture();
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
-      const message = reason(error, "The capture worklist could not be read.");
+      const message = reason(error, "Could not load the worklist.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, []);
@@ -344,7 +344,7 @@ export function useCapture(): CaptureBench {
           measurements.some((m) => !m.absent_reason && m.metric !== "gross_weight");
         if (needsArrangement && !figures.presentation) {
           throw new ApiError(
-            "Say how it was arranged — folded and flat are different sizes.",
+            "Choose an arrangement: folded or flat.",
             400,
           );
         }
@@ -428,7 +428,7 @@ export function useCapture(): CaptureBench {
         const subject = stage.subject;
         const level = subject.packaging_level;
         if (!subject.item_id || !level) {
-          throw new ApiError("A part has no packaging level to bind a barcode at.", 400);
+          throw new ApiError("Parts have no packaging level to bind a barcode to.", 400);
         }
         const scanned = binding.trim();
         if (!scanned) return;

@@ -701,12 +701,12 @@ pub async fn record_observation_image(
     // are acceptable.
     if !crate::images::is_face(&face) {
         return Err(ApiError::Rejected(format!(
-            "{face} is not a face; use one of {}",
+            "unknown face {face}; use one of {}",
             crate::images::FACES.join(", ")
         )));
     }
     if body.is_empty() {
-        return Err(ApiError::Rejected("an empty upload is not a photograph".into()));
+        return Err(ApiError::Rejected("the upload is empty".into()));
     }
     if body.len() > crate::images::MAX_BYTES {
         return Err(ApiError::Rejected(format!(
@@ -925,7 +925,7 @@ pub async fn resolve_identifier(
     let q = q.into_inner();
     if q.scan.trim().is_empty() {
         return Err(ApiError::Rejected(
-            "a scan of nothing is not a scan; send what the reader sent".into(),
+            "the scan is empty".into(),
         ));
     }
     let found = crate::locator::resolve(&state, &who, &q.scan, q.expect.as_deref()).await?;
@@ -4997,7 +4997,7 @@ pub async fn record_consignment(
             Box::pin(async move {
                 if body.package_ids.is_empty() {
                     return Err(ApiError::Rejected(
-                        "a consignment of no cartons is not a consignment".into(),
+                        "select at least one carton".into(),
                     ));
                 }
 
@@ -6266,7 +6266,7 @@ pub async fn choose_site(
         .await?;
     if found.is_none() {
         return Err(ApiError::Rejected(
-            "that is not a site this account can work at".into(),
+            "this account cannot work at that site".into(),
         ));
     }
 
@@ -6644,13 +6644,13 @@ pub async fn import_stock(
     // on, and guessing it would make one export silently replace another.
     let Some(as_at) = query.as_at else {
         return Err(ApiError::Rejected(
-            "as_at is required: a report that cannot say when it was taken              gets read as current forever"
+            "as_at is required"
                 .into(),
         ));
     };
     let Some(source) = query.source.clone().filter(|s| !s.trim().is_empty()) else {
         return Err(ApiError::Rejected(
-            "source is required: it names the feed, and a second export under              the same source replaces the first"
+            "source is required"
                 .into(),
         ));
     };
@@ -6832,11 +6832,11 @@ pub async fn import_fulfilment(
     let order = sales_order_number(&intake.order);
     if order.is_empty() {
         return Err(ApiError::Rejected(
-            "order is required: it is the key a resend is recognised by".into(),
+            "order is required".into(),
         ));
     }
     if intake.lines.is_empty() {
-        return Err(ApiError::Rejected("a fulfilment with no lines has nothing to pick".into()));
+        return Err(ApiError::Rejected("the fulfilment has no lines".into()));
     }
     let customer = crate::orders::customer_name(&intake.customer);
     let rows: Vec<crate::importing::orders::Line> = intake
@@ -7540,7 +7540,7 @@ pub async fn observable_for(
             (_, _, _, Some(id)) => ("item_part_id", id, "item_part"),
             _ => {
                 return Err(ApiError::Rejected(
-                    "an observation of nothing has no subject to register".into(),
+                    "the observation has no subject".into(),
                 ))
             }
         };
@@ -7704,7 +7704,7 @@ pub async fn record_observation(
                 }
                 if body.measurements.is_empty() {
                     return Err(ApiError::Rejected(
-                        "an observation of nothing is not an observation".into(),
+                        "the observation is empty".into(),
                     ));
                 }
 
@@ -7858,7 +7858,7 @@ pub async fn record_observation(
                         .await?;
                     let Some(mr) = metric_row else {
                         return Err(ApiError::Rejected(format!(
-                            "no metric named {}; the vocabulary is a table, not a string",
+                            "no metric named {}",
                             m.metric
                         )));
                     };

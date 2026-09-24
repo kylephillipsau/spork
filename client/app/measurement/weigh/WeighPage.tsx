@@ -52,7 +52,7 @@ export function WeighPage({ bench }: { bench: WeighBench }) {
           ) : subject ? (
             <OnTheScale bench={bench} subject={subject} />
           ) : (
-            <EmptyState icon={<Scale />} title="Nothing to weigh" description="Every item's weight is in date." />
+            <EmptyState icon={<Scale />} title="Nothing to weigh" description="All weights are up to date." />
           )}
         </Card>
 
@@ -63,7 +63,7 @@ export function WeighPage({ bench }: { bench: WeighBench }) {
             rows={next.slice(0, 12)}
             rowKey={(x) => `${x.item_id ?? x.item_style_id}/${x.packaging_level}`}
             loading={st.kind === "loading"}
-            empty={<EmptyState title="Nothing after this" />}
+            empty={<EmptyState title="No more items" />}
           />
         </Card>
       </div>
@@ -129,7 +129,7 @@ function OnTheScale({ bench, subject }: { bench: WeighBench; subject: ToWeigh })
 
       <div className={s.actions}>
         <Button disabled={bench.busy} onClick={bench.skip}>
-          Can't reach it
+          Skip
         </Button>
         <Button type="submit" variant="primary" loading={bench.busy} disabled={bench.reading.trim() === ""}>
           Record weight

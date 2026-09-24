@@ -74,7 +74,7 @@ export function useDespatch(): DespatchBench {
       const screen = await api.despatchBench(site);
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
-      const message = reason(error, "The despatch bench could not be read.");
+      const message = reason(error, "Could not load despatch.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, [site]);
@@ -102,7 +102,7 @@ export function useDespatch(): DespatchBench {
     consign: (input) =>
       press(`consign:${input.packages.join(",")}`, async (act) => {
         if (input.packages.length === 0) {
-          throw new ApiError("A consignment of no cartons is not a consignment.", 400);
+          throw new ApiError("Select at least one carton.", 400);
         }
         const response = await api.consign({ ...input, act });
         if (live.current) {

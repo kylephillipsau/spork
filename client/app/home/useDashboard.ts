@@ -41,7 +41,7 @@ export function useDashboard(): DashboardBench {
           if (live.current) set({ kind: "ready", data });
         },
         (error: unknown) => {
-          if (live.current) set({ kind: "failed", message: reason(error, "Could not be loaded.") });
+          if (live.current) set({ kind: "failed", message: reason(error, "Could not load the dashboard.") });
         },
       );
     await Promise.all([

@@ -159,8 +159,8 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
     setTenant(tenants[0]?.tenant_id ?? null);
     setProblem(
       method === "key"
-        ? "You work for more than one company. Choose which, and your key will be asked for again."
-        : "You work for more than one company. Choose which.",
+        ? "Your account belongs to more than one organisation. Choose one, then confirm your passkey again."
+        : "Your account belongs to more than one organisation. Choose one.",
     );
     return true;
   }, []);
@@ -231,7 +231,7 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
       if (declined(error)) return;
       if (asked(error, "key")) return;
       setProblem(
-        reason(error, "That key was not accepted."),
+        reason(error, "Passkey not accepted."),
       );
     } finally {
       if (live.current) setBusy(false);

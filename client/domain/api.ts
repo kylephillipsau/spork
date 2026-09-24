@@ -219,7 +219,7 @@ async function sendRaw<T>(
 async function unwrap<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) unauthorised?.();
-    let detail = `That did not work (${response.status}).`;
+    let detail = `Request failed (${response.status}).`;
     let body: unknown = null;
     try {
       body = await response.json();
@@ -370,7 +370,7 @@ export const api = {
       });
       left -= take;
     }
-    if (left > 0) throw new ApiError("Only part of that could be taken back out.", 409);
+    if (left > 0) throw new ApiError("Only some of those units were removed.", 409);
   },
 
   despatchBench: (site: Uuid) => send<DespatchScreen>("GET", `/sites/${site}/despatch`),
@@ -417,7 +417,7 @@ export const api = {
     act: Act;
   }): Promise<void> {
     if (input.lines.length === 0) {
-      throw new ApiError("That carton has nothing in it to despatch.", 409);
+      throw new ApiError("That carton is empty.", 409);
     }
     for (const line of input.lines) {
       await send<unknown>("POST", `/packages/${input.carton}/despatch`, {
@@ -989,7 +989,7 @@ export const api = {
       },
     );
     if (!response.ok) {
-      let detail = `That photograph did not go up (${response.status}).`;
+      let detail = `Photo upload failed (${response.status}).`;
       try {
         const parsed = (await response.json()) as { detail?: string; error?: string };
         detail = parsed.detail ?? parsed.error ?? detail;

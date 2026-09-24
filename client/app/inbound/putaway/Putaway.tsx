@@ -81,7 +81,7 @@ export function Putaway({ bench }: { bench: PutawayBench }) {
               {bench.bin && <Pill tone="good">{bench.bin.code}</Pill>}
             </Row>
             <ScanInput
-              label={bench.holding ? "Scan the bin" : "Scan what you picked up"}
+              label={bench.holding ? "Scan the bin" : "Scan the item"}
               value={bench.scan.typed}
               onChange={bench.typeScan}
               onScan={(v) => void bench.read(v)}
@@ -89,8 +89,8 @@ export function Putaway({ bench }: { bench: PutawayBench }) {
               refocus={bench.scan.refocus}
               hint={
                 bench.holding
-                  ? "The label on the shelf you are standing at."
-                  : "Or choose it from the dock below."
+                  ? "The bin label on the shelf."
+                  : "Or choose an item from the dock list below."
               }
             />
           </Stack>
@@ -109,7 +109,7 @@ export function Putaway({ bench }: { bench: PutawayBench }) {
             {cells.length === 0 ? (
               <EmptySlot
                 label="Dock clear"
-                note="Everything that arrived has a home."
+                note="Everything received has been put away."
               />
             ) : (
               <Records>
@@ -174,10 +174,10 @@ function Cell({
               because consolidating is the common answer and walking to a bin
               you can already see named is not a decision worth two taps. */}
           {cell.homes.length === 0 ? (
-            <Faint>nowhere yet</Faint>
+            <Faint>No other bins</Faint>
           ) : (
             <>
-              <Faint>already in</Faint>
+              <Faint>Also in</Faint>
               {cell.homes.map((home) => (
                 <Key
                   key={home.location_id}
@@ -200,7 +200,7 @@ function Cell({
           disabled={bench.busy || held}
           onClick={() => bench.choose(cell)}
         >
-          {held ? "In your hands" : "This one"}
+          {held ? "Selected" : "Select"}
         </Key>
       }
     />
@@ -247,7 +247,7 @@ export function PutawayDock({ bench }: { bench: PutawayBench }) {
         ) : (
           /* Not a refusal, a prompt: the key below is disabled until the bin is
              named, and saying which bin is the whole act. */
-          <Faint>scan a bin</Faint>
+          <Faint>Scan a bin</Faint>
         )}
       </Row>
       <Row gap={3} align="end" wrap>
@@ -262,7 +262,7 @@ export function PutawayDock({ bench }: { bench: PutawayBench }) {
         <Faint>{`of ${cell.quantity}`}</Faint>
         <Trailing>
           <Key size="small" disabled={bench.busy} onClick={bench.release}>
-            Put it back
+            Cancel
           </Key>
           <Key live disabled={bench.busy || !bench.bin} onClick={() => void bench.away()}>
             Put away
