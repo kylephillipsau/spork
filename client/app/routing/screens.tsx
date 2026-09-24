@@ -39,13 +39,13 @@ import { Setup } from "@app/setup/Setup";
 import { useSetup } from "@app/setup/useSetup";
 import { WherePage } from "@app/session/WherePage";
 import { useWhere } from "@app/session/useWhere";
-import { Password } from "@app/account/Password";
-import { Keys } from "@app/account/Keys";
+import { AccountPage } from "@app/account/AccountPage";
+import { KeysPage } from "@app/account/KeysPage";
 import { useKeys } from "@app/account/useKeys";
-import { Tokens } from "@app/admin/Tokens";
-import { Import } from "@app/admin/Import";
+import { TokensPage } from "@app/admin/TokensPage";
+import { ImportPage } from "@app/admin/ImportPage";
 import { useImport } from "@app/admin/useImport";
-import { Workspace } from "@app/admin/Workspace";
+import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { useWorkspace } from "@app/admin/useWorkspace";
 import { useTokens } from "@app/admin/useTokens";
 import { usePassword } from "@app/account/usePassword";
@@ -240,27 +240,27 @@ function LiveSetup() {
  * or a desk, and what it is about is the account rather than the work.
  */
 function LivePassword() {
-  return <Password bench={usePassword()} />;
+  return <AccountPage bench={usePassword()} />;
 }
 
 /** Passkeys. The same shell as the password screen: an account, not work. */
 function LiveKeys() {
-  return <Keys bench={useKeys()} />;
+  return <KeysPage bench={useKeys()} />;
 }
 
 /** Loading reference data from a file (D158). */
 function LiveImport() {
-  return <Import bench={useImport()} />;
+  return <ImportPage bench={useImport()} />;
 }
 
 /** The organisation and its warehouses. */
 function LiveWorkspace() {
-  return <Workspace bench={useWorkspace()} />;
+  return <WorkspacePage bench={useWorkspace()} />;
 }
 
 /** Import tokens (D158). A desk task: done sitting down, rarely. */
 function LiveTokens() {
-  return <Tokens bench={useTokens()} />;
+  return <TokensPage bench={useTokens()} />;
 }
 
 /**

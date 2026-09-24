@@ -16,7 +16,7 @@ export function Progress({ done, of, label = "picked" }: { done: number; of: num
   return (
     <span className={s.progress} title={`${done} of ${of} ${label}`}>
       <span className={s.bar} aria-hidden>
-        <span className={cx(s.fill, of > 0 && pct === 100 && s.full)} style={{ width: `${pct}%` }} />
+        <span className={cx(s.fill, of > 0 && done >= of && s.full)} style={{ width: `${pct}%` }} />
       </span>
       <span className={s.text}>
         {done}/{of}
