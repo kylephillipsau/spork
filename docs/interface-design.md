@@ -1849,6 +1849,13 @@ status colours with their usual meanings: success, warning, danger, info. Amber
 is no longer reserved for findings. Interface text is functional labels. It
 does not explain the design.
 
+**The character stays, the machinery goes.** The frame is still anodised
+aluminium and labels are still nylon (D118, D122 in spirit): the sidebar and
+sign-in ground are blasted metal with a lit top edge, and work counts, the site
+tag and the brand mark are woven nylon, the site tag dyed to the accent. Data
+surfaces stay plain so they read. The finishes are static CSS; the light
+solver, the canvas and pointer parallax (D121) are gone.
+
 **How it lands.** The kit lives alongside `design/` until every screen has moved
 over, so the app keeps working throughout. A screen on the kit is marked `bare`
 in its route and renders outside the `LightRoom`. The design-law checker and the
