@@ -45,13 +45,10 @@
 
 /* ---- a body still on the old material system ---- */
 .legacy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-5);
   min-width: 0;
-  padding: var(--ui-space-5);
-  border-radius: var(--ui-radius-xl);
-  background: var(--ano-950);
-  color: var(--legend);
-  font-family: var(--font-ui);
-  font-size: var(--text-base);
 }
 .legacySplit {
   display: grid;

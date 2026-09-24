@@ -170,13 +170,20 @@ for (const file of css) {
 // Amber marks findings and nothing else. The design system may reach it in
 // exactly two files — the lamp and the finding — and everywhere else it
 // belongs under app/integrity/.
-const AMBER_HOMES = ["materials/lamp.module.css", "materials/face.module.css"];
+const AMBER_HOMES = [
+  "materials/lamp.module.css",
+  "materials/face.module.css",
+  // Not an emitter: the D171 legacy adapter remaps findings' own amber onto
+  // the kit's warning colour, so it has to name the token. D171 supersedes
+  // D115; this law is rewritten in phase F.
+  "app/shell/legacy.module.css",
+];
 for (const file of [...designFiles, ...appFiles]) {
   if (file.ext !== ".css" && file.ext !== ".tsx" && file.ext !== ".ts") continue;
   // The token source and its generated mirror necessarily name every token.
   if (file.rel.endsWith("tokens.css") || file.rel.endsWith("tokens.gen.ts")) continue;
   if (AMBER_HOMES.some((home) => file.rel.endsWith(home))) continue;
-  if (file.rel.includes(join("app", "integrity"))) continue;
+  if (file.rel.includes("app/integrity/")) continue;
 
   const body = code(file.text);
   if (/--(face-)?(lamp-)?amber/.test(body)) {

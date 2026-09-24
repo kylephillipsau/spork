@@ -1,0 +1,305 @@
+/*
+ * The legacy adapter (D171, until phase D is done).
+ *
+ * Screens not rebuilt on the kit yet still draw with the old material
+ * primitives: an anodised Panel, a bezel, and a paper Face inside it, each with
+ * its own padding. Inside the new frame that read as a thick black border
+ * around a white card, padded twice. This flattens it without touching the
+ * screens:
+ *
+ * - the old tokens are remapped onto the kit's, so paper becomes a card, metal
+ *   becomes the page, ink becomes text, and the big gaps become tight ones;
+ * - the panel and bezel disappear, and the face is the one card with the one
+ *   padding;
+ * - keys, bands and nylon tags take the kit's button, header and badge looks.
+ *
+ * Old classes are hashed (`ny-<name>-<hash>`), so the few overrides that need a
+ * class match on its stable prefix. Delete this file with design/.
+ */
+
+.legacy {
+  /* chassis → page */
+  --ano-950: var(--ui-bg);
+  --ano-900: var(--ui-surface-sunken);
+  --ano-700: var(--ui-surface);
+  --ano-500: var(--ui-surface);
+  --ano-400: var(--ui-surface-hover);
+  --hi: 255, 255, 255;
+  --lo: 16, 24, 40;
+  --legend: var(--ui-text);
+  --legend-dim: var(--ui-text-muted);
+  --key-live: var(--ui-accent);
+  --key-live-ink: var(--ui-accent-fg);
+
+  /* paper → card */
+  --face: var(--ui-surface);
+  /* One surface per card: the inner well is the card, not a box in it. */
+  --face-well: var(--ui-surface);
+  --face-ink: var(--ui-text);
+  --face-soft: var(--ui-text-muted);
+  --face-faint: var(--ui-text-faint);
+  --face-rule: var(--ui-border);
+  --face-rule-soft: var(--ui-border);
+  --face-nitrile: var(--ui-accent);
+  --face-amber: var(--ui-warning);
+  --face-amber-soft: var(--ui-warning-soft);
+  --face-good: var(--ui-success);
+  --face-good-soft: var(--ui-success-soft);
+  --face-steel: var(--ui-text-muted);
+  --face-steel-soft: var(--ui-surface-sunken);
+  --band-bg: var(--ui-surface-sunken);
+
+  /* form */
+  --r-panel: var(--ui-radius-lg);
+  --r-face: var(--ui-radius-lg);
+  --r-well: var(--ui-radius);
+  --r-control: var(--ui-radius);
+  --r-pill: var(--ui-radius-full);
+  --edge-dim: transparent;
+  --edge-face: transparent;
+  --e-t: 0;
+  --e-b: 0;
+  --e-l: 0;
+  --e-r: 0;
+  --glint: 0;
+  --tex-blast: none;
+  --tex-fine: none;
+  --tex-pits: none;
+
+  /* density */
+  --font-ui: var(--ui-font);
+  --text-base: var(--ui-text-base);
+  --target: 32px;
+  --readout: 1.5rem;
+  --gap-1: 4px;
+  --gap-2: 6px;
+  --gap-3: 8px;
+  --gap-4: 12px;
+  --gap-5: 14px;
+  --gap-6: 16px;
+
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-base);
+}
+
+/* ---- the panel and its bezel go; only the face is a card ---- */
+.legacy :global([data-layer="panel"]) {
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+.legacy :global([data-layer="panel"])::before,
+.legacy :global([data-layer="panel"])::after,
+.legacy :global([data-layer="panel"]) > :global(span[aria-hidden="true"]) {
+  display: none !important;
+}
+
+.legacy :global([data-layer="well"]) {
+  padding: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.legacy :global([data-layer="face"]) {
+  border: 1px solid var(--ui-border) !important;
+  border-radius: var(--ui-radius-lg) !important;
+  background: var(--ui-surface) !important;
+  box-shadow: var(--ui-shadow-sm) !important;
+  overflow: hidden;
+}
+.legacy :global([data-layer="face"])::before,
+.legacy :global([data-layer="face"])::after,
+.legacy :global([data-layer="face"]) > :global(span[aria-hidden="true"]:first-child) {
+  display: none !important;
+}
+
+/* ---- section bands: a table-header strip, not an engraved plate ---- */
+.legacy :global([class*="ny-band-"]) {
+  padding: 8px 14px !important;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-sunken) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--ui-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  letter-spacing: 0.06em !important;
+}
+
+/* ---- keys: kit buttons ---- */
+.legacy :global([data-layer="key"]) {
+  height: 32px;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--ui-border-strong) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--ui-shadow-sm) !important;
+  color: var(--ui-text) !important;
+  font-family: var(--ui-font) !important;
+  font-size: var(--ui-text-sm) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+.legacy :global([data-layer="key"]):hover:not(:disabled) {
+  background: var(--ui-surface-hover) !important;
+}
+.legacy :global([data-layer="key"])::after {
+  display: none !important;
+}
+.legacy :global([data-layer="key"][class*="ny-live-"]) {
+  border-color: transparent !important;
+  background: var(--ui-accent) !important;
+  color: var(--ui-accent-fg) !important;
+}
+.legacy :global([data-layer="key"][class*="ny-live-"]):hover:not(:disabled) {
+  background: var(--ui-accent-hover) !important;
+}
+
+/* ---- nylon tags and badges: kit badges ---- */
+.legacy :global([data-layer="nylon"]) {
+  border-radius: var(--ui-radius-full) !important;
+  background: var(--ui-surface-sunken) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 1px var(--ui-border) !important;
+  color: var(--ui-text-muted) !important;
+  letter-spacing: 0.02em !important;
+}
+.legacy :global([data-layer="nylon"])::before,
+.legacy :global([data-layer="nylon"])::after {
+  display: none !important;
+}
+
+/* ---- links on a face: accent text, underline on hover ---- */
+.legacy :global([data-layer="face"] a) {
+  color: var(--ui-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.legacy :global([data-layer="face"] a:hover) {
+  text-decoration: underline;
+}
+
+/* ---- a link is a link, not a key ---- */
+.legacy :global(a[data-layer="key"]) {
+  height: auto;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: var(--ui-accent) !important;
+  font-size: var(--ui-text-base) !important;
+  font-weight: 600 !important;
+}
+.legacy :global(a[data-layer="key"]):hover {
+  background: none !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---- labels: quiet sentence-case, not engraved capitals ---- */
+.legacy :global([class*="ny-fieldLabel-"]),
+.legacy :global([class*="ny-pairKey-"]),
+.legacy :global([class*="ny-readoutKey-"]),
+.legacy :global([class*="ny-emptyLabel-"]),
+.legacy :global([class*="ny-photoFrom-"]) {
+  color: var(--ui-text-muted) !important;
+  font-family: var(--ui-font) !important;
+  font-size: var(--ui-text-xs) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+.legacy :global([class*="ny-fieldLabel-"])::first-letter,
+.legacy :global([class*="ny-pairKey-"])::first-letter,
+.legacy :global([class*="ny-readoutKey-"])::first-letter {
+  text-transform: uppercase;
+}
+.legacy :global([class*="ny-findingKind-"]) {
+  font-family: var(--ui-font) !important;
+  font-size: var(--ui-text-xs) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* ---- figures: tabular Inter rather than a typewriter ---- */
+.legacy :global([class*="ny-pairValue-"]),
+.legacy :global([class*="ny-readoutValue-"]),
+.legacy :global([class*="ny-dimValue-"]),
+.legacy :global([class*="ny-bandCount-"]) {
+  font-family: var(--ui-font) !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.legacy :global([class*="ny-code-"]) {
+  font-family: var(--ui-font-mono) !important;
+  font-size: var(--ui-text-sm) !important;
+}
+
+/* ---- pills and tags: kit badges ---- */
+.legacy :global([class*="ny-pill-"]),
+.legacy :global([class*="ny-tag-"]) {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px !important;
+  border-radius: var(--ui-radius-full) !important;
+  font-family: var(--ui-font) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  text-transform: capitalize !important;
+}
+
+/* ---- fields: white, bordered, with a focus ring ---- */
+.legacy :global([class*="ny-fieldInput-"]),
+.legacy :global([class*="ny-chooserSelect-"]) {
+  height: var(--ui-control) !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--ui-border-strong) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--ui-shadow-sm) !important;
+  color: var(--ui-text) !important;
+  font-family: var(--ui-font) !important;
+  font-size: var(--ui-text-base) !important;
+}
+.legacy :global([class*="ny-fieldInput-"]):focus,
+.legacy :global([class*="ny-chooserSelect-"]):focus {
+  border-color: var(--ui-accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--ui-ring) !important;
+}
+
+/* ---- tables and tabs ---- */
+.legacy :global([class*="ny-table-"] th) {
+  color: var(--ui-text-muted) !important;
+  font-family: var(--ui-font) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+}
+.legacy :global([class*="ny-table-"] td) {
+  font-family: var(--ui-font) !important;
+}
+.legacy :global([class*="ny-tab-"]) {
+  font-family: var(--ui-font) !important;
+  font-size: var(--ui-text-sm) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* ---- a face inside a face is a section of it, not a second card ---- */
+.legacy :global([data-layer="face"] [data-layer="face"]) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
