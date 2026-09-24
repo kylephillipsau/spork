@@ -68,7 +68,7 @@ test("a required lot is asked for before the press, not after the refusal", () =
 });
 
 test("an owner nobody named is asked for, and a promise that names one is not", () => {
-  assert.match(whatIsMissing(line({ owner_id: null }), "6", "", null) ?? "", /whose/i);
+  assert.match(whatIsMissing(line({ owner_id: null }), "6", "", null) ?? "", /owner/i);
   assert.equal(whatIsMissing(line({ owner_id: null }), "6", "", "a-party"), null);
   assert.equal(whatIsMissing(line(), "6", "", null), null);
 });

@@ -51,7 +51,7 @@ export function useQueue(): QueueBench {
       if (live.current) {
         setState({
           kind: "failed",
-          message: reason(error, "The queue could not be read."),
+          message: reason(error, "Could not load the queue."),
         });
       }
     }
@@ -65,7 +65,7 @@ export function useQueue(): QueueBench {
         if (!live.current) return;
         setState({
           kind: "failed",
-          message: reason(error, "The queue could not be read."),
+          message: reason(error, "Could not load the queue."),
         });
       });
   }, []);

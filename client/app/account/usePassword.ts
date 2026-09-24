@@ -111,7 +111,7 @@ export function usePassword(): PasswordBench {
           setState({ kind: "done", who: state.who, result });
         }
       } catch (error) {
-        const message = reason(error, "That did not work.");
+        const message = reason(error, "Request failed.");
         if (live.current) setProblem(message);
       } finally {
         if (live.current) setBusy(false);

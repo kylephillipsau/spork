@@ -88,7 +88,7 @@ export function usePutaway(): PutawayBench {
       const screen = await api.putaway(site);
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
-      const message = reason(error, "The dock list could not be read.");
+      const message = reason(error, "Could not load the dock list.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, [site, live]);
@@ -135,7 +135,7 @@ export function usePutaway(): PutawayBench {
         if (!holding) {
           const item = found.subjects.find((s) => s.kind === "item");
           if (!item) {
-            throw new ApiError("That is not an item. Scan what you picked up.", 400);
+            throw new ApiError("Not an item. Scan the item.", 400);
           }
           // **The dock's own cells, not a second enumeration.** A scan cannot
           // select goods this list would not show, which is what keeps a
@@ -166,7 +166,7 @@ export function usePutaway(): PutawayBench {
         // this: a put-away onto another dock is a move somebody meant.
         const where = found.subjects.find((s) => s.kind === "location");
         if (!where) {
-          throw new ApiError("That is not a bin. Scan the label on the shelf.", 400);
+          throw new ApiError("Not a bin. Scan the bin label.", 400);
         }
         setBin({ id: where.id, code: where.code });
       }),
@@ -188,11 +188,11 @@ export function usePutaway(): PutawayBench {
         if (!holding || !bin) return;
         const asked = Number.parseInt(quantity.trim(), 10);
         if (!Number.isFinite(asked) || asked <= 0) {
-          throw new ApiError("Say how many you are putting away.", 400);
+          throw new ApiError("Enter a quantity.", 400);
         }
         if (asked > holding.quantity) {
           throw new ApiError(
-            `The dock holds ${holding.quantity}, and this would move ${asked}.`,
+            `Only ${holding.quantity} on the dock. Cannot put away ${asked}.`,
             400,
           );
         }

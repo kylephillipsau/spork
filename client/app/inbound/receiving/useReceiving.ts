@@ -125,7 +125,7 @@ export function useReceiving(): ReceivingBench {
       const screen = await api.receiving(site);
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
-      const message = reason(error, "What is expected here could not be read.");
+      const message = reason(error, "Could not load expected deliveries.");
       if (live.current) setStatus({ kind: "failed", message });
     }
   }, [site, live]);
@@ -215,7 +215,7 @@ export function useReceiving(): ReceivingBench {
         if (!bay) {
           const where = found.subjects.find((s) => s.kind === "location");
           if (!where) {
-            throw new ApiError("That is not a place. Scan the dock or the bin.", 400);
+            throw new ApiError("Not a location. Scan the dock or a bin.", 400);
           }
           setBay({ id: where.id, code: where.code });
           return;
@@ -223,7 +223,7 @@ export function useReceiving(): ReceivingBench {
 
         const item = found.subjects.find((s) => s.kind === "item");
         if (!item) {
-          throw new ApiError("That is not an item. Scan what came off the truck.", 400);
+          throw new ApiError("Not an item. Scan the item.", 400);
         }
         const line = lines.find((l) => l.item_id === item.id);
         if (!line) {

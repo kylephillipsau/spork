@@ -100,7 +100,7 @@ export function useWriting(after?: () => Promise<void>): Writing {
         await run(doing.current.attempt(key));
         doing.current.landed(key);
       } catch (error) {
-        if (live.current) setProblem(reason(error, "That did not work."));
+        if (live.current) setProblem(reason(error, "Request failed."));
       } finally {
         if (after) await after();
         if (live.current) setBusy(false);

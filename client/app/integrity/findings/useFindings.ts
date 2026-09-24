@@ -100,7 +100,7 @@ export function useFindings(
       if (live.current) setStatus({ kind: "ready", findings });
       return findings;
     } catch (error) {
-      const message = phrase(error, "The findings could not be read.");
+      const message = phrase(error, "Could not load findings.");
       if (live.current) setStatus({ kind: "failed", message });
       return [];
     }
@@ -159,8 +159,8 @@ export function useFindings(
         setMissed(at);
         say(
           error instanceof ApiError && error.status === 404
-            ? "That finding is not here. It may belong to another company."
-            : phrase(error, "That finding could not be read."),
+            ? "Finding not found."
+            : phrase(error, "Could not load the finding."),
         );
       } finally {
         if (!stop && live.current) setHeld(false);
@@ -247,7 +247,7 @@ export function useFindings(
         // operator has looked away. Same rule, said twice, and the server's is
         // the one that binds.
         if (!why) {
-          throw new ApiError("Say why this can be accepted.", 400);
+          throw new ApiError("Enter a reason.", 400);
         }
         const updated = await api.accept(id, why);
         await after(updated, view);
@@ -268,11 +268,11 @@ export function useFindings(
     attach: (image) =>
       press(`evidence:${selected?.id ?? "none"}:${image.size}:${image.type}:${photoAt.current}`, async (act) => {
         const f = selected;
-        if (!f) throw new ApiError("Nothing is selected to attach that to.", 400);
+        if (!f) throw new ApiError("Select a finding first.", 400);
         const subject = evidenceSubject(f);
         if (!subject) {
           throw new ApiError(
-            "That finding names nothing to photograph.",
+            "This finding has nothing to photograph.",
             400,
           );
         }

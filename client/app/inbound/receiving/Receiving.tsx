@@ -80,14 +80,14 @@ export function Receiving({ bench }: { bench: ReceivingBench }) {
         <Face>
           <Stack gap={3}>
             <Row gap={3} align="baseline" wrap>
-              <Soft>{bench.bay ? "Checking in at" : "Where is it going"}</Soft>
+              <Soft>{bench.bay ? "Receiving at" : "Unloading at"}</Soft>
               {bench.bay && <Code>{bench.bay.code}</Code>}
               <Trailing>
                 {bench.delivery && (
                   <>
                     <Pill tone="good">delivery open</Pill>
                     <Key size="small" disabled={bench.busy} onClick={bench.closeDelivery}>
-                      That is the lot
+                      Close delivery
                     </Key>
                   </>
                 )}
@@ -102,8 +102,8 @@ export function Receiving({ bench }: { bench: ReceivingBench }) {
               refocus={bench.scan.refocus}
               hint={
                 bench.bay
-                  ? "A GS1 label names the item, the lot and the date at once."
-                  : "Where the goods are being put down for the delivery."
+                  ? "A GS1 label fills in the item, lot and date."
+                  : "The dock or bin where this delivery is unloaded."
               }
             />
           </Stack>
@@ -119,7 +119,7 @@ export function Receiving({ bench }: { bench: ReceivingBench }) {
             {lines.length === 0 ? (
               <EmptySlot
                 label="Nothing expected"
-                note="Everything promised to this site has arrived."
+                note="All expected deliveries have been received."
               />
             ) : (
               <Records>
@@ -158,7 +158,7 @@ function Landed({ bench }: { bench: ReceivingBench }) {
              goods are on the dock either way; what did not happen is the
              record. Saying "failed" would send somebody looking for a fault in
              the system rather than for the lot code on the carton. */
-          `${it.code} was not taken in: the policy needs a lot for this item.`}
+          `${it.code} not received: this item needs a lot.`}
     </Notice>
   );
 }
@@ -305,14 +305,14 @@ function Counting({ bench, line }: { bench: ReceivingBench; line: ExpectedLine }
                 lie; closing the promise short says the rest is not coming and
                 puts the shortfall where a supplier conversation can find it. */}
             <Key size="small" disabled={bench.busy} onClick={() => void bench.closeShort()}>
-              Nothing more coming
+              Close short
             </Key>
             <Key
               live
               disabled={bench.busy || bench.missing !== null}
               onClick={() => void bench.receive()}
             >
-              Take it in
+              Receive
             </Key>
           </Trailing>
         </Row>
@@ -353,8 +353,8 @@ function Line({
       }
       facts={
         <>
-          <Fact value={line.outstanding} label="still due" />
-          {line.received > 0 && <Fact value={line.received} label="in" />}
+          <Fact value={line.outstanding} label="outstanding" />
+          {line.received > 0 && <Fact value={line.received} label="received" />}
         </>
       }
       note={line.description && <Faint>{line.description}</Faint>}

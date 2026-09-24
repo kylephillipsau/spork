@@ -61,17 +61,17 @@ export function Locator({ scan }: { scan: ChromeScan }) {
             )}
             {scan.landing.kind === "unknown" && (
               <Faint>
-Nothing here holds that code.
+No match for this code.
               </Faint>
             )}
             {scan.landing.kind === "unrecognised" && (
               <Faint>
-Not a code this system reads.
+Not a recognised code.
               </Faint>
             )}
             {scan.landing.kind === "nowhere" && (
               <Faint>
-That is a {scan.landing.what}. There is no screen for one yet.
+No screen for {scan.landing.what} codes yet.
               </Faint>
             )}
           </Stack>

@@ -50,7 +50,7 @@ export function FindingsPage({ desk }: { desk: FindingsDesk }) {
 
   return (
     <Page>
-      <PageHeader title="Findings" description="Where a scan disagreed with the record, with the evidence." />
+      <PageHeader title="Findings" description="Discrepancies between scans and the ledger." />
 
       {desk.problem && !desk.selected && (
         <Alert tone="danger" onDismiss={desk.dismiss}>
@@ -84,7 +84,7 @@ export function FindingsPage({ desk }: { desk: FindingsDesk }) {
             loading={st.kind === "loading"}
             onRowClick={(f) => desk.select(f)}
             selectedKey={desk.selected?.id}
-            empty={<EmptyState icon={<CircleCheck />} title="No findings here" description="Everything in this view agrees with the ledger." />}
+            empty={<EmptyState icon={<CircleCheck />} title="No findings" />}
           />
         )}
       </Card>
@@ -191,7 +191,7 @@ function Detail({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
             ))}
           </div>
         ) : (
-          <p className={s.muted}>{subject ? "No photographs yet." : "Nothing to photograph: this finding names no item, bin or carton."}</p>
+          <p className={s.muted}>{subject ? "No photographs yet." : "This finding has no item, bin or carton to photograph."}</p>
         )}
       </Section>
 
@@ -209,7 +209,7 @@ function Detail({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
           />
         </Section>
       ) : (
-        <p className={s.muted}>Closed findings are kept for the record and cannot be reopened here.</p>
+        <p className={s.muted}>Closed findings cannot be reopened.</p>
       )}
     </Stack>
   );

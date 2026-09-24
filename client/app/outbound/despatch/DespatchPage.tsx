@@ -22,7 +22,7 @@ export function DespatchPage({ bench }: { bench: DespatchBench }) {
     <Page>
       <PageHeader
         title="Despatch"
-        description="Consign sealed cartons to a carrier, then record them leaving."
+        description="Consign sealed cartons to a carrier and record despatch."
       />
 
       {(bench.problem || bench.notice) && (
@@ -136,7 +136,7 @@ function Waiting({ screen, bench }: { screen: DespatchScreen; bench: DespatchBen
         columns={columns}
         rows={screen.waiting}
         rowKey={(j) => j.fulfilment_id}
-        empty={<EmptyState icon={<PackageCheck />} title="Dock clear" description="Every sealed carton is booked." />}
+        empty={<EmptyState icon={<PackageCheck />} title="Dock clear" description="All sealed cartons are booked." />}
       />
     </Card>
   );
@@ -230,7 +230,7 @@ function Manifest({ booked }: { booked: NonNullable<DespatchBench["booked"]> }) 
   return (
     <Card
       title="Consignment manifest"
-      description="Recorded here only. No carrier has been contacted yet."
+      description="Recorded in Spork only. The carrier has not been notified."
       actions={booked.total_gross_weight_g !== null ? <Badge tone="accent">Total {kg(booked.total_gross_weight_g)}</Badge> : undefined}
       padded={false}
     >
@@ -261,7 +261,7 @@ function GoneToday({ gone }: { gone: GoneConsignment[] }) {
         columns={GONE_COLUMNS}
         rows={gone}
         rowKey={(g) => g.consignment_id}
-        empty={<EmptyState icon={<Truck />} title="Nothing has left today" />}
+        empty={<EmptyState icon={<Truck />} title="No despatches today" />}
       />
     </Card>
   );

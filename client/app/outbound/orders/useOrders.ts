@@ -58,7 +58,7 @@ export function useOrders(initial = ""): OrdersDesk {
       if (live.current) {
         setState({
           kind: "failed",
-          message: reason(error, "That search did not work."),
+          message: reason(error, "Search failed."),
         });
       }
     }
@@ -73,7 +73,7 @@ export function useOrders(initial = ""): OrdersDesk {
       if (live.current) {
         setState({
           kind: "failed",
-          message: reason(error, "The latest orders did not load."),
+          message: reason(error, "Could not load orders."),
         });
       }
     }

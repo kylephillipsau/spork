@@ -163,7 +163,7 @@ pub async fn change_password(
         // change landed first. Refusing is right: the caller verified against a
         // password that is no longer current.
         return Err(ApiError::Rejected(
-            "this password was changed somewhere else while you were typing. Try again."
+            "the password was changed in another session. Try again."
                 .into(),
         ));
     }
