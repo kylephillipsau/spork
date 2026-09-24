@@ -59,6 +59,48 @@ use uuid::Uuid;
 pub const IDLE_TIMEOUT_MINUTES: i64 = 30;
 pub const ABSOLUTE_LIFETIME_HOURS: i64 = 8;
 
+/// The same limits when the person ticked "keep me signed in on this device".
+///
+/// A week idle covers a weekend and a day off; thirty days absolute means a
+/// fresh proof of identity at least monthly. The token is rotated daily
+/// ([`ROTATE_AFTER_HOURS`]) so a copy of the cookie is good for a day, not a
+/// month. The choice is the person's, on their own device: a shared bench
+/// leaves the box clear and keeps the short limits above.
+pub const REMEMBERED_IDLE_DAYS: i64 = 7;
+pub const REMEMBERED_LIFETIME_DAYS: i64 = 30;
+
+/// How old a remembered session's token may get before it is replaced.
+pub const ROTATE_AFTER_HOURS: i64 = 24;
+
+/// The two limits a session is opened with, in whole minutes because that is
+/// what `make_interval` is handed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Policy {
+    pub remembered: bool,
+    pub idle_minutes: i32,
+    pub lifetime_minutes: i32,
+}
+
+impl Policy {
+    pub fn new(remembered: bool) -> Self {
+        let (idle, lifetime) = if remembered {
+            (Duration::days(REMEMBERED_IDLE_DAYS), Duration::days(REMEMBERED_LIFETIME_DAYS))
+        } else {
+            (Duration::minutes(IDLE_TIMEOUT_MINUTES), Duration::hours(ABSOLUTE_LIFETIME_HOURS))
+        };
+        Self {
+            remembered,
+            idle_minutes: idle.num_minutes() as i32,
+            lifetime_minutes: lifetime.num_minutes() as i32,
+        }
+    }
+
+    /// When a session opened now would expire.
+    pub fn expiry(&self, from: DateTime<Utc>) -> DateTime<Utc> {
+        from + Duration::minutes(self.lifetime_minutes.into())
+    }
+}
+
 /// The cookie name. `__Host-` is a browser-enforced prefix: the cookie is
 /// refused unless it is `Secure`, has no `Domain`, and has `Path=/`, which stops
 /// a sibling subdomain planting one.
@@ -197,6 +239,11 @@ pub struct Caller {
     pub tenant_id: Uuid,
     /// Where they signed on. `client_event.site_id` for every act they record.
     pub site_id: Option<Uuid>,
+    /// Opened with "keep me signed in", so a site change keeps the long limits.
+    pub remembered: bool,
+    /// When the current token was issued: sign-on, or the last rotation.
+    pub issued_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
 }
 
 /// Where a token may arrive, in the order it is looked for.
@@ -226,7 +273,7 @@ pub fn token_from_headers(cookie: Option<&str>, authorization: Option<&str>) -> 
         .map(str::to_string)
 }
 
-/// The `Set-Cookie` value for a new session.
+/// The `Set-Cookie` value for a session that ends at `expires_at`.
 ///
 /// `__Host-` requires `Secure` and `Path=/` and forbids `Domain`; `HttpOnly`
 /// keeps it away from script, which is what limits an XSS to acting through the
@@ -234,17 +281,23 @@ pub fn token_from_headers(cookie: Option<&str>, authorization: Option<&str>) -> 
 /// stands in for a CSRF token here, since the cookie is simply not sent on a
 /// cross-site request.
 ///
-/// **No `Max-Age`.** OWASP prefers a non-persistent cookie: it dies with the
-/// browser, and the server-side record is what actually decides the lifetime.
-pub fn session_cookie(token: &str, secure: bool) -> String {
+/// **A `Max-Age`, matching the server's absolute expiry.** This used to be a
+/// browser-session cookie on OWASP's preference, and the result was a sign-in
+/// page every time the browser was reopened, which is most mornings. The
+/// server-side record is still what decides: the idle limit, the absolute one
+/// and revocation are all enforced in `session_resolve`, so a cookie that
+/// outlives its session is just a dead token. `Max-Age` only stops the browser
+/// throwing away a session that is still good.
+pub fn session_cookie(token: &str, secure: bool, expires_at: DateTime<Utc>) -> String {
+    let max_age = (expires_at - Utc::now()).num_seconds().max(0);
     // `Secure` is mandatory for `__Host-`, so a plain-HTTP development server
     // could not set the cookie at all. Under `secure = false` the prefix is
     // dropped along with the flag, which keeps local development working without
     // pretending the weaker cookie is the same thing.
     if secure {
-        format!("{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Strict; Path=/")
+        format!("{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age={max_age}")
     } else {
-        format!("{COOKIE_NAME_INSECURE}={token}; HttpOnly; SameSite=Strict; Path=/")
+        format!("{COOKIE_NAME_INSECURE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={max_age}")
     }
 }
 
@@ -255,11 +308,6 @@ pub fn clearing_cookie(secure: bool) -> String {
     } else {
         format!("{COOKIE_NAME_INSECURE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
     }
-}
-
-/// When a session opened now would expire.
-pub fn absolute_expiry(from: DateTime<Utc>) -> DateTime<Utc> {
-    from + Duration::hours(ABSOLUTE_LIFETIME_HOURS)
 }
 
 #[cfg(test)]
@@ -341,7 +389,7 @@ mod tests {
         // cookie transport was dead in exactly the mode local development and CI
         // use. Every test reached for the bearer header instead and none of them
         // noticed until a browser did.
-        let issued = session_cookie("abc123", false);
+        let issued = session_cookie("abc123", false, Utc::now());
         let name = issued.split('=').next().unwrap();
         assert_eq!(name, COOKIE_NAME_INSECURE);
         assert_eq!(
@@ -351,7 +399,7 @@ mod tests {
         );
 
         // And the same for the hardened one, which is the property that held.
-        let issued = session_cookie("abc123", true);
+        let issued = session_cookie("abc123", true, Utc::now());
         let name = issued.split('=').next().unwrap();
         assert_eq!(name, COOKIE_NAME);
         assert_eq!(
@@ -372,16 +420,38 @@ mod tests {
 
     #[test]
     fn the_secure_cookie_carries_every_flag_the_prefix_requires() {
-        let c = session_cookie("abc", true);
+        let c = session_cookie("abc", true, Utc::now() + Duration::hours(1));
         assert!(c.starts_with("__Host-id=abc"));
         for flag in ["Secure", "HttpOnly", "SameSite=Strict", "Path=/"] {
             assert!(c.contains(flag), "{flag} missing from {c}");
         }
         assert!(!c.contains("Domain"), "__Host- forbids a Domain: {c}");
-        assert!(
-            !c.contains("Max-Age") && !c.contains("Expires"),
-            "non-persistent by preference; the server record decides the lifetime: {c}"
-        );
+    }
+
+    #[test]
+    fn the_cookie_lives_as_long_as_the_session() {
+        // The regression: without a Max-Age the cookie died with the browser
+        // and every reopen was a sign-in, whatever the server thought.
+        let c = session_cookie("abc", false, Utc::now() + Duration::hours(8));
+        let age: i64 = c
+            .split("Max-Age=")
+            .nth(1)
+            .expect("a persistent cookie")
+            .parse()
+            .unwrap();
+        assert!((8 * 3600 - 5..=8 * 3600).contains(&age), "{c}");
+
+        // And never negative, which a browser would read as "delete".
+        assert!(session_cookie("abc", false, Utc::now() - Duration::hours(1)).ends_with("Max-Age=0"));
+    }
+
+    #[test]
+    fn remembering_lengthens_both_limits() {
+        let short = Policy::new(false);
+        assert_eq!((short.idle_minutes, short.lifetime_minutes), (30, 8 * 60));
+        let long = Policy::new(true);
+        assert_eq!((long.idle_minutes, long.lifetime_minutes), (7 * 24 * 60, 30 * 24 * 60));
+        assert!(long.remembered && !short.remembered);
     }
 
     #[test]

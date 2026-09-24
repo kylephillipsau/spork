@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck, Fingerprint } from "lucide-react";
 
-import { Button, Card, Stack, TextField } from "@ui/index";
+import { Button, Card, Checkbox, Stack, TextField } from "@ui/index";
 
 import type { SignInBench } from "./useSignIn";
 import s from "./session-pages.module.css";
@@ -59,6 +59,14 @@ export function SignInPage({ bench }: { bench: SignInBench }) {
                 onChange={(e) => bench.type("password", e.target.value)}
                 disabled={bench.busy || choosing}
               />
+              {!choosing && (
+                <Checkbox
+                  label="Keep me signed in on this device"
+                  checked={bench.remember}
+                  onCheckedChange={bench.setRemember}
+                  disabled={bench.busy}
+                />
+              )}
             </Stack>
           )}
 

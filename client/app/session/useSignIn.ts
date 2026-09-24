@@ -89,11 +89,36 @@ export interface SignInBench {
    * reloads, which is a fair price for a screen that says one thing at a time.
    */
   via: Method | null;
+  /** "Keep me signed in on this device". Remembered per browser, so a
+   *  personal laptop stays ticked and a shared bench stays clear. */
+  remember: boolean;
+  setRemember: (next: boolean) => void;
   type: (field: keyof Credentials, next: string) => void;
   choose: (tenant: string) => void;
   submit: () => Promise<void>;
   /** Sign in with a key. */
   useKey: () => Promise<void>;
+}
+
+const REMEMBER_KEY = "spork.remember";
+
+/** The last answer on this browser. Storage can be missing or refuse (a
+ *  private window), and then the box simply starts clear. */
+function readRemember(): boolean {
+  try {
+    return window.localStorage.getItem(REMEMBER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeRemember(next: boolean) {
+  try {
+    if (next) window.localStorage.setItem(REMEMBER_KEY, "1");
+    else window.localStorage.removeItem(REMEMBER_KEY);
+  } catch {
+    // Not remembered next time, which is the safe way to be wrong.
+  }
 }
 
 export function useSignIn(onSignedIn?: () => void): SignInBench {
@@ -103,6 +128,11 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [via, setVia] = useState<Method | null>(null);
+  const [remember, setRememberState] = useState(readRemember);
+  const setRemember = useCallback((next: boolean) => {
+    setRememberState(next);
+    writeRemember(next);
+  }, []);
 
   const live = useLive();
 
@@ -144,6 +174,7 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
       await api.signOn({
         email: credentials.email.trim(),
         password: credentials.password,
+        remember,
         ...(tenant ? { tenant_id: tenant } : {}),
       });
       if (!live.current) return;
@@ -158,7 +189,7 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
     } finally {
       if (live.current) setBusy(false);
     }
-  }, [busy, credentials, tenant, onSignedIn, asked]);
+  }, [busy, credentials, remember, tenant, onSignedIn, asked]);
 
   /**
    * Sign in with a key.
@@ -188,6 +219,7 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
       await api.finishPasskeyAuthentication({
         ceremony_id: begun.ceremony_id,
         credential: encodeAssertion(assertion),
+        remember,
         ...(tenant ? { tenant_id: tenant } : {}),
       });
       if (!live.current) return;
@@ -204,7 +236,7 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
     } finally {
       if (live.current) setBusy(false);
     }
-  }, [busy, credentials.email, tenant, onSignedIn, asked]);
+  }, [busy, credentials.email, remember, tenant, onSignedIn, asked]);
 
   return {
     state,
@@ -214,6 +246,8 @@ export function useSignIn(onSignedIn?: () => void): SignInBench {
     problem,
     keys: supportsPasskeys(),
     via,
+    remember,
+    setRemember,
     type: (field, next) => setCredentials((c) => ({ ...c, [field]: next })),
     choose: setTenant,
     submit,
