@@ -14,13 +14,13 @@ import legacy from "./legacy.module.css";
 export type Frame = "app" | "auth";
 
 /**
- * Which frame a screen gets (D171). Null keeps the old material frame, for the
- * screens not moved yet: handheld ones (phase E), first-run setup, and
- * fixtures, which draw their own shells.
+ * Which frame a screen gets (D171). Null keeps the old material frame, for
+ * fixtures only, which draw their own shells. Handheld (floor) screens get the
+ * app frame at touch density with a dock.
  */
 export function frameFor(screen: Screen): Frame | null {
-  if (screen.own || screen.surface === "floor" || screen.id === "setup") return null;
-  if (screen.id === "sign-in" || screen.id === "where") return "auth";
+  if (screen.own) return null;
+  if (screen.id === "sign-in" || screen.id === "where" || screen.id === "setup") return "auth";
   return "app";
 }
 
@@ -28,7 +28,17 @@ export function frameFor(screen: Screen): Frame | null {
 const KIT_NATIVE: ReadonlySet<string> = new Set(["sign-in", "where", "home", "pack", "orders", "findings", "finding", "tokens", "workspace", "account", "keys", "import", "despatch", "weigh", "pack-one"]);
 
 export function KitFrame({ screen, frame, children }: { screen: Screen; frame: Frame; children: ReactNode }) {
-  const body = KIT_NATIVE.has(screen.id) ? children : <LegacyBody title={screen.title}>{children}</LegacyBody>;
+  const touch = screen.surface === "floor";
+  const inner = KIT_NATIVE.has(screen.id) ? (
+    children
+  ) : (
+    // On the auth ground the page title would be dark ink on metal; the card
+    // the body draws carries its own heading there.
+    <LegacyBody title={frame === "auth" ? null : screen.title} touch={touch}>
+      {children}
+    </LegacyBody>
+  );
+  const body = touch ? <DockHost>{inner}</DockHost> : inner;
   const framed =
     frame === "auth" ? (
       <AuthLayout>{body}</AuthLayout>
@@ -38,7 +48,7 @@ export function KitFrame({ screen, frame, children }: { screen: Screen; frame: F
       </AppShell>
     );
   return (
-    <UiRoot>
+    <UiRoot density={touch ? "touch" : "desktop"}>
       {screen.session === "none" ? framed : (
         <SessionProvider>
           <KitGate>{framed}</KitGate>
@@ -80,11 +90,19 @@ export function AuthLayout({ children }: { children: ReactNode }) {
  * it moves over (phase D). The legacy adapter flattens its panels into kit
  * cards, and it keeps the evidence region DeskShell used to give it.
  */
-export function LegacyBody({ title, children }: { title: string; children: ReactNode }) {
+export function LegacyBody({
+  title,
+  touch = false,
+  children,
+}: {
+  title: string | null;
+  touch?: boolean;
+  children: ReactNode;
+}) {
   const [evidence, setEvidence] = useRegion();
   return (
-    <div className={cx(s.legacy, legacy.legacy)} data-density="desk">
-      <PageHeader title={title} />
+    <div className={cx(s.legacy, legacy.legacy)} data-density={touch ? "floor" : "desk"}>
+      {title && <PageHeader title={title} />}
       <Regions evidence={evidence}>
         <div className={s.legacySplit}>
           <div className={s.legacyWork}>{children}</div>
@@ -92,5 +110,23 @@ export function LegacyBody({ title, children }: { title: string; children: React
         </div>
       </Regions>
     </div>
+  );
+}
+
+/**
+ * Handheld screens put their primary action in a dock pinned to the bottom of
+ * the screen (D134), where a thumb is. The screen renders it through the
+ * `Dock` slot; this draws the bar it lands in — a raised surface, light so the
+ * fields and figures in it read — and hides it while nothing is in it.
+ */
+export function DockHost({ children }: { children: ReactNode }) {
+  const [dock, setDock] = useRegion();
+  return (
+    <Regions dock={dock}>
+      <div className={s.handheld}>
+        {children}
+        <div ref={setDock} className={cx(s.dock, legacy.legacy)} data-density="floor" />
+      </div>
+    </Regions>
   );
 }

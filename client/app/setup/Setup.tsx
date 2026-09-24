@@ -153,8 +153,11 @@ export function Setup({ bench }: { bench: SetupBench }) {
           <Band>Setup token</Band>
           <FaceWell>
             <Stack gap={3}>
-              <Faint>Printed to the server log at startup. Restart to print a new one.</Faint>
-              <Code>docker logs &lt;the server container&gt; | grep -A2 &quot;nobody in it&quot;</Code>
+              <Faint>
+                Printed in the server's log when it starts: the window running{" "}
+                <Code>scripts\local.ps1 start</Code>. It lasts 30 minutes; restart the server
+                to print a new one.
+              </Faint>
               {!bench.state.status.token_ready && (
                 <Row gap={3} wrap>
                   <Lamp kind="finding" />

@@ -71,3 +71,33 @@
     top: calc(var(--ui-header-height) + var(--ui-space-5));
   }
 }
+
+/* ---- handheld ---- */
+.handheld {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  min-height: calc(100dvh - var(--ui-header-height) - 64px);
+}
+.dock {
+  position: sticky;
+  bottom: var(--ui-space-3);
+  z-index: var(--ui-z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  margin-top: auto;
+  padding: var(--ui-space-3);
+  padding-bottom: calc(var(--ui-space-3) + env(safe-area-inset-bottom));
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-lg);
+}
+.dock:empty {
+  display: none;
+}
+.dock > * {
+  flex: 1 1 auto;
+}

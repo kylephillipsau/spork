@@ -58,17 +58,27 @@ export function useRegion(): [HTMLElement | null, (node: HTMLElement | null) => 
   return useState<HTMLElement | null>(null);
 }
 
-/** Publishes the shell's regions to the screen inside it. */
+/**
+ * Publishes the shell's regions to the screen inside it.
+ *
+ * **A region not named here is inherited, not blanked.** The D171 frame nests
+ * two providers — the handheld dock outside, the legacy body's evidence panel
+ * inside — and the inner one used to reset `dock` to null, so an old handheld
+ * screen inside the new frame lost its action bar entirely.
+ */
 export function Regions({
-  dock = null,
-  evidence = null,
+  dock,
+  evidence,
   children,
 }: {
   dock?: HTMLElement | null;
   evidence?: HTMLElement | null;
   children: ReactNode;
 }) {
-  const regions = useMemo(() => ({ dock, evidence }), [dock, evidence]);
+  const parent = useContext(RegionContext);
+  const d = dock === undefined ? parent.dock : dock;
+  const e = evidence === undefined ? parent.evidence : evidence;
+  const regions = useMemo(() => ({ dock: d, evidence: e }), [d, e]);
   return <RegionContext.Provider value={regions}>{children}</RegionContext.Provider>;
 }
 

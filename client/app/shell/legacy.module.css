@@ -303,3 +303,15 @@
   box-shadow: none !important;
   background: transparent !important;
 }
+
+/* ---- handheld: the old floor density, 48px targets ---- */
+.legacy[data-density="floor"] {
+  --text-base: 16px;
+  --target: 48px;
+  --readout: 2rem;
+}
+.legacy[data-density="floor"] :global([data-layer="key"]) {
+  height: 48px;
+  min-height: 48px !important;
+  font-size: var(--ui-text-md) !important;
+}
