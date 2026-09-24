@@ -24,7 +24,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--ui-space-3);
   color: var(--ui-ano-ink);
 }
 .authMark {
@@ -34,11 +34,11 @@
   width: 38px;
   height: 38px;
   border-radius: var(--ui-radius-lg);
-  font-size: 19px;
+  font-size: var(--ui-text-xl);
   font-weight: 700;
 }
 .authWordmark {
-  font-size: 22px;
+  font-size: var(--ui-text-2xl);
   font-weight: 650;
   letter-spacing: 0.02em;
 }

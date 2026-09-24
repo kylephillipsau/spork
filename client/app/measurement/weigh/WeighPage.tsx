@@ -1,15 +1,13 @@
 import { Scale } from "lucide-react";
 
-import { Badge, Button, Card, DataTable, EmptyState, PageHeader, Select, Skeleton, TextField, type Column } from "@ui/index";
-import { grams } from "@design/format";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Fact, Facts, Page, PageHeader, Select, Skeleton, TextField, type Column } from "@ui/index";
+import { kg } from "@app/common/format";
 import type { ToWeigh } from "@domain/types";
 import { Faint, sentence } from "@app/common/cells";
-import { Alert } from "@app/admin/Alert";
 
 import { current, type WeighBench } from "./useWeigh";
 import s from "./weigh.module.css";
 
-const kg = (g: number | null) => (g === null ? "—" : `${grams(g)} kg`);
 
 /**
  * Weigh (D171): items whose held weight is missing or out of date, one at a
@@ -24,7 +22,7 @@ export function WeighPage({ bench }: { bench: WeighBench }) {
   const next = queue.slice(bench.at + 1);
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader
         title="Weigh"
         description="Reweigh items whose recorded weight is missing or out of date."
@@ -69,7 +67,7 @@ export function WeighPage({ bench }: { bench: WeighBench }) {
           />
         </Card>
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -92,16 +90,16 @@ function OnTheScale({ bench, subject }: { bench: WeighBench; subject: ToWeigh })
         </div>
       </div>
 
-      <dl className={s.held}>
-        <div>
-          <dt>Held weight</dt>
-          <dd className={s.heldValue}>{kg(subject.held_g)}</dd>
-        </div>
-        <div>
-          <dt>Measured by</dt>
-          <dd>{subject.held_method ? sentence(subject.held_method) : <Faint>—</Faint>}</dd>
-        </div>
-      </dl>
+      <div className={s.held}>
+        <Facts>
+          <Fact label="Held weight">
+            <span className={s.heldValue}>{kg(subject.held_g)}</span>
+          </Fact>
+          <Fact label="Measured by" always>
+            {subject.held_method ? sentence(subject.held_method) : <Faint>—</Faint>}
+          </Fact>
+        </Facts>
+      </div>
 
       <div className={s.reading}>
         <div className={s.readingField}>

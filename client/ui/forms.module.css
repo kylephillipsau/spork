@@ -1,7 +1,7 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--ui-space-1-5);
   min-width: 0;
 }
 
@@ -156,7 +156,7 @@
   z-index: var(--ui-z-popover);
   min-width: var(--radix-select-trigger-width);
   max-height: var(--radix-select-content-available-height);
-  padding: 4px;
+  padding: var(--ui-space-1);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
@@ -168,7 +168,7 @@
   display: flex;
   align-items: center;
   height: 32px;
-  padding: 0 32px 0 8px;
+  padding: 0 var(--ui-space-8) 0 var(--ui-space-2);
   border-radius: var(--ui-radius-sm);
   font-size: var(--ui-text-base);
   cursor: pointer;
@@ -239,7 +239,7 @@
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-1-5);
   height: 38px;
   padding: 0 var(--ui-space-3);
   border: 0;
@@ -257,15 +257,4 @@
 .tab[data-state="active"] {
   border-bottom-color: var(--ui-accent);
   color: var(--ui-text);
-}
-.tabCount {
-  min-width: 20px;
-  padding: 1px 6px;
-  border-radius: var(--ui-radius-full);
-  background: var(--ui-surface-active);
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
 }

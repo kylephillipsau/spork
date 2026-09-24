@@ -1,18 +1,25 @@
-import type { ReactNode } from "react";
-import { Camera, CircleAlert, CircleCheck, Search, TriangleAlert } from "lucide-react";
+import { Camera, CircleCheck, Search } from "lucide-react";
 
 import {
+  Alert,
   Badge,
   Button,
   Card,
   DataTable,
   Drawer,
   EmptyState,
+  Fact,
+  Facts,
   Link,
+  Page,
   PageHeader,
+  Section,
   Stack,
+  Stat,
+  StatGrid,
   Tabs,
   TextField,
+  Toolbar,
   cx,
   type Column,
   type Tone,
@@ -42,7 +49,7 @@ export function FindingsPage({ desk }: { desk: FindingsDesk }) {
   const rows = st.kind === "ready" ? st.findings : [];
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader title="Findings" description="Where a scan disagreed with the record, with the evidence." />
 
       {desk.problem && !desk.selected && (
@@ -52,7 +59,7 @@ export function FindingsPage({ desk }: { desk: FindingsDesk }) {
       )}
 
       <Card padded={false}>
-        <div className={s.toolbar}>
+        <Toolbar>
           <Tabs
             aria-label="Which findings"
             value={desk.view}
@@ -63,11 +70,11 @@ export function FindingsPage({ desk }: { desk: FindingsDesk }) {
               count: v.key === desk.view && st.kind === "ready" ? rows.length : undefined,
             }))}
           />
-        </div>
+        </Toolbar>
         {st.kind === "failed" ? (
-          <p className={s.failed} role="alert">
-            <CircleAlert aria-hidden /> {st.message}
-          </p>
+          <div className={s.inset}>
+            <Alert tone="danger">{st.message}</Alert>
+          </div>
         ) : (
           <DataTable
             aria-label="Findings"
@@ -94,7 +101,7 @@ export function FindingsPage({ desk }: { desk: FindingsDesk }) {
       >
         {desk.selected && <Detail desk={desk} f={desk.selected} />}
       </Drawer>
-    </div>
+    </Page>
   );
 }
 
@@ -130,30 +137,31 @@ function Detail({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
       </div>
 
       {pair && (
-        <div className={s.pair}>
-          <Figure label="Expected" value={f.expected_quantity} />
-          <Figure label="Counted" value={f.observed_quantity} />
-          <Figure label="Difference" value={f.variance ? signed(f.variance) : null} tone={f.variance ? "warning" : undefined} />
-        </div>
+        <Card padded={false}>
+          <StatGrid>
+            <Stat label="Expected" value={f.expected_quantity ?? "—"} />
+            <Stat label="Counted" value={f.observed_quantity ?? "—"} />
+            <Stat label="Difference" value={f.variance ? signed(f.variance) : "—"} tone={f.variance ? "warning" : undefined} />
+          </StatGrid>
+        </Card>
       )}
 
-      <dl className={s.facts}>
-        <Fact label="Item" value={f.item_code} mono />
-        <Fact label="Bin" value={f.location_code} mono />
-        <Fact label="Carton" value={f.package_barcode} mono />
-        <Fact label="Found" value={dateTime(f.detected_at)} />
-        {f.resolved_at && <Fact label="Closed" value={dateTime(f.resolved_at)} />}
-        {f.resolved_by_name && <Fact label="Closed by" value={f.resolved_by_name} />}
-        {f.resolution_reason && <Fact label="Reason" value={f.resolution_reason} wide />}
-        {f.detail && <Fact label="Detail" value={f.detail} wide />}
-      </dl>
+      <Facts>
+        <Fact label="Item" mono>{f.item_code}</Fact>
+        <Fact label="Bin" mono>{f.location_code}</Fact>
+        <Fact label="Carton" mono>{f.package_barcode}</Fact>
+        <Fact label="Found">{dateTime(f.detected_at)}</Fact>
+        <Fact label="Closed">{f.resolved_at ? dateTime(f.resolved_at) : null}</Fact>
+        <Fact label="Closed by">{f.resolved_by_name}</Fact>
+        <Fact label="Reason" wide>{f.resolution_reason}</Fact>
+        <Fact label="Detail" wide>{f.detail}</Fact>
+      </Facts>
 
-      <section className={s.section}>
-        <div className={s.sectionHead}>
-          <h3 className={s.sectionTitle}>
-            Photographs <span className={s.count}>{f.evidence.length}</span>
-          </h3>
-          {subject && (
+      <Section
+        title="Photographs"
+        count={f.evidence.length}
+        actions={
+          subject && (
             <label className={cx(s.upload, desk.busy && s.uploadBusy)}>
               <Camera aria-hidden />
               <span>Add photo of {subject}</span>
@@ -171,8 +179,9 @@ function Detail({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
                 }}
               />
             </label>
-          )}
-        </div>
+          )
+        }
+      >
         {f.evidence.length > 0 ? (
           <div className={s.photos}>
             {f.evidence.map((digest) => (
@@ -184,11 +193,10 @@ function Detail({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
         ) : (
           <p className={s.muted}>{subject ? "No photographs yet." : "Nothing to photograph: this finding names no item, bin or carton."}</p>
         )}
-      </section>
+      </Section>
 
-      {isOpen(f) && (
-        <section className={s.section}>
-          <h3 className={s.sectionTitle}>Accept</h3>
+      {isOpen(f) ? (
+        <Section title="Accept">
           <TextField
             label="Reason"
             hint="Accepting closes the finding without moving stock."
@@ -199,9 +207,10 @@ function Detail({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
               if (e.key === "Enter" && desk.reason.trim()) void desk.accept(f.id);
             }}
           />
-        </section>
+        </Section>
+      ) : (
+        <p className={s.muted}>Closed findings are kept for the record and cannot be reopened here.</p>
       )}
-      {!isOpen(f) && <p className={s.muted}>Closed findings are kept for the record and cannot be reopened here.</p>}
     </Stack>
   );
 }
@@ -227,36 +236,6 @@ function Footer({ desk, f }: { desk: FindingsDesk; f: DiscrepancyRow }) {
   );
 }
 
-function Figure({ label, value, tone }: { label: string; value: string | null; tone?: "warning" | undefined }) {
-  return (
-    <div className={s.figure}>
-      <span className={s.figureLabel}>{label}</span>
-      <span className={cx(s.figureValue, tone === "warning" && s.warning)}>{value ?? "—"}</span>
-    </div>
-  );
-}
-
-function Fact({ label, value, mono, wide }: { label: string; value: string | null; mono?: boolean; wide?: boolean }) {
-  if (!value) return null;
-  return (
-    <div className={cx(s.fact, wide && s.wide)}>
-      <dt>{label}</dt>
-      <dd className={mono ? s.mono : undefined}>{value}</dd>
-    </div>
-  );
-}
-
-function Alert({ tone, onDismiss, children }: { tone: "danger" | "success"; onDismiss: () => void; children: ReactNode }) {
-  return (
-    <div className={cx(s.alert, tone === "danger" ? s.alertDanger : s.alertSuccess)} role={tone === "danger" ? "alert" : "status"}>
-      {tone === "danger" ? <TriangleAlert aria-hidden /> : <CircleCheck aria-hidden />}
-      <span className={s.alertText}>{children}</span>
-      <button type="button" className={s.alertClose} onClick={onDismiss}>
-        Dismiss
-      </button>
-    </div>
-  );
-}
 
 /* ---- the table ---- */
 

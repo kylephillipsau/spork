@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { cx } from "./cx";
+import { Count } from "./Badge";
 import { Link } from "./Link";
 import s from "./misc.module.css";
 
@@ -67,12 +68,15 @@ export function EmptyState({
 /** A bordered surface. `title` and `actions` make a header row. */
 export function Card({
   title,
+  count,
   description,
   actions,
   padded = true,
   children,
 }: {
   title?: ReactNode | undefined;
+  /** Shown beside the title: how many rows the card holds. */
+  count?: number | undefined;
   description?: ReactNode | undefined;
   actions?: ReactNode | undefined;
   padded?: boolean | undefined;
@@ -83,7 +87,12 @@ export function Card({
       {(title || actions) && (
         <header className={s.cardHeader}>
           <div>
-            {title && <h2 className={s.cardTitle}>{title}</h2>}
+            {title && (
+              <h2 className={s.cardTitle}>
+                {title}
+                {count !== undefined && <Count value={count} showZero />}
+              </h2>
+            )}
             {description && <p className={s.cardDescription}>{description}</p>}
           </div>
           {actions && <div className={s.actions}>{actions}</div>}

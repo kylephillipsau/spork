@@ -1,17 +1,24 @@
-import { useState, type ReactNode } from "react";
-import { CircleAlert, ClipboardList, History, Package } from "lucide-react";
+import { useState } from "react";
+import { ClipboardList, History, Package } from "lucide-react";
 
 import {
+  Alert,
   Badge,
   Button,
   Card,
   DataTable,
   Drawer,
   EmptyState,
+  Fact,
+  Facts,
   Link,
+  Page,
   PageHeader,
   SearchField,
+  Section,
+  Spacer,
   Stack,
+  Toolbar,
   type Column,
 } from "@ui/index";
 import { href } from "@app/routing/location";
@@ -49,12 +56,13 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
   const orders = st.kind === "found" || st.kind === "listed" ? st.orders : [];
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader title="Orders" description="Sales orders sent from NetSuite, and what has been committed against them." />
 
       <Card padded={false}>
+        <Toolbar>
         <form
-          className={s.toolbar}
+          className={s.searchForm}
           onSubmit={(e) => {
             e.preventDefault();
             void desk.search();
@@ -77,6 +85,8 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
               Latest
             </Button>
           )}
+        </form>
+          <Spacer />
           <span className={s.caption}>
             {st.kind === "found" ? (
               <>
@@ -86,12 +96,12 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
               "Latest orders"
             ) : null}
           </span>
-        </form>
+        </Toolbar>
 
         {st.kind === "failed" ? (
-          <p className={s.failed} role="alert">
-            <CircleAlert aria-hidden /> {st.message}
-          </p>
+          <div className={s.inset}>
+            <Alert tone="danger">{st.message}</Alert>
+          </div>
         ) : (
           <DataTable
             aria-label="Orders"
@@ -142,7 +152,7 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
       >
         {open && <OrderDetail order={open} />}
       </Drawer>
-    </div>
+    </Page>
   );
 }
 
@@ -150,47 +160,40 @@ function OrderDetail({ order }: { order: OrderMatch }) {
   const t = orderTotals(order);
   return (
     <Stack gap={5}>
-      <dl className={s.facts}>
+      <Facts>
         <Fact label="Status">
           <StateBadge state={order.state} />
           {order.supersedes_order_id && <Badge>Replaces an earlier order</Badge>}
         </Fact>
-        <Fact label="Confirmation">{order.confirmation_number ?? <Faint>—</Faint>}</Fact>
-        <Fact label="External reference">{order.external_ref ?? <Faint>—</Faint>}</Fact>
-        <Fact label="Placed">{order.placed_at ? dateTime(order.placed_at) : <Faint>—</Faint>}</Fact>
-        <Fact label="Promised">{order.promised_to ? dateTime(order.promised_to) : <Faint>—</Faint>}</Fact>
+        <Fact label="Confirmation" always>
+          {order.confirmation_number ?? <Faint>—</Faint>}
+        </Fact>
+        <Fact label="External reference" always>
+          {order.external_ref ?? <Faint>—</Faint>}
+        </Fact>
+        <Fact label="Placed" always>
+          {order.placed_at ? dateTime(order.placed_at) : <Faint>—</Faint>}
+        </Fact>
+        <Fact label="Promised" always>
+          {order.promised_to ? dateTime(order.promised_to) : <Faint>—</Faint>}
+        </Fact>
         <Fact label="Picked">
           <span className={s.factProgress}>
             <Progress done={t.picked} of={t.committed} />
           </span>
         </Fact>
-      </dl>
+      </Facts>
 
-      <section className={s.section}>
-        <h3 className={s.sectionTitle}>Fulfilments</h3>
+      <Section title="Fulfilments" count={order.fulfilments.length}>
         {order.fulfilments.length === 0 ? (
           <p className={s.none}>Nothing is committed against this order yet.</p>
         ) : (
-          <div className={s.tableBox}>
-            <DataTable
-              aria-label="Fulfilments"
-              columns={FULFILMENT_COLUMNS}
-              rows={order.fulfilments}
-              rowKey={(f) => f.fulfilment_id}
-            />
-          </div>
+          <Card padded={false}>
+            <DataTable aria-label="Fulfilments" columns={FULFILMENT_COLUMNS} rows={order.fulfilments} rowKey={(f) => f.fulfilment_id} />
+          </Card>
         )}
-      </section>
+      </Section>
     </Stack>
-  );
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className={s.fact}>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
   );
 }
 

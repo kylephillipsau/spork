@@ -2,6 +2,7 @@ import { useId, type ComponentPropsWithRef, type ReactNode } from "react";
 import { Checkbox as C, Select as S, Tabs as T } from "radix-ui";
 import { Check, ChevronDown, Search } from "lucide-react";
 
+import { Count } from "./Badge";
 import { cx } from "./cx";
 import s from "./forms.module.css";
 
@@ -178,7 +179,7 @@ export function Tabs({
         {items.map((t) => (
           <T.Trigger key={t.value} value={t.value} className={s.tab}>
             {t.label}
-            {t.count != null && <span className={s.tabCount}>{t.count}</span>}
+            {t.count != null && <Count value={t.count} showZero />}
           </T.Trigger>
         ))}
       </T.List>

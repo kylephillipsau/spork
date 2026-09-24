@@ -1,0 +1,178 @@
+/* ---- page ---- */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-5);
+  min-width: 0;
+}
+.narrow {
+  max-width: 720px;
+}
+
+/* ---- toolbar: the strip across the top of a card ---- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-height: var(--ui-row);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  box-shadow: inset 0 -1px 0 var(--ui-border);
+}
+.toolbarBottom {
+  background: var(--ui-surface-sunken);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.spacer {
+  flex: 1;
+}
+
+/* ---- section ---- */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
+
+/* ---- alert ---- */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border-radius: var(--ui-radius);
+  font-size: var(--ui-text-sm);
+  line-height: var(--ui-leading);
+}
+.alertIcon {
+  flex: none;
+  width: var(--ui-icon);
+  height: calc(var(--ui-text-sm) * var(--ui-leading));
+}
+.alertText {
+  flex: 1;
+  min-width: 0;
+}
+.alertDismiss {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.danger {
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+}
+.warning {
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+}
+.success {
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+}
+.info {
+  background: var(--ui-info-soft);
+  color: var(--ui-info);
+}
+
+/* ---- stats ---- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+/* A divider below only when something follows: alone in a card, the card's
+   own border is the edge. */
+.stats:not(:last-child) {
+  box-shadow: inset 0 -1px 0 var(--ui-border);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-0-5);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  box-shadow: inset -1px 0 0 var(--ui-border);
+}
+.stat:last-child {
+  box-shadow: none;
+}
+.statLabel {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 500;
+}
+.statValue {
+  font-size: var(--ui-text-xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.statMd {
+  font-size: var(--ui-text-md);
+  font-weight: 600;
+}
+.stat_muted {
+  color: var(--ui-text-muted);
+}
+.stat_warning {
+  color: var(--ui-warning);
+}
+
+/* ---- facts ---- */
+.facts {
+  display: grid;
+  gap: var(--ui-space-3) var(--ui-space-5);
+  margin: 0;
+}
+.cols1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cols2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cols3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.cols4 {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.fact dt {
+  margin-bottom: var(--ui-space-0-5);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 500;
+}
+.fact dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.wide {
+  grid-column: 1 / -1;
+}
+.mono {
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-sm);
+}

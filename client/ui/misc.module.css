@@ -17,9 +17,9 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-1-5);
   height: 22px;
-  padding: 0 8px;
+  padding: 0 var(--ui-space-2);
   border-radius: var(--ui-radius-full);
   font-size: var(--ui-text-xs);
   font-weight: 500;
@@ -41,9 +41,9 @@
   justify-content: center;
   min-width: 20px;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 var(--ui-space-1-5);
   border-radius: var(--ui-radius-full);
-  font-size: 11px;
+  font-size: var(--ui-text-2xs);
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -75,13 +75,13 @@
   display: inline-flex;
   align-items: center;
   height: 20px;
-  padding: 0 5px;
+  padding: 0 var(--ui-space-1);
   border: 1px solid var(--ui-border-strong);
   border-bottom-width: 2px;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   color: var(--ui-text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-2xs);
   line-height: 1;
 }
 
@@ -155,8 +155,15 @@
   padding: var(--ui-space-3) var(--ui-space-4);
   border-bottom: 1px solid var(--ui-border);
 }
-.cardTitle { font-size: var(--ui-text-md); font-weight: 600; line-height: var(--ui-leading-tight); }
-.cardDescription { margin-top: 2px; color: var(--ui-text-muted); font-size: var(--ui-text-sm); }
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  font-size: var(--ui-text-md);
+  font-weight: 600;
+  line-height: var(--ui-leading-tight);
+}
+.cardDescription { margin-top: var(--ui-space-0-5); color: var(--ui-text-muted); font-size: var(--ui-text-sm); }
 .cardBody { padding: var(--ui-space-4); }
 
 .actions {
@@ -194,4 +201,4 @@
 .crumb { display: inline-flex; align-items: center; min-width: 0; white-space: nowrap; }
 .crumbLink:hover { color: var(--ui-text); }
 .crumbCurrent { color: var(--ui-text); font-weight: 500; }
-.crumbSep { width: 14px; height: 14px; margin: 0 6px; color: var(--ui-text-faint); }
+.crumbSep { width: 14px; height: 14px; margin: 0 var(--ui-space-1-5); color: var(--ui-text-faint); }

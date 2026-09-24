@@ -1856,6 +1856,27 @@ tag and the brand mark are woven nylon, the site tag dyed to the accent. Data
 surfaces stay plain so they read. The finishes are static CSS; the light
 solver, the canvas and pointer parallax (D121) are gone.
 
+**How the styling is built.** One source of values, one owner per pattern,
+and checks rather than conventions:
+
+- *Tokens in three tiers* (`client/ui/tokens.css`, the only file with raw
+  values): a fixed scale (type, space including half steps, radius, icon,
+  motion), a density tier (body text, control and row heights) declared for
+  `desktop` and `touch`, and semantic colour for light and dark. Materials
+  (anodised aluminium, nylon) are tokens too, fixed across themes.
+- *Density is scoped, never global.* The frame — sidebar, header, the sign-in
+  ground — declares `data-density="desktop"` on itself, so a handheld
+  screen's touch density sizes its content and nothing around it. It was
+  once a property of `<body>`, and the sidebar changed size between views.
+- *Patterns have one owner.* Page rhythm (`Page`), card strips (`Toolbar`,
+  top or bottom), `Section`, `Alert`, `StatGrid`/`Stat`, `Facts`/`Fact`,
+  `Card` with a count, `DataTable` with a growing column: a screen composes
+  these rather than restyling its own copy.
+- *Kit laws* (`client/scripts/check-laws.mjs`, K1–K6): no raw colours outside
+  the tokens; type sizes from the type scale; spacing from the spacing scale
+  (a 1px hairline excepted); kit screens do not import `@design`; a class
+  nothing applies is drift; the frame declares desktop density.
+
 **How it lands.** The kit lives alongside `design/` until every screen has moved
 over, so the app keeps working throughout. A screen on the kit is marked `bare`
 in its route and renders outside the `LightRoom`. The design-law checker and the

@@ -80,7 +80,7 @@ export function AppShell({
 
   return (
     <div className={cx(s.shell, collapsed && s.collapsed, open && s.open)}>
-      <aside className={cx(s.sidebar, materials.anodise)} aria-label="Main">
+      <aside className={cx(s.sidebar, materials.anodise)} aria-label="Main" data-density="desktop">
         <div className={s.brand}>
           <Link variant="plain" href="/" className={s.brandLink}>
             <span className={cx(s.mark, materials.nylon, materials.dyed)} aria-hidden>
@@ -108,7 +108,7 @@ export function AppShell({
       <div className={s.scrim} onClick={() => setOpen(false)} aria-hidden />
 
       <div className={s.main}>
-        <header className={s.header}>
+        <header className={s.header} data-density="desktop">
           <span className={s.menuButton}>
             <IconButton label="Menu" icon={<MenuIcon />} onClick={() => setOpen(true)} />
           </span>

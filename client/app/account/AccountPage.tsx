@@ -1,5 +1,4 @@
-import { Avatar, Button, Card, PageHeader, Skeleton, TextField, cx } from "@ui/index";
-import { Alert } from "@app/admin/Alert";
+import { Alert, Avatar, Button, Card, Page, PageHeader, Skeleton, TextField } from "@ui/index";
 
 import type { PasswordBench } from "./usePassword";
 import s from "@app/admin/settings.module.css";
@@ -11,7 +10,7 @@ export function AccountPage({ bench }: { bench: PasswordBench }) {
   const ready = bench.draft.current !== "" && bench.draft.next !== "" && bench.draft.again !== "" && !bench.mismatched;
 
   return (
-    <div className={cx(s.page, s.narrowPage)}>
+    <Page narrow>
       <PageHeader title="Account" description="Your profile and password." />
 
       {st.kind === "failed" && <Alert tone="danger">{st.message}</Alert>}
@@ -96,6 +95,6 @@ export function AccountPage({ bench }: { bench: PasswordBench }) {
         )}
         {st.kind === "asking" && <Skeleton width="60%" />}
       </Card>
-    </div>
+    </Page>
   );
 }

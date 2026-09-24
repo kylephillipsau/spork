@@ -42,7 +42,7 @@
   height: var(--ui-control-sm);
   padding: 0 var(--ui-space-2);
   font-size: var(--ui-text-sm);
-  gap: 6px;
+  gap: var(--ui-space-1-5);
 }
 
 .lg {
@@ -86,7 +86,7 @@
 
 .danger {
   background: var(--ui-danger-solid);
-  color: #fff;
+  color: var(--ui-danger-fg);
 }
 .danger:hover:not(:disabled) {
   background: var(--ui-danger-solid-hover);

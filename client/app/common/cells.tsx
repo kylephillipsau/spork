@@ -83,7 +83,7 @@ export function dateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     day: "numeric",
     month: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
   });
 }

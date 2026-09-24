@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { Fingerprint, KeyRound } from "lucide-react";
 
-import { Badge, Button, Card, DataTable, Dialog, EmptyState, PageHeader, TextField, cx, type Column } from "@ui/index";
+import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Page, PageHeader, TextField, type Column } from "@ui/index";
 import type { Passkey } from "@domain/types";
 import { Faint, shortDate } from "@app/common/cells";
-import { Alert } from "@app/admin/Alert";
 
 import type { KeysBench } from "./useKeys";
 import s from "@app/admin/settings.module.css";
@@ -45,7 +44,7 @@ export function KeysPage({ bench }: { bench: KeysBench }) {
   ];
 
   return (
-    <div className={cx(s.page, s.narrowPage)}>
+    <Page narrow>
       <PageHeader title="Passkeys" description="Sign in with this device's fingerprint, face or PIN instead of a password." />
 
       <Card title="Add a passkey">
@@ -120,6 +119,6 @@ export function KeysPage({ bench }: { bench: KeysBench }) {
           </>
         }
       />
-    </div>
+    </Page>
   );
 }

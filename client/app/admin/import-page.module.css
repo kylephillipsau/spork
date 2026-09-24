@@ -2,7 +2,7 @@
   display: flex;
   flex: 1 1 320px;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--ui-space-1-5);
   min-width: 0;
 }
 .pickerLabel {
@@ -77,31 +77,6 @@
   gap: var(--ui-space-3);
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  border-bottom: 1px solid var(--ui-border);
-}
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--ui-space-3) var(--ui-space-5);
-  box-shadow: inset -1px 0 0 var(--ui-border);
-}
-.statLabel {
-  color: var(--ui-text-muted);
-  font-size: var(--ui-text-xs);
-  font-weight: 500;
-}
-.statValue {
-  font-size: var(--ui-text-xl);
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-.statMuted {
-  color: var(--ui-text-muted);
-}
 
 .note {
   padding: var(--ui-space-3) var(--ui-space-5);

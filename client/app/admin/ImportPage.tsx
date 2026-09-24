@@ -1,11 +1,10 @@
 import { FileSpreadsheet, FlaskConical, Upload } from "lucide-react";
 
-import { Badge, Button, Card, DataTable, PageHeader, Select, TextField, cx, type Column } from "@ui/index";
+import { Alert, Badge, Button, Card, cx, DataTable, Page, PageHeader, Select, Stat, StatGrid, TextField, type Column } from "@ui/index";
 import type { ImportReport, ItemImportReport, SiteSurvey } from "@domain/types";
 import { Faint } from "@app/common/cells";
 
 import type { ImportBench, Which } from "./useImport";
-import { Alert } from "./Alert";
 import s from "./settings.module.css";
 import imp from "./import-page.module.css";
 
@@ -19,7 +18,7 @@ export function ImportPage({ bench }: { bench: ImportBench }) {
   const reported = st.kind === "reported" ? st : null;
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader title="Import" description="Load exports from NetSuite. Check the file with a dry run, then apply it." />
 
       <Card title="File">
@@ -110,7 +109,7 @@ export function ImportPage({ bench }: { bench: ImportBench }) {
         ) : (
           <BinsResult report={reported.report} applied={reported.applied} />
         ))}
-    </div>
+    </Page>
   );
 }
 
@@ -125,14 +124,6 @@ function ResultTitle({ applied, what }: { applied: boolean; what: string }) {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "muted" | undefined }) {
-  return (
-    <div className={imp.stat}>
-      <span className={imp.statLabel}>{label}</span>
-      <span className={cx(imp.statValue, tone === "muted" && imp.statMuted)}>{value.toLocaleString()}</span>
-    </div>
-  );
-}
 
 const SITE_COLUMNS: Column<SiteSurvey>[] = [
   {
@@ -155,14 +146,14 @@ function BinsResult({ report, applied }: { report: ImportReport; applied: boolea
   const { survey, loaded } = report;
   return (
     <Card title={<ResultTitle applied={applied} what="Bin list" />} padded={false}>
-      <div className={imp.stats}>
-        <Stat label="Bins in file" value={survey.bins} />
-        <Stat label="Bins created" value={loaded.bins_created} />
-        <Stat label="Bins corrected" value={loaded.bins_corrected} />
-        <Stat label="Left out" value={loaded.bins_left_out} tone="muted" />
-        <Stat label="Sites created" value={loaded.sites_created} />
-        <Stat label="Sites matched" value={loaded.sites_matched} tone="muted" />
-      </div>
+      <StatGrid>
+        <Stat label="Bins in file" value={survey.bins.toLocaleString()} />
+        <Stat label="Bins created" value={loaded.bins_created.toLocaleString()} />
+        <Stat label="Bins corrected" value={loaded.bins_corrected.toLocaleString()} />
+        <Stat label="Left out" value={loaded.bins_left_out.toLocaleString()} tone="muted" />
+        <Stat label="Sites created" value={loaded.sites_created.toLocaleString()} />
+        <Stat label="Sites matched" value={loaded.sites_matched.toLocaleString()} tone="muted" />
+      </StatGrid>
       <DataTable aria-label="Bins by warehouse" columns={SITE_COLUMNS} rows={survey.sites} rowKey={(x) => x.warehouse} />
       <p className={imp.note}>
         Walk order: {survey.sequenced.toLocaleString()} bins have a position
@@ -183,11 +174,11 @@ function ItemsResult({ report, applied }: { report: ItemImportReport; applied: b
   ].filter(Boolean);
   return (
     <Card title={<ResultTitle applied={applied} what="Item master" />} padded={false}>
-      <div className={imp.stats}>
-        <Stat label="Items in file" value={survey.items} />
-        <Stat label="Created" value={loaded.items_created} />
-        <Stat label="Already on file" value={loaded.items_present} tone="muted" />
-      </div>
+      <StatGrid>
+        <Stat label="Items in file" value={survey.items.toLocaleString()} />
+        <Stat label="Created" value={loaded.items_created.toLocaleString()} />
+        <Stat label="Already on file" value={loaded.items_present.toLocaleString()} tone="muted" />
+      </StatGrid>
       {notes.length > 0 && <p className={imp.note}>{notes.join(" ")}</p>}
     </Card>
   );

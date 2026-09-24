@@ -1,51 +1,141 @@
 import { useState } from "react";
 import { FileText, PackageOpen, Plus, Trash2 } from "lucide-react";
 
-import { Badge, Button, Card, EmptyState, Link, PageHeader, Select, Skeleton, TextField, cx } from "@ui/index";
-import { grams } from "@design/format";
-import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight } from "@domain/types";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Fact,
+  Facts,
+  Link,
+  Page,
+  PageHeader,
+  Select,
+  Skeleton,
+  Spacer,
+  TextField,
+  Toolbar,
+  type Column,
+} from "@ui/index";
+import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, PackedRow } from "@domain/types";
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { Faint } from "@app/common/cells";
-import { Alert } from "@app/admin/Alert";
+import { kg } from "@app/common/format";
 
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
 
-const kg = (g: number | null) => (g === null ? "—" : `${grams(g)} kg`);
+/** What the packer has chosen on one line: the bin, and how many. */
+interface Draft {
+  cell: string;
+  qty: string;
+}
 
 /**
  * The pack bench for one fulfilment (D171): what is left to pack on the left,
  * the cartons on the right. Add puts units from a bin into the open carton;
- * Seal closes it. One primary action at a time: Start a carton when none is
+ * Seal closes it. One primary action at a time: Start carton when none is
  * open, otherwise Seal on the open one.
  */
 export function PackBenchPage({ bench }: { bench: PackBench }) {
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const st = bench.status;
-  if (st.kind === "loading") {
+
+  if (st.kind !== "ready") {
     return (
-      <div className={s.page}>
+      <Page>
         <PageHeader title="Pack order" />
-        <Card>
-          <Skeleton width="50%" />
-        </Card>
-      </div>
-    );
-  }
-  if (st.kind === "failed") {
-    return (
-      <div className={s.page}>
-        <PageHeader title="Pack order" />
-        <Alert tone="danger">{st.message}</Alert>
-      </div>
+        {st.kind === "failed" ? (
+          <Alert tone="danger">{st.message}</Alert>
+        ) : (
+          <Card>
+            <Skeleton width="50%" />
+          </Card>
+        )}
+      </Page>
     );
   }
 
   const screen = st.screen;
   const left = screen.lines.reduce((t, l) => t + Math.max(0, l.remaining), 0);
+  const draft = (l: BenchLine): Draft => drafts[l.line_id] ?? { cell: l.cells[0]?.stock_id ?? "", qty: String(l.remaining) };
+  const change = (l: BenchLine, next: Partial<Draft>) => setDrafts((d) => ({ ...d, [l.line_id]: { ...draft(l), ...next } }));
+  const canAdd = (l: BenchLine) => l.remaining > 0 && l.cells.length > 0 && !!bench.openCarton && !bench.busy;
+  const add = (l: BenchLine) => {
+    const d = draft(l);
+    const n = Number.parseInt(d.qty, 10);
+    if (canAdd(l) && n > 0) void bench.addToCarton({ line: l.line_id, stock: d.cell, quantity: n });
+  };
+
+  const lineColumns: Column<BenchLine>[] = [
+    {
+      key: "item",
+      header: "Item",
+      cell: (l) => (
+        <span className={l.remaining === 0 ? s.done : undefined}>
+          <span className={s.code}>{l.item_code}</span>
+          {l.description && <span className={s.desc}>{l.description}</span>}
+        </span>
+      ),
+      grow: true,
+    },
+    {
+      key: "from",
+      header: "From",
+      cell: (l) =>
+        l.cells.length === 0 ? (
+          <Faint>No stock at this site</Faint>
+        ) : (
+          <Select
+            aria-label={`Pick ${l.item_code} from`}
+            value={draft(l).cell}
+            onValueChange={(cell) => change(l, { cell })}
+            size="sm"
+            options={l.cells.map((c) => ({
+              value: c.stock_id,
+              label: `${c.location} · ${c.available} free${c.lot ? ` · lot ${c.lot}` : ""}`,
+            }))}
+          />
+        ),
+      width: "240px",
+    },
+    { key: "left", header: "Left", cell: (l) => (l.remaining > 0 ? <strong>{l.remaining}</strong> : <Faint>0</Faint>), align: "right", width: "64px" },
+    {
+      key: "add",
+      header: "Add",
+      cell: (l) =>
+        l.cells.length > 0 && l.remaining > 0 ? (
+          <form
+            className={s.add}
+            onSubmit={(e) => {
+              e.preventDefault();
+              add(l);
+            }}
+          >
+            <TextField
+              aria-label={`Quantity of ${l.item_code}`}
+              inputMode="numeric"
+              className={s.qty}
+              value={draft(l).qty}
+              onChange={(e) => change(l, { qty: e.target.value })}
+              disabled={!canAdd(l)}
+            />
+            <Button type="submit" size="sm" icon={<Plus />} disabled={!canAdd(l)}>
+              Add
+            </Button>
+          </form>
+        ) : null,
+      align: "right",
+      width: "150px",
+    },
+  ];
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader
         title={
           <>
@@ -64,25 +154,13 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
 
       <div className={s.split}>
         <Card title="To pack" description={bench.openCarton ? "Add goes into the open carton." : "Start a carton to add to it."} padded={false}>
-          {screen.lines.length === 0 ? (
-            <EmptyState title="Nothing committed" />
-          ) : (
-            <table className={s.lines}>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>From</th>
-                  <th className={s.num}>Left</th>
-                  <th className={s.num}>Add</th>
-                </tr>
-              </thead>
-              <tbody>
-                {screen.lines.map((line) => (
-                  <LineRow key={line.line_id} line={line} bench={bench} />
-                ))}
-              </tbody>
-            </table>
-          )}
+          <DataTable
+            aria-label="Lines to pack"
+            columns={lineColumns}
+            rows={screen.lines}
+            rowKey={(l) => l.line_id}
+            empty={<EmptyState title="Nothing committed" />}
+          />
         </Card>
 
         <div className={s.cartons}>
@@ -92,66 +170,7 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-function LineRow({ line, bench }: { line: BenchLine; bench: PackBench }) {
-  const [cell, setCell] = useState(line.cells[0]?.stock_id ?? "");
-  const [qty, setQty] = useState(String(line.remaining));
-  const can = line.remaining > 0 && line.cells.length > 0 && !!bench.openCarton && !bench.busy;
-  const add = () => {
-    const n = Number.parseInt(qty, 10);
-    if (can && n > 0) void bench.addToCarton({ line: line.line_id, stock: cell, quantity: n });
-  };
-
-  return (
-    <tr className={line.remaining === 0 ? s.done : undefined}>
-      <td>
-        <div className={s.code}>{line.item_code}</div>
-        {line.description && <div className={s.desc}>{line.description}</div>}
-      </td>
-      <td className={s.from}>
-        {line.cells.length === 0 ? (
-          <Faint>No stock at this site</Faint>
-        ) : (
-          <Select
-            aria-label={`Pick ${line.item_code} from`}
-            value={cell}
-            onValueChange={setCell}
-            size="sm"
-            options={line.cells.map((c) => ({
-              value: c.stock_id,
-              label: `${c.location} · ${c.available} free${c.lot ? ` · lot ${c.lot}` : ""}`,
-            }))}
-          />
-        )}
-      </td>
-      <td className={s.num}>{line.remaining > 0 ? <strong>{line.remaining}</strong> : <Faint>0</Faint>}</td>
-      <td className={s.num}>
-        {line.cells.length > 0 && line.remaining > 0 && (
-          <form
-            className={s.add}
-            onSubmit={(e) => {
-              e.preventDefault();
-              add();
-            }}
-          >
-            <TextField
-              aria-label={`Quantity of ${line.item_code}`}
-              inputMode="numeric"
-              className={s.qty}
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              disabled={!can}
-            />
-            <Button type="submit" size="sm" icon={<Plus />} disabled={!can}>
-              Add
-            </Button>
-          </form>
-        )}
-      </td>
-    </tr>
+    </Page>
   );
 }
 
@@ -185,10 +204,30 @@ function NewCarton({ screen, bench }: { screen: BenchScreen; bench: PackBench })
 
 function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) {
   const stated = carton.stated_size?.height_mm ?? null;
-  const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : grams(carton.gross_weight_g));
+  const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : (carton.gross_weight_g / 1000).toFixed(3));
   const [height, setHeight] = useState(String(carton.height_mm ?? stated ?? ""));
   const cut = height.trim() !== "" && height.trim() !== String(stated ?? "");
   const open = carton.id === bench.openCarton;
+  const footprint = carton.stated_size ? `${carton.stated_size.length_mm} × ${carton.stated_size.width_mm} mm` : null;
+
+  const contentColumns: Column<PackedRow>[] = [
+    { key: "item", header: "Item", cell: (r) => r.item_code, mono: true, grow: true },
+    { key: "lot", header: "Lot", cell: (r) => r.lot_code ?? <Faint>—</Faint>, mono: true, width: "110px" },
+    { key: "units", header: "Units", cell: (r) => r.quantity, align: "right", width: "70px" },
+  ];
+  if (!carton.sealed) {
+    contentColumns.push({
+      key: "out",
+      header: "",
+      cell: (r) => (
+        <Button size="sm" variant="ghost" disabled={bench.busy} onClick={() => void bench.takeOut({ picks: r.picks, quantity: r.quantity })}>
+          Take out
+        </Button>
+      ),
+      align: "right",
+      width: "100px",
+    });
+  }
 
   return (
     <Card
@@ -216,54 +255,27 @@ function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) 
       }
       padded={false}
     >
-      {carton.contents.length === 0 ? (
-        <p className={s.empty}>Empty.</p>
-      ) : (
-        <table className={s.contents}>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Lot</th>
-              <th className={s.num}>Units</th>
-              {!carton.sealed && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {carton.contents.map((row) => (
-              <tr key={`${row.item_code}-${row.lot_code ?? ""}`}>
-                <td className={s.code}>{row.item_code}</td>
-                <td className={s.code}>{row.lot_code ?? <Faint>—</Faint>}</td>
-                <td className={s.num}>{row.quantity}</td>
-                {!carton.sealed && (
-                  <td className={s.num}>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={bench.busy}
-                      onClick={() => void bench.takeOut({ picks: row.picks, quantity: row.quantity })}
-                    >
-                      Take out
-                    </Button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable
+        aria-label={`Carton ${carton.sequence} contents`}
+        columns={contentColumns}
+        rows={carton.contents}
+        rowKey={(r) => `${r.item_code}-${r.lot_code ?? ""}`}
+        empty={<p className={s.empty}>Empty.</p>}
+      />
 
       {carton.sealed ? (
-        <div className={s.figures}>
-          <Figure label="Gross" value={kg(carton.gross_weight_g)} big />
-          {carton.expected && <Expected expected={carton.expected} />}
-          {carton.height_mm !== null && <Figure label="Height" value={`${carton.height_mm} mm`} />}
-          {carton.stated_size && (
-            <Figure label="Footprint" value={`${carton.stated_size.length_mm} × ${carton.stated_size.width_mm} mm`} />
-          )}
+        <div className={s.body}>
+          <Facts columns={4}>
+            <Fact label="Gross">
+              <span className={s.big}>{kg(carton.gross_weight_g)}</span>
+            </Fact>
+            {carton.expected && <ExpectedFact expected={carton.expected} />}
+            <Fact label="Height">{carton.height_mm !== null ? `${carton.height_mm} mm` : null}</Fact>
+            <Fact label="Footprint">{footprint}</Fact>
+          </Facts>
         </div>
       ) : (
         <form
-          className={s.measure}
           onSubmit={(e) => {
             e.preventDefault();
             void bench.measure({
@@ -273,58 +285,52 @@ function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) 
             });
           }}
         >
-          <div className={s.measureFields}>
-            <div className={s.measureField}>
-              <TextField label="Weight" inputMode="decimal" trailing="kg" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          <div className={s.body}>
+            <div className={s.measure}>
+              <div className={s.measureField}>
+                <TextField label="Weight" inputMode="decimal" trailing="kg" value={weight} onChange={(e) => setWeight(e.target.value)} />
+              </div>
+              <div className={s.measureField}>
+                <TextField label="Height" inputMode="numeric" trailing="mm" value={height} onChange={(e) => setHeight(e.target.value)} />
+              </div>
             </div>
-            <div className={s.measureField}>
-              <TextField label="Height" inputMode="numeric" trailing="mm" value={height} onChange={(e) => setHeight(e.target.value)} />
-            </div>
-            {carton.expected && <Expected expected={carton.expected} />}
-            {carton.stated_size && (
-              <Figure label="Footprint" value={`${carton.stated_size.length_mm} × ${carton.stated_size.width_mm} mm`} />
-            )}
+            <Facts>
+              {carton.expected && <ExpectedFact expected={carton.expected} />}
+              <Fact label="Footprint">{footprint}</Fact>
+            </Facts>
           </div>
-          <div className={s.cartonActions}>
+          <Toolbar placement="bottom">
             {carton.contents.length === 0 && (
               <Button variant="ghost" icon={<Trash2 />} disabled={bench.busy} onClick={() => void bench.discard(carton.id)}>
                 Discard
               </Button>
             )}
-            <span className={s.spacer} />
+            <Spacer />
             <Button type="submit" disabled={bench.busy}>
               Record
             </Button>
             <Button variant={open ? "primary" : "secondary"} disabled={bench.busy} onClick={() => void bench.seal(carton.id)}>
               Seal
             </Button>
-          </div>
+          </Toolbar>
         </form>
       )}
     </Card>
   );
 }
 
-function Figure({ label, value, big }: { label: string; value: string; big?: boolean }) {
-  return (
-    <div className={s.figure}>
-      <span className={s.figureLabel}>{label}</span>
-      <span className={cx(s.figureValue, big && s.big)}>{value}</span>
-    </div>
-  );
-}
-
-/** What this carton has weighed before, and on what basis (D-weight baselines). */
-function Expected({ expected }: { expected: ExpectedWeight }) {
+/** What this carton has weighed before, and on what basis. */
+function ExpectedFact({ expected }: { expected: ExpectedWeight }) {
   const gap = agreement(expected);
   return (
-    <div className={s.figure}>
-      <span className={s.figureLabel}>Expected</span>
-      <span className={s.figureValue}>{kg(expected.grams)}</span>
-      <span className={s.figureNote}>
-        {provenance(expected)}
-        {gap ? ` · ${gap}` : ""}
+    <Fact label="Expected">
+      <span>
+        {kg(expected.grams)}
+        <span className={s.note}>
+          {provenance(expected)}
+          {gap ? ` · ${gap}` : ""}
+        </span>
       </span>
-    </div>
+    </Fact>
   );
 }

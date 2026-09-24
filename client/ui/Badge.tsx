@@ -23,8 +23,19 @@ export function Badge({
   );
 }
 
-/** A small count, e.g. beside a sidebar item. Renders nothing at zero. */
-export function Count({ value, tone = "neutral" }: { value: number | undefined; tone?: Tone | undefined }) {
-  if (!value) return null;
+/**
+ * A small count, e.g. beside a tab or a section title. Renders nothing at
+ * zero (D112: zero is absent) unless `showZero`, for a list that is empty.
+ */
+export function Count({
+  value,
+  tone = "neutral",
+  showZero = false,
+}: {
+  value: number | undefined;
+  tone?: Tone | undefined;
+  showZero?: boolean | undefined;
+}) {
+  if (value === undefined || (!value && !showZero)) return null;
   return <span className={cx(s.count, s[tone])}>{value > 999 ? "999+" : value}</span>;
 }

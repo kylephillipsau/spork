@@ -378,8 +378,128 @@ if (apiSource) {
   }
 }
 
+// ══ The UI kit (D171) ═══════════════════════════════════════════════════
+//
+// The kit replaces the material system, and it gets the same treatment: its
+// rules are checks, not conventions. A "kit file" is any stylesheet under
+// ui/, app/ or src/ that reads the kit's --ui- tokens. Two are exempt by what
+// they are: ui/tokens.css holds the raw values, and the legacy adapter is a
+// bridge that has to name the old tokens it remaps.
+const kitRoots = ["ui", "src"].filter((d) => exists(join(ROOT, d)));
+const kitFiles = [
+  ...appFiles,
+  ...kitRoots.flatMap((d) =>
+    walk(join(ROOT, d)).map((path) => ({
+      path,
+      rel: posix(relative(ROOT, path)),
+      ext: extname(path),
+      text: readFileSync(path, "utf8"),
+    })),
+  ),
+];
+const KIT_EXEMPT = ["ui/tokens.css", "app/shell/legacy.module.css"];
+const kitCss = kitFiles.filter(
+  (f) => f.ext === ".css" && f.text.includes("--ui-") && !KIT_EXEMPT.some((e) => f.rel.endsWith(e)),
+);
+const kitSource = kitFiles.filter((f) => f.ext === ".tsx" || f.ext === ".ts");
+
+// ── K1 ────────────────────────────────────────────────────────────────
+// The kit's values come from its tokens. A colour written into a component
+// is a colour the theme cannot change and dark mode does not know about.
+for (const file of kitCss) {
+  const body = code(file.text);
+  const hex = body.match(/#[0-9a-fA-F]{3,8}\b/);
+  const fn = body.match(/\b(?:rgba?|hsla?)\(\s*[\d.]/);
+  if (hex || fn) {
+    fail(
+      "The kit's values come from its tokens",
+      "D171",
+      file.rel,
+      `raw colour \`${(hex ?? fn)[0]}\` — name it in ui/tokens.css and read the token`,
+    );
+  }
+}
+
+// ── K2 ────────────────────────────────────────────────────────────────
+// Type sizes come from the type scale. A pixel font size is how the sidebar
+// ended up two sizes on two screens.
+for (const file of kitCss) {
+  for (const m of code(file.text).matchAll(/font-size:\s*([^;}]+)/g)) {
+    const v = m[1].trim();
+    if (!/^var\(--ui-text-[\w-]+\)$/.test(v) && !/^(inherit|[\d.]+em|[\d.]+%)$/.test(v)) {
+      fail("Type sizes come from the type scale", "D171", file.rel, `font-size: ${v}`);
+    }
+  }
+}
+
+// ── K3 ────────────────────────────────────────────────────────────────
+// Spacing comes from the spacing scale. A 1px hairline is a border's width,
+// not a space, and is the one literal allowed.
+for (const file of kitCss) {
+  for (const m of code(file.text).matchAll(/\b(padding|margin|gap|row-gap|column-gap)(-[a-z-]+)?:\s*([^;}]+)/g)) {
+    const literal = m[3].replace(/var\([^)]*\)/g, "").match(/(?<![\w.-])-?\d+(?:\.\d+)?px/g) ?? [];
+    const bad = literal.filter((px) => !/^-?1px$/.test(px) && !/^0px$/.test(px));
+    if (bad.length) {
+      fail("Spacing comes from the spacing scale", "D171", file.rel, `${m[1]}${m[2] ?? ""}: ${m[3].trim()}`);
+    }
+  }
+}
+
+// ── K4 ────────────────────────────────────────────────────────────────
+// A screen on the kit does not reach back into the material system. Mixing
+// the two is how a page ends up with two looks, and it pins design/ in place.
+for (const file of kitSource) {
+  const body = file.text;
+  if (/from "@ui\//.test(body) && /from "@design\//.test(body)) {
+    fail("Kit screens do not reach the old design system", "D171", file.rel, "imports both @ui and @design");
+  }
+}
+
+// ── K5 ────────────────────────────────────────────────────────────────
+// A class nothing uses is drift, as a token nothing reads is (law 8). A kit
+// module's users are the files that import it by name, or through the name
+// ui/index.ts re-exports it under (`materials`).
+const reexports = new Map();
+for (const f of kitSource.filter((x) => x.rel === "ui/index.ts")) {
+  for (const m of f.text.matchAll(/export \{ default as (\w+) \} from "\.\/([\w.-]+)"/g)) reexports.set(m[2], m[1]);
+}
+for (const file of kitCss.filter((f) => f.rel.endsWith(".module.css"))) {
+  const name = file.rel.split("/").pop();
+  const alias = reexports.get(name);
+  const users = kitSource.filter((s) => s.text.includes(name) || (alias && new RegExp(`\\b${alias}\\b`).test(s.text)));
+  const text = users.map((u) => u.text).join("\n");
+  const dynamic = /\b\w+\[`[^`]*\$\{|\b\w+\[[a-zA-Z]/.test(text);
+  const classes = new Set([...code(file.text).matchAll(/\.([a-zA-Z_][\w-]*)/g)].map((m) => m[1]));
+  for (const cls of classes) {
+    const used = new RegExp(`\\.${cls}\\b|["'\`]${cls}["'\`]`).test(text);
+    // A class reached as styles[tone] or styles[`dot_${state}`] is used when
+    // its prefix is, and cannot be proven unused by reading.
+    if (!used && !(dynamic && /_|^(neutral|accent|success|warning|danger|info|primary|secondary|ghost|sm|md|lg|left|right|center|cols\d)$/.test(cls))) {
+      fail("A class nothing uses is drift", "D171", file.rel, `.${cls} is styled and never applied`);
+    }
+  }
+}
+
+// ── K6 ────────────────────────────────────────────────────────────────
+// The frame declares desktop density. A handheld screen's touch density
+// sizes its content and nothing around it; the sidebar grew on handheld
+// views while density was a property of <body>.
+for (const [rel, what] of [
+  ["app/shell/AppShell.tsx", ["<aside", "<header"]],
+  ["app/shell/frames.tsx", ["s.auth"]],
+]) {
+  const file = kitSource.find((f) => f.rel === rel);
+  if (!file) continue;
+  for (const el of what) {
+    const line = file.text.split("\n").find((l) => l.includes(el));
+    if (!line || !line.includes('data-density="desktop"')) {
+      fail("The frame declares desktop density", "D171", rel, `${el} does not carry data-density="desktop"`);
+    }
+  }
+}
+
 // ── report ────────────────────────────────────────────────────────────
-const CHECKS = 11;
+const CHECKS = 17;
 
 if (failures.length === 0) {
 console.log(

@@ -80,7 +80,7 @@ tbody tr:last-child .td {
 .sortButton {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-1);
   padding: 0;
   border: 0;
   background: none;

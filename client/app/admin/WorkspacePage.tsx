@@ -1,11 +1,10 @@
 import { Warehouse } from "lucide-react";
 
-import { Badge, Card, DataTable, EmptyState, PageHeader, Skeleton, type Column } from "@ui/index";
+import { Alert, Badge, Card, DataTable, EmptyState, Fact, Facts, Page, PageHeader, Skeleton, type Column } from "@ui/index";
 import type { WorkspaceSite } from "@domain/types";
 import { Faint, Progress, shortDate } from "@app/common/cells";
 
 import type { WorkspaceBench } from "./useWorkspace";
-import { Alert } from "./Alert";
 import s from "./settings.module.css";
 
 /** The organisation and its warehouses, as the imports have described them. */
@@ -14,35 +13,25 @@ export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
   const ws = st.kind === "ready" ? st.workspace : null;
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader title="Workspace" description="Your organisation and its warehouses." />
 
       {st.kind === "failed" && <Alert tone="danger">{st.message}</Alert>}
 
       <Card title="Organisation">
         {ws ? (
-          <dl className={s.facts}>
-            <div>
-              <dt>Name</dt>
-              <dd>{ws.organisation.name}</dd>
-            </div>
-            <div>
-              <dt>Short name</dt>
-              <dd className={s.mono}>{ws.organisation.slug}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <Badge tone={ws.organisation.active ? "success" : "neutral"} dot>
-                  {ws.organisation.active ? "Active" : "Inactive"}
-                </Badge>
-              </dd>
-            </div>
-            <div>
-              <dt>Created</dt>
-              <dd>{shortDate(ws.organisation.created_at)}</dd>
-            </div>
-          </dl>
+          <Facts columns={4}>
+            <Fact label="Name">{ws.organisation.name}</Fact>
+            <Fact label="Short name" mono>
+              {ws.organisation.slug}
+            </Fact>
+            <Fact label="Status">
+              <Badge tone={ws.organisation.active ? "success" : "neutral"} dot>
+                {ws.organisation.active ? "Active" : "Inactive"}
+              </Badge>
+            </Fact>
+            <Fact label="Created">{shortDate(ws.organisation.created_at)}</Fact>
+          </Facts>
         ) : (
           <Skeleton width="50%" />
         )}
@@ -58,7 +47,7 @@ export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
           empty={<EmptyState icon={<Warehouse />} title="No warehouses yet" description="Import a bin list to create them." />}
         />
       </Card>
-    </div>
+    </Page>
   );
 }
 

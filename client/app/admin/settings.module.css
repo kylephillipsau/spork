@@ -1,72 +1,48 @@
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-5);
-}
-
-/* A readable column for forms that do not need the page's width. */
-.narrowPage {
-  max-width: 720px;
-}
-
 .formRow {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--ui-space-3);
 }
+
 .grow {
   flex: 1 1 280px;
 }
+
 .narrow {
   flex: 0 0 150px;
 }
+
 .stack {
   display: flex;
   flex-direction: column;
   gap: var(--ui-space-4);
 }
+
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--ui-space-2);
 }
+
 .below {
   margin-top: var(--ui-space-4);
 }
+
 .inset {
   padding: var(--ui-space-4);
 }
+
 .muted {
   color: var(--ui-text-muted);
   font-size: var(--ui-text-sm);
 }
+
 .mono {
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);
 }
 
-/* ---- facts, as a definition grid ---- */
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--ui-space-4) var(--ui-space-5);
-  margin: 0;
-}
-.facts dt {
-  margin-bottom: 2px;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-text-xs);
-  font-weight: 500;
-}
-.facts dd {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  margin: 0;
-}
-
-/* ---- a token just minted ---- */
 .minted {
   display: flex;
   flex-direction: column;
@@ -76,25 +52,29 @@
   border-radius: var(--ui-radius-lg);
   background: var(--ui-success-soft);
 }
+
 .mintedHead {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--ui-space-3);
 }
+
 .mintedTitle {
   font-size: var(--ui-text-md);
   font-weight: 600;
 }
+
 .secret {
   display: flex;
   align-items: center;
   gap: var(--ui-space-2);
-  padding: 6px 6px 6px var(--ui-space-3);
+  padding: var(--ui-space-1-5) var(--ui-space-1-5) var(--ui-space-1-5) var(--ui-space-3);
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius);
   background: var(--ui-surface);
 }
+
 .secretValue {
   flex: 1;
   min-width: 0;
@@ -102,45 +82,4 @@
   font-size: var(--ui-text-sm);
   white-space: nowrap;
   user-select: all;
-}
-
-/* ---- alerts ---- */
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--ui-space-2);
-  padding: var(--ui-space-3);
-  border-radius: var(--ui-radius);
-  font-size: var(--ui-text-sm);
-}
-.alert svg {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-top: 1px;
-}
-.alertDanger {
-  background: var(--ui-danger-soft);
-  color: var(--ui-danger);
-}
-.alertWarning {
-  background: var(--ui-warning-soft);
-  color: var(--ui-warning);
-}
-.alertSuccess {
-  background: var(--ui-success-soft);
-  color: var(--ui-success);
-}
-.alertText {
-  flex: 1;
-}
-.alertClose {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
 }

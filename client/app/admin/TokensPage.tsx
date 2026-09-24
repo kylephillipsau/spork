@@ -1,23 +1,11 @@
 import { useState } from "react";
 import { Check, Copy, KeyRound, Plus } from "lucide-react";
 
-import {
-  Badge,
-  Button,
-  Card,
-  DataTable,
-  Dialog,
-  EmptyState,
-  PageHeader,
-  TextField,
-  useToast,
-  type Column,
-} from "@ui/index";
+import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Page, PageHeader, TextField, useToast, type Column } from "@ui/index";
 import type { ApiToken } from "@domain/types";
 import { Faint, shortDate } from "@app/common/cells";
 
 import { standing, type TokensBench } from "./useTokens";
-import { Alert } from "./Alert";
 import s from "./settings.module.css";
 
 const STANDING = {
@@ -74,7 +62,7 @@ export function TokensPage({ bench }: { bench: TokensBench }) {
   ];
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader
         title="Import tokens"
         description="Credentials for machines that send data to Spork, such as the NetSuite userscript."
@@ -166,7 +154,7 @@ export function TokensPage({ bench }: { bench: TokensBench }) {
           </>
         }
       />
-    </div>
+    </Page>
   );
 }
 

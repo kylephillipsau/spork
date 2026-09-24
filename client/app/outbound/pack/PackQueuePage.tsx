@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { CircleAlert, Package } from "lucide-react";
+import { Package } from "lucide-react";
 
-import { Button, Card, DataTable, EmptyState, Link, PageHeader, SearchField, Tabs, type Column } from "@ui/index";
+import { Alert, Button, Card, DataTable, EmptyState, Link, Page, PageHeader, SearchField, Spacer, Tabs, Toolbar, type Column } from "@ui/index";
 import { href } from "@app/routing/location";
 import { useNavigate } from "@app/routing/Router";
 import { DueBadge, Faint, Progress, StageBadge } from "@app/common/cells";
@@ -30,11 +30,11 @@ export function PackQueuePage({ bench, onOpen }: { bench: QueueBench; onOpen?: (
   const rows = view === "all" ? jobs : jobs.filter((j) => j.stage === view);
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader title="Packing" description="Fulfilments at this site with work for the pack bench." />
 
       <Card padded={false}>
-        <div className={s.toolbar}>
+        <Toolbar>
           <Tabs
             aria-label="Stage"
             value={view}
@@ -44,6 +44,7 @@ export function PackQueuePage({ bench, onOpen }: { bench: QueueBench; onOpen?: (
               ...STAGES.map((st) => ({ value: st, label: STAGE_LABELS[st], count: counts[st] })),
             ]}
           />
+          <Spacer />
           <form
             className={s.search}
             onSubmit={(e) => {
@@ -61,12 +62,12 @@ export function PackQueuePage({ bench, onOpen }: { bench: QueueBench; onOpen?: (
               Search
             </Button>
           </form>
-        </div>
+        </Toolbar>
 
         {bench.state.kind === "failed" ? (
-          <p className={s.failed} role="alert">
-            <CircleAlert aria-hidden /> {bench.state.message}
-          </p>
+          <div className={s.inset}>
+            <Alert tone="danger">{bench.state.message}</Alert>
+          </div>
         ) : (
           <DataTable
             aria-label="Packing queue"
@@ -86,7 +87,7 @@ export function PackQueuePage({ bench, onOpen }: { bench: QueueBench; onOpen?: (
           />
         )}
       </Card>
-    </div>
+    </Page>
   );
 }
 

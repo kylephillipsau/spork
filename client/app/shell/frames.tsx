@@ -71,7 +71,7 @@ function KitGate({ children }: { children: ReactNode }): ReactElement {
 /** Sign-in and first choices: a centred card on the anodised ground. */
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className={cx(s.auth, materials.anodise)}>
+    <div className={cx(s.auth, materials.anodise)} data-density="desktop">
       <div className={s.authColumn}>
         <div className={s.authBrand}>
           <span className={cx(s.authMark, materials.nylon, materials.dyed)} aria-hidden>

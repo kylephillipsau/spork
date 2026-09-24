@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { PackageCheck, Send, Truck } from "lucide-react";
 
-import { Badge, Button, Card, DataTable, EmptyState, PageHeader, Select, Skeleton, type Column } from "@ui/index";
-import { grams, millimetres } from "@design/format";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Page, PageHeader, Select, Skeleton, Stat, StatGrid, Toolbar, type Column } from "@ui/index";
+import { kg, millimetres } from "@app/common/format";
 import type { BookedCarton, BookedConsignment, CarrierLine, DespatchScreen, GoneConsignment, WaitingJob } from "@domain/types";
 import { Faint, dateTime, sentence } from "@app/common/cells";
-import { Alert } from "@app/admin/Alert";
 
 import type { DespatchBench } from "./useDespatch";
 import s from "./despatch.module.css";
 
-const kg = (g: number | null) => (g === null ? "—" : `${grams(g)} kg`);
 
 /**
  * Despatch (D171): consign sealed cartons to a carrier, then record them
@@ -21,7 +19,7 @@ export function DespatchPage({ bench }: { bench: DespatchBench }) {
   const st = bench.status;
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader
         title="Despatch"
         description="Consign sealed cartons to a carrier, then record them leaving."
@@ -54,7 +52,7 @@ export function DespatchPage({ bench }: { bench: DespatchBench }) {
           <GoneToday gone={st.screen.gone_today} />
         </>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -108,7 +106,7 @@ function Waiting({ screen, bench }: { screen: DespatchScreen; bench: DespatchBen
 
   return (
     <Card title="Waiting to consign" description={screen.providers.length ? `Booked through ${screen.providers.map((p) => p.name).join(", ")}` : "No freight provider configured"} padded={false}>
-      <div className={s.toolbar}>
+      <Toolbar>
         <div className={s.select}>
           <Select
             label="Carrier"
@@ -132,7 +130,7 @@ function Waiting({ screen, bench }: { screen: DespatchScreen; bench: DespatchBen
             size="sm"
           />
         </div>
-      </div>
+      </Toolbar>
       <DataTable
         aria-label="Waiting to consign"
         columns={columns}
@@ -192,26 +190,18 @@ function Booked({ consignment: c, bench }: { consignment: BookedConsignment; ben
       }
       padded={false}
     >
-      <div className={s.stats}>
-        <Stat label="Cartons" value={String(c.package_count)} />
-        <Stat label="Gone" value={`${gone} / ${c.package_count}`} />
-        <Stat label="Gross" value={kg(c.gross_weight_g)} />
-        <Stat label="Despatch" value={c.despatch_at ? dateTime(c.despatch_at) : "—"} />
-        <Stat label="Carrier status" value={c.status ? sentence(c.status) : "—"} />
-      </div>
+      <StatGrid>
+        <Stat size="md" label="Cartons" value={String(c.package_count)} />
+        <Stat size="md" label="Gone" value={`${gone} / ${c.package_count}`} />
+        <Stat size="md" label="Gross" value={kg(c.gross_weight_g)} />
+        <Stat size="md" label="Despatch" value={c.despatch_at ? dateTime(c.despatch_at) : "—"} />
+        <Stat size="md" label="Carrier status" value={c.status ? sentence(c.status) : "—"} />
+      </StatGrid>
       <DataTable aria-label="Cartons" columns={columns} rows={c.packages} rowKey={(p) => p.id} />
     </Card>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className={s.stat}>
-      <span className={s.statLabel}>{label}</span>
-      <span className={s.statValue}>{value}</span>
-    </div>
-  );
-}
 
 /* ---- the manifest just booked ---- */
 

@@ -23,6 +23,7 @@ export {
 export { Field, TextField, SearchField, Select, Checkbox, Tabs, type Option, type TabItem } from "./Forms";
 export { DataTable, type Column } from "./DataTable";
 export { Dialog, Drawer, Menu, MenuItem, MenuLabel, MenuSeparator, MenuRadioGroup } from "./Overlays";
+export { Page, Toolbar, Spacer, Section, Alert, StatGrid, Stat, Facts, Fact, type AlertTone } from "./Layout";
 export { Tooltip } from "./Tooltip";
 export { useToast } from "./Toast";
 export { cx } from "./cx";

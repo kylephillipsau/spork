@@ -1,105 +1,70 @@
 /*
- * Spork UI tokens (D171).
+ * Spork UI tokens (D171). The only file in the kit that holds raw values;
+ * everything else reads these (check-laws, "The kit's values come from its
+ * tokens").
  *
- * A conventional light-first palette: neutral surfaces, one accent, four
- * status colours. Dark is the same names with different values, switched by
- * `data-theme="dark"` on <html> (see theme.ts); the default is light whatever
- * the operating system says.
+ * Three tiers:
  *
- * Prefixed `--ui-` while the old material system (design/) still ships, so
- * the two sets cannot collide. The prefix goes when design/ does.
+ *   1. Scale      type, space, radius, icon, motion, layers. Fixed.
+ *   2. Density    the sizes a surface needs for how it is used: body text,
+ *                 control heights, row heights. Declared for "desktop" and
+ *                 "touch"; an element opts in with data-density.
+ *   3. Semantic   colours by meaning (surface, text, line, accent, status),
+ *                 for light and dark.
+ *
+ * Plus the component tokens that have no better home (frame, table,
+ * tooltip) and the materials (anodised aluminium, nylon), which do not
+ * change with the theme.
+ *
+ * **Density is scoped, never global.** The frame (sidebar, header) declares
+ * data-density="desktop" on itself, so a handheld screen's touch density
+ * sizes its content and nothing around it. It used to be set on <body>,
+ * which let the sidebar's text grow on the handheld views.
+ *
+ * Prefixed --ui- while design/ still ships. The prefix goes when design/ does.
  */
 
+/* ---- 1. scale ---------------------------------------------------------- */
 :root {
-  color-scheme: light;
-
-  /* Surfaces */
-  --ui-bg: #f6f7f9;
-  --ui-surface: #ffffff;
-  --ui-surface-sunken: #f1f3f5;
-  --ui-surface-hover: #f3f4f6;
-  --ui-surface-active: #e9ebef;
-  --ui-sidebar: #fbfbfc;
-  --ui-overlay: rgba(15, 17, 21, 0.45);
-
-  /* Lines */
-  --ui-border: #e3e5e9;
-  --ui-border-strong: #cfd3d9;
-
-  /* Text */
-  --ui-text: #16181d;
-  --ui-text-muted: #515761;
-  --ui-text-faint: #6b717b;
-  --ui-text-inverse: #ffffff;
-
-  /* Accent */
-  --ui-accent: #4f46e5;
-  --ui-accent-hover: #4338ca;
-  --ui-accent-fg: #ffffff;
-  --ui-accent-soft: #eef0ff;
-  --ui-accent-soft-fg: #3730a3;
-  --ui-ring: rgba(79, 70, 229, 0.45);
-
-  /* Status: a strong colour for text and icons, a soft one for fills */
-  --ui-success: #15803d;
-  --ui-success-soft: #ecfdf3;
-  --ui-warning: #b45309;
-  --ui-warning-soft: #fff8eb;
-  --ui-danger: #dc2626;
-  --ui-danger-soft: #fef2f2;
-  --ui-danger-solid: #dc2626;
-  --ui-danger-solid-hover: #b91c1c;
-  --ui-info: #0369a1;
-  --ui-info-soft: #eff8ff;
-
-  /* Elevation */
-  --ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --ui-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
-  --ui-shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18), 0 4px 8px -4px rgba(16, 24, 40, 0.08);
-
-  /* Shape */
-  --ui-radius-sm: 4px;
-  --ui-radius: 6px;
-  --ui-radius-lg: 8px;
-  --ui-radius-xl: 12px;
-  --ui-radius-full: 999px;
-
-  /* Space, on a 4px grid */
-  --ui-space-1: 4px;
-  --ui-space-2: 8px;
-  --ui-space-3: 12px;
-  --ui-space-4: 16px;
-  --ui-space-5: 20px;
-  --ui-space-6: 24px;
-  --ui-space-8: 32px;
-  --ui-space-10: 40px;
-
-  /* Type */
   --ui-font: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ui-font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+
+  --ui-text-2xs: 11px;
   --ui-text-xs: 12px;
   --ui-text-sm: 13px;
-  --ui-text-base: 14px;
-  --ui-text-md: 15px;
   --ui-text-lg: 16px;
   --ui-text-xl: 18px;
   --ui-text-2xl: 22px;
   --ui-text-3xl: 28px;
   --ui-leading: 1.45;
   --ui-leading-tight: 1.25;
+  --ui-tracking-caps: 0.06em;
 
-  /* Controls: desktop density. Handheld raises these (see [data-density]). */
-  --ui-control-sm: 28px;
-  --ui-control: 34px;
-  --ui-control-lg: 40px;
+  /* Space, on a 4px grid with half steps where a control needs them. */
+  --ui-space-0-5: 2px;
+  --ui-space-1: 4px;
+  --ui-space-1-5: 6px;
+  --ui-space-2: 8px;
+  --ui-space-2-5: 10px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-space-10: 40px;
+  --ui-space-16: 64px;
 
-  /* Frame */
-  --ui-sidebar-width: 240px;
-  --ui-sidebar-collapsed: 60px;
-  --ui-header-height: 56px;
-  --ui-content-max: 1440px;
+  --ui-radius-sm: 4px;
+  --ui-radius: 6px;
+  --ui-radius-lg: 8px;
+  --ui-radius-xl: 12px;
+  --ui-radius-full: 999px;
 
-  /* Layers */
+  --ui-icon-sm: 14px;
+  --ui-icon: 16px;
+  --ui-icon-lg: 18px;
+  --ui-icon-xl: 20px;
+
   --ui-z-sticky: 10;
   --ui-z-sidebar: 20;
   --ui-z-overlay: 40;
@@ -108,6 +73,84 @@
 
   --ui-ease: cubic-bezier(0.2, 0, 0, 1);
   --ui-duration: 140ms;
+  --ui-duration-slow: 180ms;
+
+  /* Frame */
+  --ui-sidebar-width: 240px;
+  --ui-sidebar-collapsed: 60px;
+  --ui-header-height: 56px;
+  --ui-content-max: 1440px;
+  --ui-mark: 30px;
+  --ui-mark-lg: 38px;
+}
+
+/* ---- 2. density --------------------------------------------------------- */
+:root,
+[data-density="desktop"] {
+  --ui-text-base: 14px;
+  --ui-text-md: 15px;
+  --ui-control-sm: 28px;
+  --ui-control: 34px;
+  --ui-control-lg: 40px;
+  --ui-row: 44px;
+  --ui-row-head: 38px;
+  --ui-nav-item: 34px;
+}
+
+[data-density="touch"] {
+  --ui-text-base: 16px;
+  --ui-text-md: 17px;
+  --ui-control-sm: 40px;
+  --ui-control: 48px;
+  --ui-control-lg: 56px;
+  --ui-row: 56px;
+  --ui-row-head: 40px;
+  --ui-nav-item: 44px;
+}
+
+/* ---- 3. semantic colour ------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  --ui-bg: #f6f7f9;
+  --ui-surface: #ffffff;
+  --ui-surface-sunken: #f1f3f5;
+  --ui-surface-hover: #f3f4f6;
+  --ui-surface-active: #e9ebef;
+  --ui-overlay: rgba(15, 17, 21, 0.45);
+
+  --ui-border: #e3e5e9;
+  --ui-border-strong: #cfd3d9;
+
+  --ui-text: #16181d;
+  --ui-text-muted: #515761;
+  --ui-text-faint: #6b717b;
+
+  --ui-accent: #4f46e5;
+  --ui-accent-hover: #4338ca;
+  --ui-accent-fg: #ffffff;
+  --ui-accent-soft: #eef0ff;
+  --ui-accent-soft-fg: #3730a3;
+  --ui-ring: rgba(79, 70, 229, 0.45);
+
+  --ui-success: #15803d;
+  --ui-success-soft: #ecfdf3;
+  --ui-warning: #b45309;
+  --ui-warning-soft: #fff8eb;
+  --ui-danger: #dc2626;
+  --ui-danger-soft: #fef2f2;
+  --ui-danger-solid: #dc2626;
+  --ui-danger-solid-hover: #b91c1c;
+  --ui-danger-fg: #ffffff;
+  --ui-info: #0369a1;
+  --ui-info-soft: #eff8ff;
+
+  --ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --ui-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --ui-shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18), 0 4px 8px -4px rgba(16, 24, 40, 0.08);
+
+  --ui-tooltip-bg: #1b1d22;
+  --ui-tooltip-fg: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -118,7 +161,6 @@
   --ui-surface-sunken: #111316;
   --ui-surface-hover: #1e2126;
   --ui-surface-active: #262a30;
-  --ui-sidebar: #121418;
   --ui-overlay: rgba(0, 0, 0, 0.6);
 
   --ui-border: #272a30;
@@ -127,7 +169,6 @@
   --ui-text: #eceef1;
   --ui-text-muted: #a4a9b2;
   --ui-text-faint: #8a909a;
-  --ui-text-inverse: #0d0e11;
 
   --ui-accent: #6366f1;
   --ui-accent-hover: #7c7ff5;
@@ -150,24 +191,14 @@
   --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --ui-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   --ui-shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--ui-border);
+
+  --ui-tooltip-bg: #2a2d34;
 }
 
-/* Handheld screens: bigger type and 48px touch targets. */
-[data-density="touch"] {
-  --ui-text-base: 16px;
-  --ui-text-md: 17px;
-  --ui-control-sm: 40px;
-  --ui-control: 48px;
-  --ui-control-lg: 56px;
-}
-
+/* ---- materials (fixed across themes) ------------------------------------ */
 /*
- * Materials (D171, keeping Hard Anodise's character without its machinery).
- *
- * The frame is anodised aluminium and labels are nylon, as before; the data
- * surfaces are plain. What went is the per-frame light solver and the canvas:
- * the edges and grain here are static, so the look costs nothing to run.
- * Fixed across themes — the metal is the same metal in light and dark.
+ * Anodised aluminium for the frame and nylon for labels, kept from Hard
+ * Anodise as static finishes (D171): no light solver, no canvas.
  */
 :root {
   --ui-tex-blast: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23b)'/%3E%3C/svg%3E");
@@ -175,11 +206,16 @@
   --ui-ano-bottom: #121418;
   --ui-ano-raised: #23272e;
   --ui-ano-pressed: #2b3038;
-  --ui-ano-edge: rgba(214, 228, 255, 0.07);
-  --ui-ano-rule: rgba(214, 228, 255, 0.06);
+  --ui-ano-hi: 214, 228, 255;
+  --ui-ano-shade: 0, 0, 0;
+  --ui-ano-edge: rgba(var(--ui-ano-hi), 0.07);
+  --ui-ano-rule: rgba(var(--ui-ano-hi), 0.06);
+  --ui-ano-hover: rgba(var(--ui-ano-hi), 0.05);
   --ui-ano-ink: #e4e8ef;
+  --ui-ano-ink-strong: #ffffff;
   --ui-ano-ink-muted: #9aa2ae;
   --ui-ano-ink-faint: #6f7783;
+  --ui-ano-accent: #a5acff;
   --ui-nylon: #2a2d35;
   --ui-nylon-dyed: #2e2a6b;
   --ui-nylon-ink: #d9ddf9;

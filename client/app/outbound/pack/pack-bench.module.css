@@ -1,8 +1,3 @@
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-5);
-}
 .ref {
   font-family: var(--ui-font-mono);
 }
@@ -25,55 +20,22 @@
   min-width: 0;
 }
 
-/* ---- the two plain tables: lines and carton contents ---- */
-.lines,
-.contents {
-  width: 100%;
-  border-collapse: collapse;
-}
-.lines th,
-.contents th {
-  height: 36px;
-  padding: 0 var(--ui-space-4);
-  border-bottom: 1px solid var(--ui-border);
-  background: var(--ui-surface-sunken);
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-align: left;
-  text-transform: uppercase;
-}
-.lines td,
-.contents td {
-  padding: 8px var(--ui-space-4);
-  border-bottom: 1px solid var(--ui-border);
-  vertical-align: middle;
-}
-.lines tbody tr:last-child td,
-.contents tbody tr:last-child td {
-  border-bottom: 0;
-}
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.done td {
-  color: var(--ui-text-faint);
-}
+/* ---- lines ---- */
 .code {
+  display: block;
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);
   font-weight: 600;
 }
 .desc {
+  display: block;
+  overflow: hidden;
   color: var(--ui-text-muted);
   font-size: var(--ui-text-sm);
+  text-overflow: ellipsis;
 }
-.from {
-  width: 38%;
-  min-width: 200px;
+.done {
+  color: var(--ui-text-faint);
 }
 .add {
   display: inline-flex;
@@ -102,67 +64,40 @@
 .print {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-1-5);
   color: var(--ui-accent);
   font-size: var(--ui-text-sm);
   font-weight: 500;
 }
 .print svg {
-  width: 15px;
-  height: 15px;
+  width: var(--ui-icon-sm);
+  height: var(--ui-icon-sm);
 }
 .empty {
   padding: var(--ui-space-3) var(--ui-space-4);
   color: var(--ui-text-muted);
   font-size: var(--ui-text-sm);
 }
-
-.figures,
-.measureFields {
+.body {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--ui-space-5);
+  flex-direction: column;
+  gap: var(--ui-space-4);
   padding: var(--ui-space-4);
-  border-top: 1px solid var(--ui-border);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.measure {
+  display: flex;
+  gap: var(--ui-space-4);
 }
 .measureField {
   width: 130px;
 }
-.measure {
-  display: flex;
-  flex-direction: column;
-}
-.cartonActions {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  padding: var(--ui-space-3) var(--ui-space-4);
-  border-top: 1px solid var(--ui-border);
-  background: var(--ui-surface-sunken);
-}
-.spacer {
-  flex: 1;
-}
-
-.figure {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.figureLabel {
-  color: var(--ui-text-muted);
-  font-size: var(--ui-text-xs);
-  font-weight: 500;
-}
-.figureValue {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
 .big {
   font-size: var(--ui-text-xl);
+  font-weight: 650;
 }
-.figureNote {
+.note {
+  display: block;
   color: var(--ui-text-faint);
   font-size: var(--ui-text-xs);
 }

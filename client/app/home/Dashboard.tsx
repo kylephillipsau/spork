@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   ArrowRight,
-  CircleAlert,
   ClipboardList,
   Inbox,
   Package,
@@ -12,7 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Button, DataTable, EmptyState, Link, PageHeader, Skeleton, cx, type Column } from "@ui/index";
+import { Alert, Button, Card, DataTable, EmptyState, Link, Page, PageHeader, Skeleton, cx, type Column } from "@ui/index";
 import { orderTotals } from "@app/outbound/orders/OrdersPage";
 import { DueBadge, Progress, StageBadge, StateBadge, ago, sentence, shortDate, signed } from "@app/common/cells";
 import { href } from "@app/routing/location";
@@ -28,7 +27,7 @@ export function Dashboard({ dash, site }: { dash: DashboardBench; site: string |
   const w = dash.work.kind === "ready" ? dash.work.data : null;
 
   return (
-    <div className={s.page}>
+    <Page>
       <PageHeader
         title="Dashboard"
         description={site ? `Work waiting at ${site}` : "Work waiting"}
@@ -112,7 +111,7 @@ export function Dashboard({ dash, site }: { dash: DashboardBench; site: string |
           )}
         </ReadBody>
       </Panel>
-    </div>
+    </Page>
   );
 }
 
@@ -150,6 +149,7 @@ function Tile({
 
 /* ---- panels ---- */
 
+/** A dashboard panel: a Card whose header links to the full screen. */
 function Panel({
   title,
   count,
@@ -164,18 +164,20 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className={cx(s.panel, className)}>
-      <header className={s.panelHead}>
-        <h2 className={s.panelTitle}>
-          {title}
-          {count !== undefined && <span className={s.panelCount}>{count}</span>}
-        </h2>
-        <Link href={href(viewAll)} className={s.viewAll}>
-          View all <ArrowRight aria-hidden />
-        </Link>
-      </header>
-      {children}
-    </section>
+    <div className={className}>
+      <Card
+        title={title}
+        count={count}
+        padded={false}
+        actions={
+          <Link href={href(viewAll)} className={s.viewAll}>
+            View all <ArrowRight aria-hidden />
+          </Link>
+        }
+      >
+        {children}
+      </Card>
+    </div>
   );
 }
 
@@ -191,9 +193,9 @@ function ReadBody<T>({ read, rows, children }: { read: Read<T>; rows: number; ch
   }
   if (read.kind === "failed") {
     return (
-      <p className={s.failed} role="alert">
-        <CircleAlert aria-hidden /> {read.message}
-      </p>
+      <div className={s.inset}>
+        <Alert tone="danger">{read.message}</Alert>
+      </div>
     );
   }
   return <>{children(read.data)}</>;

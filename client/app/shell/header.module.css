@@ -8,7 +8,7 @@
   gap: var(--ui-space-2);
   width: clamp(200px, 26vw, 340px);
   height: var(--ui-control);
-  padding: 0 6px 0 10px;
+  padding: 0 var(--ui-space-1-5) 0 var(--ui-space-2-5);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   background: var(--ui-surface-sunken);
@@ -46,7 +46,7 @@
 }
 .searchHint {
   display: inline-flex;
-  gap: 2px;
+  gap: var(--ui-space-0-5);
 }
 .searchBox:focus-within .searchHint {
   display: none;
@@ -84,7 +84,7 @@
 }
 .resultsClose {
   display: inline-flex;
-  padding: 4px;
+  padding: var(--ui-space-1);
   border: 0;
   border-radius: var(--ui-radius-sm);
   background: none;
@@ -107,7 +107,7 @@
 .resultsList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-0-5);
   margin: var(--ui-space-2) 0 0;
   padding: 0;
   list-style: none;
@@ -116,7 +116,7 @@
   display: flex;
   justify-content: space-between;
   gap: var(--ui-space-3);
-  padding: 6px 8px;
+  padding: var(--ui-space-1-5) var(--ui-space-2);
   border-radius: var(--ui-radius-sm);
 }
 .resultsOption:hover {
@@ -131,9 +131,9 @@
 .site {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-1-5);
   height: 30px;
-  padding: 0 10px;
+  padding: 0 var(--ui-space-2-5);
   border: 0;
   border-radius: var(--ui-radius);
   font: inherit;
@@ -159,7 +159,7 @@
   align-items: center;
   gap: var(--ui-space-2);
   height: 36px;
-  padding: 0 8px 0 4px;
+  padding: 0 var(--ui-space-2) 0 var(--ui-space-1);
   border: 0;
   border-radius: var(--ui-radius-full);
   background: none;
@@ -180,7 +180,7 @@
 .userCard {
   display: flex;
   flex-direction: column;
-  padding: 6px 8px;
+  padding: var(--ui-space-1-5) var(--ui-space-2);
 }
 .userCardName {
   font-weight: 600;
@@ -207,7 +207,7 @@
     left: var(--ui-space-4);
     right: var(--ui-space-4);
     width: auto;
-    padding: 0 10px;
+    padding: 0 var(--ui-space-2-5);
   }
   .searchInput {
     width: 0;
