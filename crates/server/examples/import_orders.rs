@@ -32,16 +32,22 @@
 //! zero and *that is true* rather than a gap. This is the difference between
 //! this file and the shipped fulfilment history: no movements have to be
 //! invented, because no movements happened here yet.
+//!
+//! # The writes are shared
+//!
+//! Everything from here to the database is [`spork_server::importing::orders`],
+//! which `POST /import/fulfilment` also uses. This file reads the export and
+//! prints what the loader says.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
-use spork_server::orders::{customer_code, customer_name, item_code, outstanding, parse_date};
+use spork_server::importing::orders::{self, Options, SkipReason};
+use spork_server::orders::{customer_name, item_code, outstanding};
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
 // The columns, by position. See the note above.
-const I_ID: usize = 0;
 const LINE: usize = 1;
 const DOC: usize = 2;
 const ITEM: usize = 3;
@@ -81,19 +87,6 @@ fn args() -> Result<Args, String> {
     })
 }
 
-struct Line {
-    doc: String,
-    line_no: i32,
-    item: String,
-    quantity: i64,
-    committed: Option<i64>,
-    fulfilled: i64,
-    customer: String,
-    po_ref: String,
-    location: String,
-    date: String,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let args = match args() {
@@ -109,27 +102,33 @@ async fn main() -> Result<(), String> {
         .from_path(&args.orders)
         .map_err(|e| e.to_string())?;
     let mut lines = vec![];
+    let mut committed_seen = 0;
     for rec in rdr.records() {
         let r = rec.map_err(|e| e.to_string())?;
         let g = |i: usize| r.get(i).unwrap_or("").trim().to_string();
         if g(DOC).is_empty() || g(ITEM).is_empty() {
             continue;
         }
-        lines.push(Line {
+        let ordered = g(QTY).parse::<f64>().unwrap_or(0.0).round() as i64;
+        let fulfilled = g(FULFILLED).parse::<f64>().unwrap_or(0.0).round() as i64;
+        if g(COMMITTED).parse::<f64>().is_ok() {
+            committed_seen += 1;
+        }
+        // Internal ID is not read; the natural key is the document number,
+        // which is what a person quotes.
+        lines.push(orders::Line {
             doc: g(DOC),
             line_no: g(LINE).parse().unwrap_or(0),
             item: item_code(&g(ITEM)),
-            quantity: g(QTY).parse::<f64>().unwrap_or(0.0).round() as i64,
-            committed: g(COMMITTED).parse::<f64>().ok().map(|v| v.round() as i64),
-            fulfilled: g(FULFILLED).parse::<f64>().unwrap_or(0.0).round() as i64,
+            // The export has no description column, so items are not created.
+            description: None,
+            ordered,
+            outstanding: outstanding(ordered, fulfilled),
             customer: customer_name(&g(CUSTOMER)),
             po_ref: g(PO_REF),
             location: g(LOCATION),
             date: g(DATE),
-            // Internal ID is read for the report only; the natural key here is
-            // the document number, which is what a person quotes.
         });
-        let _ = I_ID;
     }
 
     let docs: HashSet<&str> = lines.iter().map(|l| l.doc.as_str()).collect();
@@ -141,7 +140,7 @@ async fn main() -> Result<(), String> {
         customers.len()
     );
 
-    let (client, connection) = tokio_postgres::connect(&args.url, NoTls)
+    let (mut client, connection) = tokio_postgres::connect(&args.url, NoTls)
         .await
         .map_err(|e| e.to_string())?;
     tokio::spawn(async move {
@@ -159,340 +158,63 @@ async fn main() -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    // ---- what resolves, and what does not ----
-    let mut item_ids: HashMap<String, Uuid> = HashMap::new();
-    for row in client
-        .query(
-            "SELECT code, id FROM item WHERE tenant_id = $1",
-            &[&args.tenant],
-        )
-        .await
-        .map_err(|e| e.to_string())?
-    {
-        item_ids.insert(row.get(0), row.get(1));
-    }
-    let mut site_ids: HashMap<String, Uuid> = HashMap::new();
-    for row in client
-        .query("SELECT name, id FROM site WHERE tenant_id = $1", &[&args.tenant])
-        .await
-        .map_err(|e| e.to_string())?
-    {
-        site_ids.insert(row.get::<_, String>(0), row.get(1));
-    }
-
-    let site_of = |csv_name: &str| -> Option<Uuid> {
-        site_ids
-            .get(&spork_server::bins::site_name(csv_name))
-            .copied()
-    };
-
-    let unknown_items: BTreeMap<&str, usize> =
-        lines.iter().filter(|l| !item_ids.contains_key(&l.item)).fold(
-            BTreeMap::new(),
-            |mut m, l| {
-                *m.entry(l.item.as_str()).or_insert(0) += 1;
-                m
-            },
-        );
-    let unknown_sites: BTreeMap<&str, usize> =
-        lines.iter().filter(|l| site_of(&l.location).is_none()).fold(
-            BTreeMap::new(),
-            |mut m, l| {
-                *m.entry(l.location.as_str()).or_insert(0) += 1;
-                m
-            },
-        );
-
-    // **What will load, counting the sites this run is about to create.** The
-    // first version filtered against the sites that existed *before* the write,
-    // so 18 Perth lines were dropped even though the report said Perth would be
-    // made — and with them two entire orders. The report and the write have to
-    // agree about what is loadable, so they compute it the same way.
-    let will_have_site = |l: &Line| {
-        site_of(&l.location).is_some() || spork_server::bins::timezone_for(&l.location).is_some()
-    };
-    let loadable: Vec<&Line> = lines
-        .iter()
-        .filter(|l| item_ids.contains_key(&l.item) && will_have_site(l))
-        .collect();
-    let to_pick: i64 = loadable
-        .iter()
-        .map(|l| outstanding(l.quantity, l.fulfilled))
-        .sum();
-    let with_work = loadable
-        .iter()
-        .filter(|l| outstanding(l.quantity, l.fulfilled) > 0)
-        .count();
+    let tx = client.transaction().await.map_err(|e| e.to_string())?;
+    let loaded = orders::load(&tx, args.tenant, &lines, Options::default(), args.apply).await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     // **Counted separately, because they are different problems.** The first
     // version said "the catalogue does not have this item" about lines whose
     // item was fine and whose warehouse was missing, which is the kind of report
     // that sends somebody looking in the wrong file.
-    let missing_item = lines.iter().filter(|l| !item_ids.contains_key(&l.item)).count();
-    let missing_site = lines
+    let count = |why: SkipReason| loaded.skipped.iter().filter(|s| s.reason == why).count();
+    let with_work = lines.iter().filter(|l| l.outstanding > 0).count();
+    println!("  {:>5} lines load", loaded.lines_loaded);
+    println!(
+        "  {with_work:>5} lines still have something to pick ({} units load)",
+        loaded.units_to_pick
+    );
+    println!("  {:>5} name an item the catalogue does not have", count(SkipReason::UnknownItem));
+    println!("  {:>5} name a warehouse with no site on file", count(SkipReason::UnknownWarehouse));
+    let unknown_items: BTreeMap<&str, usize> = loaded
+        .skipped
         .iter()
-        .filter(|l| item_ids.contains_key(&l.item) && !will_have_site(l))
-        .count();
-
-    println!("  {:>5} lines load", loadable.len());
-    println!("  {with_work:>5} of them still have something to pick ({to_pick} units)");
-    println!("  {missing_item:>5} name an item the catalogue does not have");
-    println!("  {missing_site:>5} name a warehouse with no site on file");
+        .filter(|s| s.reason == SkipReason::UnknownItem)
+        .fold(BTreeMap::new(), |mut m, s| {
+            *m.entry(s.item.as_str()).or_insert(0) += 1;
+            m
+        });
     if !unknown_items.is_empty() {
         let mut v: Vec<_> = unknown_items.iter().collect();
         v.sort_by_key(|(_, n)| std::cmp::Reverse(**n));
-        println!("        {}", v.iter().take(8)
-            .map(|(c, n)| format!("{c} ×{n}")).collect::<Vec<_>>().join("  "));
+        println!(
+            "        {}",
+            v.iter().take(8).map(|(c, n)| format!("{c} ×{n}")).collect::<Vec<_>>().join("  ")
+        );
     }
-    if !unknown_sites.is_empty() {
-        println!("\n  warehouses with no site yet:");
-        for (s, n) in &unknown_sites {
-            let known = spork_server::bins::timezone_for(s).is_some();
-            println!(
-                "      {s} ×{n}  {}",
-                if known { "clock known, will be created" } else { "clock unknown, left out" }
-            );
-        }
+    if !loaded.differs.is_empty() {
+        println!("  {:>5} lines on file disagree with the export, and were left alone", loaded.differs.len());
     }
 
+    println!();
+    println!("    {:>5} sites created", loaded.sites_created);
+    println!("    {:>5} customers created", loaded.customers_created);
+    println!("    {:>5} orders", loaded.orders_created);
+    println!("    {:>5} order lines", loaded.lines_created);
+    println!(
+        "    {:>5} fulfilments, {} lines to pick",
+        loaded.fulfilments_created, loaded.commitments_created
+    );
     if !args.apply {
         println!("\n  Dry run. Nothing was written. Add --apply once the above reads right.\n");
         return Ok(());
     }
-
-    // ---- write ----
-    let mut client = client;
-    let tx = client.transaction().await.map_err(|e| e.to_string())?;
-
-    // The channel these arrived through. D39: an order carries which system is
-    // its record of authority, and this one is ours.
-    let channel: Uuid = {
-        tx.execute(
-            "INSERT INTO source_channel (tenant_id, code, name, authority)
-             VALUES ($1, 'netsuite', 'NetSuite', 'local')
-             ON CONFLICT (tenant_id, code) DO NOTHING",
-            &[&args.tenant],
-        )
-        .await
-        .map_err(|e| format!("source_channel: {e}"))?;
-        tx.query_one(
-            "SELECT id FROM source_channel WHERE tenant_id = $1 AND code = 'netsuite'",
-            &[&args.tenant],
-        )
-        .await
-        .map_err(|e| e.to_string())?
-        .get(0)
-    };
-
-    let mut party_ids: HashMap<String, Uuid> = HashMap::new();
-    let mut codes: HashSet<String> = tx
-        .query("SELECT code FROM party WHERE tenant_id = $1", &[&args.tenant])
-        .await
-        .map_err(|e| e.to_string())?
-        .iter()
-        .map(|r| r.get::<_, String>(0))
-        .collect();
-    let mut parties_made = 0;
-    // Sorted, so the codes a run assigns do not depend on row order.
-    let mut names: Vec<&str> = customers.into_iter().collect();
-    names.sort_unstable();
-    for name in names {
-        if let Some(row) = tx
-            .query_opt(
-                "SELECT id FROM party WHERE tenant_id = $1 AND name = $2",
-                &[&args.tenant, &name],
-            )
-            .await
-            .map_err(|e| e.to_string())?
-        {
-            party_ids.insert(name.to_string(), row.get(0));
-            continue;
-        }
-        let code = customer_code(name, &|c| codes.contains(c));
-        codes.insert(code.clone());
-        let id: Uuid = tx
-            .query_one(
-                "INSERT INTO party (tenant_id, name, code) VALUES ($1, $2, $3) RETURNING id",
-                &[&args.tenant, &name, &code],
-            )
-            .await
-            .map_err(|e| format!("party {name}: {e}"))?
-            .get(0);
-        party_ids.insert(name.to_string(), id);
-        parties_made += 1;
-    }
-
-    // **A warehouse an order ships from is evidence the warehouse exists.**
-    // Perth appears on 18 lines and was absent from the bin export, so it has no
-    // shelves — but it has a clock, and a site with no shelves is visible and
-    // true where a dropped order line is neither.
-    let mut sites_made = 0;
-    for name in lines
-        .iter()
-        .map(|l| l.location.as_str())
-        .collect::<std::collections::BTreeSet<_>>()
-    {
-        let short = spork_server::bins::site_name(name);
-        if site_ids.contains_key(&short) {
-            continue;
-        }
-        let Some(tz) = spork_server::bins::timezone_for(name) else {
-            continue;
-        };
-        let code = spork_server::bins::site_code(name);
-        let id: Uuid = tx
-            .query_one(
-                "INSERT INTO site (tenant_id, code, name, timezone, active)
-                 VALUES ($1, $2, $3, $4, true)
-                 ON CONFLICT (tenant_id, code) DO UPDATE SET name = EXCLUDED.name
-                 RETURNING id",
-                &[&args.tenant, &code, &short, &tz],
-            )
-            .await
-            .map_err(|e| format!("site {short}: {e}"))?
-            .get(0);
-        site_ids.insert(short, id);
-        sites_made += 1;
-    }
-    let mut orders_made: u64 = 0;
-    let mut lines_made = 0;
-    let mut fulfilments_made: u64 = 0;
-    let mut commitments_made = 0;
-    let mut order_ids: HashMap<&str, (Uuid, Uuid)> = HashMap::new(); // doc -> (order, fulfilment)
-
-    for l in &loadable {
-        // Re-resolved: the map has grown since `loadable` was computed.
-        let Some(site) = site_ids
-            .get(&spork_server::bins::site_name(&l.location))
-            .copied()
-        else {
-            continue;
-        };
-        let placed = parse_date(&l.date)
-            .and_then(|d| d.and_hms_opt(0, 0, 0))
-            .map(|dt| dt.and_utc())
-            .unwrap_or_else(chrono::Utc::now);
-
-        let (order_id, fulfilment_id) = match order_ids.get(l.doc.as_str()) {
-            Some(v) => *v,
-            None => {
-                // **The INSERT's row count, not the loop's.** These are counted
-                // per order *seen*, and on a second run every order is seen and
-                // none is created — so the first version reported "113 orders"
-                // for a run that wrote nothing.
-                let created = tx.execute(
-                    "INSERT INTO \"order\" (tenant_id, site_id, customer_party_id,
-                         confirmation_number, external_ref, source_channel_id,
-                         placed_at, promised_to, state, currency)
-                     SELECT $1, $2, $3, $4, NULLIF($5, ''), $6, $7, $7, 'placed', 'AUD'
-                      WHERE NOT EXISTS (SELECT 1 FROM \"order\" o
-                                         WHERE o.tenant_id = $1 AND o.confirmation_number = $4)",
-                    &[
-                        &args.tenant,
-                        &site,
-                        &party_ids.get(&l.customer),
-                        &l.doc,
-                        &l.po_ref,
-                        &channel,
-                        &placed,
-                    ],
-                )
-                .await
-                .map_err(|e| format!("order {}: {e}", l.doc))?;
-                orders_made += created;
-                let oid: Uuid = tx
-                    .query_one(
-                        "SELECT id FROM \"order\"
-                          WHERE tenant_id = $1 AND confirmation_number = $2
-                          ORDER BY placed_at DESC LIMIT 1",
-                        &[&args.tenant, &l.doc],
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .get(0);
-
-                // **One commitment per order, planned, with nothing picked.**
-                // Nothing has moved in this system, so every progress quantity
-                // is zero and that is the truth rather than a gap.
-                fulfilments_made += tx
-                    .execute(
-                        "INSERT INTO fulfilment (tenant_id, order_id, site_id, state)
-                         SELECT $1, $2, $3, 'planned'
-                          WHERE NOT EXISTS (SELECT 1 FROM fulfilment f WHERE f.order_id = $2)",
-                        &[&args.tenant, &oid, &site],
-                    )
-                    .await
-                    .map_err(|e| format!("fulfilment for {}: {e}", l.doc))?;
-                let fid: Uuid = tx
-                    .query_one(
-                        "SELECT id FROM fulfilment WHERE order_id = $1 ORDER BY id LIMIT 1",
-                        &[&oid],
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .get(0);
-                order_ids.insert(l.doc.as_str(), (oid, fid));
-                (oid, fid)
-            }
-        };
-
-        let item = item_ids[&l.item];
-        let existing: Option<Uuid> = tx
-            .query_opt(
-                "SELECT id FROM order_line
-                  WHERE order_id = $1 AND item_id = $2 AND line_number = $3",
-                &[&order_id, &item, &l.line_no],
-            )
-            .await
-            .map_err(|e| e.to_string())?
-            .map(|r| r.get(0));
-        let line_id = match existing {
-            Some(id) => id,
-            None => {
-                lines_made += 1;
-                tx.query_one(
-                    "INSERT INTO order_line (tenant_id, order_id, item_id,
-                         quantity_ordered, line_number)
-                     VALUES ($1, $2, $3, $4, $5) RETURNING id",
-                    &[&args.tenant, &order_id, &item, &l.quantity, &l.line_no],
-                )
-                .await
-                .map_err(|e| format!("order_line {} {}: {e}", l.doc, l.item))?
-                .get(0)
-            }
-        };
-
-        // What is still to pick. Nothing outstanding means no commitment:
-        // `fulfilment_line_quantity_ck` insists on more than zero, rightly.
-        let left = outstanding(l.quantity, l.fulfilled);
-        if left > 0 {
-            commitments_made += tx
-                .execute(
-                    "INSERT INTO fulfilment_line (tenant_id, fulfilment_id, order_line_id,
-                         quantity)
-                     SELECT $1, $2, $3, $4
-                      WHERE NOT EXISTS (SELECT 1 FROM fulfilment_line fl
-                                         WHERE fl.fulfilment_id = $2 AND fl.order_line_id = $3)",
-                    &[&args.tenant, &fulfilment_id, &line_id, &left],
-                )
-                .await
-                .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
-        }
-        let _ = l.committed; // see the note in the report below
-    }
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
     println!("\n  Applied.");
-    println!("    {sites_made:>5} sites created");
-    println!("    {parties_made:>5} customers created");
-    println!("    {orders_made:>5} orders");
-    println!("    {lines_made:>5} order lines");
-    println!("    {fulfilments_made:>5} fulfilments, {commitments_made} lines to pick");
-    println!(
-        "\n  `Quantity Committed` was read and not stored: an allocation names the\n  \
-         stock cell it claims (D12), and the export says how many but not which.\n  \
-         Recording it without a cell would be a claim against nothing.\n"
-    );
+    if committed_seen > 0 {
+        println!(
+            "\n  `Quantity Committed` was read and not stored: an allocation names the\n  \
+             stock cell it claims (D12), and the export says how many but not which.\n  \
+             Recording it without a cell would be a claim against nothing.\n"
+        );
+    }
     Ok(())
 }

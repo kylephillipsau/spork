@@ -11,6 +11,8 @@
 
       scripts\local.ps1 setup     create the database, migrate, build client and binaries
       scripts\local.ps1 start     run the server and the scheduler (Ctrl+C stops both)
+      scripts\local.ps1 start -Lan   the same, reachable from other devices on this network
+      scripts\local.ps1 firewall  allow other devices on this network in (asks for admin once)
       scripts\local.ps1 migrate   apply pending migrations only
       scripts\local.ps1 seed      load fixtures/seed.sql (demo tenants; password dock-station-1)
       scripts\local.ps1 reset     drop and recreate the local database, then migrate
@@ -21,8 +23,12 @@
 #>
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'start', 'migrate', 'seed', 'reset', 'status')]
-    [string]$Command = 'status'
+    [ValidateSet('setup', 'start', 'migrate', 'seed', 'reset', 'status', 'firewall')]
+    [string]$Command = 'status',
+    # Listen on every interface rather than loopback only. Opt-in, because the
+    # server speaks plain HTTP: over the LAN a password crosses the WiFi in the
+    # clear until the site has a certificate (see the plan's risks).
+    [switch]$Lan
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,7 +42,8 @@ $Local = Join-Path $Root '.local'
 $DbName = 'spork'
 $DbAdmin = 'postgres://postgres:spork@localhost:55432/postgres'
 $env:DATABASE_URL = "postgres://postgres:spork@localhost:55432/$DbName"
-$env:BIND = '127.0.0.1:18080'
+$Port = 18080
+$env:BIND = if ($Lan) { "0.0.0.0:$Port" } else { "127.0.0.1:$Port" }
 $env:SPORK_RP_ID = 'localhost'
 $env:SPORK_RP_ORIGIN = 'http://localhost:18080'
 $env:SPORK_CLIENT_DIR = Join-Path $Root 'client\dist'
@@ -149,12 +156,49 @@ function Start-Spork {
     $scheduler = Start-Process (Join-Path $bin 'spork-scheduler.exe') -NoNewWindow -PassThru
     try {
         Write-Host ""
-        Write-Host "Spork: http://localhost:18080  (Ctrl+C to stop)"
+        Write-Host "Spork: http://localhost:$Port  (Ctrl+C to stop)"
+        if ($Lan) {
+            foreach ($ip in Get-LanAddresses) { Write-Host "       http://${ip}:$Port  (other devices; password sign-in)" }
+            Write-Host "Passkeys work at localhost only until the site has a certificate."
+        }
         Write-Host "On an empty database the server logs a setup token; use it to create the first administrator."
         Write-Host ""
         & (Join-Path $bin 'spork-server.exe')
     } finally {
         if (-not $scheduler.HasExited) { Stop-Process -Id $scheduler.Id -Force }
+    }
+}
+
+# IPv4 addresses other devices can reach: DHCP or manual, not loopback or
+# link-local (169.254.x.x means the adapter never got an address).
+function Get-LanAddresses {
+    Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.PrefixOrigin -in 'Dhcp', 'Manual' -and $_.IPAddress -notlike '169.254.*' } |
+        Select-Object -ExpandProperty IPAddress
+}
+
+# One inbound rule, scoped as narrowly as the job allows: this port, TCP, the
+# Private profile only, and only from the local subnet. A laptop that joins a
+# café's WiFi (Public) is not serving the warehouse to strangers.
+function Open-Firewall {
+    $rule = 'Spork (LAN)'
+    $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).
+        IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $admin) {
+        Write-Host "Asking Windows for admin rights to add the firewall rule..."
+        $p = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, 'firewall')
+        if ($p.ExitCode -ne 0) { throw "the firewall rule was not added (exit $($p.ExitCode))" }
+    } else {
+        Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+        New-NetFirewallRule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP `
+            -LocalPort $Port -Profile Private -RemoteAddress LocalSubnet | Out-Null
+    }
+    Write-Host "Firewall: TCP $Port open to the local subnet on Private networks."
+    $public = Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object NetworkCategory -eq 'Public'
+    foreach ($n in $public) {
+        Write-Host "  '$($n.Name)' is set to Public, so the rule does not apply there. If it is the"
+        Write-Host "  warehouse network, set it to Private in Settings > Network & internet."
     }
 }
 
@@ -192,4 +236,5 @@ switch ($Command) {
         Invoke-Migrate
     }
     'status' { Show-Status }
+    'firewall' { Open-Firewall }
 }

@@ -6688,6 +6688,140 @@ pub async fn import_bins(
     }))
 }
 
+/// One item fulfilment, as the NetSuite page shows it.
+///
+/// **JSON rather than a file**, which the other imports are not, because there
+/// is no file: this is sent by a userscript from the item fulfilment page while
+/// somebody has it open, and the page is the only export NetSuite gives us
+/// without API access. The body is still stored exactly as it arrived, like an
+/// export is.
+#[derive(Deserialize, Debug)]
+pub struct FulfilmentIntake {
+    /// The sales order's document number. `Sales Order #SO1234` is read as
+    /// `SO1234`, because that is how the page's "Created From" renders it.
+    pub order: String,
+    #[serde(default)]
+    pub customer: String,
+    #[serde(default)]
+    pub po_ref: String,
+    /// Day-first, as NetSuite renders it here. Blank means now.
+    #[serde(default)]
+    pub date: String,
+    pub lines: Vec<FulfilmentIntakeLine>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FulfilmentIntakeLine {
+    /// The sales order line this fulfils (`orderline` on the page).
+    pub line: i32,
+    /// As the page shows it; `Parent : Child` is read as the child.
+    pub item: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    /// The warehouse: `Melbourne Warehouse`.
+    pub location: String,
+    /// What this fulfilment will pick.
+    pub quantity: f64,
+    /// What the sales order line still has outstanding, when the page shows
+    /// it. The page never shows what was *ordered*, so the order line records
+    /// the most we know was outstanding: this, or failing it, `quantity`.
+    #[serde(default)]
+    pub remaining: Option<f64>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct FulfilmentIntakeReport {
+    pub order: String,
+    pub lines: usize,
+    pub loaded: crate::importing::orders::OrdersLoaded,
+    pub arrival: Option<FileArrival>,
+}
+
+/// `Sales Order #SO1234` -> `SO1234`. Anything else, trimmed.
+fn sales_order_number(raw: &str) -> String {
+    let t = raw.trim();
+    t.rsplit_once('#').map(|(_, n)| n.trim()).unwrap_or(t).to_string()
+}
+
+/// Load one item fulfilment's lines as work to pick (phase 1 of the Spork plan).
+///
+/// **Idempotent per order**, because the sender will resend: the page can be
+/// opened twice, and a device resends after a failover (D170). The same order
+/// twice writes nothing the second time, and a line whose quantities moved is
+/// reported in `differs` and left alone. Dry run unless `?apply=true`, like
+/// every import.
+///
+/// Items the catalogue lacks are created from the page's code and description:
+/// the page is as much evidence an item exists as an order is that a warehouse
+/// does. A warehouse with no clock on file is still refused, by line.
+#[post("/import/fulfilment")]
+pub async fn import_fulfilment(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ImportQuery>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+
+    let intake: FulfilmentIntake = serde_json::from_slice(&body)
+        .map_err(|e| ApiError::Rejected(format!("not a fulfilment: {e}")))?;
+    let order = sales_order_number(&intake.order);
+    if order.is_empty() {
+        return Err(ApiError::Rejected(
+            "order is required: it is the key a resend is recognised by".into(),
+        ));
+    }
+    if intake.lines.is_empty() {
+        return Err(ApiError::Rejected("a fulfilment with no lines has nothing to pick".into()));
+    }
+    let customer = crate::orders::customer_name(&intake.customer);
+    let rows: Vec<crate::importing::orders::Line> = intake
+        .lines
+        .iter()
+        .map(|l| {
+            let quantity = l.quantity.round() as i64;
+            crate::importing::orders::Line {
+                doc: order.clone(),
+                line_no: l.line,
+                item: crate::orders::item_code(&l.item),
+                description: l.description.clone(),
+                ordered: l.remaining.map(|r| r.round() as i64).unwrap_or(quantity).max(quantity),
+                outstanding: quantity,
+                customer: customer.clone(),
+                po_ref: intake.po_ref.trim().to_string(),
+                location: l.location.trim().to_string(),
+                date: intake.date.clone(),
+            }
+        })
+        .collect();
+
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let tenant = scope.tenant();
+    let apply = query.apply;
+    let actor = crate::importing::received::Actor::Token(machine.token_id);
+    let filename = query.filename.clone();
+    let options = crate::importing::orders::Options { create_items: true };
+    let (loaded, arrival) = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
+                let loaded = crate::importing::orders::load(tx, tenant, &rows, options, apply)
+                    .await
+                    .map_err(ApiError::Rejected)?;
+                read_through(tx, arrival).await?;
+                Ok((loaded, arrival))
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(FulfilmentIntakeReport {
+        order,
+        lines: intake.lines.len(),
+        loaded,
+        arrival: arrival.map(FileArrival::from),
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Packaging presets
 // ---------------------------------------------------------------------------
@@ -8820,6 +8954,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(import_bins)
         .service(import_items)
         .service(import_stock)
+        .service(import_fulfilment)
         .service(void_package)
         .service(bind_barcode)
         .service(item_barcodes);
