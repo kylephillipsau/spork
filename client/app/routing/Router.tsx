@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { LightRoom } from "@design/index";
 import { Framed } from "./Framed";
+import { KitFrame, frameFor } from "@app/shell/frames";
 import type { ReactElement } from "react";
 import { resolve } from "@domain/routing";
 import type { Params, Pattern } from "@domain/routing";
@@ -130,6 +131,17 @@ export function Router({
   const density = found?.route.surface === "floor" ? "floor" : "desk";
 
   if (found?.route.bare) return found.route.render(found.params);
+
+  // The UI kit's frames (D171), outside the LightRoom. Screens not moved yet
+  // fall through to the old frame below.
+  const frame = found ? frameFor(found.route) : null;
+  if (found && frame) {
+    return (
+      <KitFrame screen={found.route} frame={frame}>
+        {found.route.render(found.params)}
+      </KitFrame>
+    );
+  }
 
   let body;
   if (!found) {

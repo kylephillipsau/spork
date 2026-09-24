@@ -15,7 +15,7 @@
     "render": "node scripts/render.mjs",
     "build:review": "vite build --mode review --outDir dist-review",
     "build:mobile": "tsc --noEmit && vite build --mode mobile --outDir dist-mobile",
-    "test": "node --test domain/*.test.ts app/nav/*.test.ts app/routing/*.test.ts app/integrity/findings/*.test.ts app/measurement/capture/*.test.ts app/outbound/picking/*.test.ts app/measurement/*.test.ts app/inbound/putaway/*.test.ts app/inbound/receiving/*.test.ts",
+    "test": "node --test domain/*.test.ts app/nav/*.test.ts app/routing/*.test.ts app/shell/*.test.ts app/integrity/findings/*.test.ts app/measurement/capture/*.test.ts app/outbound/picking/*.test.ts app/measurement/*.test.ts app/inbound/putaway/*.test.ts app/inbound/receiving/*.test.ts",
     "frame": "node scripts/check-frame.mjs"
   },
   "dependencies": {

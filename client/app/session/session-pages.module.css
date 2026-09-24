@@ -1,0 +1,117 @@
+.title {
+  font-size: var(--ui-text-2xl);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.subtitle {
+  margin-top: var(--ui-space-1);
+  color: var(--ui-text-muted);
+}
+
+.done,
+.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-space-2);
+}
+.done svg,
+.problem svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+.done svg {
+  color: var(--ui-success);
+}
+.problem {
+  padding: var(--ui-space-3);
+  border-radius: var(--ui-radius);
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  font-size: var(--ui-text-sm);
+}
+
+.or {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-sm);
+}
+.or::before,
+.or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--ui-border);
+}
+
+.centre {
+  display: flex;
+  justify-content: center;
+  padding: var(--ui-space-8);
+  color: var(--ui-text-faint);
+}
+
+/* ---- choices: organisations and sites ---- */
+.choices,
+.sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.choice,
+.site {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--ui-space-4);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.choice:hover,
+.site:hover:not(:disabled) {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+.choice[aria-checked="true"] {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+.radio {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 50%;
+  background: var(--ui-surface);
+}
+.choice[aria-checked="true"] .radio {
+  border: 5px solid var(--ui-accent);
+}
+.siteCode {
+  min-width: 44px;
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  color: var(--ui-accent);
+}
+.siteName {
+  flex: 1;
+}
+.siteGo {
+  width: 18px;
+  height: 18px;
+  color: var(--ui-text-faint);
+}

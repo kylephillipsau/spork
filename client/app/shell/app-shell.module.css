@@ -1,0 +1,293 @@
+.shell {
+  --sidebar: var(--ui-sidebar-width);
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.collapsed {
+  --sidebar: var(--ui-sidebar-collapsed);
+}
+
+/* ---- sidebar ---- */
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-z-sidebar);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  height: var(--ui-header-height);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--ui-ano-rule);
+}
+.brandLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--ui-ano-ink);
+}
+.mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ui-radius);
+  font-size: 15px;
+  font-weight: 700;
+}
+.wordmark {
+  font-size: var(--ui-text-md);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 10px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-ano-raised) transparent;
+}
+
+.group + .group {
+  margin-top: 14px;
+}
+.groupLabel {
+  padding: 0 10px 6px;
+  color: var(--ui-ano-ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--ui-radius);
+  color: var(--ui-ano-ink-muted);
+  font-size: var(--ui-text-base);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.item:hover {
+  background: rgba(214, 228, 255, 0.05);
+  color: var(--ui-ano-ink);
+}
+.item:focus-visible {
+  outline: 2px solid var(--ui-ring);
+  outline-offset: -2px;
+}
+.current,
+.current:hover {
+  color: #fff;
+}
+.current::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--ui-accent);
+}
+.itemIcon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.current .itemIcon {
+  color: #a5acff;
+}
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.itemCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--ui-radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.foot {
+  padding: 10px;
+  border-top: 1px solid var(--ui-ano-rule);
+}
+.collapse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ui-radius);
+  background: none;
+  color: var(--ui-ano-ink-faint);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.collapse:hover {
+  background: rgba(214, 228, 255, 0.05);
+  color: var(--ui-ano-ink);
+}
+.collapse svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* Collapsed: icons only, labels and counts become tooltips. */
+.collapsed .wordmark,
+.collapsed .groupLabel,
+.collapsed .itemLabel,
+.collapsed .itemCount {
+  display: none;
+}
+.collapsed .group + .group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-ano-rule);
+}
+.collapsed .item,
+.collapsed .collapse {
+  justify-content: center;
+  padding: 0;
+}
+.collapsed .brand {
+  justify-content: center;
+  padding: 0;
+}
+
+/* ---- main ---- */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  height: var(--ui-header-height);
+  padding: 0 var(--ui-space-6);
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.menuButton {
+  display: none;
+}
+.crumbs {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+.content {
+  width: 100%;
+  max-width: var(--ui-content-max);
+  padding: var(--ui-space-6) var(--ui-space-8) var(--ui-space-10);
+}
+
+.scrim {
+  display: none;
+}
+
+/* ---- narrow: the sidebar opens over the page ---- */
+@media (max-width: 900px) {
+  .shell,
+  .collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: var(--ui-z-overlay);
+    width: var(--ui-sidebar-width);
+    transform: translateX(-100%);
+    transition: transform 180ms var(--ui-ease);
+  }
+  .open .sidebar {
+    transform: none;
+    box-shadow: var(--ui-shadow-lg);
+  }
+  /* The drawer is always the full sidebar, whatever the desktop setting. */
+  .collapsed .wordmark,
+  .collapsed .groupLabel,
+  .collapsed .itemLabel,
+  .collapsed .itemCount {
+    display: revert;
+  }
+  .collapsed .item,
+  .collapsed .collapse {
+    justify-content: flex-start;
+    padding: 0 10px;
+  }
+  .collapse {
+    display: none;
+  }
+  .open .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--ui-z-overlay) - 1);
+    background: var(--ui-overlay);
+  }
+  .menuButton {
+    display: inline-flex;
+  }
+  .header {
+    padding: 0 var(--ui-space-4);
+  }
+  .content {
+    padding: var(--ui-space-5) var(--ui-space-4) var(--ui-space-8);
+  }
+}

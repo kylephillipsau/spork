@@ -1,0 +1,213 @@
+/* ---- search / scan ---- */
+.search {
+  position: relative;
+}
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  width: clamp(200px, 26vw, 340px);
+  height: var(--ui-control);
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-faint);
+  transition: border-color var(--ui-duration) var(--ui-ease), background var(--ui-duration) var(--ui-ease);
+}
+.searchBox:focus-within {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  box-shadow: 0 0 0 3px var(--ui-ring);
+}
+.searchIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+}
+.searchInput::placeholder {
+  color: var(--ui-text-faint);
+}
+.searchHint {
+  display: inline-flex;
+  gap: 2px;
+}
+.searchBox:focus-within .searchHint {
+  display: none;
+}
+
+.results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: var(--ui-z-popover);
+  width: max(100%, 320px);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-lg);
+}
+.resultsHead {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.resultsIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--ui-warning);
+}
+.resultsCode {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--ui-text-sm);
+}
+.resultsClose {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: none;
+  color: var(--ui-text-faint);
+  cursor: pointer;
+}
+.resultsClose:hover {
+  background: var(--ui-surface-hover);
+  color: var(--ui-text);
+}
+.resultsClose svg {
+  width: 14px;
+  height: 14px;
+}
+.resultsText {
+  margin-top: var(--ui-space-2);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+.resultsList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--ui-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.resultsOption {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding: 6px 8px;
+  border-radius: var(--ui-radius-sm);
+}
+.resultsOption:hover {
+  background: var(--ui-surface-hover);
+}
+.resultsDetail {
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-sm);
+}
+
+/* ---- site: a dyed nylon tag ---- */
+.site {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ui-radius);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.site:focus-visible {
+  outline: 2px solid var(--ui-ring);
+  outline-offset: 2px;
+}
+.siteIcon,
+.siteChevron {
+  width: 15px;
+  height: 15px;
+  opacity: 0.85;
+}
+
+/* ---- user ---- */
+.user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  height: 36px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--ui-radius-full);
+  background: none;
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.user:hover {
+  background: var(--ui-surface-hover);
+}
+.userName {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.userCard {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+}
+.userCardName {
+  font-weight: 600;
+}
+.userCardOrg {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+@media (max-width: 1100px) {
+  .userName,
+  .searchHint {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .searchBox {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .searchBox:focus-within {
+    position: fixed;
+    left: var(--ui-space-4);
+    right: var(--ui-space-4);
+    width: auto;
+    padding: 0 10px;
+  }
+  .searchInput {
+    width: 0;
+  }
+  .searchBox:focus-within .searchInput {
+    width: auto;
+  }
+}

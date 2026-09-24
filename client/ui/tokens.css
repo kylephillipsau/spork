@@ -160,3 +160,27 @@
   --ui-control: 48px;
   --ui-control-lg: 56px;
 }
+
+/*
+ * Materials (D171, keeping Hard Anodise's character without its machinery).
+ *
+ * The frame is anodised aluminium and labels are nylon, as before; the data
+ * surfaces are plain. What went is the per-frame light solver and the canvas:
+ * the edges and grain here are static, so the look costs nothing to run.
+ * Fixed across themes — the metal is the same metal in light and dark.
+ */
+:root {
+  --ui-tex-blast: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23b)'/%3E%3C/svg%3E");
+  --ui-ano-top: #1b1e24;
+  --ui-ano-bottom: #121418;
+  --ui-ano-raised: #23272e;
+  --ui-ano-pressed: #2b3038;
+  --ui-ano-edge: rgba(214, 228, 255, 0.07);
+  --ui-ano-rule: rgba(214, 228, 255, 0.06);
+  --ui-ano-ink: #e4e8ef;
+  --ui-ano-ink-muted: #9aa2ae;
+  --ui-ano-ink-faint: #6f7783;
+  --ui-nylon: #2a2d35;
+  --ui-nylon-dyed: #2e2a6b;
+  --ui-nylon-ink: #d9ddf9;
+}

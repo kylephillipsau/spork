@@ -139,6 +139,8 @@
 
 /* ---- card ---- */
 .card {
+  /* Its own ink: a card can sit on the anodised frame, whose ink is light. */
+  color: var(--ui-text);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);

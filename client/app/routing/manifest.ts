@@ -75,11 +75,11 @@ export function wantsChromeLocator(screen: ScreenSpec): boolean {
  * beside `/orders/:order`.
  */
 export const SCREENS: readonly ScreenSpec[] = [
-  spec("home", "/", "Waiting", "bench"),
+  spec("home", "/", "Dashboard", "bench"),
   // The literal above the pattern: declaration order is match order, and this
   // is the first pair where it matters.
-  spec("pack", "/pack", "Pack", "bench"),
-  spec("pack-one", "/pack/:fulfilment", "Pack", "bench"),
+  spec("pack", "/pack", "Packing", "bench"),
+  spec("pack-one", "/pack/:fulfilment", "Pack order", "bench"),
   spec("despatch", "/despatch", "Despatch", "bench"),
   spec("weigh", "/weigh", "Weigh", "bench"),
   spec("capture", "/capture", "Capture", "floor", { claimsScan: true }),
@@ -94,14 +94,14 @@ export const SCREENS: readonly ScreenSpec[] = [
   // carton. A GS1 label answers item, lot and date in one pass.
   spec("receiving", "/receiving", "Receiving", "floor", { claimsScan: true }),
   spec("putaway", "/putaway", "Put away", "floor", { claimsScan: true }),
-  spec("orders", "/orders", "Find an order", "desk"),
+  spec("orders", "/orders", "Orders", "desk"),
   spec("findings", "/findings", "Findings", "desk"),
   // The screen D135 was waiting for: a finding is a row in the database, so a
   // link to one restores the queue, the tab and the evidence panel. Same title
   // as the queue, because it is the same screen with a row open on it.
-  spec("finding", "/findings/:finding", "Findings", "desk"),
-  spec("where", "/where", "Where you are working", "plain"),
-  spec("account", "/account", "Password", "plain"),
+  spec("finding", "/findings/:finding", "Finding", "desk"),
+  spec("where", "/where", "Select warehouse", "plain"),
+  spec("account", "/account", "Account", "plain"),
   spec("workspace", "/workspace", "Workspace", "desk"),
   spec("import", "/import", "Import", "desk"),
   spec("tokens", "/tokens", "Import tokens", "desk"),

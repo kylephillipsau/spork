@@ -47,6 +47,22 @@ export function Gate({
   needsSession: boolean;
   children: ReactNode;
 }): ReactElement {
+  const state = useGate(needsSession);
+  if (state === "open") return <>{children}</>;
+  return (
+    <Panel elevation="raised" frame="bezel">
+      <Face>
+        <Faint>{state === "leaving" ? "Taking you to sign in…" : "…"}</Faint>
+      </Face>
+    </Panel>
+  );
+}
+
+/**
+ * The gate's decision, and the redirects it runs. Both frames draw their own
+ * waiting state from it: the old material one above, and the UI kit's (D171).
+ */
+export function useGate(needsSession: boolean): "loading" | "leaving" | "open" {
   const session = useSession();
   const navigate = useNavigate();
   const turnedAway = needsSession && session.kind === "anonymous";
@@ -72,37 +88,10 @@ export function Gate({
     navigate(`/where${next}`, { replace: true });
   }, [unplaced, navigate]);
 
-  if (session.kind === "loading" && needsSession) {
-    return (
-      <Panel elevation="raised" frame="bezel">
-        <Face>
-          <Faint>…</Faint>
-        </Face>
-      </Panel>
-    );
-  }
-
-  if (turnedAway) {
-    return (
-      <Panel elevation="raised" frame="bezel">
-        <Face>
-          <Faint>Taking you to sign in…</Faint>
-        </Face>
-      </Panel>
-    );
-  }
-
-  if (unplaced) {
-    return (
-      <Panel elevation="raised" frame="bezel">
-        <Face>
-          <Faint>…</Faint>
-        </Face>
-      </Panel>
-    );
-  }
-
-  return <>{children}</>;
+  if (session.kind === "loading" && needsSession) return "loading";
+  if (turnedAway) return "leaving";
+  if (unplaced) return "loading";
+  return "open";
 }
 
 /** Where to go after signing in: what was asked for, or the front door. */

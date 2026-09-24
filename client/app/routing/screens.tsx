@@ -37,7 +37,7 @@ import { Weigh } from "@app/measurement/weigh/Weigh";
 import { useWeigh } from "@app/measurement/weigh/useWeigh";
 import { Setup } from "@app/setup/Setup";
 import { useSetup } from "@app/setup/useSetup";
-import { Where } from "@app/session/Where";
+import { WherePage } from "@app/session/WherePage";
 import { useWhere } from "@app/session/useWhere";
 import { Password } from "@app/account/Password";
 import { Keys } from "@app/account/Keys";
@@ -57,7 +57,7 @@ import { href } from "./location";
 import { nextAfterSignIn } from "@app/session/Gate";
 import { useSessionBench } from "@app/session/SessionContext";
 import { useNavigate } from "@app/routing/Router";
-import { SignIn } from "@app/session/SignIn";
+import { SignInPage } from "@app/session/SignInPage";
 import { useSignIn } from "@app/session/useSignIn";
 import { Orders } from "@app/outbound/orders/Orders";
 import { PackQueue } from "@app/outbound/pack/PackQueue";
@@ -112,7 +112,7 @@ function LiveWhere() {
   const onSettled = useCallback(() => {
     void refresh().then(() => navigate(nextAfterSignIn(), { replace: true }));
   }, [refresh, navigate]);
-  return <Where bench={useWhere(onSettled)} />;
+  return <WherePage bench={useWhere(onSettled)} />;
 }
 
 /**
@@ -236,7 +236,7 @@ function LiveSignIn() {
   // A full load rather than a client navigation once it succeeds. The cookie is
   // new, and every hook behind the gate should start from a provider that has
   // seen it rather than one that resolved `anonymous` a moment ago.
-  return <SignIn bench={useSignIn(() => window.location.assign(href(nextAfterSignIn())))} />;
+  return <SignInPage bench={useSignIn(() => window.location.assign(href(nextAfterSignIn())))} />;
 }
 
 function LiveSetup() {

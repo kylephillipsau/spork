@@ -26,3 +26,4 @@ export { Dialog, Drawer, Menu, MenuItem, MenuLabel, MenuSeparator, MenuRadioGrou
 export { Tooltip } from "./Tooltip";
 export { useToast } from "./Toast";
 export { cx } from "./cx";
+export { default as materials } from "./materials.module.css";
