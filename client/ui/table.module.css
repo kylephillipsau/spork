@@ -29,6 +29,7 @@
 
 .td {
   height: 44px;
+  white-space: nowrap;
   padding: 0 var(--ui-space-4);
   border-bottom: 1px solid var(--ui-border);
   vertical-align: middle;
@@ -36,6 +37,20 @@
 
 tbody tr:last-child .td {
   border-bottom: 0;
+}
+
+.grow {
+  width: 100%;
+  max-width: 0;
+}
+.growHead {
+  width: 100%;
+}
+.truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .left { text-align: left; }

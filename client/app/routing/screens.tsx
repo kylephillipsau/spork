@@ -63,8 +63,8 @@ import { Orders } from "@app/outbound/orders/Orders";
 import { PackQueue } from "@app/outbound/pack/PackQueue";
 import { useQueue } from "@app/outbound/pack/useQueue";
 import { useOrders } from "@app/outbound/orders/useOrders";
-import { Home } from "@app/home/Home";
-import { useHome } from "@app/home/useHome";
+import { Dashboard } from "@app/home/Dashboard";
+import { useDashboard } from "@app/home/useDashboard";
 import type { Screen } from "./Router";
 
 /**
@@ -283,8 +283,11 @@ function LiveOrders() {
   return <Orders desk={useOrders(reference)} />;
 }
 
+/** The dashboard (D171): counts, the packing queue, findings and orders. */
 function LiveHome() {
-  return <Home bench={useHome()} />;
+  const { session } = useSessionBench();
+  const site = session.kind === "signed-in" ? session.who.site_code : null;
+  return <Dashboard dash={useDashboard()} site={site} />;
 }
 
 /**

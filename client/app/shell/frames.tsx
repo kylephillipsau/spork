@@ -25,7 +25,7 @@ export function frameFor(screen: Screen): Frame | null {
 }
 
 /** Screens whose bodies are built on the UI kit. The rest are wrapped. */
-const KIT_NATIVE: ReadonlySet<string> = new Set(["sign-in", "where"]);
+const KIT_NATIVE: ReadonlySet<string> = new Set(["sign-in", "where", "home"]);
 
 export function KitFrame({ screen, frame, children }: { screen: Screen; frame: Frame; children: ReactNode }) {
   const body = KIT_NATIVE.has(screen.id) ? children : <LegacyBody title={screen.title}>{children}</LegacyBody>;

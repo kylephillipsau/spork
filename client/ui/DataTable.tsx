@@ -16,6 +16,11 @@ export interface Column<T> {
   width?: string | undefined;
   /** Monospace and tabular figures: codes, references, quantities. */
   mono?: boolean | undefined;
+  /**
+   * Takes the width the other columns leave, and truncates with an ellipsis
+   * rather than wrapping. Usually the one name-like column: customer, item.
+   */
+  grow?: boolean | undefined;
 }
 
 type Direction = "asc" | "desc";
@@ -81,7 +86,7 @@ export function DataTable<T>({
                 <th
                   key={c.key}
                   scope="col"
-                  className={cx(s.th, c.align && s[c.align])}
+                  className={cx(s.th, c.align && s[c.align], c.grow && s.growHead)}
                   style={c.width ? { width: c.width } : undefined}
                   aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
@@ -127,8 +132,8 @@ export function DataTable<T>({
                     aria-selected={selectedKey !== undefined ? selectedKey === key : undefined}
                   >
                     {columns.map((c) => (
-                      <td key={c.key} className={cx(s.td, c.align && s[c.align], c.mono && s.mono)}>
-                        {c.cell(row)}
+                      <td key={c.key} className={cx(s.td, c.align && s[c.align], c.mono && s.mono, c.grow && s.grow)}>
+                        {c.grow ? <span className={s.truncate}>{c.cell(row)}</span> : c.cell(row)}
                       </td>
                     ))}
                   </tr>
