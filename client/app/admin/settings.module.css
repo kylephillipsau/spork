@@ -123,6 +123,10 @@
   background: var(--ui-danger-soft);
   color: var(--ui-danger);
 }
+.alertWarning {
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+}
 .alertSuccess {
   background: var(--ui-success-soft);
   color: var(--ui-success);

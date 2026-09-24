@@ -11,13 +11,16 @@ export function Alert({
   onDismiss,
   children,
 }: {
-  tone: "danger" | "success";
+  tone: "danger" | "warning" | "success";
   onDismiss?: (() => void) | undefined;
   children: ReactNode;
 }) {
   return (
-    <div className={cx(s.alert, tone === "danger" ? s.alertDanger : s.alertSuccess)} role={tone === "danger" ? "alert" : "status"}>
-      {tone === "danger" ? <TriangleAlert aria-hidden /> : <CircleCheck aria-hidden />}
+    <div
+      className={cx(s.alert, tone === "danger" ? s.alertDanger : tone === "warning" ? s.alertWarning : s.alertSuccess)}
+      role={tone === "success" ? "status" : "alert"}
+    >
+      {tone === "success" ? <CircleCheck aria-hidden /> : <TriangleAlert aria-hidden />}
       <span className={s.alertText}>{children}</span>
       {onDismiss && (
         <button type="button" className={s.alertClose} onClick={onDismiss}>

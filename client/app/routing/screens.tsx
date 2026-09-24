@@ -20,7 +20,7 @@ import "@design/layers.css";
 import { PackBench } from "@app/outbound/pack/PackBench";
 
 import { usePackBench } from "@app/outbound/pack/usePackBench";
-import { Despatch } from "@app/outbound/despatch/Despatch";
+import { DespatchPage } from "@app/outbound/despatch/DespatchPage";
 
 import { useDespatch } from "@app/outbound/despatch/useDespatch";
 import { Capture, CaptureDock } from "@app/measurement/capture/Capture";
@@ -33,7 +33,7 @@ import { Receiving, ReceivingDock } from "@app/inbound/receiving/Receiving";
 import { useReceiving } from "@app/inbound/receiving/useReceiving";
 import { FindingsPage } from "@app/integrity/findings/FindingsPage";
 import { useFindings } from "@app/integrity/findings/useFindings";
-import { Weigh } from "@app/measurement/weigh/Weigh";
+import { WeighPage } from "@app/measurement/weigh/WeighPage";
 import { useWeigh } from "@app/measurement/weigh/useWeigh";
 import { Setup } from "@app/setup/Setup";
 import { useSetup } from "@app/setup/useSetup";
@@ -95,7 +95,7 @@ function LivePack({ fulfilment }: { fulfilment: string }) {
 }
 
 function LiveDespatch() {
-  return <Despatch bench={useDespatch()} />;
+  return <DespatchPage bench={useDespatch()} />;
 }
 
 /**
@@ -168,7 +168,7 @@ function LiveFindings({ at }: { at: string | null }) {
 
 /** Weigh is a Bench surface: standing at a scale, several hundred a day. */
 function LiveWeigh() {
-  return <Weigh bench={useWeigh()} />;
+  return <WeighPage bench={useWeigh()} />;
 }
 
 function LiveReceiving() {
