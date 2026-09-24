@@ -17,7 +17,7 @@ import { Dock } from "@app/shells/slots";
 import "@design/tokens.css";
 import "@design/layers.css";
 
-import { PackBench } from "@app/outbound/pack/PackBench";
+import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
 
 import { usePackBench } from "@app/outbound/pack/usePackBench";
 import { DespatchPage } from "@app/outbound/despatch/DespatchPage";
@@ -91,7 +91,7 @@ function LiveQueue() {
 }
 
 function LivePack({ fulfilment }: { fulfilment: string }) {
-  return <PackBench bench={usePackBench(fulfilment)} />;
+  return <PackBenchPage bench={usePackBench(fulfilment)} />;
 }
 
 function LiveDespatch() {

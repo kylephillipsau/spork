@@ -1,0 +1,168 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-5);
+}
+.ref {
+  font-family: var(--ui-font-mono);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ui-space-5);
+  align-items: start;
+}
+@media (min-width: 1200px) {
+  .split {
+    grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
+  }
+}
+.cartons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  min-width: 0;
+}
+
+/* ---- the two plain tables: lines and carton contents ---- */
+.lines,
+.contents {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lines th,
+.contents th {
+  height: 36px;
+  padding: 0 var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.lines td,
+.contents td {
+  padding: 8px var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border);
+  vertical-align: middle;
+}
+.lines tbody tr:last-child td,
+.contents tbody tr:last-child td {
+  border-bottom: 0;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.done td {
+  color: var(--ui-text-faint);
+}
+.code {
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
+.desc {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+.from {
+  width: 38%;
+  min-width: 200px;
+}
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.qty {
+  width: 64px;
+  height: var(--ui-control-sm);
+}
+
+/* ---- cartons ---- */
+.newCarton {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ui-space-3);
+}
+.preset {
+  flex: 1;
+}
+.cartonTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-accent);
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+}
+.print svg {
+  width: 15px;
+  height: 15px;
+}
+.empty {
+  padding: var(--ui-space-3) var(--ui-space-4);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+.figures,
+.measureFields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ui-space-5);
+  padding: var(--ui-space-4);
+  border-top: 1px solid var(--ui-border);
+}
+.measureField {
+  width: 130px;
+}
+.measure {
+  display: flex;
+  flex-direction: column;
+}
+.cartonActions {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-surface-sunken);
+}
+.spacer {
+  flex: 1;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.figureLabel {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 500;
+}
+.figureValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.big {
+  font-size: var(--ui-text-xl);
+}
+.figureNote {
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-xs);
+}
