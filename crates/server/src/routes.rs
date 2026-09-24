@@ -5794,6 +5794,9 @@ pub struct SignOnRequest {
     pub site_id: Option<Uuid>,
     /// D27's recording device, when the client knows it.
     pub device_id: Option<Uuid>,
+    /// "Keep me signed in on this device": a week idle and thirty days in all,
+    /// rather than half an hour and a shift. Absent means no.
+    pub remember: Option<bool>,
 }
 
 #[derive(Serialize, Debug)]
@@ -5874,7 +5877,17 @@ pub async fn sign_on(
         return Err(ApiError::Unauthenticated);
     };
 
-    issue_session(&conn, &req, person_id, body.tenant_id, body.site_id, body.device_id).await
+    let policy = auth::Policy::new(body.remember.unwrap_or(false));
+    issue_session(
+        &conn,
+        &req,
+        person_id,
+        body.tenant_id,
+        body.site_id,
+        body.device_id,
+        policy,
+    )
+    .await
 }
 
 /// Mint a session for a person who has just proved who they are.
@@ -5891,6 +5904,7 @@ async fn issue_session(
     wanted_tenant: Option<Uuid>,
     site_id: Option<Uuid>,
     device_id: Option<Uuid>,
+    policy: auth::Policy,
 ) -> Result<HttpResponse, ApiError> {
     // Which tenant. One membership needs no choice; several need the request to
     // say, and the answer lists them rather than picking.
@@ -5933,7 +5947,6 @@ async fn issue_session(
     // `make_interval` from a typed integer: `chrono::Duration` has no interval
     // binding, and building one by string would be the format!-into-SQL habit
     // this codebase does not have.
-    let lifetime_hours = auth::ABSOLUTE_LIFETIME_HOURS as i32;
     let user_agent = req
         .headers()
         .get("user-agent")
@@ -5943,18 +5956,22 @@ async fn issue_session(
     // Membership is re-checked inside the function, which is where it belongs:
     // it is the sentence that decides whose data this session sees.
     conn.query_one(
-        "SELECT session_open($1, $2, $3, $4, make_interval(hours => $5), $6, $7)",
+        "SELECT session_open($1, $2, $3, $4, make_interval(mins => $5),
+                            make_interval(mins => $6), $7, $8, $9)",
         &[
             &person_id,
             &tenant_id,
             &site_id,
             &minted.sha256,
-            &lifetime_hours,
+            &policy.lifetime_minutes,
+            &policy.idle_minutes,
+            &policy.remembered,
             &device_id,
             &user_agent,
         ],
     )
     .await?;
+    let expires_at = policy.expiry(Utc::now());
 
     let display_name: String = conn
         .query_one("SELECT display_name FROM person WHERE id = $1", &[&person_id])
@@ -5964,14 +5981,14 @@ async fn issue_session(
     Ok(HttpResponse::Ok()
         .insert_header((
             "set-cookie",
-            auth::session_cookie(&minted.token, secure_cookies(req)),
+            auth::session_cookie(&minted.token, secure_cookies(req), expires_at),
         ))
         .json(SignOnResponse {
             person_id,
             display_name,
             tenant_id,
             site_id,
-            expires_at: Utc::now() + Duration::hours(auth::ABSOLUTE_LIFETIME_HOURS),
+            expires_at,
             token: minted.token,
         }))
 }
@@ -6023,12 +6040,12 @@ pub async fn caller(
 
     let conn = state.pool.get().await?;
     crate::tenancy::ensure_app_role(&conn).await?;
-    let idle_minutes = auth::IDLE_TIMEOUT_MINUTES as i32;
     let row = conn
         .query_opt(
-            "SELECT session_id, person_id, tenant_id, site_id
-               FROM session_resolve($1, make_interval(mins => $2))",
-            &[&auth::token_digest(&token), &idle_minutes],
+            "SELECT session_id, person_id, tenant_id, site_id,
+                    remembered, issued_at, expires_at
+               FROM session_resolve($1)",
+            &[&auth::token_digest(&token)],
         )
         .await?
         .ok_or(ApiError::Unauthenticated)?;
@@ -6038,6 +6055,9 @@ pub async fn caller(
         person_id: row.get(1),
         tenant_id: row.get(2),
         site_id: row.get(3),
+        remembered: row.get(4),
+        issued_at: row.get(5),
+        expires_at: row.get(6),
     })
 }
 
@@ -6080,7 +6100,11 @@ pub async fn current_session(
         })
         .await?;
 
-    Ok(HttpResponse::Ok().json(CurrentSession {
+    let mut response = HttpResponse::Ok();
+    if let Some(cookie) = rotated_cookie(&state, &req, &who).await? {
+        response.insert_header(("set-cookie", cookie));
+    }
+    Ok(response.json(CurrentSession {
         person_id: who.person_id,
         display_name: row.get(0),
         tenant_id: who.tenant_id,
@@ -6088,6 +6112,45 @@ pub async fn current_session(
         site_id: who.site_id,
         site_code: row.get(2),
     }))
+}
+
+/// A fresh token for a remembered session whose current one is a day old, as
+/// the cookie that carries it; `None` when nothing is due.
+///
+/// Here because this is what a browser calls when it opens the app, so a device
+/// that is used daily trades its token daily. **Only for the cookie.** A
+/// handheld's bearer token lives in the app's own store and has no way to be
+/// told about a replacement, so rotating it would sign the device out two
+/// minutes later.
+///
+/// Two tabs racing on the old cookie both resolve (the old digest has a
+/// two-minute grace) and only one rotates (`session_rotate` matches the
+/// current digest), so neither is signed out.
+async fn rotated_cookie(
+    state: &web::Data<AppState>,
+    req: &HttpRequest,
+    who: &auth::Caller,
+) -> Result<Option<String>, ApiError> {
+    let due = Utc::now() - Duration::hours(auth::ROTATE_AFTER_HOURS);
+    if !who.remembered || who.issued_at > due {
+        return Ok(None);
+    }
+    let cookie = req.headers().get("cookie").and_then(|v| v.to_str().ok());
+    let Some(old) = auth::token_from_headers(cookie, None) else {
+        return Ok(None);
+    };
+    let minted = auth::mint_token();
+    let after = auth::ROTATE_AFTER_HOURS as i32;
+    let conn = state.pool.get().await?;
+    crate::tenancy::ensure_app_role(&conn).await?;
+    let rotated: bool = conn
+        .query_one(
+            "SELECT session_rotate($1, $2, make_interval(hours => $3))",
+            &[&auth::token_digest(&old), &minted.sha256, &after],
+        )
+        .await?
+        .get(0);
+    Ok(rotated.then(|| auth::session_cookie(&minted.token, secure_cookies(req), who.expires_at)))
 }
 
 #[derive(Serialize, Debug)]
@@ -6216,6 +6279,7 @@ pub async fn choose_site(
         Some(who.tenant_id),
         Some(wanted),
         None,
+        auth::Policy::new(who.remembered),
     )
     .await?;
 
@@ -8252,6 +8316,8 @@ pub struct FinishAuthentication {
     pub tenant_id: Option<Uuid>,
     pub site_id: Option<Uuid>,
     pub device_id: Option<Uuid>,
+    /// As on [`SignOnRequest`].
+    pub remember: Option<bool>,
 }
 
 #[post("/passkeys/authentication/finish")]
@@ -8344,7 +8410,17 @@ pub async fn passkey_authentication_finish(
         );
     }
 
-    issue_session(&conn, &req, person_id, body.tenant_id, body.site_id, body.device_id).await
+    let policy = auth::Policy::new(body.remember.unwrap_or(false));
+    issue_session(
+        &conn,
+        &req,
+        person_id,
+        body.tenant_id,
+        body.site_id,
+        body.device_id,
+        policy,
+    )
+    .await
 }
 
 #[derive(Serialize)]

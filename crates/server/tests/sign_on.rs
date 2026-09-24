@@ -302,6 +302,7 @@ async fn the_app_role_cannot_read_the_tables_behind_the_functions() {
         "credential_record_attempt",
         "session_open",
         "session_resolve",
+        "session_rotate",
         "session_revoke",
     ] {
         let ok: bool = client
@@ -316,6 +317,127 @@ async fn the_app_role_cannot_read_the_tables_behind_the_functions() {
             .get(0);
         assert!(ok, "{f} is how the app gets in");
     }
+}
+
+/// "Keep me signed in" is a longer session, not a longer cookie on the same one.
+///
+/// The regression it guards: the cookie had no `Max-Age`, so every browser
+/// restart was a sign-in. And the rule that makes a thirty-day token tolerable:
+/// it is replaced daily, and the old one stops working two minutes later.
+#[actix_web::test]
+async fn a_remembered_session_outlasts_the_browser_and_rotates_daily() {
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let _seeded = one_at_a_time().await;
+    let app = app!(&u);
+    let (client, connection) = tokio_postgres::connect(&u, tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+
+    let sign_on = |remember: bool| {
+        test::TestRequest::post()
+            .uri("/sessions")
+            .set_json(json!({ "email": KYLE, "password": PASSWORD, "site_id": SITE, "remember": remember }))
+            .to_request()
+    };
+    let max_age = |cookie: &str| -> i64 {
+        cookie.split("Max-Age=").nth(1).expect("a persistent cookie").parse().unwrap()
+    };
+    let current = |cookie: String| {
+        test::TestRequest::get()
+            .uri("/sessions/current")
+            .insert_header(("cookie", cookie))
+            .to_request()
+    };
+
+    // Both kinds of cookie survive a restart, each for its own session's life.
+    let short = test::call_service(&app, sign_on(false)).await;
+    let short_cookie = short.headers().get("set-cookie").unwrap().to_str().unwrap().to_string();
+    assert!((8 * 3600 - 60..=8 * 3600).contains(&max_age(&short_cookie)), "{short_cookie}");
+    let short: Value = test::read_body_json(short).await;
+    let short_token = short["token"].as_str().unwrap().to_string();
+
+    let long = test::call_service(&app, sign_on(true)).await;
+    let long_cookie = long.headers().get("set-cookie").unwrap().to_str().unwrap().to_string();
+    let thirty_days = 30 * 24 * 3600;
+    assert!((thirty_days - 60..=thirty_days).contains(&max_age(&long_cookie)), "{long_cookie}");
+    let long: Value = test::read_body_json(long).await;
+    let long_token = long["token"].as_str().unwrap().to_string();
+
+    // An hour away: the shift session has gone idle, the remembered one has not.
+    client
+        .execute(
+            "UPDATE session SET last_seen_at = now() - interval '1 hour'
+              WHERE token_sha256 = ANY($1)",
+            &[&vec![auth::token_digest(&short_token), auth::token_digest(&long_token)]],
+        )
+        .await
+        .unwrap();
+    let resp = test::call_service(&app, current(format!("id={short_token}"))).await;
+    assert_eq!(resp.status(), 401, "half an hour idle is the limit without the box");
+    let resp = test::call_service(&app, current(format!("id={long_token}"))).await;
+    assert!(resp.status().is_success(), "a week idle is the limit with it");
+    assert!(resp.headers().get("set-cookie").is_none(), "not a day old: nothing to rotate");
+
+    // A day later the browser opens the app and is handed a new token.
+    client
+        .execute(
+            "UPDATE session SET created_at = now() - interval '25 hours' WHERE token_sha256 = $1",
+            &[&auth::token_digest(&long_token)],
+        )
+        .await
+        .unwrap();
+    let resp = test::call_service(&app, current(format!("id={long_token}"))).await;
+    assert!(resp.status().is_success());
+    let rotated = resp.headers().get("set-cookie").expect("a rotated cookie").to_str().unwrap().to_string();
+    let new_token = rotated.split(['=', ';']).nth(1).unwrap().to_string();
+    assert_ne!(new_token, long_token);
+    assert!(max_age(&rotated) < thirty_days, "the rotation keeps the absolute expiry");
+
+    // The old one is honoured for a moment, for a tab that raced it, and does
+    // not rotate a second time.
+    let resp = test::call_service(&app, current(format!("id={long_token}"))).await;
+    assert!(resp.status().is_success(), "within the grace");
+    assert!(resp.headers().get("set-cookie").is_none(), "one rotation per day");
+
+    // Then it is nobody, and the new one is the session.
+    client
+        .execute(
+            "UPDATE session SET rotated_at = now() - interval '3 minutes' WHERE token_sha256 = $1",
+            &[&auth::token_digest(&new_token)],
+        )
+        .await
+        .unwrap();
+    let resp = test::call_service(&app, current(format!("id={long_token}"))).await;
+    assert_eq!(resp.status(), 401, "the old token is dead after the grace");
+    let resp = test::call_service(&app, current(format!("id={new_token}"))).await;
+    assert!(resp.status().is_success(), "the new token is the same session");
+
+    // A bearer is never rotated: a handheld has no way to be told.
+    client
+        .execute(
+            "UPDATE session SET rotated_at = now() - interval '25 hours' WHERE token_sha256 = $1",
+            &[&auth::token_digest(&new_token)],
+        )
+        .await
+        .unwrap();
+    let resp = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri("/sessions/current")
+            .insert_header(("authorization", format!("Bearer {new_token}")))
+            .to_request(),
+    )
+    .await;
+    assert!(resp.status().is_success());
+    assert!(resp.headers().get("set-cookie").is_none(), "no rotation for a bearer");
+
+    cleanup(&u).await;
 }
 
 /// Sessions are committed, so the tests remove their own.

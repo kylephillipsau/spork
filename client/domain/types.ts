@@ -732,6 +732,9 @@ export interface SignOnRequest {
   site_id?: Uuid;
   /** D27's recording device, when the client knows it. */
   device_id?: Uuid;
+  /** "Keep me signed in on this device": a week idle and thirty days in all,
+   *  rather than half an hour and a shift. Absent means no. */
+  remember?: boolean;
 }
 
 /** What `POST /sessions` answers with. */

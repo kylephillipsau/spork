@@ -442,7 +442,8 @@ async fn a_passkey_only_person_is_told_there_is_no_password_to_change() {
     let digest = auth::token_digest(&minted);
     client
         .query_one(
-            "SELECT session_open($1, $2, $3, $4, make_interval(hours => 1), NULL, NULL)",
+            "SELECT session_open($1, $2, $3, $4, make_interval(hours => 1),
+                                 make_interval(mins => 30), false, NULL, NULL)",
             &[
                 &person,
                 &Uuid::parse_str(ALPHA).unwrap(),

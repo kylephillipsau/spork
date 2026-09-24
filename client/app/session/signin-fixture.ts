@@ -30,6 +30,8 @@ export function fixtureSignIn(
     // its place, which is a layout nothing else here draws.
     keys: true,
     via: null,
+    remember: false,
+    setRemember: () => {},
     type: () => {},
     choose: () => {},
     submit: noop,
