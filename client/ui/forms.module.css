@@ -37,7 +37,7 @@
 }
 .control:focus-within {
   border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px var(--ui-ring);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
 }
 .invalid,
 .invalid:focus-within {
@@ -54,10 +54,52 @@
   height: 100%;
   padding: 0;
   border: 0;
-  outline: none;
+  outline: none !important;
   background: transparent;
   color: inherit;
   font: inherit;
+}
+/* The box around the input shows focus (border and ring), so the input itself
+   must not: the global focus rules outrank a plain class, and without this a
+   focused field drew a second outline inside its own border. */
+.input:focus,
+.input:focus-visible {
+  outline: none !important;
+}
+/* A text field's input fills its box edge to edge, and the box clips it to its
+   corners. With the padding on the box instead, anything the browser paints on
+   the input itself — autofill's blue or yellow above all — showed as a second
+   rectangle inset inside the border. */
+.fieldBox {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.fieldBox .input {
+  padding: 0 var(--ui-space-3);
+}
+.fieldBox .leading {
+  padding-left: var(--ui-space-3);
+}
+.fieldBox .leading + .input {
+  padding-left: var(--ui-space-2);
+}
+.fieldBox .trailing {
+  padding-right: var(--ui-space-3);
+}
+.fieldBox .input:has(+ .trailing) {
+  padding-right: var(--ui-space-2);
+}
+
+/* Autofill keeps the field's own surface rather than the browser's colour. */
+.input:autofill,
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ui-text);
+  caret-color: var(--ui-text);
+  box-shadow: 0 0 0 1000px var(--ui-surface) inset !important;
+  transition: background-color 100000s 0s;
 }
 .input::placeholder {
   color: var(--ui-text-faint);
@@ -90,9 +132,9 @@
   color: var(--ui-text-faint);
 }
 .selectTrigger:focus-visible {
-  outline: none;
+  outline: none !important;
   border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px var(--ui-ring);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
 }
 .selectIcon {
   display: inline-flex;
@@ -123,7 +165,7 @@
   border-radius: var(--ui-radius-sm);
   font-size: var(--ui-text-base);
   cursor: pointer;
-  outline: none;
+  outline: none !important;
   user-select: none;
 }
 .selectItem[data-highlighted] {

@@ -18,7 +18,7 @@
 .searchBox:focus-within {
   border-color: var(--ui-accent);
   background: var(--ui-surface);
-  box-shadow: 0 0 0 3px var(--ui-ring);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
 }
 .searchIcon {
   flex: none;
@@ -35,6 +35,11 @@
   background: transparent;
   color: var(--ui-text);
   font: inherit;
+}
+/* Focus is drawn by .searchBox; see ui/forms.module.css .input. */
+.searchInput:focus,
+.searchInput:focus-visible {
+  outline: none !important;
 }
 .searchInput::placeholder {
   color: var(--ui-text-faint);

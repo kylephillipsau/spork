@@ -77,7 +77,7 @@
   animation: pop var(--ui-duration) var(--ui-ease);
 }
 .dialog:focus {
-  outline: none;
+  outline: none !important;
 }
 .dialog .overlayFooter {
   border-radius: 0 0 var(--ui-radius-xl) var(--ui-radius-xl);
@@ -99,7 +99,7 @@
   animation: slide 180ms var(--ui-ease);
 }
 .drawer:focus {
-  outline: none;
+  outline: none !important;
 }
 .drawerBody {
   flex: 1;
@@ -129,7 +129,7 @@
   font-size: var(--ui-text-base);
   text-decoration: none;
   cursor: pointer;
-  outline: none;
+  outline: none !important;
   user-select: none;
 }
 .menuItem[data-highlighted] {
@@ -202,7 +202,7 @@
   margin: 0;
   padding: var(--ui-space-4);
   list-style: none;
-  outline: none;
+  outline: none !important;
 }
 .toast {
   color: var(--ui-text);

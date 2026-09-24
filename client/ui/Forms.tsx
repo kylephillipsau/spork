@@ -53,7 +53,7 @@ export function TextField({ label, hint, error, leading, trailing, id, className
   const fieldId = id ?? auto;
   return (
     <Field label={label} hint={hint} error={error} htmlFor={fieldId}>
-      <div className={cx(s.control, error != null && s.invalid, className)}>
+      <div className={cx(s.control, s.fieldBox, error != null && s.invalid, className)}>
         {leading && <span className={s.leading}>{leading}</span>}
         <input id={fieldId} className={s.input} aria-invalid={error != null || undefined} {...input} />
         {trailing && <span className={s.trailing}>{trailing}</span>}
