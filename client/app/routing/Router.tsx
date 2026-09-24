@@ -31,6 +31,12 @@ export interface Screen {
    * `LightRoom`, because a material with no room above it is unlit.
    */
   readonly own?: boolean;
+  /**
+   * Built on the UI kit (D171): rendered outside the old `LightRoom`, whose
+   * canvas and light solver belong to the material system the kit replaces.
+   * Implies `own` for now; the new app shell takes over framing in phase C.
+   */
+  readonly bare?: boolean;
   readonly path: string;
   readonly pattern: Pattern;
   /** The browser tab, and the shell's title. */
@@ -122,6 +128,8 @@ export function Router({
   // it in place: the room, the canvas and the solver survive every navigation
   // there is.
   const density = found?.route.surface === "floor" ? "floor" : "desk";
+
+  if (found?.route.bare) return found.route.render(found.params);
 
   let body;
   if (!found) {

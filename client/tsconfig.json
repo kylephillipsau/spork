@@ -22,8 +22,9 @@
     "paths": {
       "@design/*": ["design/*"],
       "@domain/*": ["domain/*"],
-      "@app/*": ["app/*"]
+      "@app/*": ["app/*"],
+      "@ui/*": ["ui/*"]
     }
   },
-  "include": ["design", "domain", "app", "src", "types"]
+  "include": ["design", "domain", "app", "ui", "src", "types"]
 }

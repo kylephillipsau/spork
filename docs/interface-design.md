@@ -1821,3 +1821,36 @@ working pair of lanes is one directory away when there is an account to point
 them at. Nothing committed ties the app to a developer account: the bundle
 identifier is its own and the team ID is never in the repository, so moving
 Spork onto a separate account later costs one environment variable.
+
+### D171 — Spork uses a conventional desktop interface
+
+*Adopted 2026-09-24 for Spork. Supersedes the look and the shells of this
+register: D109, D115, D118–D129, D134, D148, D149, D159 and D162. The data
+and routing decisions (D110's grouping by job, D112's badge meaning, D113,
+D114, D117, D144, D146, D161) stand.*
+
+**Decision.** Desktop screens sit in one standard app shell: a collapsible
+sidebar, a header with breadcrumbs, a search box that accepts scans, a site
+switcher and a user menu, then a page header (title, description, actions)
+above the work. Handheld screens keep their own mobile layout with 48px targets.
+Everything is built from a UI kit in `client/ui/`: Radix primitives for the
+behaviour that is hard to get right (menus, dialogs, selects, tooltips, focus),
+styled with our own CSS modules and `--ui-` tokens.
+
+**Why.** "Hard Anodise" was a coherent material concept, and it was not what
+people using a warehouse system expect or want. It had four shells of different
+widths, a nameplate for a header, account settings in the work rail, a site
+choice as a whole screen, and a canvas plus a light solver running every frame.
+The standard conventions exist because people already know them.
+
+**The look.** Light and neutral by default, with dark as a per-browser setting
+(Light, Dark or System). One accent colour, 6–8px radii, ordinary shadows. Four
+status colours with their usual meanings: success, warning, danger, info. Amber
+is no longer reserved for findings. Interface text is functional labels. It
+does not explain the design.
+
+**How it lands.** The kit lives alongside `design/` until every screen has moved
+over, so the app keeps working throughout. A screen on the kit is marked `bare`
+in its route and renders outside the `LightRoom`. The design-law checker and the
+render and frame gates are rewritten around the new shell once the screens have
+moved; until then they continue to guard the screens they were written for.

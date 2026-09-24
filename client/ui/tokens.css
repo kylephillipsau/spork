@@ -1,0 +1,162 @@
+/*
+ * Spork UI tokens (D171).
+ *
+ * A conventional light-first palette: neutral surfaces, one accent, four
+ * status colours. Dark is the same names with different values, switched by
+ * `data-theme="dark"` on <html> (see theme.ts); the default is light whatever
+ * the operating system says.
+ *
+ * Prefixed `--ui-` while the old material system (design/) still ships, so
+ * the two sets cannot collide. The prefix goes when design/ does.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --ui-bg: #f6f7f9;
+  --ui-surface: #ffffff;
+  --ui-surface-sunken: #f1f3f5;
+  --ui-surface-hover: #f3f4f6;
+  --ui-surface-active: #e9ebef;
+  --ui-sidebar: #fbfbfc;
+  --ui-overlay: rgba(15, 17, 21, 0.45);
+
+  /* Lines */
+  --ui-border: #e3e5e9;
+  --ui-border-strong: #cfd3d9;
+
+  /* Text */
+  --ui-text: #16181d;
+  --ui-text-muted: #515761;
+  --ui-text-faint: #6b717b;
+  --ui-text-inverse: #ffffff;
+
+  /* Accent */
+  --ui-accent: #4f46e5;
+  --ui-accent-hover: #4338ca;
+  --ui-accent-fg: #ffffff;
+  --ui-accent-soft: #eef0ff;
+  --ui-accent-soft-fg: #3730a3;
+  --ui-ring: rgba(79, 70, 229, 0.45);
+
+  /* Status: a strong colour for text and icons, a soft one for fills */
+  --ui-success: #15803d;
+  --ui-success-soft: #ecfdf3;
+  --ui-warning: #b45309;
+  --ui-warning-soft: #fff8eb;
+  --ui-danger: #dc2626;
+  --ui-danger-soft: #fef2f2;
+  --ui-danger-solid: #dc2626;
+  --ui-danger-solid-hover: #b91c1c;
+  --ui-info: #0369a1;
+  --ui-info-soft: #eff8ff;
+
+  /* Elevation */
+  --ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --ui-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --ui-shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18), 0 4px 8px -4px rgba(16, 24, 40, 0.08);
+
+  /* Shape */
+  --ui-radius-sm: 4px;
+  --ui-radius: 6px;
+  --ui-radius-lg: 8px;
+  --ui-radius-xl: 12px;
+  --ui-radius-full: 999px;
+
+  /* Space, on a 4px grid */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-space-10: 40px;
+
+  /* Type */
+  --ui-font: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --ui-font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --ui-text-xs: 12px;
+  --ui-text-sm: 13px;
+  --ui-text-base: 14px;
+  --ui-text-md: 15px;
+  --ui-text-lg: 16px;
+  --ui-text-xl: 18px;
+  --ui-text-2xl: 22px;
+  --ui-text-3xl: 28px;
+  --ui-leading: 1.45;
+  --ui-leading-tight: 1.25;
+
+  /* Controls: desktop density. Handheld raises these (see [data-density]). */
+  --ui-control-sm: 28px;
+  --ui-control: 34px;
+  --ui-control-lg: 40px;
+
+  /* Frame */
+  --ui-sidebar-width: 240px;
+  --ui-sidebar-collapsed: 60px;
+  --ui-header-height: 56px;
+  --ui-content-max: 1440px;
+
+  /* Layers */
+  --ui-z-sticky: 10;
+  --ui-z-sidebar: 20;
+  --ui-z-overlay: 40;
+  --ui-z-popover: 50;
+  --ui-z-toast: 60;
+
+  --ui-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ui-duration: 140ms;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ui-bg: #0d0e11;
+  --ui-surface: #16181c;
+  --ui-surface-sunken: #111316;
+  --ui-surface-hover: #1e2126;
+  --ui-surface-active: #262a30;
+  --ui-sidebar: #121418;
+  --ui-overlay: rgba(0, 0, 0, 0.6);
+
+  --ui-border: #272a30;
+  --ui-border-strong: #3a3e46;
+
+  --ui-text: #eceef1;
+  --ui-text-muted: #a4a9b2;
+  --ui-text-faint: #8a909a;
+  --ui-text-inverse: #0d0e11;
+
+  --ui-accent: #6366f1;
+  --ui-accent-hover: #7c7ff5;
+  --ui-accent-fg: #ffffff;
+  --ui-accent-soft: rgba(99, 102, 241, 0.16);
+  --ui-accent-soft-fg: #c7cbff;
+  --ui-ring: rgba(129, 140, 248, 0.55);
+
+  --ui-success: #4ade80;
+  --ui-success-soft: rgba(34, 197, 94, 0.14);
+  --ui-warning: #fbbf24;
+  --ui-warning-soft: rgba(245, 158, 11, 0.14);
+  --ui-danger: #f87171;
+  --ui-danger-soft: rgba(239, 68, 68, 0.14);
+  --ui-danger-solid: #dc2626;
+  --ui-danger-solid-hover: #ef4444;
+  --ui-info: #38bdf8;
+  --ui-info-soft: rgba(14, 165, 233, 0.14);
+
+  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ui-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --ui-shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--ui-border);
+}
+
+/* Handheld screens: bigger type and 48px touch targets. */
+[data-density="touch"] {
+  --ui-text-base: 16px;
+  --ui-text-md: 17px;
+  --ui-control-sm: 40px;
+  --ui-control: 48px;
+  --ui-control-lg: 56px;
+}

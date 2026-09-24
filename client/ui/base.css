@@ -1,0 +1,45 @@
+/*
+ * Base styles for screens built on the Spork UI kit (D171).
+ *
+ * Scoped to `body[data-ui="kit"]`, which UiRoot sets, so screens still on the
+ * old material system are untouched until they move over.
+ */
+
+body[data-ui="kit"] {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-base);
+  line-height: var(--ui-leading);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body[data-ui="kit"] *,
+body[data-ui="kit"] *::before,
+body[data-ui="kit"] *::after {
+  box-sizing: border-box;
+}
+
+body[data-ui="kit"] :focus-visible {
+  outline: 2px solid var(--ui-ring);
+  outline-offset: 2px;
+}
+
+body[data-ui="kit"] ::selection {
+  background: var(--ui-accent-soft);
+}
+
+body[data-ui="kit"] h1,
+body[data-ui="kit"] h2,
+body[data-ui="kit"] h3,
+body[data-ui="kit"] p {
+  margin: 0;
+}
+
+body[data-ui="kit"] code,
+body[data-ui="kit"] kbd {
+  font-family: var(--ui-font-mono);
+}

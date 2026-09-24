@@ -1,6 +1,7 @@
 import { pattern } from "@domain/routing";
 import type { Screen } from "./Router";
 import { Gallery } from "../../src/Gallery";
+import { UiKit } from "../../src/UiKit";
 
 /**
  * Things that exist to be looked at rather than used.
@@ -19,5 +20,17 @@ export const REVIEW_ONLY: readonly Screen[] = [
     // Its own shell, like every fixture: no session, no rail, no network.
     own: true,
     render: () => <Gallery />,
+  },
+  {
+    // The UI kit that replaces the material system (D171), outside the
+    // LightRoom it replaces.
+    id: "ui-kit",
+    path: "/ui-kit",
+    title: "UI kit",
+    surface: "desk",
+    pattern: pattern("/ui-kit"),
+    own: true,
+    bare: true,
+    render: () => <UiKit />,
   },
 ];

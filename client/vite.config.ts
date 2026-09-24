@@ -13,6 +13,7 @@ export default defineConfig({
       "@design": fileURLToPath(new URL("./design", import.meta.url)),
       "@domain": fileURLToPath(new URL("./domain", import.meta.url)),
       "@app": fileURLToPath(new URL("./app", import.meta.url)),
+      "@ui": fileURLToPath(new URL("./ui", import.meta.url)),
     },
   },
   css: {
