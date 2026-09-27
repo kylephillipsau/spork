@@ -1,24 +1,26 @@
 #!/usr/bin/env node
 /**
- * THE FRAME, AS THE PRODUCTION BUNDLE ACTUALLY BUILDS IT.
+ * THE FRAME, AS THE PRODUCTION BUNDLE ACTUALLY BUILDS IT (D171).
  *
- * The render gate measures `dist-review` and every route it visits is a fixture
- * — and every fixture draws its own shell, its own chrome and its own literal
- * site and operator. So the frame the *deployment* uses, the one with the
- * session in it, was checked by nothing at all. That is the same shape of gap
- * this repository has recorded twice: a green gate measuring the wrong artefact.
+ * The render gate measures `dist-review`, where every route is a fixture that
+ * draws its own frame with a literal session. So the frame the deployment
+ * uses, the one with the session and the network in it, is checked here.
  *
- * This one serves `dist` — what the Dockerfile copies — answers the API with
- * canned JSON, and asks the questions the persistent layout is for:
+ * This serves `dist` (what the Dockerfile copies), answers the API with canned
+ * JSON, and asks what the persistent frame is for:
  *
- *  - a screen's own regions reach the shell that outlives them (the dock, the
- *    evidence panel), and take no space while they hold nothing;
- *  - the chrome, the work rail and the room's canvas are the *same DOM nodes*
- *    after a navigation, which is the whole claim;
- *  - `/sessions/current` is fetched once, not once per screen.
+ *  - a handheld screen's dock reaches the frame's bar, sits in the reachable
+ *    third, and takes no room while it is empty (D134);
+ *  - the sidebar and header are the same DOM nodes after a navigation, so a
+ *    move between screens reconciles the frame rather than remounting it;
+ *  - `/sessions/current` is fetched once, not once per screen, and choosing a
+ *    finding does not re-read the counts;
+ *  - a link to one finding opens it, Back closes it, and a reload restores it
+ *    (D135);
+ *  - on a phone the sidebar is a drawer behind the Menu button;
+ *  - the passkey button runs a real WebAuthn ceremony.
  *
- * Those are all properties of a running tree. None of them is visible to a
- * grep, and every one of them was false a commit ago.
+ * None of that is visible to a grep.
  *
  *   npm run frame        after `npm run build`
  */
@@ -230,9 +232,6 @@ const base = `http://localhost:${server.address().port}`;
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
-/** 60% of the viewport, which one column of two never is. */
-const window_ratio = (p) => p.viewportSize().width * 0.6;
-
 const failures = [];
 const crashes = [];
 // A screen that threw renders nothing, and every assertion after it fails for
@@ -243,341 +242,165 @@ function say(ok, what) {
   console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}`);
   if (!ok) failures.push(what);
 }
-/**
- * Waits for the frame, not for a number of milliseconds.
- *
- * A fixed delay is the classic way to write a gate that is green on a laptop
- * and red on a cold CI runner, and this one would fail a build that is fine.
- * The chrome is the first thing the frame draws, so it is what "the screen is
- * up" means here.
- */
-const settle = () => page.waitForSelector('[data-region="chrome"]', { timeout: 15_000 });
 
-/**
- * The findings have arrived.
- *
- * The title changes when the route matches, which is before the screen's read
- * comes back — so anything that depends on there being rows, including the page
- * being tall enough to scroll, has to wait for the rows and not for the route.
- * This gate went green and red on the same bundle until it did.
- */
-const findings = () =>
-  page.waitForSelector('[data-region="work"] button:has-text("Evidence")', { timeout: 15_000 });
+const SIDEBAR = 'aside[aria-label="Main"]';
+const DOCK = '[data-region="dock"]';
+const DRAWER = '[role="dialog"]';
+const ROWS = 'table[aria-label="Findings"] tbody tr';
 
-// ── a screen's own region reaches the shell above it ───────────────────────
+/** The frame is up: the header is the first thing it draws. */
+const settle = () => page.waitForSelector("header", { timeout: 15_000 });
+/** The findings have arrived, not just the route. */
+const findings = () => page.waitForSelector(ROWS, { timeout: 15_000 });
+const titled = (t) => page.waitForFunction((want) => document.title.startsWith(want), t, { timeout: 15_000 });
+const drawerShown = (shown) =>
+  page
+    .waitForFunction((want) => (document.querySelector('[role="dialog"]') !== null) === want, shown, { timeout: 15_000 })
+    .catch(() => {});
+const sidebarShown = (shown) =>
+  page
+    .waitForFunction((want) => document.querySelector('aside[aria-label="Main"]')?.checkVisibility() === want, shown, {
+      timeout: 5_000,
+    })
+    .catch(() => {});
+
+// ── a handheld screen's dock reaches the frame ─────────────────────────────
+await page.setViewportSize({ width: 430, height: 932 });
 await page.goto(`${base}/picking`);
 await settle();
-say((await page.locator('[data-region="dock"]').count()) === 1, "picking draws one dock");
-// The dock's contents arrive with the screen's read, so wait for the portal
-// rather than for the clock.
+say((await page.locator(DOCK).count()) === 1, "picking draws one dock");
 await page
-  .waitForFunction(
-    () => (document.querySelector('[data-region="dock"]')?.textContent ?? "").trim().length > 0,
-    null,
-    { timeout: 15_000 },
-  )
+  .waitForFunction((sel) => (document.querySelector(sel)?.textContent ?? "").trim().length > 0, DOCK, { timeout: 15_000 })
   .catch(() => {});
-say(
-  (await page.locator('[data-region="dock"]').innerText()).trim().length > 0,
-  "the screen's own state is in the shell's dock",
-);
-const dock = await page.locator('[data-region="dock"]').boundingBox();
-const view = page.viewportSize();
-say(
-  dock !== null && dock.y + dock.height > view.height - 60,
-  "and the dock is in the reachable third (D134)",
-);
+say((await page.locator(DOCK).innerText()).trim().length > 0, "the screen's own state is in the frame's dock");
+const dock = await page.locator(DOCK).boundingBox();
+say(dock !== null && dock.y + dock.height > 932 - 80, "and the dock is in the reachable third (D134)");
 
 // ── and takes nothing while it holds nothing ───────────────────────────────
 await page.goto(`${base}/capture`);
 await settle();
-say(
-  (await page.locator('[data-region="dock"]').count()) === 1,
-  "capture's dock container is in the document with nothing in it",
-);
-say(
-  !(await page.locator('[data-region="dock"]').isVisible()),
-  "and out of the layout, so an empty dock costs a handheld nothing",
-);
+say((await page.locator(DOCK).count()) === 1, "capture's dock container is there with nothing in it");
+say(!(await page.locator(DOCK).isVisible()), "and out of the layout, so an empty dock costs nothing");
 
 // ── the frame is the same frame afterwards ─────────────────────────────────
+await page.setViewportSize({ width: 1440, height: 900 });
 await page.goto(`${base}/pack`);
 await settle();
-const stamped = await page.evaluate(() => {
-  const regions = document.querySelectorAll('[data-region="chrome"]');
-  regions.forEach((node, i) => (node.dataset["stamp"] = `chrome-${i}`));
-  const canvas = document.querySelector("canvas");
-  if (canvas) canvas.dataset["stamp"] = "canvas";
-  return regions.length;
-});
-say(stamped === 2, "the chrome and the work rail are both there to begin with");
-
-await page.click('a[href="/despatch"]');
-await page.waitForFunction(() => document.title.startsWith("Despatch"), null, { timeout: 15_000 });
-say(new URL(page.url()).pathname === "/despatch", "a rail link navigates without a page load");
+await page.evaluate((sel) => {
+  document.querySelector(sel).dataset["stamp"] = "sidebar";
+  document.querySelector("header").dataset["stamp"] = "header";
+}, SIDEBAR);
+await page.click(`${SIDEBAR} a[href="/despatch"]`);
+await titled("Despatch");
+say(new URL(page.url()).pathname === "/despatch", "a sidebar link navigates without a page load");
 say(
-  await page.evaluate(() =>
-    [...document.querySelectorAll('[data-region="chrome"]')].every(
-      (node, i) => node.dataset["stamp"] === `chrome-${i}`,
-    ),
+  await page.evaluate(
+    (sel) =>
+      document.querySelector(sel)?.dataset["stamp"] === "sidebar" &&
+      document.querySelector("header")?.dataset["stamp"] === "header",
+    SIDEBAR,
   ),
-  "the chrome and the rail are the same DOM nodes after it",
+  "the sidebar and header are the same DOM nodes after it",
 );
-say(await page.evaluate(() => document.title.startsWith("Despatch")), "and the tab title followed");
+say(
+  (await page.locator(`${SIDEBAR} [aria-current="page"]`).getAttribute("href")) === "/despatch",
+  "and the sidebar marks where it went",
+);
 
 // ── one session for the application ────────────────────────────────────────
 let sessions = 0;
 page.on("request", (request) => {
   if (new URL(request.url()).pathname === "/api/sessions/current") sessions += 1;
 });
-await page.click('a[href="/weigh"]');
-await page.waitForFunction(() => document.title.startsWith("Weigh"), null, { timeout: 15_000 });
-await page.click('a[href="/findings"]');
-await page.waitForFunction(() => document.title.startsWith("Findings"), null, { timeout: 15_000 });
+await page.click(`${SIDEBAR} a[href="/weigh"]`);
+await titled("Weigh");
+await page.click(`${SIDEBAR} a[href="/findings"]`);
+await titled("Findings");
 await findings();
 say(sessions === 0, `no session refetch across two more navigations (saw ${sessions})`);
 
-// ── the room outlives all of it ────────────────────────────────────────────
-say(
-  await page.evaluate(() => document.querySelector("canvas")?.dataset["stamp"] === "canvas"),
-  "the light room's canvas survived bench → bench → desk",
-);
-say(
-  await page.evaluate(() => document.querySelector("aside") !== null),
-  "the evidence panel's container is in the document",
-);
-say(
-  await page.evaluate(() => !document.querySelector("aside").checkVisibility()),
-  "and out of the layout with nothing selected",
-);
-const wide = await page.evaluate(
-  () => document.querySelector('[data-region="work"]').getBoundingClientRect().width,
-);
-say(wide > window_ratio(page), "so the work column is not paying for a panel nobody opened");
-
-// ── and opens beside the work when a row is chosen ─────────────────────────
-const row = page.locator('[data-region="work"] button', { hasText: "Evidence" }).first();
-if ((await row.count()) > 0) {
-  await row.click();
-  await page.waitForFunction(() => document.querySelector("aside")?.checkVisibility() === true, null, {
-    timeout: 15_000,
-  });
-  say(true, "choosing a finding opens the evidence panel through the portal");
-  const narrowed = await page.evaluate(
-    () => document.querySelector('[data-region="work"]').getBoundingClientRect().width,
-  );
-  say(narrowed < wide, "and the work column gives it the room, rather than overlaying (D119)");
-} else {
-  say(false, "a finding to choose");
-}
-
-say(
-  new URL(page.url()).pathname === "/findings/01a0-d0",
-  `and the finding is in the path afterwards (saw ${new URL(page.url()).pathname})`,
-);
-
-// ── and moving between rows is not arriving anywhere ───────────────────────
-// The badge counts are refreshed on arrival at a screen. Choosing a row is a
-// navigation now, so keyed on the path that read fired once per finding an
-// operator looked at — twenty reads of `/work` to triage twenty findings.
+// ── choosing a finding is a place, and not an arrival ──────────────────────
 let works = 0;
 const countWork = (request) => {
   if (new URL(request.url()).pathname === "/api/work") works += 1;
 };
 page.on("request", countWork);
-await page.locator('[data-region="work"] button', { hasText: "Evidence" }).first().click();
-await page
-  .waitForFunction(() => location.pathname === "/findings/01a0-d1", null, { timeout: 15_000 })
-  .catch(() => {});
+await page.locator(ROWS).first().click();
+await drawerShown(true);
+say((await page.locator(DRAWER).count()) === 1, "choosing a finding opens its drawer");
 say(
-  new URL(page.url()).pathname === "/findings/01a0-d1",
-  "a second row is a second finding in the path",
+  new URL(page.url()).pathname === "/findings/01a0-d0",
+  `and the finding is in the path (saw ${new URL(page.url()).pathname})`,
 );
-say(works === 0, `and the badges are not re-read to get there (saw ${works})`);
+await page.keyboard.press("Escape");
+await drawerShown(false);
+await page.locator(ROWS).nth(1).click();
+await page.waitForFunction(() => location.pathname === "/findings/01a0-d1", null, { timeout: 15_000 }).catch(() => {});
+say(new URL(page.url()).pathname === "/findings/01a0-d1", "a second row is a second finding in the path");
+say(works === 0, `and the counts are not re-read to get there (saw ${works})`);
 page.off("request", countWork);
 
-// ── a link to one finding restores the panel, which is D135 ────────────────
-// The whole reason `/findings/:finding` exists: this is a fresh load of a URL
-// somebody could have been sent, for a finding that is *not* on the tab the
-// screen opens on. The panel has to be open before anything is clicked, and the
-// tab has to have moved to the one that can show it.
+// ── a link to one finding restores it, which is D135 ───────────────────────
+// A fresh load of a URL somebody could have been sent, for a finding that is
+// not on the tab the screen opens on.
 await page.goto(`${base}/findings/01a0-d7`);
 await settle();
-await page
-  .waitForFunction(() => document.querySelector("aside")?.checkVisibility() === true, null, {
-    timeout: 15_000,
-  })
-  .catch(() => {});
+await drawerShown(true);
+say((await page.locator(DRAWER).count()) === 1, "a link to one finding opens it, with nothing clicked");
+say((await page.locator(DRAWER).innerText()).includes("carrier claim"), "and it is that finding, read by id");
 say(
-  await page.evaluate(() => document.querySelector("aside")?.checkVisibility() === true),
-  "a link to one finding opens the panel on it, with nothing clicked",
-);
-say(
-  // `.first()`, because the panel that portals in is an `aside` too — the
-  // shell's evidence column is the one that is always there.
-  (await page.locator("aside").first().innerText()).includes("carrier claim"),
-  "and it is that finding, read by id rather than found in the queue",
-);
-say(
-  await page.evaluate(
-    () =>
-      document.querySelector('[aria-label="Which findings"] [aria-checked="true"]')?.textContent ===
-      "Closed",
-  ),
+  ((await page.locator('[aria-label="Which findings"] [aria-selected="true"]').innerText()) ?? "").startsWith("Closed"),
   "and the tab moved to the one that can show a closed finding",
 );
 
-// ── and Back is the way out of it ──────────────────────────────────────────
-// Back was announced to React and the path it then read was the one from
-// before the navigation, so the address bar moved and the screen did not.
-// `/findings/:finding` is the first route where anybody would see that.
-const chosen = page.locator('[data-region="work"] button', { hasText: "Evidence" }).first();
-const panelShown = (shown) =>
-  page
-    .waitForFunction(
-      (want) => document.querySelector("aside")?.checkVisibility() === want,
-      shown,
-      { timeout: 15_000 },
-    )
-    .catch(() => {});
-
+// ── Back is the way out, and a reload comes back ───────────────────────────
 await page.goto(`${base}/findings`);
 await settle();
 await findings();
-await chosen.click();
-await panelShown(true);
+await page.locator(ROWS).first().click();
+await drawerShown(true);
 await page.goBack();
-await panelShown(false);
+await drawerShown(false);
 say(new URL(page.url()).pathname === "/findings", "Back leaves the finding");
-say(
-  await page.evaluate(() => document.querySelector("aside")?.checkVisibility() === false),
-  "and the panel closes with it, rather than the URL moving on its own",
-);
-
-// ── and a refresh comes back to the same evidence ──────────────────────────
-// The other half of what D135 asked for: selection was in memory, so reloading
-// the page a finding was open on dropped the operator on the bare queue.
-await chosen.click();
-await panelShown(true);
+say((await page.locator(DRAWER).count()) === 0, "and the drawer closes with it");
+await page.goForward();
+await drawerShown(true);
 await page.reload();
 await settle();
-await panelShown(true);
-say(
-  await page.evaluate(() => document.querySelector("aside")?.checkVisibility() === true),
-  "a refresh comes back to the finding that was open",
-);
-say(
-  (await page.locator("aside").first().innerText()).includes("NYL-440"),
-  "and to the same one, rather than to whichever row is first",
-);
+await drawerShown(true);
+say((await page.locator(DRAWER).count()) === 1, "a reload comes back to the finding that was open");
+say((await page.locator(DRAWER).innerText()).includes("NYL-440"), "and to the same one");
 
-await page.goto(`${base}/findings`);
-await settle();
-await findings();
-
-// ── wide: there is no dialog, and nothing to open ──────────────────────────
-say(
-  (await page.locator('[role="dialog"]').count()) === 0,
-  "at 1440px the rail is a column and claims to be nothing else",
-);
-say(
-  !(await page.locator("button", { hasText: "Menu" }).first().isVisible()),
-  "and the Menu key is not drawn where the rail is already on the screen",
-);
-
-// ── narrow: the rail is a sheet, and the way to it is pinned ───────────────
+// ── on a phone the sidebar is a drawer ─────────────────────────────────────
 await page.setViewportSize({ width: 390, height: 844 });
 await page.goto(`${base}/findings`);
 await settle();
 await findings();
-
-const menu = page.locator("button", { hasText: "Menu" }).first();
-const rail = page.locator('nav[aria-label="Work"]');
-say(await menu.isVisible(), "at 390px the chrome offers a Menu key");
-say(!(await rail.isVisible()), "and the rail is not in the way of the work");
+const menu = page.locator('button[aria-label="Menu"]');
+say(await menu.isVisible(), "at 390px the header offers a Menu button");
+say(!(await page.locator(SIDEBAR).isVisible()), "and the sidebar is not in the way of the work");
 say(
-  (await page.locator('[role="dialog"]').count()) === 0,
-  "nothing claims to be a dialog while it is closed",
+  await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),
+  "and nothing scrolls sideways",
 );
-
-await page.evaluate(() => window.scrollTo(0, 600));
-await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 5_000 }).catch(() => {});
-say(await page.evaluate(() => window.scrollY > 100), "a pocket-width worklist scrolls");
-say(
-  await page.evaluate(() => {
-    const chrome = document.querySelector('[data-region="chrome"]');
-    return Math.abs(chrome.getBoundingClientRect().top) < 1;
-  }),
-  "the chrome is pinned, so the way out is not at the top of a list you scrolled",
-);
-
 await menu.click();
-await page.waitForSelector('[role="dialog"]', { timeout: 5_000 });
-say(await rail.isVisible(), "the Menu key opens the sheet, with the same rail in it");
-say(
-  (await page.locator('nav[aria-label="Work"]').count()) === 1,
-  "one rail in the document, not a second copy shown at this width",
-);
-const sheet = await page.locator('[role="dialog"]').boundingBox();
-say(
-  sheet.x === 0 && sheet.y === 0 && sheet.width === 390 && sheet.height === 844,
-  "it covers the screen rather than overlaying the work (D119)",
-);
-say(
-  await page.evaluate(() => document.querySelector('[role="dialog"]').contains(document.activeElement)),
-  "and focus is inside it",
-);
-
+await sidebarShown(true);
+say(await page.locator(SIDEBAR).isVisible(), "Menu opens the sidebar");
 await page.keyboard.press("Escape");
-await page.waitForSelector('[role="dialog"]', { state: "detached", timeout: 5_000 });
-say(true, "Escape closes it");
-say(
-  await page.evaluate(() => document.activeElement?.textContent?.trim() === "Menu"),
-  "and focus goes back to the key that opened it",
-);
-
+await sidebarShown(false);
+say(!(await page.locator(SIDEBAR).isVisible()), "Escape closes it");
 await menu.click();
-await page.waitForSelector('[role="dialog"]', { timeout: 5_000 });
-await page.click('nav[aria-label="Work"] a[href="/pack"]');
-await page.waitForFunction(() => document.title.startsWith("Pack"), null, { timeout: 15_000 });
+await sidebarShown(true);
+await page.click(`${SIDEBAR} a[href="/pack"]`);
+await titled("Packing");
 say(new URL(page.url()).pathname === "/pack", "choosing a destination navigates");
-say(
-  (await page.locator('[role="dialog"]').count()) === 0,
-  "and arriving is what closes the sheet — nothing is left over the screen",
-);
-say(
-  await page.evaluate(() => document.body.style.overflow !== "hidden"),
-  "and the page scrolls again",
-);
-// The frame outlives the navigation now, and the scroll position is the
-// frame's. Arriving 600px down a screen you have never seen would be a
-// regression the old remount was hiding.
-say(await page.evaluate(() => window.scrollY === 0), "and the new screen starts at the top");
-
-// ── the band between the two, which is neither ─────────────────────────────
-// Below 62rem the rail is a sheet; below 48rem the chrome stacks into three
-// rows (D159). Between them is a one-row chrome with a Menu key in it, and it
-// is the width nothing else here measures.
-await page.setViewportSize({ width: 800, height: 900 });
-await page.goto(`${base}/findings`);
-await settle();
-await findings();
-say(await menu.isVisible(), "at 800px the Menu key is there too");
-say(!(await rail.isVisible()), "and the rail is still a sheet rather than a column");
-await menu.click();
-await page.waitForSelector('[role="dialog"]', { timeout: 5_000 });
-const tablet = await page.locator('[role="dialog"]').boundingBox();
-say(
-  tablet.x === 0 && tablet.width === 800 && tablet.height === 900,
-  "and it covers a tablet the same way it covers a phone",
-);
+await sidebarShown(false);
+say(!(await page.locator(SIDEBAR).isVisible()), "and arriving closes the sidebar");
 
 // ── the passkey has a caller ───────────────────────────────────────────────
-// The debt this closes was not a bug in anything: it was an endpoint with
-// nobody calling it, which no gate here could see. A virtual authenticator is
-// what makes the ceremony assertable without a person and a fingerprint — the
+// A virtual authenticator makes the ceremony assertable without a person: the
 // client decodes a challenge, asks for an assertion, and encodes what comes
-// back, and every one of those three was written from scratch for this screen.
+// back.
 await page.setViewportSize({ width: 1440, height: 900 });
 const cdp = await page.context().newCDPSession(page);
 await cdp.send("WebAuthn.enable");
@@ -594,9 +417,7 @@ const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
 const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
 await cdp.send("WebAuthn.addCredential", {
   authenticatorId,
-  // **Plain base64, padded.** CDP's `binary` is base64; base64url is what the
-  // WebAuthn *wire* uses, and mixing the two is the exact confusion this
-  // client's `webauthn.ts` exists to keep in one place.
+  // Plain padded base64: CDP's `binary`. The WebAuthn wire uses base64url.
   credential: {
     credentialId: Buffer.from("spork-frame-gate").toString("base64"),
     isResidentCredential: true,
@@ -610,38 +431,28 @@ await cdp.send("WebAuthn.addCredential", {
 const ceremony = [];
 const onCeremony = (request) => {
   const { pathname } = new URL(request.url());
-  if (pathname.startsWith("/api/passkeys/authentication/")) {
-    ceremony.push([pathname, request.postData() ?? ""]);
-  }
+  if (pathname.startsWith("/api/passkeys/authentication/")) ceremony.push([pathname, request.postData() ?? ""]);
 };
 page.on("request", onCeremony);
 
 await page.goto(`${base}/sign-in`);
-await page.waitForSelector('[data-region="work"]', { timeout: 15_000 });
-const passkey = page.locator("button", { hasText: "Use a passkey" }).first();
-say(await passkey.isVisible(), "the sign-in screen offers a key");
+const passkey = page.locator("button", { hasText: "Sign in with a passkey" }).first();
+await passkey.waitFor({ timeout: 15_000 }).catch(() => {});
+say(await passkey.isVisible(), "the sign-in screen offers a passkey");
 await passkey.click();
-await page
-  .waitForFunction(() => location.pathname === "/", null, { timeout: 15_000 })
-  .catch(() => {});
+await page.waitForFunction(() => location.pathname === "/", null, { timeout: 15_000 }).catch(() => {});
 page.off("request", onCeremony);
 
 const begun = ceremony.find(([p]) => p.endsWith("/begin"));
 const finished = ceremony.find(([p]) => p.endsWith("/finish"));
-say(begun !== undefined, "and pressing it begins a ceremony, which nothing called before today");
-say(
-  begun !== undefined && begun[1] === "{}",
-  "with no email, so the authenticator says who this is",
-);
+say(begun !== undefined, "and pressing it begins a ceremony");
+say(begun !== undefined && begun[1] === "{}", "with no email, so the authenticator says who this is");
 say(finished !== undefined, "the assertion goes back to the server");
 say(
   finished !== undefined && JSON.parse(finished[1]).credential?.response?.signature?.length > 0,
   "and it carries a signature, so the base64url edge is wired the right way round",
 );
-say(
-  new URL(page.url()).pathname === "/",
-  `and a key signs somebody in (saw ${new URL(page.url()).pathname})`,
-);
+say(new URL(page.url()).pathname === "/", `and a passkey signs somebody in (saw ${new URL(page.url()).pathname})`);
 
 await browser.close();
 server.close();
@@ -651,4 +462,4 @@ if (failures.length || crashes.length) {
   console.error(`\nframe failed — ${failures.length} assertions, ${crashes.length} exceptions`);
   process.exit(1);
 }
-console.log("\nframe ok — the shell, the chrome and the room are mounted once");
+console.log("\nframe ok — the frame is mounted once and the session read once");

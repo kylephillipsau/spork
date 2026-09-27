@@ -132,7 +132,7 @@
   background: var(--ui-surface-sunken);
   color: var(--ui-text-faint);
 }
-.emptyIcon svg { width: 20px; height: 20px; }
+.emptyIcon svg { width: var(--ui-icon-xl); height: var(--ui-icon-xl); }
 .emptyTitle { font-weight: 600; }
 .emptyText { max-width: 44ch; color: var(--ui-text-muted); }
 .emptyAction { margin-top: var(--ui-space-2); }

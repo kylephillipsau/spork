@@ -21,7 +21,8 @@
  * sizes its content and nothing around it. It used to be set on <body>,
  * which let the sidebar's text grow on the handheld views.
  *
- * Prefixed --ui- while design/ still ships. The prefix goes when design/ does.
+ * Prefixed --ui- so the kit's names cannot collide with a library's own
+ * custom properties (Radix sets --radix-*).
  */
 
 /* ---- 1. scale ---------------------------------------------------------- */
@@ -38,7 +39,7 @@
   --ui-text-3xl: 28px;
   --ui-leading: 1.45;
   --ui-leading-tight: 1.25;
-  --ui-tracking-caps: 0.06em;
+  --ui-tracking-caps: 0.04em;
 
   /* Space, on a 4px grid with half steps where a control needs them. */
   --ui-space-0-5: 2px;

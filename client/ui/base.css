@@ -1,8 +1,8 @@
 /*
- * Base styles for screens built on the Spork UI kit (D171).
+ * Base styles for the Spork UI kit (D171).
  *
- * Scoped to `body[data-ui="kit"]`, which UiRoot sets, so screens still on the
- * old material system are untouched until they move over.
+ * Scoped to `body[data-ui="kit"]`, which UiRoot sets: a page mounted outside
+ * the kit (none today) gets the browser's defaults rather than half of ours.
  */
 
 body[data-ui="kit"] {

@@ -20,11 +20,10 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@design/*": ["design/*"],
       "@domain/*": ["domain/*"],
       "@app/*": ["app/*"],
       "@ui/*": ["ui/*"]
     }
   },
-  "include": ["design", "domain", "app", "ui", "src", "types"]
+  "include": ["domain", "app", "ui", "src", "types"]
 }

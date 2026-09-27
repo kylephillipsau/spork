@@ -157,8 +157,8 @@ let transport: Transport = WEB;
 /**
  * Point this client at a server it does not share an origin with.
  *
- * Called once, by the platform host, before anything fetches. Nothing in
- * `app/` or `design/` imports it: the screens do not know there is more than
+ * Called once, by the platform host, before anything fetches. No screen
+ * imports it: the screens do not know there is more than
  * one way to reach a server, which is the point of the seam.
  */
 export function useTransport(next: Transport): void {
@@ -168,9 +168,8 @@ export function useTransport(next: Transport): void {
 /**
  * Where a content-addressed photograph's bytes are (D132).
  *
- * Exported because `Photo` draws pictures and does not know an API exists —
- * nothing under `design/` imports from here, deliberately, so the URL is built
- * on this side and passed in.
+ * Built here rather than by the component that draws the picture, so the API
+ * prefix and the platform host's origin are written down once.
  */
 export const imageUrl = (digest: string): string => `${transport.base}/images/${digest}`;
 

@@ -56,7 +56,6 @@ export function AppShell({
 }) {
   const live = usePath();
   const path = at ?? live;
-  const counts = useWork(screenId, fixedCounts);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [open, setOpen] = useState(false);
 
@@ -82,6 +81,9 @@ export function AppShell({
   }
 
   const here = currentItem(path);
+  // Keyed on the sidebar item, not the screen: /findings and /findings/:id are
+  // two screens and one place, and choosing a row is not arriving anywhere.
+  const counts = useWork(here?.item.id ?? screenId, fixedCounts);
   const crumbs: Crumb[] = [];
   if (here?.group.label) crumbs.push({ label: here.group.label });
   if (here && here.item.path !== "/") {

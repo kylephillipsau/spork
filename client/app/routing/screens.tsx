@@ -14,8 +14,6 @@ import { useCallback, type ReactElement } from "react";
 
 import { Dock } from "@app/shell/dock";
 
-import "@design/tokens.css";
-import "@design/layers.css";
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
 

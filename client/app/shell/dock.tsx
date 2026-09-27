@@ -22,7 +22,7 @@ export function DockHost({ children }: { children: ReactNode }) {
     <DockContext.Provider value={dock}>
       <div className={s.handheld}>
         {children}
-        <div ref={setDock} className={s.dock} />
+        <div ref={setDock} className={s.dock} data-region="dock" />
       </div>
     </DockContext.Provider>
   );

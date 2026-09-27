@@ -1,8 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import "@design/tokens.css";
-import "@design/layers.css";
 
 import { Router } from "@app/routing/Router";
 import type { Screen } from "@app/routing/Router";

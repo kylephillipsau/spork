@@ -14,7 +14,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  height: 38px;
+  height: var(--ui-row-head);
   padding: 0 var(--ui-space-4);
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-surface-sunken);
@@ -23,12 +23,12 @@
   font-weight: 600;
   text-align: left;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-tracking-caps);
   white-space: nowrap;
 }
 
 .td {
-  height: 44px;
+  height: var(--ui-row);
   white-space: nowrap;
   padding: 0 var(--ui-space-4);
   border-bottom: 1px solid var(--ui-border);

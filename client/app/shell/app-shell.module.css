@@ -44,8 +44,8 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--ui-mark);
+  height: var(--ui-mark);
   border-radius: var(--ui-radius);
   font-size: var(--ui-text-md);
   font-weight: 700;
@@ -90,7 +90,7 @@
   display: flex;
   align-items: center;
   gap: var(--ui-space-2-5);
-  height: 34px;
+  height: var(--ui-nav-item);
   padding: 0 var(--ui-space-2-5);
   border-radius: var(--ui-radius);
   color: var(--ui-ano-ink-muted);
@@ -258,10 +258,17 @@
     z-index: var(--ui-z-overlay);
     width: var(--ui-sidebar-width);
     transform: translateX(-100%);
-    transition: transform 180ms var(--ui-ease);
+    /* Hidden once it has slid away, so its links are not tabbable or read
+       out while off-screen; visible at once when it opens. */
+    visibility: hidden;
+    transition:
+      transform var(--ui-duration-slow) var(--ui-ease),
+      visibility 0s linear var(--ui-duration-slow);
   }
   .open .sidebar {
     transform: none;
+    visibility: visible;
+    transition: transform var(--ui-duration-slow) var(--ui-ease);
     box-shadow: var(--ui-shadow-lg);
   }
   /* The drawer is always the full sidebar, whatever the desktop setting. */

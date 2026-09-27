@@ -17,8 +17,8 @@ RUN npm ci
 COPY client/ ./
 # `build` is `tsc --noEmit && vite build`, so a type error fails the image.
 #
-# The other three gates — the token contract, the client/server type contract,
-# and the design laws — run in CI rather than here. They check that the source
+# The other gates — the client/server type contract and the design laws —
+# run in CI rather than here. They check that the source
 # is coherent, which is a property of a commit; this stage turns a commit that
 # already passed them into an artefact. Running them twice would also mean
 # copying `crates/` into a node image to satisfy the contract check, which is a
