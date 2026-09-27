@@ -19,13 +19,14 @@ designed against it.
 
 ## Where we actually are
 
-> **Status.** The plan below is largely built. `client/` holds the design
-> package and the Pack screen, five gates run in CI, and the bundle is deployed
-> beside the API. What follows is the design as it stands, with the corrections
-> that got it there recorded rather than smoothed over — the material was wrong
-> about its own finish four times, about its light three times, and about its
-> edges three times, and every correction came from checking the physics or
-> rendering the page.
+> **Status (2026-09-28).** Every screen is built on the UI kit in
+> `client/ui/` and sits in one conventional app shell (D171). The "Hard
+> Anodise" material system this document goes on to describe is retired: its
+> anodised aluminium and nylon survive as static finishes on the frame, and
+> `client/design/` is deleted. The navigation, data and routing decisions
+> stand. The material sections below are kept as the record of how the
+> interface got here, with the corrections that got it there, and are marked
+> where D171 supersedes them.
 
 When this document was written there were twelve server-rendered pages, one
 two-hundred-line stylesheet, and a header bar with four links in it. That
@@ -226,6 +227,10 @@ and that is where the design effort goes.
 ---
 
 ## The material system: Hard Anodise
+
+> **Superseded by D171.** Kept as the record. The light solver, the canvas,
+> the layers and the primitives are gone; the anodised frame and nylon labels
+> remain as static finishes in `client/ui/tokens.css`.
 
 > This section supersedes the paper-first system this document originally
 > specified — condensed stencil type, two rule weights, kraft bands. That
@@ -451,9 +456,14 @@ not overshoot either. **Nothing animates that blocks work.**
 
 ## The laws
 
-The design system's actual deliverable. Eight of them are enforced by
-`client/scripts/check-laws.mjs`; the rest are enforced by review, and the ones
-that are not checkable are the ones that have broken.
+> **Superseded by D171.** These were the material system's laws. The kit's
+> laws, and the ones from this table that survived (tokens nothing reads,
+> overlays that catch the pointer), are the twelve checks in
+> `client/scripts/check-laws.mjs`; D171 lists them.
+
+The design system's actual deliverable. Eight of them were enforced by
+`client/scripts/check-laws.mjs`; the rest were enforced by review, and the ones
+that were not checkable are the ones that broke.
 
 | Law | Why it is a law and not a preference |
 |---|---|
@@ -485,35 +495,34 @@ that are not checkable are the ones that have broken.
 
 ## Component inventory
 
-Built and exported from `client/design/index.ts`:
+The UI kit, exported from `client/ui/index.ts` (D171). Radix primitives supply
+the behaviour that is hard to get right; the styling is the kit's own CSS
+modules over `--ui-` tokens.
 
-**Materials.** `Panel`, `Well`, `Nylon`, `Boot`, `Tag`, `Face`, `FaceWell`,
-`Key`, `Lamp`.
+**Actions.** `Button` (primary, secondary, ghost, danger; three sizes),
+`IconButton`, `Link` — the only anchor, so the router can intercept it.
 
-**Instruments.** `Readout` (three sizes), `Band`, `Pill` (three tones), `Code`,
-`Soft`, `Faint`, `Steel`, `Field` (three widths, commits on Enter, `secret` for a password), `Chooser`,
-`Dim`, `EmptySlot`.
+**Forms.** `Field`, `TextField` (with a leading icon or trailing unit),
+`SearchField`, `ScanField` (claims the caret, takes it back after each scan, is
+never disabled; D111, D117), `Select`, `Checkbox`, `Tabs`.
 
-**Structures.** `Table`, `Num`, `NumHead`, `Action`, `Finding`, `EvidencePair`.
+**Display.** `Badge` and `Count` (six tones), `Card` (title, count, actions),
+`PageHeader`, `Breadcrumbs`, `EmptyState`, `Skeleton`, `Spinner`, `Avatar`,
+`Kbd`, `Tooltip`.
 
-**Layout.** `Stack`, `Row`, `Grid`, `Spacer` — gap only, from the token scale.
+**Layout.** `Page`, `Toolbar`, `Section`, `Spacer`, `Stack`, `Inline`,
+`StatGrid`/`Stat`, `Facts`/`Fact`, `Alert`.
 
-**Room.** `LightRoom`, `startLightSolver`.
+**Data.** `DataTable` (sortable, with a growing column) for desk screens;
+`List`/`ListItem` for handheld screens, where a table's columns are too narrow
+to read.
 
-**Shells.** `BenchShell` (key at the top), `FloorShell` (dock at the bottom,
-D134), `DeskShell` (an evidence rail beside the work), `PlainShell` (one narrow
-column and no chrome, for the screens that are about the account rather than the
-work — setting a deployment up, which runs before there is a site or a person to
-name, and changing your own password, which says whose it is in its own content
-rather than in a corner as a tag).
+**Overlays.** `Dialog`, `Drawer`, `Menu` and its items, `useToast`.
 
-**Locator.** `ScanInput` — one input, claims focus on mount and takes it back
-after each scan (D111, D117). A wedge, not a camera: a warehouse scanner is a
-keyboard.
-
-Still to build: `Stamp`, `Sheet`, `Toast`, `Badge`, `Numpad`, and
-the compositions — `WorkQueue`, `GateHeader`, `CartonBuilder`, `WorklistRow`,
-`PickCard`, `ReceiptLine`, `MeasurementHistory`, `PolicyScope`.
+**Frame** (`client/app/shell/`). `AppShell` (sidebar, header, search, site
+switcher, user menu), `AuthLayout` (the anodised sign-in ground), `KitFrame`
+(picks one of the two and mounts the session and gate), `DockHost` and `Dock`
+(the handheld action bar, D134), `Thumb` (an item photo, in `app/common/`).
 
 A screen built from anything not on this list has found a gap worth naming.
 
@@ -529,12 +538,13 @@ crates/server/
   src/web/               narrows to documents: packing list, A4, labels
 
 client/
-  design/                tokens · materials · light · primitives · layout
+  ui/                    the kit: tokens · components · base styles
   domain/                types, API client, formatting
   app/
-    shells/              BenchShell (FloorShell, DeskShell to come)
-    outbound/pack/       usePackBench · PackBench · fixture
-  scripts/               gen-tokens · check-contract · check-laws · render
+    shell/               AppShell · frames · dock · navigation
+    routing/             manifest · Router · live screens · fixtures
+    outbound/pack/       usePackBench · PackBenchPage · fixture
+  scripts/               check-contract · check-laws · render · check-frame
 ```
 
 ### One definition, two renderers
@@ -601,27 +611,24 @@ write can fail having partly landed. A screen left showing what it hoped
 happened is how a bench starts disagreeing with the ledger it exists to
 describe.
 
-### Four gates
+### Five gates
 
-`npm run verify` is the first three; CI adds the fourth after the build.
+`npm run verify` is the first three; CI adds the last two after the builds.
 
 | Gate | Asks |
 |---|---|
 | `typecheck` | Does it compile, under `strict` and `noUncheckedIndexedAccess` |
-| `tokens:check` | Is `tokens.gen.ts` generated from `tokens.css`, and does every themed token exist in **both** night blocks |
-| `contract` | Does `domain/types.ts` still agree with `crates/server/src/bench.rs` about which fields exist |
-| `laws` | Eight of the laws above, as static checks |
-| `render` | Runs the bundle in a browser and measures what came out |
+| `contract` | Does `domain/types.ts` still agree with the server about which fields exist |
+| `laws` | Twelve static checks: values from the tokens, no unread tokens or unused classes, the frame at desktop density, no fixture on the live path, anchors from `Link`, and the rest D171 lists |
+| `render` | Runs the review build in a browser, visits every fixture in both themes (handheld ones at handheld size, desk ones again at 390px) and measures what came out |
+| `frame` | Runs the production build against canned JSON: the dock, the frame surviving navigation, one session read, finding deep links, the phone drawer, the passkey ceremony |
 
-**The fifth exists because the first four read source.** Typecheck, the token
-contract and the laws all answer questions about *text*, and all stayed green
-through a component that rendered nowhere, a layer painting across the whole
-chassis, and a stylesheet rule shipping the opposite of its own comment. None of
-those is visible to a grep and all three are obvious to a
-`getBoundingClientRect`. See D131.
+**The last two exist because the first three read source.** A component that
+renders nowhere, a page that scrolls sideways on a phone, or a frame remounted
+on every navigation is invisible to a grep and obvious in a browser. See D131.
 
-The token generator uses the same bidirectional diff D25 applies to
-`@projection` columns, and the type contract is the cheap half of D113's
+The render gate reads its route list from `app/routing/fixtures.tsx`, so a new
+fixture cannot go unrendered. The type contract is the cheap half of D113's
 "generated, not hand-mirrored" until a generator exists.
 
 ### Migration
@@ -633,58 +640,36 @@ is deleted for tidiness.
 
 ## What is built
 
-- **The design package.** Tokens, two materials, the light solver, the hangar,
-  and the primitives listed above at both densities.
-- **All five gates**, including the render check, which visits every screen in
-  both faces — the Floor ones at a handheld viewport (D134) — and keeps the
-  screenshots as a CI artefact.
-- **The Bench shell**, **Pack** and **Despatch**, each against the live endpoint
-  or a fixture, behind a route table in `main.tsx`.
-- **The Floor shell** and **Capture**: the worklist, the figures and the seven
-  faces, three stages against `/capture`, `/observations` and the image
-  endpoint. D133, D134 and D135.
-- **The locator**, on the capture screen: `ScanInput` over `GET /resolve`, which
-  is D34's resolution function built at last. A scan resolving to one thing with
-  one capture target opens the session; anything less certain draws the options.
-  The failure record D111 asks for is deferred and the screen says so (D136).
-- **Setup**, at `/setup`: the way into a deployment that has nobody in
-  it, gated by a token the server prints to its log (D142). Four fixture routes,
-  because a real deployment stops needing it the moment somebody does it.
-- **The Desk shell** and **Findings**: the queue with its evidence on the row,
-  the evidence panel in the rail, and investigate and accept. The third of the
-  four surfaces, and the first screen to use amber for what amber is for.
-- **The deployment**: node stage, same-origin bundle, cache contract, root
-  redirect, and a link from the maud pages.
-- **The photograph model** — `observation_image`, content-addressed storage and
-  the two endpoints, now with a screen that drives them.
+- **The UI kit and the app shell** (D171): every screen, desktop and handheld,
+  in one frame with a sidebar, breadcrumbs, a search box that takes scans, a
+  site switcher and a user menu. Light, dark or system theme per browser.
+- **Outbound**: the dashboard, orders, picking, the packing queue and bench,
+  and despatch.
+- **Inbound**: receiving and put away, on the handheld.
+- **Inventory**: findings with deep links (D135), weigh, and capture with its
+  figures, barcodes and seven faces (D133).
+- **Settings and account**: workspace, import and import tokens, password and
+  passkeys, first-run setup (D142) and warehouse selection.
+- **Five gates**, including the render gate, which visits every fixture, and
+  the frame gate, which runs the production build.
+- **The deployment**: same-origin bundle, cache contract, and the packing list
+  kept as a server-rendered document.
 
 ## What to build next
 
-**The standing direction is that every view and component runs on the design
-system.** Three screens do; eleven server-rendered maud pages do not, and they
-are the worklist. Route by route, per the migration note above — nothing is
-deleted for tidiness, and `/app/packing-list/{id}` stays maud because it is
-genuinely a document.
+Every interactive screen is on the kit (D171). The packing list stays a
+server-rendered document at `/app/packing-list/{id}`, per D113.
 
-1. **Weigh**, the last of the four load-bearing screens with nothing built.
-   Bench surface, so the shell exists; `/revalidation` and `/weighings` are both
-   built, and the worklist logic is already a tested pure module.
-2. **The rest of the maud pages** — orders, fulfilment, the packing worklist,
-   keys — and then sign-in, which moves last because it runs before a session
-   exists and carries the passkey ceremony.
-3. **The resolution-failure record** — D28's `activity_event` and the
+1. **The resolution-failure record** — D28's `activity_event` and the
    `symbology` table beside it. The locator resolves and reports and keeps
    nothing, which is the one part of D111 still owed (D136).
-4. **The locator in the chrome.** It is on the capture screen and belongs on
-   every surface, which is what D111 actually asks for. That needs somewhere to
-   navigate to, so it arrives with the router.
-5. **Pick**, where the offline question stops being theoretical.
-6. **A real router**, which Capture turned out not to force (D135) and
-   **Findings does**: its state is on the server, so a deep link to a selected
-   finding restores everything it names, which is exactly the test D135 set.
+2. **Handheld hardware.** The handheld screens are checked at 430px and touch
+   density in a desktop browser. They have not been run on the Honeywell
+   device itself.
 
-Open question 4 — whether the material survives a Honeywell handheld — is a
-hardware question rather than a scheduling one, and stays in the register.
+Open question 4 — whether the material survives a Honeywell handheld — is
+mostly answered by D171: the blend modes, masks and light solver it worried
+about are gone. What remains is item 2.
 
 ## Decisions
 
@@ -1872,13 +1857,23 @@ and checks rather than conventions:
   top or bottom), `Section`, `Alert`, `StatGrid`/`Stat`, `Facts`/`Fact`,
   `Card` with a count, `DataTable` with a growing column: a screen composes
   these rather than restyling its own copy.
-- *Kit laws* (`client/scripts/check-laws.mjs`, K1–K6): no raw colours outside
-  the tokens; type sizes from the type scale; spacing from the spacing scale
-  (a 1px hairline excepted); kit screens do not import `@design`; a class
-  nothing applies is drift; the frame declares desktop density.
+- *Laws* (`client/scripts/check-laws.mjs`, twelve checks): no raw colours
+  outside the tokens; type sizes from the type scale; spacing from the
+  spacing scale (a 1px hairline excepted); a token nothing reads and a class
+  nothing applies are drift; every dark-theme value overrides a declared
+  light one; the frame declares desktop density; nothing laid over content
+  catches the pointer; no fixture and no Tauri import on the live path;
+  anchors come from `Link`; the API mints no identity and reads no clock.
 
-**How it lands.** The kit lives alongside `design/` until every screen has moved
-over, so the app keeps working throughout. A screen on the kit is marked `bare`
-in its route and renders outside the `LightRoom`. The design-law checker and the
-render and frame gates are rewritten around the new shell once the screens have
-moved; until then they continue to guard the screens they were written for.
+**How it landed.** In phases, with the app working throughout: the kit
+(B), the shell (C), the desktop screens (D), the handheld screens and setup in
+the new frame (E), and then the cleanup (F). F rebuilt the handheld bodies on
+the kit, moved the review fixtures onto the kit pages, deleted `design/`, the
+four old shells, the work rail and the `LightRoom`, and rewrote the laws, the
+render gate and the frame gate. The new gates found real defects on their
+first run: a phone page scrolling 288px sideways, sub-40px tabs on the
+handheld, fixtures fetching `/api/sites`, the counts re-read on every finding
+opened, and a closed phone sidebar whose links stayed focusable.
+
+**The `--ui-` prefix stays.** It was to go with `design/`; it is kept because
+it keeps the kit's names clear of a library's own custom properties.
