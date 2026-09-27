@@ -23,19 +23,19 @@ import { usePackBench } from "@app/outbound/pack/usePackBench";
 import { DespatchPage } from "@app/outbound/despatch/DespatchPage";
 
 import { useDespatch } from "@app/outbound/despatch/useDespatch";
-import { Capture, CaptureDock } from "@app/measurement/capture/Capture";
+import { CapturePage, CaptureDockPage } from "@app/measurement/capture/CapturePage";
 import { useCapture } from "@app/measurement/capture/useCapture";
-import { PickList, PickDock } from "@app/outbound/picking/PickList";
+import { PickingPage, PickingDock } from "@app/outbound/picking/PickingPage";
 import { usePicking } from "@app/outbound/picking/usePicking";
-import { Putaway, PutawayDock } from "@app/inbound/putaway/Putaway";
+import { PutawayPage, PutawayDockPage } from "@app/inbound/putaway/PutawayPage";
 import { usePutaway } from "@app/inbound/putaway/usePutaway";
-import { Receiving, ReceivingDock } from "@app/inbound/receiving/Receiving";
+import { ReceivingPage, ReceivingDockPage } from "@app/inbound/receiving/ReceivingPage";
 import { useReceiving } from "@app/inbound/receiving/useReceiving";
 import { FindingsPage } from "@app/integrity/findings/FindingsPage";
 import { useFindings } from "@app/integrity/findings/useFindings";
 import { WeighPage } from "@app/measurement/weigh/WeighPage";
 import { useWeigh } from "@app/measurement/weigh/useWeigh";
-import { Setup } from "@app/setup/Setup";
+import { SetupPage } from "@app/setup/SetupPage";
 import { useSetup } from "@app/setup/useSetup";
 import { WherePage } from "@app/session/WherePage";
 import { useWhere } from "@app/session/useWhere";
@@ -130,9 +130,9 @@ function LiveCapture() {
   const bench = useCapture();
   return (
     <>
-      <Capture bench={bench} />
+      <CapturePage bench={bench} />
       <Dock>
-        <CaptureDock bench={bench} />
+        <CaptureDockPage bench={bench} />
       </Dock>
     </>
   );
@@ -175,9 +175,9 @@ function LiveReceiving() {
   const bench = useReceiving();
   return (
     <>
-      <Receiving bench={bench} />
+      <ReceivingPage bench={bench} />
       <Dock>
-        <ReceivingDock bench={bench} />
+        <ReceivingDockPage bench={bench} />
       </Dock>
     </>
   );
@@ -187,9 +187,9 @@ function LivePutaway() {
   const bench = usePutaway();
   return (
     <>
-      <Putaway bench={bench} />
+      <PutawayPage bench={bench} />
       <Dock>
-        <PutawayDock bench={bench} />
+        <PutawayDockPage bench={bench} />
       </Dock>
     </>
   );
@@ -199,9 +199,9 @@ function LivePicking() {
   const bench = usePicking();
   return (
     <>
-      <PickList bench={bench} />
+      <PickingPage bench={bench} />
       <Dock>
-        <PickDock bench={bench} />
+        <PickingDock bench={bench} />
       </Dock>
     </>
   );
@@ -230,7 +230,7 @@ function LiveSignIn() {
 }
 
 function LiveSetup() {
-  return <Setup bench={useSetup()} />;
+  return <SetupPage bench={useSetup()} />;
 }
 
 /**

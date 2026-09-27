@@ -1,38 +1,31 @@
-import { Code, Face, Faint, Lamp, Link, Panel, Row, Stack } from "@design/index";
-import { href } from "./location";
+import { Button, Card, Stack } from "@ui/index";
+
+import { useNavigate } from "./Router";
+import s from "@app/session/session-pages.module.css";
 
 /**
  * A path this application does not have.
  *
- * **What this replaces is the worst thing in the client.** The route table
- * ended `?? FixturePack`, so every typo, every stale link and every unmatched
- * path rendered the pack screen filled with invented data — a screen lying
- * about which screen it was, and the single biggest reason the whole thing
- * read as a demo.
- *
- * The path is drawn in mono because it is a string somebody typed or a link
- * somebody followed, and D114 says a string a person reads back is monospace.
+ * The route table used to end `?? FixturePack`, so every typo and stale link
+ * drew the pack screen full of invented data. Now it says so. The path is in
+ * mono because it is a string somebody typed or followed (D114).
  */
 export function NotFound({ path }: { path: string }) {
+  const navigate = useNavigate();
   return (
-    <Panel elevation="raised" frame="bezel">
-      <Stack gap={3}>
-        <Face>
-          <Row gap={3} wrap>
-            <Lamp kind="finding" />
-            <span>Page not found:</span>
-            <Code>{path}</Code>
-          </Row>
-        </Face>
-        <Face>
-          <Stack gap={3}>
-            <Faint>Check the address and try again.</Faint>
-            <Row gap={3}>
-              <Link href={href("/")}>Go to dashboard</Link>
-            </Row>
-          </Stack>
-        </Face>
+    <Card>
+      <Stack gap={5}>
+        <div>
+          <h1 className={s.title}>Page not found</h1>
+          <p className={s.subtitle}>
+            <code>{path}</code>
+          </p>
+          <p className={s.subtitle}>Check the address and try again.</p>
+        </div>
+        <Button variant="primary" size="lg" block onClick={() => navigate("/")}>
+          Go to dashboard
+        </Button>
       </Stack>
-    </Panel>
+    </Card>
   );
 }

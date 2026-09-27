@@ -258,3 +258,15 @@
   border-bottom-color: var(--ui-accent);
   color: var(--ui-text);
 }
+
+/* A scan field: taller, and the value in the mono face so a code reads as one. */
+.scan {
+  height: var(--ui-control-lg);
+}
+.scan .input {
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-md);
+}
+.scan .leading {
+  color: var(--ui-accent);
+}

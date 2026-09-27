@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { LightRoom } from "@design/index";
 import { Framed } from "./Framed";
-import { KitFrame, frameFor } from "@app/shell/frames";
+import { KitFrame, LostFrame, frameFor } from "@app/shell/frames";
 import type { ReactElement } from "react";
 import { resolve } from "@domain/routing";
 import type { Params, Pattern } from "@domain/routing";
@@ -130,12 +130,17 @@ export function Router({
   // there is.
   const density = found?.route.surface === "floor" ? "floor" : "desk";
 
-  if (found?.route.bare) return found.route.render(found.params);
+  // No screen means no session and no frame to put it in: the sign-in ground.
+  if (!found) {
+    return <LostFrame>{notFound(path)}</LostFrame>;
+  }
 
-  // The UI kit's frames (D171), outside the LightRoom. Screens not moved yet
-  // fall through to the old frame below.
-  const frame = found ? frameFor(found.route) : null;
-  if (found && frame) {
+  if (found.route.bare) return found.route.render(found.params);
+
+  // The UI kit's frames (D171), outside the LightRoom. Fixtures fall through
+  // to the old frame below.
+  const frame = frameFor(found.route);
+  if (frame) {
     return (
       <KitFrame screen={found.route} frame={frame}>
         {found.route.render(found.params)}
@@ -143,15 +148,10 @@ export function Router({
     );
   }
 
-  let body;
-  if (!found) {
-    body = notFound(path);
-  } else {
-    const drawn = found.route.render(found.params);
-    // Fixtures draw their own shell with literal chrome and no network, so they
-    // pass straight through — inside the room, but not inside the frame.
-    body = found.route.own ? drawn : <Framed screen={found.route}>{drawn}</Framed>;
-  }
+  const drawn = found.route.render(found.params);
+  // Fixtures draw their own shell with literal chrome and no network, so they
+  // pass straight through — inside the room, but not inside the frame.
+  const body = found.route.own ? drawn : <Framed screen={found.route}>{drawn}</Framed>;
 
   return <LightRoom density={density}>{body}</LightRoom>;
 }

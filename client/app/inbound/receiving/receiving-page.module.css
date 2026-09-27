@@ -1,0 +1,59 @@
+.code {
+  font-family: var(--ui-font-mono);
+}
+
+.warning {
+  margin-top: var(--ui-space-1);
+  font-size: var(--ui-text-sm);
+}
+
+.count {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ui-space-3);
+}
+
+.qty {
+  width: 9rem;
+}
+.level {
+  width: 8rem;
+}
+.lot {
+  flex: 1 1 10rem;
+}
+
+.units {
+  align-self: center;
+  color: var(--ui-text-muted);
+}
+.units strong {
+  color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  align-self: center;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+.figure {
+  color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-3);
+  color: var(--ui-text-muted);
+}

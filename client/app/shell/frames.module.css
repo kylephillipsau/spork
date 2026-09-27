@@ -43,35 +43,6 @@
   letter-spacing: 0.02em;
 }
 
-/* ---- a body still on the old material system ---- */
-.legacy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-5);
-  min-width: 0;
-}
-.legacySplit {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--ui-space-5);
-  align-items: start;
-}
-.legacyWork {
-  min-width: 0;
-}
-.legacyEvidence:empty {
-  display: none;
-}
-@media (min-width: 1200px) {
-  .legacySplit:has(.legacyEvidence:not(:empty)) {
-    grid-template-columns: minmax(0, 1fr) 26rem;
-  }
-  .legacyEvidence {
-    position: sticky;
-    top: calc(var(--ui-header-height) + var(--ui-space-5));
-  }
-}
-
 /* ---- handheld ---- */
 .handheld {
   display: flex;
