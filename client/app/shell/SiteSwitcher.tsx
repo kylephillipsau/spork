@@ -13,15 +13,16 @@ import s from "./header.module.css";
  * destination; D171). A woven nylon tag, dyed: the one label that says where
  * you are.
  */
-export function SiteSwitcher() {
+export function SiteSwitcher({ fixed }: { fixed?: SiteRow[] | undefined }) {
   const { session, refresh } = useSessionBench();
   const toast = useToast();
-  const [sites, setSites] = useState<SiteRow[]>([]);
+  const [read, setSites] = useState<SiteRow[]>([]);
+  const sites = fixed ?? read;
 
   const who = session.kind === "signed-in" ? session.who : null;
 
   useEffect(() => {
-    if (!who) return;
+    if (!who || fixed) return;
     let live = true;
     api
       .sites()
@@ -32,7 +33,7 @@ export function SiteSwitcher() {
     return () => {
       live = false;
     };
-  }, [who?.site_id, who]);
+  }, [who?.site_id, who, fixed]);
 
   if (!who) return null;
 

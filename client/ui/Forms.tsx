@@ -174,7 +174,7 @@ export function Tabs({
   "aria-label"?: string | undefined;
 }) {
   return (
-    <T.Root value={value} onValueChange={onValueChange} activationMode="manual">
+    <T.Root className={s.tabsRoot} value={value} onValueChange={onValueChange} activationMode="manual">
       <T.List className={s.tabs} aria-label={ariaLabel}>
         {items.map((t) => (
           <T.Trigger key={t.value} value={t.value} className={s.tab}>

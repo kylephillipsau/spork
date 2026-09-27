@@ -33,7 +33,6 @@
 
   /* ---- legend ink, screen-printed onto the chassis ---- */
   --legend: #cbd2db;
-  --legend-dim: #5b636f;
 
   /* ---- lamps: emitted light, never paint (D115, D118) ---- */
   --lamp-amber: #ff9a3c;
@@ -105,7 +104,6 @@
   --track-legend: 0.2em;
   /* The wordmark, tracked wider than the legend beside it. It was a bare
      0.24em in four stylesheets; this is the same number with a name. */
-  --track-mark: 0.24em;
 
   /* ---- textures. Two octaves, not four (D120). ---- */
   --tex-blast: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23b)'/%3E%3C/svg%3E");
@@ -226,7 +224,6 @@
   --gap-3: 12px;
   --gap-4: 14px;
   --gap-5: 18px;
-  --gap-6: 24px;
 }
 
 @media (min-width: 48rem) {
@@ -234,7 +231,6 @@
     --gap-3: 12px;
     --gap-4: 16px;
     --gap-5: 24px;
-    --gap-6: 32px;
   }
 }
 
@@ -245,6 +241,5 @@
     --gap-3: 18px;
     --gap-4: 24px;
     --gap-5: 32px;
-    --gap-6: 44px;
   }
 }

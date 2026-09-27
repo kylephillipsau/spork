@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from "react";
 import { Spinner, UiRoot, cx, materials } from "@ui/index";
 import { SessionProvider } from "@app/session/SessionContext";
 import { useGate } from "@app/session/Gate";
-import { Regions, useRegion } from "@app/shells/slots";
+import { DockHost } from "./dock";
 import { wantsChromeLocator } from "@app/routing/manifest";
 import type { Screen } from "@app/routing/Router";
 
@@ -12,13 +12,8 @@ import s from "./frames.module.css";
 
 export type Frame = "app" | "auth";
 
-/**
- * Which frame a screen gets (D171). Null keeps the old material frame, for
- * fixtures only, which draw their own shells. Handheld (floor) screens get the
- * app frame at touch density with a dock.
- */
-export function frameFor(screen: Screen): Frame | null {
-  if (screen.own) return null;
+/** Which frame a screen gets (D171): sign-in and first choices on the anodised ground, the rest in the app shell. */
+export function frameFor(screen: Screen): Frame {
   if (screen.id === "sign-in" || screen.id === "where" || screen.id === "setup") return "auth";
   return "app";
 }
@@ -78,23 +73,5 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
     </div>
-  );
-}
-
-/**
- * Handheld screens put their primary action in a dock pinned to the bottom of
- * the screen (D134), where a thumb is. The screen renders it through the
- * `Dock` slot; this draws the bar it lands in — a raised surface, light so the
- * fields and figures in it read — and hides it while nothing is in it.
- */
-export function DockHost({ children }: { children: ReactNode }) {
-  const [dock, setDock] = useRegion();
-  return (
-    <Regions dock={dock}>
-      <div className={s.handheld}>
-        {children}
-        <div ref={setDock} className={s.dock} />
-      </div>
-    </Regions>
   );
 }

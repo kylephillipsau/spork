@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { ApiError, api } from "@domain/api";
-import { destinationFor } from "@app/nav/destination";
-import type { Landing } from "@app/nav/destination";
+import { destinationFor } from "./destination";
+import type { Landing } from "./destination";
 import { useNavigate, usePath } from "@app/routing/Router";
 import { claim, currentHolder, release, subscribe } from "./claim";
 

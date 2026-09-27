@@ -191,9 +191,8 @@ export function PutawayDockPage({ bench }: { bench: PutawayBench }) {
           <Faint>Scan a bin</Faint>
         )}
       </div>
-      <div className={s.row}>
-        <div className={s.quantity}>
-          <TextField
+      <div className={s.quantity}>
+        <TextField
             label="Putting away"
             inputMode="numeric"
             autoComplete="off"
@@ -202,12 +201,12 @@ export function PutawayDockPage({ bench }: { bench: PutawayBench }) {
             disabled={bench.busy}
             trailing={`of ${cell.quantity}`}
           />
-        </div>
-        <Spacer />
-        <Button disabled={bench.busy} onClick={bench.release}>
+      </div>
+      <div className={s.actions}>
+        <Button size="lg" disabled={bench.busy} onClick={bench.release}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" disabled={bench.busy || !bench.bin}>
+        <Button type="submit" size="lg" variant="primary" disabled={bench.busy || !bench.bin}>
           Put away
         </Button>
       </div>

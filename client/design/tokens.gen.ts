@@ -45,7 +45,6 @@ export const TOKENS = [
   "--lamp-nitrile-core",
   "--lamp-off",
   "--legend",
-  "--legend-dim",
   "--lo",
   "--lx",
   "--ly",
@@ -60,7 +59,6 @@ export const TOKENS = [
   "--tex-fine",
   "--tex-pits",
   "--track-legend",
-  "--track-mark",
 ] as const;
 
 export type Token = (typeof TOKENS)[number];
@@ -110,7 +108,6 @@ export const FIXED_TOKENS = [
   "--lamp-nitrile-core",
   "--lamp-off",
   "--legend",
-  "--legend-dim",
   "--lo",
   "--nyl-700",
   "--nyl-dyed",
@@ -123,7 +120,6 @@ export const FIXED_TOKENS = [
   "--tex-fine",
   "--tex-pits",
   "--track-legend",
-  "--track-mark",
 ] as const;
 
 /** Written per panel, per frame, by the light solver (D121). Never authored

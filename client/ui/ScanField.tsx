@@ -61,6 +61,7 @@ export function ScanField({
         <input
           ref={input}
           id={id}
+          data-scan="screen"
           className={s.input}
           value={value}
           placeholder={placeholder}

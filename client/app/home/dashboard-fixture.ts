@@ -23,3 +23,19 @@ export const DASHBOARD_LOADING: DashboardBench = {
   refreshing: true,
   refresh: noop,
 };
+
+/** Nothing waiting anywhere: every panel's drawn absence. */
+export const DASHBOARD_QUIET: DashboardBench = {
+  work: { kind: "ready", data: { pack: 0, pick: 0, despatch: 0, findings: 0, no_site: false } },
+  queue: { kind: "ready", data: [] },
+  findings: { kind: "ready", data: [] },
+  orders: { kind: "ready", data: [] },
+  refreshing: false,
+  refresh: noop,
+};
+
+/** Signed in, attached to no warehouse: the counts cannot be read. */
+export const DASHBOARD_NO_SITE: DashboardBench = {
+  ...DASHBOARD_QUIET,
+  work: { kind: "ready", data: { pack: 0, pick: 0, despatch: 0, findings: 0, no_site: true } },
+};

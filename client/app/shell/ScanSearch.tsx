@@ -3,7 +3,7 @@ import { CircleAlert, Search, X } from "lucide-react";
 
 import { Kbd, Link, Spinner } from "@ui/index";
 import { href } from "@app/routing/location";
-import { useChromeScan } from "@app/scan/useScan";
+import { useChromeScan, type ChromeScan } from "@app/scan/useScan";
 
 import s from "./header.module.css";
 
@@ -13,8 +13,9 @@ import s from "./header.module.css";
  * A barcode wedge types and presses Enter, so a scan and a typed code are the
  * same thing here. It never takes focus by itself (D117): Ctrl+K or `/` does.
  */
-export function ScanSearch() {
-  const scan = useChromeScan();
+export function ScanSearch({ fixed }: { fixed?: ChromeScan | undefined }) {
+  const live = useChromeScan();
+  const scan = fixed ?? live;
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function ScanSearch() {
         {scan.busy ? <Spinner size={14} /> : <Search className={s.searchIcon} aria-hidden />}
         <input
           ref={input}
+          data-scan="header"
           className={s.searchInput}
           value={scan.value}
           onChange={(e) => scan.type(e.target.value)}

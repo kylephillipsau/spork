@@ -227,6 +227,12 @@
 }
 
 /* ---- tabs ---- */
+/* Shrinks inside a wrapping toolbar, so the tabs scroll instead of pushing
+   the page sideways on a phone. */
+.tabsRoot {
+  min-width: 0;
+  max-width: 100%;
+}
 .tabs {
   display: flex;
   gap: var(--ui-space-1);
@@ -240,7 +246,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--ui-space-1-5);
-  height: 38px;
+  height: var(--ui-row-head);
   padding: 0 var(--ui-space-3);
   border: 0;
   border-bottom: 2px solid transparent;

@@ -147,8 +147,11 @@
   box-shadow: var(--ui-shadow-sm);
   min-width: 0;
 }
+/* Wraps, so at handheld width the actions drop under the title rather than
+   squeezing it onto two lines. */
 .cardHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--ui-space-4);

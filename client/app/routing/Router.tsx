@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import { LightRoom } from "@design/index";
-import { Framed } from "./Framed";
 import { KitFrame, LostFrame, frameFor } from "@app/shell/frames";
 import type { ReactElement } from "react";
 import { resolve } from "@domain/routing";
@@ -24,20 +22,11 @@ export interface Screen {
   /** Stable, and what the rail marks as current. */
   readonly id: string;
   /**
-   * This screen draws its own shell and the Router should not frame it.
-   *
-   * Fixtures do: each one exists to show a component in a state, with literal
-   * chrome and no network, so it supplies its own `DeskShell` or `FloorShell`
-   * and its own `site`/`who`. They still render *inside* the Router's
-   * `LightRoom`, because a material with no room above it is unlit.
+   * This screen draws its own frame and the Router should not frame it.
+   * Fixtures do: each shows a page in one state, with a literal session and
+   * no network, so it supplies its own shell.
    */
   readonly own?: boolean;
-  /**
-   * Built on the UI kit (D171): rendered outside the old `LightRoom`, whose
-   * canvas and light solver belong to the material system the kit replaces.
-   * Implies `own` for now; the new app shell takes over framing in phase C.
-   */
-  readonly bare?: boolean;
   readonly path: string;
   readonly pattern: Pattern;
   /** The browser tab, and the shell's title. */
@@ -54,9 +43,9 @@ export interface Screen {
   /**
    * The work, and only the work.
    *
-   * Floor's dock and Desk's evidence panel are drawn by the screen too, with
-   * [`Dock`] and [`Evidence`] — they hold the screen's state, so they are
-   * rendered where that state is and land where the shell put the container.
+   * A handheld screen's dock is drawn by the screen too, with [`Dock`]: it
+   * holds the screen's state, so it is rendered where that state is and lands
+   * where the frame put the container.
    */
   readonly render: (params: Params) => ReactElement;
 }
@@ -118,42 +107,19 @@ export function Router({
     document.title = found ? `${found.route.title} · Spork` : "Not found · Spork";
   }, [found]);
 
-  // **One room, above the route switch.** `LightRoom` documents itself as
-  // "mounted once, at the app root", and until this it was mounted by each
-  // shell — so every navigation swapped the element type at the root, unmounted
-  // the whole tree, stopped the light solver, destroyed the canvas and started
-  // a fresh critically-damped spring that its own comment says takes "a little
-  // under a second" to settle. That was the transition nobody asked for.
-  //
-  // `density` is an attribute rather than a component, so desk → floor changes
-  // it in place: the room, the canvas and the solver survive every navigation
-  // there is.
-  const density = found?.route.surface === "floor" ? "floor" : "desk";
-
   // No screen means no session and no frame to put it in: the sign-in ground.
-  if (!found) {
-    return <LostFrame>{notFound(path)}</LostFrame>;
-  }
+  if (!found) return <LostFrame>{notFound(path)}</LostFrame>;
 
-  if (found.route.bare) return found.route.render(found.params);
+  // Fixtures draw their own frame, with a literal session and no network.
+  if (found.route.own) return found.route.render(found.params);
 
-  // The UI kit's frames (D171), outside the LightRoom. Fixtures fall through
-  // to the old frame below.
-  const frame = frameFor(found.route);
-  if (frame) {
-    return (
-      <KitFrame screen={found.route} frame={frame}>
-        {found.route.render(found.params)}
-      </KitFrame>
-    );
-  }
-
-  const drawn = found.route.render(found.params);
-  // Fixtures draw their own shell with literal chrome and no network, so they
-  // pass straight through — inside the room, but not inside the frame.
-  const body = found.route.own ? drawn : <Framed screen={found.route}>{drawn}</Framed>;
-
-  return <LightRoom density={density}>{body}</LightRoom>;
+  // One element type for every live screen, so a navigation reconciles the
+  // frame (sidebar, header, session) rather than remounting it.
+  return (
+    <KitFrame screen={found.route} frame={frameFor(found.route)}>
+      {found.route.render(found.params)}
+    </KitFrame>
+  );
 }
 
 export { href, go };

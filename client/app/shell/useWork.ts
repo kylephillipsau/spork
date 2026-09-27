@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLive } from "@app/acting";
 import { api } from "@domain/api";
 import type { WorkWaiting } from "@domain/types";
-import type { BadgeKey } from "./rail";
+import type { Badge as BadgeKey } from "./nav";
 
 /**
  * The counts the rail's badges show.
@@ -25,7 +25,10 @@ import type { BadgeKey } from "./rail";
  * A failure is silent. A badge is an aid to navigation, and an error message in
  * the chrome about a count is noise on every screen at once.
  */
-export function useWork(screen: string): Readonly<Partial<Record<BadgeKey, number>>> {
+export function useWork(
+  screen: string,
+  fixed?: Readonly<Partial<Record<BadgeKey, number>>>,
+): Readonly<Partial<Record<BadgeKey, number>>> {
   const [counts, setCounts] = useState<Partial<Record<BadgeKey, number>>>({});
   const live = useLive();
 
@@ -44,8 +47,8 @@ export function useWork(screen: string): Readonly<Partial<Record<BadgeKey, numbe
   }, []);
 
   useEffect(() => {
-    void read();
-  }, [read, screen]);
+    if (!fixed) void read();
+  }, [read, screen, fixed]);
 
-  return counts;
+  return fixed ?? counts;
 }

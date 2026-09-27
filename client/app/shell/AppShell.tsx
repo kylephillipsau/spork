@@ -3,11 +3,13 @@ import { Menu as MenuIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { Breadcrumbs, IconButton, Link, Tooltip, cx, materials, type Crumb } from "@ui/index";
 import { usePath } from "@app/routing/Router";
-import { useWork } from "@app/nav/useWork";
+import { useWork } from "./useWork";
 
 
 import { NAV, SETTINGS, currentItem, type Badge, type NavGroup, type NavItem } from "./nav";
 import { ScanSearch } from "./ScanSearch";
+import type { ChromeScan } from "@app/scan/useScan";
+import type { SiteRow } from "@domain/types";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { UserMenu } from "./UserMenu";
 import s from "./app-shell.module.css";
@@ -32,16 +34,29 @@ export function AppShell({
   screenId,
   title,
   showSearch = true,
+  counts: fixedCounts,
+  scan,
+  sites,
+  at,
   children,
 }: {
   screenId: string;
   title: string;
   /** Off on screens that claim the scanner themselves (D117). */
   showSearch?: boolean | undefined;
+  /** Literal badge counts, for fixtures: nothing is fetched. */
+  counts?: Readonly<Partial<Record<Badge, number>>> | undefined;
+  /** A literal search state, for fixtures. */
+  scan?: ChromeScan | undefined;
+  /** A literal site list, for fixtures. */
+  sites?: SiteRow[] | undefined;
+  /** The path this frame stands for, for fixtures, whose own URL is under /fixtures. */
+  at?: string | undefined;
   children: ReactNode;
 }) {
-  const path = usePath();
-  const counts = useWork(screenId);
+  const live = usePath();
+  const path = at ?? live;
+  const counts = useWork(screenId, fixedCounts);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [open, setOpen] = useState(false);
 
@@ -116,8 +131,8 @@ export function AppShell({
             <Breadcrumbs items={crumbs} />
           </div>
           <div className={s.tools}>
-            {showSearch && <ScanSearch />}
-            <SiteSwitcher />
+            {showSearch && <ScanSearch fixed={scan} />}
+            <SiteSwitcher fixed={sites} />
             <UserMenu />
           </div>
         </header>

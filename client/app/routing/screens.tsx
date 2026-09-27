@@ -12,7 +12,7 @@
  */
 import { useCallback, type ReactElement } from "react";
 
-import { Dock } from "@app/shells/slots";
+import { Dock } from "@app/shell/dock";
 
 import "@design/tokens.css";
 import "@design/layers.css";
@@ -70,14 +70,11 @@ import type { Screen } from "./Router";
 /**
  * Every screen here draws its work and nothing else.
  *
- * The shell, the chrome, the rail, the session and the gate are all in
- * [`Framed`], mounted once above the router. A screen that drew its own would
- * be the top of the tree, and swapping it on a navigation would take all of
- * those down with it — which is exactly what these functions used to do.
- *
- * The two exceptions are regions the shell owns but the *screen's* state fills:
- * Floor's dock and Desk's evidence panel. Those are rendered here, beside the
- * hook that feeds them, and portal into the shell's container.
+ * The frame (sidebar, header, session, gate) is `KitFrame`, mounted by the
+ * router above the screen, so a navigation reconciles it rather than tearing
+ * it down. The one exception is a handheld screen's dock: the frame owns the
+ * bar, but the screen's state fills it, so it is rendered here beside the hook
+ * that feeds it and portals into the frame.
  */
 /**
  * The queue at `/pack`, and one commitment at `/pack/:fulfilment`.

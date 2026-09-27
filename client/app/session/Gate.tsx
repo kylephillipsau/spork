@@ -1,6 +1,4 @@
 import { useEffect } from "react";
-import type { ReactElement, ReactNode } from "react";
-import { Face, Faint, Panel } from "@design/index";
 import { useNavigate } from "@app/routing/Router";
 import { currentPath } from "@app/routing/location";
 import { useSession } from "./SessionContext";
@@ -39,28 +37,11 @@ import { useSession } from "./SessionContext";
  *
  * While the session resolves this draws nothing rather than redirecting. A gate
  * that fires during the first render signs everybody out on every reload.
- */
-export function Gate({
-  needsSession,
-  children,
-}: {
-  needsSession: boolean;
-  children: ReactNode;
-}): ReactElement {
-  const state = useGate(needsSession);
-  if (state === "open") return <>{children}</>;
-  return (
-    <Panel elevation="raised" frame="bezel">
-      <Face>
-        <Faint>{state === "leaving" ? "Taking you to sign in…" : "…"}</Faint>
-      </Face>
-    </Panel>
-  );
-}
-
-/**
- * The gate's decision, and the redirects it runs. Both frames draw their own
- * waiting state from it: the old material one above, and the UI kit's (D171).
+ *
+ * # The hook
+ *
+ * The gate's decision, and the redirects it runs. The frame draws the waiting
+ * state (D171).
  */
 export function useGate(needsSession: boolean): "loading" | "leaving" | "open" {
   const session = useSession();

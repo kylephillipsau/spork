@@ -209,10 +209,12 @@
     width: auto;
     padding: 0 var(--ui-space-2-5);
   }
-  .searchInput {
+  /* Collapsed to the icon until focused; the input takes no room and its
+     placeholder does not show past the icon. */
+  .searchBox:not(:focus-within) .searchInput {
+    flex: 0 0 0;
     width: 0;
-  }
-  .searchBox:focus-within .searchInput {
-    width: auto;
+    min-width: 0;
+    opacity: 0;
   }
 }

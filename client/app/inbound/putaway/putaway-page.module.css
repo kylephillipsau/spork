@@ -37,3 +37,11 @@
 .quantity {
   width: calc(var(--ui-control-lg) * 3);
 }
+/* Cancel at its own width; the primary action takes the rest, under the thumb. */
+.actions {
+  display: flex;
+  gap: var(--ui-space-2);
+}
+.actions > :last-child {
+  flex: 1;
+}

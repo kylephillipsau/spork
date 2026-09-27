@@ -36,6 +36,7 @@ export function Button({
     <button
       type={type}
       className={cx(s.button, s[variant], s[size], block && s.block, className)}
+      data-variant={variant}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...rest}

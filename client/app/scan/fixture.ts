@@ -1,4 +1,4 @@
-import type { Landing } from "@app/nav/destination";
+import type { Landing } from "./destination";
 import type { ChromeScan } from "./useScan";
 
 /**

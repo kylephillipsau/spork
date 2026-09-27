@@ -42,9 +42,10 @@ export function SetupPage({ bench }: { bench: SetupBench }) {
     return (
       <Card>
         <Stack gap={4}>
-          <p className={s.done}>
-            <CircleCheck aria-hidden /> This deployment is already set up.
-          </p>
+          <div>
+            <h1 className={s.title}>Already set up</h1>
+            <p className={s.subtitle}>This deployment is already set up.</p>
+          </div>
           <Link href={href("/sign-in")}>Sign in</Link>
         </Stack>
       </Card>
@@ -56,9 +57,11 @@ export function SetupPage({ bench }: { bench: SetupBench }) {
     return (
       <Card>
         <Stack gap={5}>
-          <p className={s.done}>
-            <CircleCheck aria-hidden /> Set up. You can sign in now.
-          </p>
+          <div className={s.done}>
+            <CircleCheck aria-hidden />
+            <h1 className={s.title}>Set up</h1>
+          </div>
+          <p className={s.subtitle}>You can sign in now.</p>
           <Facts columns={1}>
             <Fact label="Organisation" mono>
               {r.tenant_id}
@@ -118,7 +121,7 @@ export function SetupPage({ bench }: { bench: SetupBench }) {
                 <Alert tone="warning">The setup token has expired. Restart the server for a new one.</Alert>
               )}
               <TextField
-                label="Setup token"
+                aria-label="Setup token"
                 autoComplete="off"
                 spellCheck={false}
                 value={d.token}

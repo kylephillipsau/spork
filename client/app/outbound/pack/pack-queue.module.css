@@ -3,8 +3,14 @@
   align-items: center;
   gap: var(--ui-space-2);
 }
+/* 260px at a desk; on a phone the field takes what the button leaves. */
+.search {
+  min-width: 0;
+  max-width: 100%;
+}
 .search > :first-child {
-  width: 260px;
+  flex: 0 1 260px;
+  min-width: 0;
 }
 .inset {
   padding: var(--ui-space-4);
