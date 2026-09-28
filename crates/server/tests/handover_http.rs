@@ -52,7 +52,7 @@ async fn goods_picked_elsewhere_arrive_where_they_are_put() {
         &app,
         test::TestRequest::post()
             .uri("/import/fulfilment?apply=true")
-            .insert_header(("authorization", token))
+            .insert_header(("authorization", token.clone()))
             .set_payload(
                 json!({
                     "order": format!("S-ho-{run}"),
@@ -230,4 +230,42 @@ async fn goods_picked_elsewhere_arrive_where_they_are_put() {
     let j = job(&queue);
     assert_eq!(j["picked"], json!(1), "one in a carton is one done at the bench: {j}");
     assert_eq!(j["stage"], json!("on_the_bench"), "{j}");
+
+    // ── NetSuite is corrected: six were picked after all ─────────────────
+    // Six are here against four reported, which J75 names until the record
+    // catches up. A later report raising the level is how it does, and it
+    // leaves this suite's rows consistent for every check that runs after.
+    let corrected = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/import/fulfilment?apply=true")
+            .insert_header(("authorization", token))
+            .set_payload(
+                json!({
+                    "order": format!("S-ho-{run}"),
+                    "customer": format!("Handover Test {run}"),
+                    "fulfilment_id": if_id,
+                    "fulfilment_number": "IF-HO",
+                    "status": "Picked",
+                    "observed_at": "2026-09-28T10:00:00Z",
+                    "lines": [
+                        { "line": 1, "item": format!("HO-{run}"), "description": "Handover test item",
+                          "location": "Melbourne Warehouse", "quantity": 4, "picked": 6,
+                          "external_line": "1" },
+                    ]
+                })
+                .to_string(),
+            )
+            .to_request(),
+        "the corrected report",
+    )
+    .await;
+    assert_eq!(corrected["picks"]["recorded"], json!(1), "{corrected}");
+    db.execute("SELECT projection_run_all($1)", &[&tenant]).await.expect("fold");
+    let level: i64 = db
+        .query_one("SELECT external_picked_quantity FROM fulfilment_line WHERE id = $1", &[&line])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(level, 6, "the later report is the level, raised to what is here");
 }

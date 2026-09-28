@@ -34,7 +34,7 @@ pub enum Id {
     J31, J32, J33, J34, J35, J36, J37, J38, J39, J40,
     J41, J42, J43, J44, J45, J46, J47, J48, J49, J50,
     J51, J52, J53, J54, J55, J56, J57, J58, J59, J60, J61, J62, J63, J64, J65, J66,
-    J67, J68, J69, J70, J71, J72, J73, J74,
+    J67, J68, J69, J70, J71, J72, J73, J74, J75,
 }
 
 impl fmt::Display for Id {
@@ -51,7 +51,7 @@ pub const ALL: &[Id] = &[
     Id::J41, Id::J42, Id::J43, Id::J44, Id::J45, Id::J46, Id::J47, Id::J48, Id::J49,
     Id::J50, Id::J51, Id::J52, Id::J53, Id::J54, Id::J55, Id::J56, Id::J57,
     Id::J58, Id::J59, Id::J60, Id::J61, Id::J62, Id::J63, Id::J64, Id::J65, Id::J66,
-    Id::J67, Id::J68, Id::J69, Id::J70, Id::J71, Id::J72, Id::J73, Id::J74,
+    Id::J67, Id::J68, Id::J69, Id::J70, Id::J71, Id::J72, Id::J73, Id::J74, Id::J75,
 ];
 
 /// What a failing job-asserted invariant produces.
@@ -312,6 +312,9 @@ pub fn spec(id: Id) -> Invariant {
         J74 => Invariant { id, owners: "D172", asserts_absence: false,
             statement: "fulfilment_line.external_picked_quantity equals the sum, over the line's external lines, of each one's newest external_pick by observed_at, recorded_at and id. A level, so the newest report wins rather than adding up; and never picked_quantity, which is this system's own ledger (J68)",
             check: Check::Run(checks::j74_a_pick_made_elsewhere_folds_to_its_newest_report) },
+        J75 => Invariant { id, owners: "D172", asserts_absence: true,
+            statement: "No line has more handed over than another system now reports picked on it. Checked at the write only as a warning, because a count at the bench outranks a report from a screen; and a later report can lower the level under goods already here (an un-pick, a line reduced). Either way the difference is for a person, which is what makes it a finding and not a refusal",
+            check: Check::Run(checks::j75_nothing_handed_over_past_the_report) },
         J69 => Invariant { id, owners: "D12, D99, D100", asserts_absence: true,
             statement: "No stock_movement naming a fulfilment line moves an item other than the one that line commits, reached through its order_line. A finding rather than a CHECK: it spans rows, and D12 makes a substituted pick a fact to record rather than a write to refuse",
             check: Check::Run(checks::j69_a_movement_serves_its_line_s_item) },
@@ -3134,6 +3137,51 @@ pub mod checks {
                     r.get::<_, String>(0), r.get::<_, i64>(1), r.get::<_, i64>(2))));
         }
         let lines: i64 = c.query_one("SELECT count(*) FROM fulfilment_line", &[])?.get(0);
+        Ok((lines as usize, findings))
+    }
+
+    /// D172. Handed over, net of corrections, against the level reported now.
+    ///
+    /// The level is each external line's newest report, summed, as J74 and the
+    /// maintainer read it; handed is every movement naming a report, through
+    /// `stock_movement_effective` so a take-out nets.
+    pub fn j75_nothing_handed_over_past_the_report(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let mut findings = vec![];
+        let rows = c.query(
+            "WITH level AS (
+                 SELECT fulfilment_line_id, sum(quantity)::bigint AS q
+                   FROM (SELECT DISTINCT ON (fulfilment_line_id, external_line)
+                                fulfilment_line_id, quantity
+                           FROM external_pick
+                          ORDER BY fulfilment_line_id, external_line,
+                                   observed_at DESC, recorded_at DESC, id DESC) newest
+                  GROUP BY fulfilment_line_id),
+             handed AS (
+                 SELECT m.fulfilment_line_id, sum(v.effective_quantity)::bigint AS q
+                   FROM stock_movement m
+                   JOIN stock_movement_effective v
+                     ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                  WHERE m.external_pick_id IS NOT NULL
+                  GROUP BY m.fulfilment_line_id)
+             SELECT h.fulfilment_line_id::text, h.q, coalesce(l.q, 0)
+               FROM handed h LEFT JOIN level l ON l.fulfilment_line_id = h.fulfilment_line_id
+              WHERE h.q > coalesce(l.q, 0)",
+            &[],
+        )?;
+        for r in &rows {
+            findings.push(finding(Id::J75, "handed_past_report",
+                format!("fulfilment_line {} has {} handed over against {} reported picked",
+                    r.get::<_, String>(0), r.get::<_, i64>(1), r.get::<_, i64>(2))));
+        }
+        let lines: i64 = c
+            .query_one(
+                "SELECT count(DISTINCT fulfilment_line_id) FROM stock_movement
+                  WHERE external_pick_id IS NOT NULL",
+                &[],
+            )?
+            .get(0);
         Ok((lines as usize, findings))
     }
 

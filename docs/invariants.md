@@ -217,6 +217,7 @@ examined nothing.
 | J72 | Every length, width or height **we** recorded against a single unit names the `presentation` it was measured in. An apron folded twice is 250×180×30 and the same apron in a heap is something else, so the number without the word is unreproducible and unarguable. `POST /observations` refuses one — and a rule that lives only in a writer is a rule the *second* writer breaks: the prepack loader, a repair script and any future import all reach this table and none of them go through that check. Scoped to `each`, because a carton has one arrangement and asking for the word would be ceremony; and scoped to observations that are ours, because a counterparty's asserted each dimension is theirs to qualify and a finding we can never clear trains people to ignore the list | D138 | ● |
 | J73 | Every table carrying a `tenant_id` **that `spork_app` can reach** forces row level security. J38 asserts this of the tables carrying an `@projection` column, and that set is narrower than it reads: `reported_stock` arrived with a tenant column, no projection column and row level security switched off, and **the whole suite stayed green** — the property nobody was checking was the one that decides whose rows a query returns. A tenant column is the declaration that rows belong to somebody; RLS is what makes the declaration true. **The privilege clause is not an allow-list.** RLS is not the only way to close a table and this schema uses the other one: `session` carries a `tenant_id` and has no policy at all, because the application holds no privilege on it and migration 70's `SECURITY DEFINER` functions are its only interface — demanding a policy there is a second lock on a welded door. Naming the exceptions would have worked and would have rotted, because a named exception stays true in the file long after it stops being true in the database. So the exemption *is* its reason, asked of Postgres at check time, and it audits itself: grant the application one column of `session` and this fires on the next run. Column privileges rather than table privileges, because this schema grants by column in several places and a table-level test reports no access while a column stands open | D18, D19 | ● |
 | J74 | `fulfilment_line.external_picked_quantity` equals the sum, over the line's external lines, of each one's **newest** `external_pick` by `observed_at`, then `recorded_at`, then `id`. **A level, not a delta**: a report says how many another system says are picked as at a moment, so the newest wins and an un-pick is a later report of fewer. Ordered by when the other system says it was so, not by when it reached us, so reports arriving out of order fold to the same answer. **Never `picked_quantity`**, which J68 holds to this system's own ledger: a reported pick added there would break J68 and fire J56's `picked > covered` on every NetSuite pick, since nothing allocates stock to a line this system holds none for | D172 | |
+| J75 | No line has more **handed over** (net of corrections) than another system now reports picked on it. The write only warns, because a count made at the bench outranks a report read off a screen, and a later report can lower the level under goods already here: an un-pick, a line reduced in NetSuite. Either way the difference is for a person to resolve, which is what makes it a finding rather than a refusal. It is the default answer to "the item fulfilment changed under an open fulfilment"; cancelling instead is a separate, per-site choice | D172 | ● |
 
 ---
 
@@ -259,13 +260,13 @@ appears here as its current whole text.
 | | |
 |---|---|
 | Structural | 56 |
-| Job-asserted | 74 |
-| **Total** | **130** |
-| Marked for vacuity | 71 |
+| Job-asserted | 75 |
+| **Total** | **131** |
+| Marked for vacuity | 72 |
 | `specified` | 22 |
-| `implemented` | 108 |
+| `implemented` | 109 |
 
-Seventy-one of a hundred and thirty assert an absence and pass on an empty population.
+Seventy-two of a hundred and thirty-one assert an absence and pass on an empty population.
 That is the number worth watching, because those are the entries that will report
 success on the day they stop being checked.
 

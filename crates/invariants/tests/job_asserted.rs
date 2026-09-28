@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 74, "the register holds 74 job-asserted invariants");
+    assert_eq!(seen.len(), 75, "the register holds 75 job-asserted invariants");
 }
 
 #[test]
@@ -613,6 +613,63 @@ fn j56_bounds_packed_by_both_kinds_of_pick() {
 
     assert!(!within, "three packed of four picked elsewhere is not a finding");
     assert!(past, "five packed of four picked anywhere is");
+}
+
+/// J75 can fail: two handed over against one reported.
+///
+/// A report of one and a handover of two, against a fixture line, through the
+/// shared `manual` channel; both removed before asserting.
+#[test]
+fn j75_finds_more_handed_over_than_reported() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+
+    const TENANT: &str = "11111111-1111-1111-1111-111111111111";
+    const LINE: &str = "f11e0000-0000-0000-0000-000000000002";
+    const ITEM: &str = "17e10000-0000-0000-0000-000000000001";
+    const EVENT: &str = "ce000000-0000-0000-0000-000000000009";
+    const PERSON: &str = "77770000-0000-0000-0000-000000000001";
+    const REPORT: &str = "e7000000-0000-0000-0000-000000000075";
+    const HANDOVER: &str = "5b000000-0000-0000-0000-000000000075";
+
+    client
+        .batch_execute(&format!(
+            "INSERT INTO external_pick (id, tenant_id, client_event_id, fulfilment_line_id,
+                 source_channel_id, quantity, document, external_id, external_line, observed_at)
+             SELECT '{REPORT}', '{TENANT}', '{EVENT}', '{LINE}', sc.id, 1,
+                    'IF-J75', 'if-j75', '1', now()
+               FROM source_channel sc WHERE sc.tenant_id IS NULL AND sc.code = 'manual';
+             INSERT INTO stock_movement (id, tenant_id, client_event_id, item_id, quantity,
+                 to_location_id, to_status_id, to_owner_id,
+                 reason, occurred_at, recorded_at, recorded_by_id,
+                 fulfilment_line_id, external_pick_id)
+             VALUES ('{HANDOVER}', '{TENANT}', '{EVENT}', '{ITEM}', 2,
+                 '10c00000-0000-0000-0000-000000000004',
+                 '57a70000-0000-0000-0000-000000000001',
+                 '9a247000-0000-0000-0000-000000000001',
+                 'handover', now(), now(), '{PERSON}', '{LINE}', '{REPORT}')"
+        ))
+        .expect("one reported, two handed over");
+
+    let outcome = run(&mut client, spork_invariants::jobs::Id::J75);
+
+    client
+        .batch_execute(&format!(
+            "DELETE FROM stock_movement WHERE id = '{HANDOVER}';
+             DELETE FROM external_pick WHERE id = '{REPORT}'"
+        ))
+        .expect("clean");
+
+    let (verdict, examined, findings) = outcome.expect("run J75");
+    assert_eq!(verdict, Verdict::Findings, "J75 examined {examined} and found nothing");
+    assert!(
+        findings.iter().any(|f| f.detail.contains(LINE) && f.detail.contains("2 handed over against 1")),
+        "{:?}",
+        findings.iter().map(|f| f.detail.as_str()).collect::<Vec<_>>()
+    );
 }
 
 /// J74 can fail: a report on file that the line's column has not folded.

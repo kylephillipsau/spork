@@ -231,6 +231,10 @@ confirming before costing that work.
 
 ### D2 — NetSuite's data model does not constrain ours (2026-07-30)
 
+> **Carried through by D172** (domain-model.md, 2026-09-28): picks made on the
+> WMS handheld arrive as reports (`external_pick`), each item fulfilment is its
+> own fulfilment, and the goods reach the ledger when handed over at the bench.
+
 **Decision.** Build the domain model that is correct for the work, not the one
 that maps cleanly onto NetSuite. Where NetSuite cannot represent something we
 need, that is a NetSuite shortcoming to be improved upon, not a constraint to

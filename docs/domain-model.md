@@ -13448,3 +13448,73 @@ database peers. Distributed SQL — consensus needs three nodes and prevents
 partitions from writing at all, the opposite of the goal. Synchronising derived
 tables. A device holding the ledger, or any part of it, to read from. Devices as
 origins in a frontier.
+
+### D172 — A pick made elsewhere is reported, and the goods arrive when they are handed over
+
+*Adopted 2026-09-28, with migrations 93–95. For the NetSuite coexistence at
+Melbourne, where the WMS handheld picks and this system packs.*
+
+**Decision.** This system accepts picks it did not make. When another system
+says a line was picked, that is recorded as **`external_pick`**: a level (how
+many are picked, as at the moment the other system says), never a movement.
+The goods reach this system's ledger when they are **handed over**: the packer
+puts them down at the staging spot or straight into a carton, and that is one
+`stock_movement` with no from side, named `handover`, naming the report it is
+the goods of. Each item fulfilment is its own fulfilment here, keyed by the
+channel's id for it.
+
+**Why not the ledger at report time.** Migration 86 already made the argument
+for reported stock and it holds word for word: writing another system's pick as
+a movement would be this system asserting it held goods it never saw. No bin
+here held them, and every check that reads the ledger would start comparing
+against a fiction.
+
+**Why not `picked_quantity`.** It is a fold of this system's ledger and J68
+holds it to exactly that. A report added to it would break J68, and would fire
+J56's `picked > covered` on every NetSuite pick, because nothing allocates stock
+to a line this system holds none for. So the report folds into its own column,
+`external_picked_quantity` (J74), and J56 bounds packed by both kinds of pick
+together.
+
+**A level, not a delta.** A report is an observation (D8): how many are picked
+as at `observed_at`. Each external line's newest report is its level, by
+`(observed_at, recorded_at, id)`, so reports arriving out of order fold the
+same, a resend of the same moment is one report, and an un-pick is a later
+report of fewer. Nothing is rewritten.
+
+**One fulfilment per item fulfilment.** One sales order can have several, at
+one site or several; keyed by (order, site), two at one site collapsed into
+one. `fulfilment.source_channel_id` and `external_id` identify the document,
+`fulfilment.reference` carries the number a person quotes, and a fulfilment
+loaded before ids were sent is adopted by the first send that names it rather
+than duplicated. Typed columns, not open question 4's polymorphic mapping
+table, which could not carry a foreign key (S51); D157: wait for the third case.
+
+**Handover, and whose goods.** A handover into a carton is packed once the
+carton is sealed and despatched when it leaves, by the folds that already exist;
+a handover to staging becomes an ordinary cell that the bench boxes from. It is
+not counted as picked (D166: picking is leaving storage). The owner is the
+site's `owner_party_id`: nothing in the schema said who owns what a site holds
+(question 26), so a site says, and a handover at a site that has not is
+refused rather than defaulted (D169's reason).
+
+**When the report and the bench disagree.** Handing over more than is reported
+is recorded with a warning: a count at the bench outranks a report read off a
+screen. J75 names any line with more handed over than now reported, which also
+covers an un-pick after goods were boxed. That finding is the default; cancelling
+the fulfilment instead is a per-site choice, not yet built.
+
+**What arrives, and how.** `POST /import/fulfilment` takes the item
+fulfilment's ids, number, status, `observed_at`, picker and per-line picked
+quantity, under the existing import token (D158); a Picked item fulfilment with
+an id and a moment is reported. The pack queue counts a line as done at the
+bench when it is picked here or boxed, and phrases where it was picked (D114).
+
+**Amendments.** D158: the import token's fulfilment endpoint also reports
+picks. D166: a fourth arrival shape, the handover. D105: `handover` joins the
+reason vocabulary. J56: bounded by both kinds of pick. J68: now mirrors
+migration 91's storage-only rule, which it had not.
+
+**Rejects.** A phantom location to pick from. Seeding stock from the report.
+Folding reports into `picked_quantity`. The polymorphic `external_reference`
+table. Inventing an owner for a site that has not said.
