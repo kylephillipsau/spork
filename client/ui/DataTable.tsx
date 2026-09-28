@@ -12,8 +12,13 @@ export interface Column<T> {
   /** Makes the header a sort button. Return what to compare by. */
   sort?: ((row: T) => string | number | null | undefined) | undefined;
   align?: "left" | "right" | "center" | undefined;
-  /** CSS width, e.g. "120px" or "20%". */
+  /**
+   * CSS width, e.g. "120px" or "20%". Also the column's minimum: a table
+   * scrolls sideways rather than crushing a column below what it asked for.
+   */
   width?: string | undefined;
+  /** The label beside the value when the table stacks. Defaults to the header when it is text. */
+  label?: string | undefined;
   /** Monospace and tabular figures: codes, references, quantities. */
   mono?: boolean | undefined;
   /**
@@ -28,6 +33,13 @@ type Direction = "asc" | "desc";
 /**
  * A sortable table with a sticky header, row hover, and loading and empty
  * states. Sorting is client-side over the rows given.
+ *
+ * **It stacks when its container is narrow** (a container query, so a table in
+ * a narrow card stacks on a wide screen too): each row becomes a block, the
+ * `grow` column its title, and every other cell a label and its value. Wide
+ * enough to be a table, declared widths are minimums and the growing column
+ * has one too, so a squeeze scrolls sideways instead of wrapping a column to a
+ * word per line.
  */
 export function DataTable<T>({
   columns,
@@ -87,7 +99,7 @@ export function DataTable<T>({
                   key={c.key}
                   scope="col"
                   className={cx(s.th, c.align && s[c.align], c.grow && s.growHead)}
-                  style={c.width ? { width: c.width } : undefined}
+                  style={c.width ? { width: c.width, minWidth: c.width } : undefined}
                   aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
                   {c.sort ? (
@@ -132,7 +144,11 @@ export function DataTable<T>({
                     aria-selected={selectedKey !== undefined ? selectedKey === key : undefined}
                   >
                     {columns.map((c) => (
-                      <td key={c.key} className={cx(s.td, c.align && s[c.align], c.mono && s.mono, c.grow && s.grow)}>
+                      <td
+                        key={c.key}
+                        className={cx(s.td, c.align && s[c.align], c.mono && s.mono, c.grow && s.grow)}
+                        data-label={c.grow ? undefined : (c.label ?? (typeof c.header === "string" ? c.header : undefined)) || undefined}
+                      >
                         {c.grow ? <span className={s.truncate}>{c.cell(row)}</span> : c.cell(row)}
                       </td>
                     ))}

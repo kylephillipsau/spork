@@ -1,6 +1,8 @@
 .wrap {
   width: 100%;
   overflow-x: auto;
+  /* What the stacked layout below measures: this table's own width. */
+  container-type: inline-size;
 }
 
 .table {
@@ -45,6 +47,8 @@ tbody tr:last-child .td {
 }
 .growHead {
   width: 100%;
+  /* The name-like column keeps room for a name before anything scrolls. */
+  min-width: 12rem;
 }
 .truncate {
   display: block;
@@ -103,4 +107,78 @@ tbody tr:last-child .td {
 
 .emptyRow {
   border-top: 1px solid var(--ui-border);
+}
+
+/* ---- stacked, when the table itself is narrow ------------------------------
+   Each row a block: the growing column its title, every other cell a label and
+   its value. The header row stays in the document for screen readers and is
+   hidden from sight; sorting waits for a table wide enough to be one. */
+@container (max-width: 40rem) {
+  .table,
+  .table tbody,
+  .table tr {
+    display: block;
+    width: 100%;
+  }
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .table tr {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-1);
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .td {
+    display: grid;
+    grid-template-columns: minmax(6rem, 35%) minmax(0, 1fr);
+    align-items: center;
+    /* A value keeps its own width: a badge is not a bar. */
+    justify-items: start;
+    gap: var(--ui-space-3);
+    height: auto;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    text-align: left;
+  }
+  .td::before {
+    content: attr(data-label);
+    color: var(--ui-text-muted);
+    font-family: var(--ui-font);
+    font-size: var(--ui-text-xs);
+    font-weight: 600;
+    letter-spacing: var(--ui-tracking-caps);
+    text-transform: uppercase;
+  }
+  /* A cell with nothing in it (no action left on a finished line) is not
+     drawn, so its label does not stand alone. */
+  .td:empty {
+    display: none;
+  }
+  /* No label (the title, an actions cell): the value takes the whole row. */
+  .td:not([data-label]) {
+    display: block;
+  }
+  .td:not([data-label])::before {
+    content: none;
+  }
+  .grow {
+    order: -1;
+    width: auto;
+    max-width: none;
+    font-weight: 600;
+  }
+  .grow .truncate {
+    white-space: normal;
+  }
 }

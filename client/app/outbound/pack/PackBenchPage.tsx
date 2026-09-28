@@ -67,6 +67,9 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
   const canAdd = (l: BenchLine) => l.remaining > 0 && l.cells.length > 0 && !!bench.openCarton && !bench.busy;
   // Picked elsewhere and not yet here: the goods are handed over rather than
   // taken from a bin (D172). Into the open carton, or else to staging.
+  // Where the picking happened, when it was not here: one document for the
+  // whole fulfilment, so it is said once rather than on every line.
+  const elsewhere = screen.lines.find((l) => l.elsewhere)?.elsewhere ?? null;
   const handing = (l: BenchLine) => !!l.elsewhere && l.cells.length === 0 && l.remaining > 0;
   const canHand = (l: BenchLine) => handing(l) && (!!bench.openCarton || !!screen.staging_id) && !bench.busy;
   const hand = (l: BenchLine) => {
@@ -86,7 +89,9 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       cell: (l) => (
         <span className={l.remaining === 0 ? s.done : undefined}>
           <span className={s.code}>{l.item_code}</span>
-          {l.description && <span className={s.desc}>{l.description}</span>}
+          {/* An item made from a code alone has the code as its description;
+              saying it twice is noise. */}
+          {l.description && l.description !== l.item_code && <span className={s.desc}>{l.description}</span>}
         </span>
       ),
       grow: true,
@@ -97,12 +102,11 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       cell: (l) =>
         l.cells.length === 0 ? (
           l.elsewhere ? (
-            <span className={s.elsewhere}>
-              <span>{l.elsewhere.provenance}</span>
-              <Faint>
-                {l.elsewhere.handed} of {l.elsewhere.reported} handed over
-              </Faint>
-            </span>
+            // Where it was picked is said once, above the table; the line says
+            // only how much of it is here.
+            <Faint>
+              {l.elsewhere.handed} of {l.elsewhere.reported} handed over
+            </Faint>
           ) : (
             <Faint>No stock at this site</Faint>
           )
@@ -190,7 +194,16 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       )}
 
       <div className={s.split}>
-        <Card title="To pack" description={bench.openCarton ? "Items are added to the open carton." : "Start a carton to add items."} padded={false}>
+        <Card
+          title="To pack"
+          description={[
+            elsewhere?.provenance,
+            bench.openCarton ? "Items are added to the open carton." : "Start a carton to add items.",
+          ]
+            .filter(Boolean)
+            .join(". ")}
+          padded={false}
+        >
           <DataTable
             aria-label="Lines to pack"
             columns={lineColumns}

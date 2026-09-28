@@ -200,8 +200,15 @@
   min-width: 0;
   font-size: var(--ui-text-sm);
   color: var(--ui-text-muted);
+  /* The trail measures itself: when it is short of room it shows only where
+     you are, rather than squeezing every crumb until they overlap. */
+  container-type: inline-size;
 }
 .crumb { display: inline-flex; align-items: center; min-width: 0; white-space: nowrap; }
+.crumb > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 18rem) {
+  .crumb:not(:last-child) { display: none; }
+}
 .crumbLink:hover { color: var(--ui-text); }
 .crumbCurrent { color: var(--ui-text); font-weight: 500; }
 .crumbSep { width: 14px; height: 14px; margin: 0 var(--ui-space-1-5); color: var(--ui-text-faint); }
