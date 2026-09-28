@@ -17,12 +17,14 @@ export const PACK_FIXTURE: BenchScreen = {
   customer: "Harbourline Provisions Pty Ltd",
   site: "MEL",
   dock_id: "10c00000-0000-0000-0000-000000000003",
+  staging_id: "10c00000-0000-0000-0000-000000000004",
   lines: [
     {
       line_id: "f11e0000-0000-0000-0000-000000000001",
       item_code: "GLV-NIT-BLU-M",
       description: "Nitrile glove, blue, medium",
       remaining: 0,
+      elsewhere: null,
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000001",
@@ -37,6 +39,7 @@ export const PACK_FIXTURE: BenchScreen = {
       item_code: "HRN-DSP-WHT",
       description: "Hair net, disposable, white",
       remaining: 0,
+      elsewhere: null,
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000002",
@@ -51,6 +54,7 @@ export const PACK_FIXTURE: BenchScreen = {
       item_code: "APR-PE-CLR-L",
       description: "Apron, polythene, clear, large",
       remaining: 1,
+      elsewhere: null,
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000003",
@@ -65,6 +69,20 @@ export const PACK_FIXTURE: BenchScreen = {
           available: 3,
         },
       ],
+    },
+    {
+      line_id: "f11e0000-0000-0000-0000-000000000004",
+      item_code: "SLV-PE-BLU",
+      description: "Oversleeve, polythene, blue",
+      remaining: 20,
+      cells: [],
+      elsewhere: {
+        reported: 20,
+        handed: 0,
+        document: "IF400187",
+        picked_by: "Casual Melbourne",
+        provenance: "Picked in NetSuite · IF400187 · by Casual Melbourne",
+      },
     },
   ],
   cartons: [

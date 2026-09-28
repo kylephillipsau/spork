@@ -302,6 +302,27 @@ export const api = {
   },
 
   /**
+   * Goods picked elsewhere, put down here (D172): into the open carton, or at
+   * the staging spot. One act, and a retry of it is the same act.
+   */
+  async handOver(input: {
+    line: Uuid;
+    quantity: number;
+    carton?: Uuid;
+    location?: Uuid;
+    act: Act;
+  }): Promise<void> {
+    await send<unknown>("POST", "/handovers", {
+      fulfilment_line_id: input.line,
+      quantity: input.quantity,
+      to_package_id: input.carton ?? null,
+      to_location_id: input.location ?? null,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    });
+  },
+
+  /**
    * **Two events, because they were come by two ways.** The weight is read off
    * a scale; a cut-down height is known because the packer cut the box.
    * `method` is the column that says which, and one event cannot say both.

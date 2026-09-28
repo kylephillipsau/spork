@@ -269,8 +269,8 @@ pub fn spec(id: Id) -> Invariant {
         J55 => Invariant { id, owners: "D51", asserts_absence: true,
             statement: "No fulfilment that is not cancelled commits to a removed order line",
             check: Check::Run(checks::j55_no_commitment_against_a_removed_line) },
-        J56 => Invariant { id, owners: "D53, load-bearing since D100", asserts_absence: true,
-            statement: "No fulfilment line is covered beyond its own quantity, and despatched <= packed <= picked <= covered. The monotonicity held by construction while one fold produced all four from nested state sets; D100 folds three from the ledger and one from allocations, so a pick with no allocation or an over-pick breaks it, and this is what reports that",
+        J56 => Invariant { id, owners: "D53, load-bearing since D100, amended by D172", asserts_absence: true,
+            statement: "No fulfilment line is covered beyond its own quantity, despatched <= packed <= picked + picked elsewhere, and picked <= covered. The monotonicity held by construction while one fold produced all four from nested state sets; D100 folds three from the ledger and one from allocations, so a pick with no allocation or an over-pick breaks it, and this is what reports that. D172: goods another system picked are packed here without being picked here, so packed is bounded by both kinds of pick together",
             check: Check::Run(checks::j56_coverage_is_bounded_and_monotone) },
         J57 => Invariant { id, owners: "D23, D58, widened by D92 and D93", asserts_absence: true,
             statement: "Every row naming an item_packing_config -- stock_movement, goods_receipt_line and asserted_unit_content -- names one for its own item that was already effective when it happened, each against its own clock",
@@ -3052,7 +3052,9 @@ pub mod checks {
         // (column, the predicate that selects the movements it should equal).
         // `p` is the package a movement went into, joined for the packed arm.
         const LEDGER: &[(&str, &str)] = &[
-            ("picked_quantity", "m.from_location_id IS NOT NULL"),
+            // D166, migration 91: out of *storage*, not merely out of a location.
+            // A leg from `staging` into a carton moves goods already picked.
+            ("picked_quantity", "fl.kind IN ('pick_face', 'bulk', 'overflow')"),
             ("packed_quantity", "p.status IN ('sealed', 'despatched')"),
             ("despatched_quantity", "m.to_location_id IS NULL AND m.to_package_id IS NULL"),
         ];
@@ -3072,6 +3074,7 @@ pub mod checks {
                                JOIN stock_movement_effective v
                                  ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
                                LEFT JOIN package p ON p.id = m.to_package_id
+                               LEFT JOIN location fl ON fl.id = m.from_location_id
                               WHERE m.fulfilment_line_id IS NOT NULL
                                 AND {shape}
                               GROUP BY m.fulfilment_line_id) g
@@ -3388,18 +3391,21 @@ pub mod checks {
         }
 
         for r in &c.query(
+            // D172: packed is bounded by what was picked here and what another
+            // system says it picked, together. picked alone stays bounded by
+            // covered: this system's own picks still need their allocation.
             "SELECT id::text, covered_quantity, picked_quantity,
-                    packed_quantity, despatched_quantity
+                    packed_quantity, despatched_quantity, external_picked_quantity
                FROM fulfilment_line
               WHERE NOT (despatched_quantity <= packed_quantity
-                     AND packed_quantity <= picked_quantity
+                     AND packed_quantity <= picked_quantity + external_picked_quantity
                      AND picked_quantity <= covered_quantity)",
             &[],
         )? {
             findings.push(finding(Id::J56, "coverage_not_monotone",
-                format!("fulfilment_line {} reports covered {}, picked {}, packed {}, despatched {}, which no sequence of states produces",
+                format!("fulfilment_line {} reports covered {}, picked {} (and {} elsewhere), packed {}, despatched {}, which no sequence of states produces",
                     r.get::<_, String>(0), r.get::<_, i64>(1), r.get::<_, i64>(2),
-                    r.get::<_, i64>(3), r.get::<_, i64>(4))));
+                    r.get::<_, i64>(5), r.get::<_, i64>(3), r.get::<_, i64>(4))));
         }
 
         let examined: i64 = c.query_one("SELECT count(*) FROM fulfilment_line", &[])?.get(0);

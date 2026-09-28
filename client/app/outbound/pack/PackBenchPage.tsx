@@ -65,6 +65,14 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
   const draft = (l: BenchLine): Draft => drafts[l.line_id] ?? { cell: l.cells[0]?.stock_id ?? "", qty: String(l.remaining) };
   const change = (l: BenchLine, next: Partial<Draft>) => setDrafts((d) => ({ ...d, [l.line_id]: { ...draft(l), ...next } }));
   const canAdd = (l: BenchLine) => l.remaining > 0 && l.cells.length > 0 && !!bench.openCarton && !bench.busy;
+  // Picked elsewhere and not yet here: the goods are handed over rather than
+  // taken from a bin (D172). Into the open carton, or else to staging.
+  const handing = (l: BenchLine) => !!l.elsewhere && l.cells.length === 0 && l.remaining > 0;
+  const canHand = (l: BenchLine) => handing(l) && (!!bench.openCarton || !!screen.staging_id) && !bench.busy;
+  const hand = (l: BenchLine) => {
+    const n = Number.parseInt(draft(l).qty, 10);
+    if (canHand(l) && n > 0) void bench.handOver({ line: l.line_id, quantity: n });
+  };
   const add = (l: BenchLine) => {
     const d = draft(l);
     const n = Number.parseInt(d.qty, 10);
@@ -88,7 +96,16 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       header: "From",
       cell: (l) =>
         l.cells.length === 0 ? (
-          <Faint>No stock at this site</Faint>
+          l.elsewhere ? (
+            <span className={s.elsewhere}>
+              <span>{l.elsewhere.provenance}</span>
+              <Faint>
+                {l.elsewhere.handed} of {l.elsewhere.reported} handed over
+              </Faint>
+            </span>
+          ) : (
+            <Faint>No stock at this site</Faint>
+          )
         ) : (
           <Select
             aria-label={`Pick ${l.item_code} from`}
@@ -126,6 +143,26 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
             />
             <Button type="submit" size="sm" icon={<Plus />} disabled={!canAdd(l)}>
               Add
+            </Button>
+          </form>
+        ) : handing(l) ? (
+          <form
+            className={s.add}
+            onSubmit={(e) => {
+              e.preventDefault();
+              hand(l);
+            }}
+          >
+            <TextField
+              aria-label={`Quantity of ${l.item_code} handed over`}
+              inputMode="numeric"
+              className={s.qty}
+              value={draft(l).qty}
+              onChange={(e) => change(l, { qty: e.target.value })}
+              disabled={!canHand(l)}
+            />
+            <Button type="submit" size="sm" icon={<Plus />} disabled={!canHand(l)}>
+              {bench.openCarton ? "Into carton" : "To staging"}
             </Button>
           </form>
         ) : null,

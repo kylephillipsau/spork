@@ -35,6 +35,8 @@ export interface PackBench {
   dismiss: () => void;
   startCarton: (preset: Uuid) => Promise<void>;
   addToCarton: (input: { line: Uuid; stock: Uuid; quantity: number }) => Promise<void>;
+  /** Goods picked elsewhere: into the open carton, else to the staging spot. */
+  handOver: (input: { line: Uuid; quantity: number }) => Promise<void>;
   measure: (input: { carton: Uuid; weightKg?: string; heightMm?: string }) => Promise<void>;
   takeOut: (input: { picks: [Uuid, number][]; quantity: number }) => Promise<void>;
   seal: (carton: Uuid) => Promise<void>;
@@ -111,6 +113,18 @@ export function usePackBench(fulfilment: Uuid): PackBench {
         if (!openCarton) throw new ApiError("Start a carton first.", 409);
         if (!(quantity > 0)) throw new ApiError("How many?", 400);
         await api.pickInto({ line, stock, carton: openCarton, quantity, act });
+      }),
+
+    handOver: ({ line, quantity }) =>
+      press(`handover:${line}:${quantity}`, async (act) => {
+        if (!(quantity > 0)) throw new ApiError("Enter a quantity.", 400);
+        if (openCarton) {
+          await api.handOver({ line, quantity, carton: openCarton, act });
+          return;
+        }
+        const staging = screen?.staging_id;
+        if (!staging) throw new ApiError("Start a carton first. This site has no staging location.", 409);
+        await api.handOver({ line, quantity, location: staging, act });
       }),
 
     measure: ({ carton, weightKg, heightMm }) =>

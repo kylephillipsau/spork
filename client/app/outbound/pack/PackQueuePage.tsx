@@ -118,7 +118,18 @@ const COLUMNS: Column<PackJob>[] = [
     mono: true,
     width: "110px",
   },
-  { key: "customer", header: "Customer", cell: (j) => j.customer, sort: (j) => j.customer, grow: true },
+  {
+    key: "customer",
+    header: "Customer",
+    cell: (j) => (
+      <>
+        {j.customer}
+        {j.provenance && <span className={s.provenance}>{j.provenance}</span>}
+      </>
+    ),
+    sort: (j) => j.customer,
+    grow: true,
+  },
   {
     key: "picked",
     header: "Picked",

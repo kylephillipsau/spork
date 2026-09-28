@@ -55,6 +55,9 @@ pub struct Bench {
     pub site: String,
     /// Where a new carton comes into existence. D97: `created` asserts placement.
     pub dock_id: Option<Uuid>,
+    /// Where goods picked elsewhere are put down before they are boxed: the
+    /// site's staging location, when it has one (D172).
+    pub staging_id: Option<Uuid>,
     pub lines: Vec<BenchLine>,
 }
 
@@ -63,8 +66,28 @@ pub struct BenchLine {
     pub line_id: Uuid,
     pub item_code: String,
     pub description: Option<String>,
+    /// Still to do at the bench: committed less the larger of what this system
+    /// picked and what has gone into a carton (D172).
     pub remaining: i64,
     pub cells: Vec<Cell>,
+    /// Present when another system says this line was picked there (D172).
+    pub elsewhere: Option<PickedElsewhere>,
+}
+
+/// A line picked elsewhere: what is reported, and what has been handed over.
+#[derive(Serialize)]
+pub struct PickedElsewhere {
+    /// What the other system reports picked, now: each external line's newest.
+    pub reported: i64,
+    /// Handed over against it so far, net of corrections.
+    pub handed: i64,
+    /// The document a person quotes: `IF270947`.
+    pub document: String,
+    /// Who picked, in the other system's words.
+    pub picked_by: Option<String>,
+    /// Where it was picked, as a sentence (D114): "Picked in NetSuite ·
+    /// IF270947 · by Casual Melbourne".
+    pub provenance: String,
 }
 
 /// A place the item actually is, with what is free to claim.
@@ -210,14 +233,29 @@ pub async fn bench_view(
                     )
                     .await?
                     .map(|r| r.get(0));
+                let staging_id: Option<Uuid> = tx
+                    .query_opt(
+                        "SELECT id FROM location
+                          WHERE site_id = $1 AND kind = 'staging' ORDER BY code LIMIT 1",
+                        &[&site_id],
+                    )
+                    .await?
+                    .map(|r| r.get(0));
 
                 let lines = tx
                     .query(
                         "SELECT fl.id, i.code, i.description, ol.item_id,
-                                fl.quantity - fl.picked_quantity
+                                fl.quantity - greatest(fl.picked_quantity, bx.q)
                            FROM fulfilment_line fl
                            JOIN order_line ol ON ol.id = fl.order_line_id
                            JOIN item i ON i.id = ol.item_id
+                           LEFT JOIN LATERAL (
+                               SELECT coalesce(sum(v.effective_quantity), 0)::bigint AS q
+                                 FROM stock_movement m
+                                 JOIN stock_movement_effective v
+                                   ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                                WHERE m.fulfilment_line_id = fl.id
+                                  AND m.to_package_id IS NOT NULL) bx ON true
                           WHERE fl.fulfilment_id = $1
                           ORDER BY i.code",
                         &[&fulfilment_id],
@@ -244,7 +282,45 @@ pub async fn bench_view(
                             &[&item_id, &site_id],
                         )
                         .await?;
+                    // Picked elsewhere: the level live from the reports (the
+                    // column may lag the scheduler), the newest report's
+                    // document and picker, and what is handed over already.
+                    let line_id: Uuid = l.get(0);
+                    let elsewhere = tx
+                        .query_opt(
+                            "SELECT (SELECT coalesce(sum(quantity), 0)::bigint FROM
+                                       (SELECT DISTINCT ON (external_line) quantity
+                                          FROM external_pick WHERE fulfilment_line_id = $1
+                                         ORDER BY external_line, observed_at DESC,
+                                                  recorded_at DESC, id DESC) newest),
+                                    (SELECT coalesce(sum(v.effective_quantity), 0)::bigint
+                                       FROM stock_movement m
+                                       JOIN stock_movement_effective v
+                                         ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                                      WHERE m.fulfilment_line_id = $1
+                                        AND m.external_pick_id IS NOT NULL),
+                                    ep.document, ep.picked_by,
+                                    (SELECT name FROM source_channel WHERE id = ep.source_channel_id)
+                               FROM external_pick ep
+                              WHERE ep.fulfilment_line_id = $1
+                              ORDER BY ep.observed_at DESC, ep.recorded_at DESC, ep.id DESC
+                              LIMIT 1",
+                            &[&line_id],
+                        )
+                        .await?
+                        .map(|r| PickedElsewhere {
+                            reported: r.get(0),
+                            handed: r.get(1),
+                            provenance: crate::packing::picked_elsewhere(
+                                r.get(4),
+                                r.get(2),
+                                r.get(3),
+                            ),
+                            document: r.get(2),
+                            picked_by: r.get(3),
+                        });
                     out.push(BenchLine {
+                        elsewhere,
                         line_id: l.get(0),
                         item_code: l.get(1),
                         description: l.get(2),
@@ -267,6 +343,7 @@ pub async fn bench_view(
                     customer: head.get(1),
                     site: head.get(2),
                     dock_id,
+                    staging_id,
                     lines: out,
                 })
             })

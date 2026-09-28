@@ -26,8 +26,22 @@ export interface BenchLine {
   line_id: Uuid;
   item_code: string;
   description: string | null;
+  /** Still to do at the bench: committed less what is picked here or boxed. */
   remaining: number;
   cells: Cell[];
+  /** Present when another system says this line was picked there (D172). */
+  elsewhere: PickedElsewhere | null;
+}
+
+/** A line picked elsewhere: what is reported, and what is handed over (D172). */
+export interface PickedElsewhere {
+  reported: number;
+  handed: number;
+  /** The document a person quotes: `IF270947`. */
+  document: string;
+  picked_by: string | null;
+  /** Server-phrased: "Picked in NetSuite · IF270947 · by Casual Melbourne". */
+  provenance: string;
 }
 
 export interface Preset {
@@ -101,6 +115,8 @@ export interface BenchScreen {
   customer: string;
   site: string;
   dock_id: Uuid | null;
+  /** The site's staging location, where goods picked elsewhere are put down (D172). */
+  staging_id: Uuid | null;
   lines: BenchLine[];
   cartons: CartonSummary[];
   presets: Preset[];
@@ -777,7 +793,12 @@ export interface PackJob {
   customer: string;
   lines: number;
   committed: number;
+  /** Done at the bench: picked here, or boxed when picked elsewhere (D172). */
   picked: number;
+  /** What another system reports picked (D172). */
+  reported: number;
+  /** Server-phrased: "Picked in NetSuite · IF270947". Null when picked here. */
+  provenance: string | null;
   cartons: number;
   /** Server-phrased: "overdue", "due tomorrow". Null when nothing was promised. */
   due: string | null;

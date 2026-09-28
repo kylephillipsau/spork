@@ -556,6 +556,65 @@ fn j68_finds_progress_that_disagrees_with_the_ledger() {
     );
 }
 
+/// J56 as D172 amended it: packing what another system picked is not a finding,
+/// and packing past both kinds of pick still is.
+///
+/// Built on a fixture line's projected columns directly, then put back: what is
+/// under test is the inequality, not the folds that produce the numbers.
+#[test]
+fn j56_bounds_packed_by_both_kinds_of_pick() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    const LINE: &str = "f11e0000-0000-0000-0000-000000000002";
+
+    let before = client
+        .query_one(
+            &format!(
+                "SELECT covered_quantity, picked_quantity, packed_quantity, despatched_quantity,
+                        external_picked_quantity FROM fulfilment_line WHERE id = '{LINE}'"
+            ),
+            &[],
+        )
+        .expect("the fixture line");
+    let set = |c: &mut postgres::Client, packed: i64, elsewhere: i64| {
+        c.batch_execute(&format!(
+            "UPDATE fulfilment_line SET covered_quantity = 0, picked_quantity = 0,
+                    packed_quantity = {packed}, despatched_quantity = 0,
+                    external_picked_quantity = {elsewhere}
+              WHERE id = '{LINE}'"
+        ))
+        .expect("set the columns");
+    };
+    let fired = |c: &mut postgres::Client| -> bool {
+        let (_, _, findings) = run(c, spork_invariants::jobs::Id::J56).expect("run J56");
+        findings.iter().any(|f| f.detail.contains(LINE))
+    };
+
+    set(&mut client, 3, 4);
+    let within = fired(&mut client);
+    set(&mut client, 5, 4);
+    let past = fired(&mut client);
+
+    client
+        .batch_execute(&format!(
+            "UPDATE fulfilment_line SET covered_quantity = {}, picked_quantity = {},
+                    packed_quantity = {}, despatched_quantity = {}, external_picked_quantity = {}
+              WHERE id = '{LINE}'",
+            before.get::<_, i64>(0),
+            before.get::<_, i64>(1),
+            before.get::<_, i64>(2),
+            before.get::<_, i64>(3),
+            before.get::<_, i64>(4),
+        ))
+        .expect("put it back");
+
+    assert!(!within, "three packed of four picked elsewhere is not a finding");
+    assert!(past, "five packed of four picked anywhere is");
+}
+
 /// J74 can fail: a report on file that the line's column has not folded.
 ///
 /// A pick reported from NetSuite and a maintainer that has not run is exactly

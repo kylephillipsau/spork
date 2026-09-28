@@ -233,6 +233,7 @@ function packBench() {
         dismiss: () => {},
         startCarton: noop,
         addToCarton: noop,
+        handOver: noop,
         measure: noop,
         takeOut: noop,
         seal: noop,

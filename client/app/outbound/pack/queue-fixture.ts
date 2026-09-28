@@ -21,6 +21,8 @@ const job = (over: Partial<PackJob> & Pick<PackJob, "fulfilment_id" | "stage">):
   lines: 3,
   committed: 24,
   picked: 0,
+  reported: 0,
+  provenance: null,
   cartons: 0,
   due: "due tomorrow",
   ...over,
@@ -31,6 +33,15 @@ export const QUEUE: QueueState = {
   jobs: [
     job({ fulfilment_id: "f1", stage: "ready", due: "overdue" }),
     job({ fulfilment_id: "f2", stage: "ready", reference: "IF265592", customer: "Gloveco" }),
+    // Picked on the handheld, reported by NetSuite, waiting to be boxed here.
+    job({
+      fulfilment_id: "f6",
+      stage: "ready",
+      reference: "IF270947",
+      customer: "Northside Bakery",
+      reported: 24,
+      provenance: "Picked in NetSuite · IF270947 · by Casual Melbourne",
+    }),
     job({
       fulfilment_id: "f3",
       stage: "on_the_bench",

@@ -15,3 +15,10 @@
 .inset {
   padding: var(--ui-space-4);
 }
+
+/* Where the picking happened, when it was not here (D172). */
+.provenance {
+  display: block;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+}

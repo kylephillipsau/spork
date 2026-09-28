@@ -96,7 +96,15 @@ pub struct PackJob {
     pub customer: String,
     pub lines: i64,
     pub committed: i64,
+    /// What is done at the bench, per line the larger of what this system
+    /// picked and what has gone into a carton (D172). For work picked here the
+    /// two are one movement; for work picked elsewhere it is what is boxed.
     pub picked: i64,
+    /// What another system reports picked (D172), zero when it reports nothing.
+    pub reported: i64,
+    /// Where the picking happened when it was not here, server-phrased (D114):
+    /// "Picked in NetSuite · IF270947 · by Casual Melbourne".
+    pub provenance: Option<String>,
     pub cartons: i64,
     /// Server-phrased (D114), and absent when nothing was promised.
     pub due: Option<String>,
@@ -133,14 +141,31 @@ pub async fn queue(
                                 coalesce(p.name, 'no customer named'),
                                 count(fl.id),
                                 coalesce(sum(fl.quantity), 0)::bigint,
-                                coalesce(sum(fl.picked_quantity), 0)::bigint,
+                                coalesce(sum(greatest(fl.picked_quantity, bx.q)), 0)::bigint,
                                 o.promised_to,
                                 (SELECT count(*) FROM package pk
-                                  WHERE pk.fulfilment_id = f.id)
+                                  WHERE pk.fulfilment_id = f.id),
+                                coalesce(sum(fl.external_picked_quantity), 0)::bigint,
+                                (SELECT sc.name FROM source_channel sc
+                                  WHERE sc.id = f.source_channel_id),
+                                (SELECT ep.picked_by FROM external_pick ep
+                                   JOIN fulfilment_line el ON el.id = ep.fulfilment_line_id
+                                  WHERE el.fulfilment_id = f.id
+                                  ORDER BY ep.observed_at DESC, ep.recorded_at DESC LIMIT 1),
+                                EXISTS (SELECT 1 FROM external_pick ep
+                                          JOIN fulfilment_line el ON el.id = ep.fulfilment_line_id
+                                         WHERE el.fulfilment_id = f.id)
                            FROM fulfilment f
                            JOIN \"order\" o ON o.id = f.order_id
                            LEFT JOIN party p ON p.id = o.customer_party_id
                            LEFT JOIN fulfilment_line fl ON fl.fulfilment_id = f.id
+                           LEFT JOIN LATERAL (
+                               SELECT coalesce(sum(v.effective_quantity), 0)::bigint AS q
+                                 FROM stock_movement m
+                                 JOIN stock_movement_effective v
+                                   ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                                WHERE m.fulfilment_line_id = fl.id
+                                  AND m.to_package_id IS NOT NULL) bx ON true
                           WHERE f.state <> 'cancelled'
                             AND ($1::uuid IS NULL OR f.site_id = $1)
                             AND ($2::text IS NULL
@@ -149,7 +174,7 @@ pub async fn queue(
                                  OR o.external_ref ILIKE $2
                                  OR p.name ILIKE $2)
                           GROUP BY f.id, f.reference, o.confirmation_number,
-                                   o.external_ref, p.name, o.promised_to
+                                   o.external_ref, p.name, o.promised_to, f.source_channel_id
                           ORDER BY o.promised_to NULLS LAST, f.id",
                         &[&site, &like],
                     )
@@ -162,15 +187,21 @@ pub async fn queue(
                         let committed: i64 = r.get(5);
                         let picked: i64 = r.get(6);
                         let promised: Option<DateTime<Utc>> = r.get(7);
+                        let reference: Option<String> = r.get(1);
+                        let provenance = r.get::<_, bool>(12).then(|| {
+                            picked_elsewhere(r.get(10), reference.as_deref(), r.get(11))
+                        });
                         PackJob {
                             fulfilment_id: r.get(0),
-                            reference: r.get(1),
+                            reference,
                             order_reference: r.get(2),
                             customer: r.get(3),
                             lines: r.get(4),
                             committed,
                             picked,
                             cartons: r.get(8),
+                            reported: r.get(9),
+                            provenance,
                             due: promised.map(|p| due(p.date_naive(), today)),
                             stage: stage(picked, committed),
                         }
@@ -181,9 +212,38 @@ pub async fn queue(
         .await
 }
 
+/// Where the picking happened, in a sentence (D114): the channel, the
+/// document a person quotes, and who picked, when each is known.
+pub fn picked_elsewhere(
+    channel: Option<&str>,
+    document: Option<&str>,
+    picked_by: Option<&str>,
+) -> String {
+    let mut out = format!("Picked in {}", channel.filter(|c| !c.is_empty()).unwrap_or("another system"));
+    if let Some(d) = document.filter(|d| !d.is_empty()) {
+        out.push_str(" · ");
+        out.push_str(d);
+    }
+    if let Some(p) = picked_by.filter(|p| !p.is_empty()) {
+        out.push_str(" · by ");
+        out.push_str(p);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn where_the_picking_happened_reads_as_a_sentence() {
+        assert_eq!(
+            picked_elsewhere(Some("NetSuite"), Some("IF270947"), Some("Casual Melbourne")),
+            "Picked in NetSuite · IF270947 · by Casual Melbourne"
+        );
+        assert_eq!(picked_elsewhere(Some("NetSuite"), None, None), "Picked in NetSuite");
+        assert_eq!(picked_elsewhere(None, Some("IF1"), Some("")), "Picked in another system · IF1");
+    }
 
     #[test]
     fn a_commitment_with_no_lines_is_not_packed() {

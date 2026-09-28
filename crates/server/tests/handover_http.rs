@@ -18,6 +18,10 @@ use common::{pool, url};
 
 /// PACK-1, the staging spot at Melbourne in the fixture.
 const STAGING: &str = "10c00000-0000-0000-0000-000000000004";
+/// DOCK-1, where a carton comes into being.
+const DOCK: &str = "10c00000-0000-0000-0000-000000000003";
+/// The fixture's small box preset.
+const SMALL_BOX: &str = "9a7e0000-0000-0000-0000-0000000000b1";
 
 #[actix_web::test]
 async fn goods_picked_elsewhere_arrive_where_they_are_put() {
@@ -150,7 +154,7 @@ async fn goods_picked_elsewhere_arrive_where_they_are_put() {
         .await
         .unwrap()
         .get(0);
-    db.execute("SELECT projection_fulfilment_rebuild($1)", &[&tenant]).await.expect("fold");
+    db.execute("SELECT projection_run_all($1)", &[&tenant]).await.expect("fold, as the scheduler would");
     let p = db
         .query_one(
             "SELECT picked_quantity, external_picked_quantity FROM fulfilment_line WHERE id = $1",
@@ -160,4 +164,70 @@ async fn goods_picked_elsewhere_arrive_where_they_are_put() {
         .unwrap();
     assert_eq!(p.get::<_, i64>(0), 0, "nothing left storage here, so nothing was picked here");
     assert_eq!(p.get::<_, i64>(1), 4, "the report still says four");
+
+    // ── the queue: where it was picked, and not yet packed ───────────────
+    let get = |uri: String| {
+        test::TestRequest::get()
+            .uri(&uri)
+            .insert_header(("authorization", session.clone()))
+            .to_request()
+    };
+    let job = |queue: &Value| {
+        queue
+            .as_array()
+            .expect("a list")
+            .iter()
+            .find(|j| j["reference"] == json!("IF-HO"))
+            .cloned()
+            .expect("the job is in the queue at its site")
+    };
+    let queue = common::ok_json(&app, get(format!("/packing?q=S-ho-{run}")), "GET /packing").await;
+    let j = job(&queue);
+    assert_eq!(j["provenance"], json!("Picked in NetSuite · IF-HO"), "{j}");
+    assert_eq!(j["reported"], json!(4), "{j}");
+    assert_eq!(j["picked"], json!(0), "waiting at the staging spot is not packed: {j}");
+    assert_eq!(j["stage"], json!("ready"), "{j}");
+
+    // ── the bench: what is reported, what is handed over, and where ──────
+    let fulfilment = j["fulfilment_id"].as_str().unwrap().to_string();
+    let bench = common::ok_json(&app, get(format!("/fulfilments/{fulfilment}/bench")), "bench").await;
+    let bl = &bench["lines"][0];
+    assert_eq!(bl["elsewhere"]["reported"], json!(4), "{bench}");
+    assert_eq!(bl["elsewhere"]["handed"], json!(5), "{bench}");
+    assert_eq!(bl["elsewhere"]["document"], json!("IF-HO"), "{bench}");
+    assert!(
+        bl["cells"].as_array().unwrap().iter().any(|c| c["location"] == json!("PACK-1")),
+        "the goods handed over are a cell at the staging spot to box from: {bench}"
+    );
+
+    // ── straight into a carton: on the bench ─────────────────────────────
+    let carton = Uuid::now_v7();
+    common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/packages")
+            .insert_header(("authorization", session.clone()))
+            .set_json(json!({ "id": carton, "fulfilment_id": fulfilment,
+                              "package_type_id": SMALL_BOX, "location_id": DOCK,
+                              "client_event_id": Uuid::now_v7(), "occurred_at": "2026-09-28T09:40:00Z" }))
+            .to_request(),
+        "POST /packages",
+    )
+    .await;
+    common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/handovers")
+            .insert_header(("authorization", session.clone()))
+            .set_json(json!({ "fulfilment_line_id": line, "quantity": 1, "to_package_id": carton,
+                              "client_event_id": Uuid::now_v7(), "occurred_at": "2026-09-28T09:41:00Z" }))
+            .to_request(),
+        "POST /handovers (into the carton)",
+    )
+    .await;
+    db.execute("SELECT projection_run_all($1)", &[&tenant]).await.expect("fold, as the scheduler would");
+    let queue = common::ok_json(&app, get(format!("/packing?q=S-ho-{run}")), "GET /packing again").await;
+    let j = job(&queue);
+    assert_eq!(j["picked"], json!(1), "one in a carton is one done at the bench: {j}");
+    assert_eq!(j["stage"], json!("on_the_bench"), "{j}");
 }
