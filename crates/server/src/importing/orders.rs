@@ -15,6 +15,16 @@
 //! committed to the fulfilment for its own site rather than to whichever site
 //! the order's first line named. The order itself takes the first line's site.
 //!
+//! # One fulfilment per item fulfilment, when the sender says which (D172)
+//!
+//! A line can say which document it came from: the sales order's internal id,
+//! the item fulfilment's internal id and number, and its own line key. When it
+//! does, the fulfilment is found by the item fulfilment's id rather than by
+//! order and site, so two item fulfilments at one site are two fulfilments
+//! here, and the same one sent twice is the same row. A fulfilment loaded
+//! before senders said (by order and site, with no id) is adopted by the first
+//! send that does, rather than duplicated.
+//!
 //! # Idempotent, and first write wins
 //!
 //! Orders are keyed by document number, lines by `(order, item, line number)`,
@@ -54,6 +64,22 @@ pub struct Line {
     pub location: String,
     /// Day-first, as the export writes it. Blank means now.
     pub date: String,
+    /// Which document this line came from, when the sender knows (D172). The
+    /// export does not, and loads by order and site as it always has.
+    pub source: Option<Source>,
+}
+
+/// Where a line came from, in the channel's own keys.
+#[derive(Debug, Clone, Default)]
+pub struct Source {
+    /// The sales order's internal id.
+    pub order_id: Option<String>,
+    /// The item fulfilment's internal id: what a fulfilment is found by.
+    pub fulfilment_id: Option<String>,
+    /// Its number, the one a person quotes: `IF270947`.
+    pub fulfilment_number: Option<String>,
+    /// The line's key within the item fulfilment.
+    pub line: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -107,6 +133,8 @@ pub struct OrdersLoaded {
     pub orders_created: u64,
     pub lines_created: usize,
     pub fulfilments_created: u64,
+    /// Fulfilments loaded before their document was known, now matched to it.
+    pub fulfilments_adopted: u64,
     pub commitments_created: u64,
     /// Lines that loaded, or were already on file.
     pub lines_loaded: usize,
@@ -312,7 +340,8 @@ async fn write(
 
     // ---- orders, lines, commitments ----
     let mut order_ids: HashMap<&str, Uuid> = HashMap::new();
-    let mut fulfilment_ids: HashMap<(Uuid, Uuid), Uuid> = HashMap::new();
+    // Keyed by order, site and, when the line names one, the item fulfilment.
+    let mut fulfilment_ids: HashMap<(Uuid, Uuid, Option<String>), Uuid> = HashMap::new();
 
     for &(l, item, site) in &loadable {
         let order_id = match order_ids.get(l.doc.as_str()) {
@@ -329,8 +358,8 @@ async fn write(
                     .execute(
                         "INSERT INTO \"order\" (tenant_id, site_id, customer_party_id,
                              confirmation_number, external_ref, source_channel_id,
-                             placed_at, promised_to, state, currency)
-                         SELECT $1, $2, $3, $4, NULLIF($5, ''), $6, $7, $7, 'placed', 'AUD'
+                             placed_at, promised_to, state, currency, external_id)
+                         SELECT $1, $2, $3, $4, NULLIF($5, ''), $6, $7, $7, 'placed', 'AUD', $8
                           WHERE NOT EXISTS (SELECT 1 FROM \"order\" o
                                              WHERE o.tenant_id = $1 AND o.confirmation_number = $4)",
                         &[
@@ -341,6 +370,7 @@ async fn write(
                             &l.po_ref,
                             &channel,
                             &placed,
+                            &order_external_id(l),
                         ],
                     )
                     .await
@@ -355,37 +385,66 @@ async fn write(
                     .await
                     .map_err(|e| e.to_string())?
                     .get(0);
+                // An order loaded before its id was known learns it now. Only
+                // into an empty column: an id already on file is not overwritten
+                // by a different one, which would be two orders sharing a number.
+                if let Some(external) = order_external_id(l) {
+                    tx.execute(
+                        "UPDATE \"order\" SET external_id = $2
+                          WHERE id = $1 AND external_id IS NULL",
+                        &[&id, &external],
+                    )
+                    .await
+                    .map_err(|e| format!("order {}: {e}", l.doc))?;
+                }
                 order_ids.insert(l.doc.as_str(), id);
                 id
             }
         };
 
-        // **One commitment per order and site, planned, with nothing picked.**
+        // **One commitment per item fulfilment when the line says which, and
+        // per order and site when it does not** — planned, with nothing picked.
         // Nothing has moved in this system, so every progress quantity is zero
-        // and that is the truth rather than a gap.
-        let fulfilment_id = match fulfilment_ids.get(&(order_id, site)) {
+        // and that is the truth rather than a gap. A pick made elsewhere is
+        // reported separately (D172), not written here.
+        let document = document_of(l);
+        let key = (order_id, site, document.map(|d| d.0.to_string()));
+        let fulfilment_id = match fulfilment_ids.get(&key) {
             Some(id) => *id,
             None => {
-                out.fulfilments_created += tx
-                    .execute(
-                        "INSERT INTO fulfilment (tenant_id, order_id, site_id, state)
-                         SELECT $1, $2, $3, 'planned'
-                          WHERE NOT EXISTS (SELECT 1 FROM fulfilment f
-                                             WHERE f.order_id = $2 AND f.site_id = $3)",
-                        &[&tenant, &order_id, &site],
-                    )
-                    .await
-                    .map_err(|e| format!("fulfilment for {}: {e}", l.doc))?;
-                let id: Uuid = tx
-                    .query_one(
-                        "SELECT id FROM fulfilment
-                          WHERE order_id = $1 AND site_id = $2 ORDER BY id LIMIT 1",
-                        &[&order_id, &site],
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .get(0);
-                fulfilment_ids.insert((order_id, site), id);
+                let id = match document {
+                    Some((external, number)) => {
+                        let (id, made, adopted) = fulfilment_for_document(
+                            tx, tenant, channel, order_id, site, external, number,
+                        )
+                        .await
+                        .map_err(|e| format!("fulfilment {external} for {}: {e}", l.doc))?;
+                        out.fulfilments_created += u64::from(made);
+                        out.fulfilments_adopted += u64::from(adopted);
+                        id
+                    }
+                    None => {
+                        out.fulfilments_created += tx
+                            .execute(
+                                "INSERT INTO fulfilment (tenant_id, order_id, site_id, state)
+                                 SELECT $1, $2, $3, 'planned'
+                                  WHERE NOT EXISTS (SELECT 1 FROM fulfilment f
+                                                     WHERE f.order_id = $2 AND f.site_id = $3)",
+                                &[&tenant, &order_id, &site],
+                            )
+                            .await
+                            .map_err(|e| format!("fulfilment for {}: {e}", l.doc))?;
+                        tx.query_one(
+                            "SELECT id FROM fulfilment
+                              WHERE order_id = $1 AND site_id = $2 ORDER BY id LIMIT 1",
+                            &[&order_id, &site],
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .get(0)
+                    }
+                };
+                fulfilment_ids.insert(key, id);
                 id
             }
         };
@@ -431,9 +490,10 @@ async fn write(
         // What is still to pick. Nothing outstanding means no commitment:
         // `fulfilment_line_quantity_ck` insists on more than zero, rightly.
         if l.outstanding > 0 {
+            let external_line = l.source.as_ref().and_then(|s| s.line.as_deref());
             let committed = tx
                 .query_opt(
-                    "SELECT quantity FROM fulfilment_line
+                    "SELECT quantity, id FROM fulfilment_line
                       WHERE fulfilment_id = $1 AND order_line_id = $2",
                     &[&fulfilment_id, &line_id],
                 )
@@ -442,6 +502,17 @@ async fn write(
             match committed {
                 Some(row) => {
                     let on_file: i64 = row.get(0);
+                    // A commitment loaded before its line key was known learns it.
+                    if let Some(key) = external_line {
+                        let id: Uuid = row.get(1);
+                        tx.execute(
+                            "UPDATE fulfilment_line SET external_line = $2
+                              WHERE id = $1 AND external_line IS NULL",
+                            &[&id, &key],
+                        )
+                        .await
+                        .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
+                    }
                     if on_file != l.outstanding {
                         out.differs.push(Differs {
                             doc: l.doc.clone(),
@@ -457,9 +528,9 @@ async fn write(
                     out.commitments_created += tx
                         .execute(
                             "INSERT INTO fulfilment_line (tenant_id, fulfilment_id,
-                                 order_line_id, quantity)
-                             VALUES ($1, $2, $3, $4)",
-                            &[&tenant, &fulfilment_id, &line_id, &l.outstanding],
+                                 order_line_id, quantity, external_line)
+                             VALUES ($1, $2, $3, $4, $5)",
+                            &[&tenant, &fulfilment_id, &line_id, &l.outstanding, &external_line],
                         )
                         .await
                         .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
@@ -470,4 +541,89 @@ async fn write(
     }
 
     Ok(out)
+}
+
+/// The sales order's id in its channel, when the line carries one.
+fn order_external_id(l: &Line) -> Option<&str> {
+    l.source.as_ref()?.order_id.as_deref().map(str::trim).filter(|s| !s.is_empty())
+}
+
+/// The item fulfilment's id and number, when the line carries the id.
+fn document_of(l: &Line) -> Option<(&str, Option<&str>)> {
+    let s = l.source.as_ref()?;
+    let id = s.fulfilment_id.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+    let number = s.fulfilment_number.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    Some((id, number))
+}
+
+/// The fulfilment that is this item fulfilment: found by its id, else adopted
+/// from a row loaded by order and site before ids were sent, else made.
+///
+/// Returns the id, whether one was made, and whether one was adopted. The
+/// number is recorded where the row has none, and left alone where it has one:
+/// a number that changed under a known id is for a person, not an importer.
+async fn fulfilment_for_document(
+    tx: &Transaction<'_>,
+    tenant: Uuid,
+    channel: Uuid,
+    order_id: Uuid,
+    site: Uuid,
+    external: &str,
+    number: Option<&str>,
+) -> Result<(Uuid, bool, bool), tokio_postgres::Error> {
+    if let Some(row) = tx
+        .query_opt(
+            "SELECT id FROM fulfilment
+              WHERE tenant_id = $1 AND source_channel_id = $2 AND external_id = $3",
+            &[&tenant, &channel, &external],
+        )
+        .await?
+    {
+        let id: Uuid = row.get(0);
+        tx.execute(
+            "UPDATE fulfilment SET reference = $2 WHERE id = $1 AND reference IS NULL",
+            &[&id, &number],
+        )
+        .await?;
+        return Ok((id, false, false));
+    }
+
+    // **Adopt, do not duplicate.** Before senders named the item fulfilment,
+    // the userscript loaded one fulfilment per order and site. The first send
+    // that names it claims that row, so the work already recorded against it
+    // stays with the document it was for. Only a row nobody has claimed, and
+    // not a cancelled one.
+    if let Some(row) = tx
+        .query_opt(
+            "SELECT id FROM fulfilment
+              WHERE order_id = $1 AND site_id = $2 AND external_id IS NULL
+                AND state <> 'cancelled'
+              ORDER BY id LIMIT 1",
+            &[&order_id, &site],
+        )
+        .await?
+    {
+        let id: Uuid = row.get(0);
+        tx.execute(
+            "UPDATE fulfilment
+                SET source_channel_id = $2, external_id = $3,
+                    reference = coalesce(reference, $4)
+              WHERE id = $1",
+            &[&id, &channel, &external, &number],
+        )
+        .await?;
+        return Ok((id, false, true));
+    }
+
+    let id: Uuid = tx
+        .query_one(
+            "INSERT INTO fulfilment (tenant_id, order_id, site_id, state,
+                 source_channel_id, external_id, reference)
+             VALUES ($1, $2, $3, 'planned', $4, $5, $6)
+             RETURNING id",
+            &[&tenant, &order_id, &site, &channel, &external, &number],
+        )
+        .await?
+        .get(0);
+    Ok((id, true, false))
 }

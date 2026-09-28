@@ -6771,6 +6771,17 @@ pub struct FulfilmentIntake {
     /// Day-first, as NetSuite renders it here. Blank means now.
     #[serde(default)]
     pub date: String,
+    /// The sales order's internal id, when the sender can read it (D172).
+    #[serde(default)]
+    pub order_id: Option<String>,
+    /// The item fulfilment's internal id. When present, the fulfilment is found
+    /// by it rather than by order and site, so each item fulfilment is its own
+    /// fulfilment here (D172).
+    #[serde(default)]
+    pub fulfilment_id: Option<String>,
+    /// The item fulfilment's number, the one a person quotes: `IF270947`.
+    #[serde(default)]
+    pub fulfilment_number: Option<String>,
     pub lines: Vec<FulfilmentIntakeLine>,
 }
 
@@ -6791,6 +6802,9 @@ pub struct FulfilmentIntakeLine {
     /// the most we know was outstanding: this, or failing it, `quantity`.
     #[serde(default)]
     pub remaining: Option<f64>,
+    /// The line's key within the item fulfilment (D172).
+    #[serde(default)]
+    pub external_line: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -6855,6 +6869,12 @@ pub async fn import_fulfilment(
                 po_ref: intake.po_ref.trim().to_string(),
                 location: l.location.trim().to_string(),
                 date: intake.date.clone(),
+                source: Some(crate::importing::orders::Source {
+                    order_id: intake.order_id.clone(),
+                    fulfilment_id: intake.fulfilment_id.clone(),
+                    fulfilment_number: intake.fulfilment_number.clone(),
+                    line: l.external_line.clone(),
+                }),
             }
         })
         .collect();

@@ -128,6 +128,7 @@ async fn main() -> Result<(), String> {
             po_ref: g(PO_REF),
             location: g(LOCATION),
             date: g(DATE),
+            source: None,
         });
     }
 

@@ -159,6 +159,9 @@ async fn what_a_thing_has_weighed_resolves_by_specificity_and_reaches_both_scree
         person_id: PERSON.parse().unwrap(),
         tenant_id: TENANT.parse().unwrap(),
         site_id: Some(SITE.parse().unwrap()),
+        remembered: false,
+        issued_at: chrono::Utc::now(),
+        expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
     };
     let glove: Uuid = GLOVE.parse().unwrap();
     let sized: Uuid = SIZED.parse().unwrap();
