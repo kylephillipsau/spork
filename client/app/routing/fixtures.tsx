@@ -88,7 +88,7 @@ import { FAILED as KEYS_FAILED, NONE as KEYS_NONE, READY as KEYS_READY, fixtureK
 import { TokensPage } from "@app/admin/TokensPage";
 import { FAILED as TOKENS_FAILED, MINTED, NONE as TOKENS_NONE, READY as TOKENS_READY, fixtureTokens } from "@app/admin/fixture";
 import { ImportPage } from "@app/admin/ImportPage";
-import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
+import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, RACKS as IMP_RACKS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
@@ -590,6 +590,9 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-import-items", "/fixtures/import/items", "Import — item master", "desk", { screen: "import" }, () => (
     <ImportPage bench={fixtureImport(IMP_ITEMS)} />
+  )),
+  app("f-import-racks", "/fixtures/import/racks", "Import — racks", "desk", { screen: "import" }, () => (
+    <ImportPage bench={fixtureImport(IMP_RACKS)} />
   )),
   app("f-import-failed", "/fixtures/import/failed", "Import — refused", "desk", { screen: "import" }, () => (
     <ImportPage bench={fixtureImport(IMP_FAILED)} />

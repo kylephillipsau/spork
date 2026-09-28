@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 75, "the register holds 75 job-asserted invariants");
+    assert_eq!(seen.len(), 77, "the register holds 77 job-asserted invariants");
 }
 
 #[test]
@@ -859,6 +859,99 @@ fn j71_finds_two_bins_at_one_walking_position() {
     assert!(
         said.iter().any(|d| d.contains("A-01-1-RIVAL")),
         "J71 did not report two bins at one position: {said:?}"
+    );
+}
+
+/// J76 can fail: two bins drawn into one space.
+///
+/// Nothing in the fixture has a box, so without this J76 examines nothing and
+/// passes, which is the register's warning about every absence it asserts.
+#[test]
+fn j76_finds_two_bins_in_one_space() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+
+    const TENANT: &str = "11111111-1111-1111-1111-111111111111";
+    const SITE: &str = "a5170000-0000-0000-0000-000000000001";
+
+    // Two shelves entered by hand, the second starting halfway along the first;
+    // and a third that only touches the first's end face, which is not a clash.
+    client
+        .batch_execute(&format!(
+            "INSERT INTO location (id, tenant_id, site_id, code, kind, active, geometry_source,
+                                   x_mm, y_mm, z_mm, length_mm, width_mm, height_mm)
+             VALUES ('10c00000-0000-0000-0000-0000000076a1', '{TENANT}', '{SITE}', 'J76-ONE',
+                     'pick_face', true, 'manual', 0, 0, 0, 1000, 1000, 1000),
+                    ('10c00000-0000-0000-0000-0000000076a2', '{TENANT}', '{SITE}', 'J76-TWO',
+                     'pick_face', true, 'manual', 500, 0, 0, 1000, 1000, 1000),
+                    ('10c00000-0000-0000-0000-0000000076a3', '{TENANT}', '{SITE}', 'J76-NEXT',
+                     'pick_face', true, 'manual', 1500, 0, 0, 1000, 1000, 1000);"
+        ))
+        .expect("the bins");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J76);
+
+    client
+        .batch_execute("DELETE FROM location WHERE code LIKE 'J76-%';")
+        .expect("the test removes the bins it added");
+
+    let (_, examined, findings) = outcome.expect("J76 runs");
+    assert!(examined >= 3, "J76 examined {examined}, so it did not see the bins");
+    let said: Vec<&str> = findings.iter().map(|f| f.detail.as_str()).collect();
+    assert!(
+        said.iter().any(|d| d.contains("J76-ONE") && d.contains("J76-TWO")),
+        "J76 did not report two bins in one space: {said:?}"
+    );
+    assert!(
+        !said.iter().any(|d| d.contains("J76-ONE") && d.contains("J76-NEXT")),
+        "J76 called two bins that only touch a clash: {said:?}"
+    );
+}
+
+/// J77 can fail: a rack along an aisle, and a bin in it that no rack names.
+#[test]
+fn j77_finds_a_bin_its_aisle_s_racks_do_not_place() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+
+    const TENANT: &str = "11111111-1111-1111-1111-111111111111";
+    const SITE: &str = "a5170000-0000-0000-0000-000000000001";
+
+    client
+        .batch_execute(&format!(
+            "INSERT INTO rack (id, tenant_id, site_id, code, aisle, x_mm, y_mm, rotation,
+                               depth_mm, height_mm, first_bay, bay_widths_mm, level_z_mm,
+                               positions, code_template)
+             VALUES ('7ac00000-0000-0000-0000-000000000077', '{TENANT}', '{SITE}', 'J77-RACK',
+                     'J77', 0, 0, 0, 1000, 3000, 1, '{{2000}}', '{{0}}', '{{1}}',
+                     '{{aisle}}-{{bay}}-{{level}}');
+             INSERT INTO location (id, tenant_id, site_id, code, aisle, bay, level, kind, active)
+             VALUES ('10c00000-0000-0000-0000-0000000077a1', '{TENANT}', '{SITE}', 'J77-9-1',
+                     'J77', '9', '1', 'pick_face', true);"
+        ))
+        .expect("the rack and the bin");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J77);
+
+    client
+        .batch_execute(
+            "DELETE FROM location WHERE code = 'J77-9-1';
+             DELETE FROM rack WHERE code = 'J77-RACK';",
+        )
+        .expect("the test removes what it added");
+
+    let (_, examined, findings) = outcome.expect("J77 runs");
+    assert!(examined > 0, "J77 examined nothing, so it proved nothing");
+    let said: Vec<&str> = findings.iter().map(|f| f.detail.as_str()).collect();
+    assert!(
+        said.iter().any(|d| d.contains("J77-9-1")),
+        "J77 did not report a bin its aisle's rack does not place: {said:?}"
     );
 }
 

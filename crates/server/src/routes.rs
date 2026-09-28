@@ -6875,6 +6875,102 @@ pub async fn import_bins(
     }))
 }
 
+#[derive(Serialize, Debug)]
+pub struct RackImportReport {
+    pub loaded: crate::importing::layout::RacksLoaded,
+    pub arrival: Option<FileArrival>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct FloorImportReport {
+    pub loaded: crate::importing::layout::FloorLoaded,
+    pub arrival: Option<FileArrival>,
+}
+
+/// Load a site's racks, and put every bin they name where they say (D173).
+///
+/// **On the import path although a person writes it.** A layout is authored
+/// here, usually from a survey spreadsheet, not exported from the system of
+/// record; but an import token keeps "the import endpoints are reached by an
+/// import token" true, and the stored arrival keeps each version of the layout
+/// as it arrived.
+#[post("/import/racks")]
+pub async fn import_racks(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ImportQuery>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+
+    let rows = crate::importing::layout::read_racks(body.as_ref()).map_err(ApiError::Rejected)?;
+    if rows.is_empty() {
+        return Err(ApiError::Rejected("no racks in the file".into()));
+    }
+
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let tenant = scope.tenant();
+    let apply = query.apply;
+    let actor = crate::importing::received::Actor::Token(machine.token_id);
+    let filename = query.filename.clone();
+    let loaded = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
+                let l = crate::importing::layout::load_racks(tx, tenant, &rows, apply)
+                    .await
+                    .map_err(ApiError::Rejected)?;
+                read_through(tx, arrival).await?;
+                Ok((l, arrival))
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(RackImportReport {
+        loaded: loaded.0,
+        arrival: loaded.1.map(FileArrival::from),
+    }))
+}
+
+/// Load a site's floor areas: docks, staging, walkways, walls (D173).
+#[post("/import/floor")]
+pub async fn import_floor(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ImportQuery>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+
+    let rows = crate::importing::layout::read_floor(body.as_ref()).map_err(ApiError::Rejected)?;
+    if rows.is_empty() {
+        return Err(ApiError::Rejected("no areas in the file".into()));
+    }
+
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let tenant = scope.tenant();
+    let apply = query.apply;
+    let actor = crate::importing::received::Actor::Token(machine.token_id);
+    let filename = query.filename.clone();
+    let loaded = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
+                let l = crate::importing::layout::load_floor(tx, tenant, &rows, apply)
+                    .await
+                    .map_err(ApiError::Rejected)?;
+                read_through(tx, arrival).await?;
+                Ok((l, arrival))
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(FloorImportReport {
+        loaded: loaded.0,
+        arrival: loaded.1.map(FileArrival::from),
+    }))
+}
+
 /// One item fulfilment, as the NetSuite page shows it.
 ///
 /// **JSON rather than a file**, which the other imports are not, because there
@@ -9215,6 +9311,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(list_api_tokens)
         .service(revoke_api_token)
         .service(import_bins)
+        .service(import_racks)
+        .service(import_floor)
         .service(import_items)
         .service(import_stock)
         .service(import_fulfilment)

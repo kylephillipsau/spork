@@ -13,6 +13,8 @@ import type {
   Workspace,
   ImportReport,
   ItemImportReport,
+  RackImportReport,
+  FloorImportReport,
   ChooseSiteRequest,
   CurrentSession,
   ConsignmentResponse,
@@ -674,6 +676,28 @@ export const api = {
     sendRaw<ItemImportReport>(
       "POST",
       `/import/items${q.apply ? "?apply=true" : ""}`,
+      csv,
+      token,
+    ),
+
+  /**
+   * Load a site's racks, which places the bins they name (D173). Same
+   * credential rules as `importBins`: a layout is written by a person, but it
+   * arrives on the import path so that each version of it is kept.
+   */
+  importRacks: (token: string, csv: string, q: { apply?: boolean }) =>
+    sendRaw<RackImportReport>(
+      "POST",
+      `/import/racks${q.apply ? "?apply=true" : ""}`,
+      csv,
+      token,
+    ),
+
+  /** Load a site's floor areas: docks, staging, walkways, walls (D173). */
+  importFloor: (token: string, csv: string, q: { apply?: boolean }) =>
+    sendRaw<FloorImportReport>(
+      "POST",
+      `/import/floor${q.apply ? "?apply=true" : ""}`,
       csv,
       token,
     ),

@@ -69,6 +69,41 @@ export const ITEMS: ImportState = {
   },
   applied: false,
 };
+/**
+ * A rack file's dry run (D173): 38 racks at one site. 4,104 slots; 3,960 name a
+ * bin and are placed, 12 of those measured and kept, so 3,948 placed; 144
+ * slots name no bin on file, and 7 bins sit in racked aisles no rack names.
+ */
+export const RACKS: ImportState = {
+  kind: "reported",
+  which: "racks",
+  report: {
+    loaded: {
+      racks_created: 38,
+      racks_changed: 0,
+      racks_unchanged: 0,
+      sites: [
+        {
+          site: "NORTH",
+          racks: 38,
+          slots: 4104,
+          bins_placed: 3948,
+          bins_moved: 0,
+          bins_kept_measured: 12,
+          bins_unplaced: 0,
+          slots_without_bin: 144,
+          slots_without_bin_sample: ["C-41-1", "C-41-2", "C-41-3", "C-41-4", "C-43-1"],
+          bins_uncovered: 7,
+          bins_uncovered_sample: ["C-FLOOR-1", "C-FLOOR-2", "D-00-1", "D-99-1", "E-7", "E-8", "E-9"],
+        },
+      ],
+      applied: false,
+    },
+    arrival: null,
+  },
+  applied: false,
+};
+
 export const FAILED: ImportState = {
   kind: "failed",
   message: "no rows with a `Bin Number` — is this the bin export?",
@@ -79,7 +114,7 @@ export function fixtureImport(state: ImportState, file = "bins.csv"): ImportBenc
   return {
     state,
     which,
-    file: state.kind === "idle" ? null : ({ name: which === "items" ? "items.csv" : file } as File),
+    file: state.kind === "idle" ? null : ({ name: which === "bins" ? file : `${which}.csv` } as File),
     options: { assumeKind: "", includeExternal: false },
     pick: () => {},
     choose: () => {},

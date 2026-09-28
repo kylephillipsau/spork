@@ -286,16 +286,16 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-One hundred and seventy-two recorded decisions, a hundred and thirty-one rules the design must always
-satisfy, and a database that ninety-five migrations build and reverse cleanly, both
+One hundred and seventy-three recorded decisions, a hundred and thirty-three rules the design must always
+satisfy, and a database that ninety-six migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
 suite rather than a document. Each rule carries its own metadata and its own
 identifier, so allocating the same number twice is a compile error rather than a
-mistake anyone can make. One hundred and nine rules are implemented and none fails.
+mistake anyone can make. One hundred and eleven rules are implemented and none fails.
 
-Seventy-two of the rules state that something does not happen, and a rule of
+Seventy-four of the rules state that something does not happen, and a rule of
 that shape passes when there is nothing to check. The suite reports those
 separately: a check that examined nothing is recorded as proving nothing, rather
 than counted as a pass.
@@ -329,7 +329,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D172
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D173
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being

@@ -29,6 +29,7 @@ pub mod error;
 pub mod health;
 pub mod images;
 pub mod importing;
+pub mod layout;
 pub mod ledger_views;
 pub mod locator;
 pub mod moving;

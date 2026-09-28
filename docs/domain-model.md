@@ -13518,3 +13518,69 @@ migration 91's storage-only rule, which it had not.
 **Rejects.** A phantom location to pick from. Seeding stock from the report.
 Folding reports into `picked_quantity`. The polymorphic `external_reference`
 table. Inventing an owner for a site that has not said.
+
+### D173 — Where the racks stand: a layout is declared per rack, and bins take their place from it
+
+*Adopted 2026-09-29, with migration 96. Phase 0 of the warehouse view: the
+layout data every map, heat map and pick path reads.*
+
+**Decision.** A site's physical layout is recorded as **racks** and **floor
+areas**, and a bin's box in space is **generated from the rack that holds it**
+unless somebody measured it. A `rack` is one run of bays along one aisle face: an
+origin on the floor plan, a rotation, bay widths, level heights, positions per
+level, and a template that says what its bins are called. Expanding a rack gives
+every slot's code and box; each slot whose code is a bin on file gets that box,
+and is marked as placed by that rack. A `floor_area` is a polygon on the plan:
+a dock, a staging lane, a walkway, a wall, a floor stack.
+
+**One frame per site.** Millimetres, integers, on the site's own plan: `x` to
+the right, `y` up the page, `z` up from the floor, from an origin the survey
+chooses. A bin's `x_mm`, `y_mm`, `z_mm` is the corner of its box nearest that
+origin, and `length_mm`, `width_mm`, `height_mm` are its extent **along x, y and
+z**, not its frontage and depth. Migration 1 created the six columns without
+saying which; saying it now costs nothing, since nothing has written them.
+
+**Rotation in quarter turns only.** A rack turns by 0, 90, 180 or 270 degrees,
+so every bin is an axis-aligned box. That keeps the six columns meaningful
+without a seventh, and keeps picking in the view a ray against boxes. A rack
+set at an angle is rare enough to wait for, and relaxing the CHECK is a decision
+of its own, since a rotated rack's box is no longer its footprint.
+
+**Declared geometry, then generated, then measured.** Each placed bin says
+where its box came from, in `geometry_source`: `template` (generated from its
+rack), `survey` (measured) or `manual` (entered). A generator writes only where
+the source is empty or `template`, so a measured box is never overwritten by a
+drawing of what the rack should be. A bin a rack stops placing, because the rack
+was re-imported with fewer bays, loses its template box instead of keeping one
+that is no longer true.
+
+**Bins come from the bin list, not from racks.** The rack says where; the bin
+list says what exists. A slot with no bin on file is reported by the import and
+not created, because creating it would assert a bin that the system of record
+does not have. A bin that a rack's aisle covers but no slot places is **J77**,
+which is where a miscoded bin or a mistyped template shows up after the import
+report has scrolled away.
+
+**Refused at the import, because it is the file contradicting itself.**
+A template that produces one code twice. A generated code that does not decompose
+to the rack's own aisle, which would make J77 unanswerable. A floor outline
+with fewer than three points or with edges that cross. An unknown site: a layout
+never creates a warehouse, for the bin importer's reason.
+
+**Reported, not refused, because it is a disagreement about the floor.** Two
+bins whose boxes overlap in space (**J76**). Whether the racks or the survey
+are wrong is a person's question, and J71 made the same choice for two bins at
+one pick position.
+
+**How it arrives.** `POST /import/racks` and `POST /import/floor` take a CSV
+each, under the import token (D158), stored as an arrival and dry-run unless
+told to apply, like every other import. A layout is authored by a person,
+usually from a survey spreadsheet, but keeping it on the import path keeps
+"the import endpoints are reached by an import token" true, and keeps each
+version of the layout on file as it arrived. The columns are in
+[layout.md](./layout.md).
+
+**Rejects.** A slot table: a slot is a function of its rack row, so storing it
+is a second copy to drift. Free rotation. Racks creating bins. A traversable
+graph stored beside the layout: it is derived from the layout when pick paths
+need it (phase 3). PostGIS for a few thousand boxes and a few dozen polygons.

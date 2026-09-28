@@ -1119,3 +1119,53 @@ export interface ItemImportReport {
   loaded: ItemsLoaded;
   arrival: FileArrival | null;
 }
+
+/**
+ * One site's bins after its racks were expanded together (D173).
+ *
+ * A rack names bins; it never creates them. So a slot with no bin on file is
+ * counted here and nothing more, and a bin in a racked aisle that no rack
+ * names is J77 before it is a finding.
+ */
+export interface SitePlaced {
+  site: string;
+  racks: number;
+  slots: number;
+  /** Had no box, and now have one from their rack. */
+  bins_placed: number;
+  /** Their rack changed, so their box did. */
+  bins_moved: number;
+  /** Surveyed or entered by hand, and left where they were measured. */
+  bins_kept_measured: number;
+  /** No rack names them any more, so they lose the box a rack gave them. */
+  bins_unplaced: number;
+  slots_without_bin: number;
+  slots_without_bin_sample: string[];
+  bins_uncovered: number;
+  bins_uncovered_sample: string[];
+}
+
+export interface RacksLoaded {
+  racks_created: number;
+  racks_changed: number;
+  racks_unchanged: number;
+  sites: SitePlaced[];
+  applied: boolean;
+}
+
+export interface RackImportReport {
+  loaded: RacksLoaded;
+  arrival: FileArrival | null;
+}
+
+export interface FloorLoaded {
+  areas_created: number;
+  areas_changed: number;
+  areas_unchanged: number;
+  applied: boolean;
+}
+
+export interface FloorImportReport {
+  loaded: FloorLoaded;
+  arrival: FileArrival | null;
+}
