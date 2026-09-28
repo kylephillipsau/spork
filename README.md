@@ -69,11 +69,22 @@ has already written to.
 | `mobile` | Tauri shell around the client bundle |
 | `docs` | the design record |
 
+## NetSuite
+
+Spork takes work from NetSuite without writing to it. The Spork Bridge
+userscript (in the separate `warehouse-scripts` repo) reads item fulfilments the
+handheld has marked Picked, using SuiteQL as the signed-in user, and sends each
+to `POST /api/import/fulfilment` with an import token minted under Import
+tokens. Spork records these as picks made elsewhere (D172), ready to pack.
+
 ## The design record
 
 `docs/` holds the reasoning rather than the instructions: the domain decision
 record, the invariant and open-question registers, and the analyses behind them.
 Start at [docs/architecture.md](docs/architecture.md).
+
+Where work stands is in the newest handoff,
+[docs/handoff-orders-bridge-3d.md](docs/handoff-orders-bridge-3d.md).
 
 ## Licence
 
