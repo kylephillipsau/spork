@@ -9050,6 +9050,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(despatch_package)
         .service(open_lines)
         .service(crate::picking::record::record_pick)
+        .service(crate::handover::record_handover)
         .service(crate::workspace::workspace)
         .service(record_correction)
         .service(record_adjustment)

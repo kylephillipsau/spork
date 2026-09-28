@@ -238,6 +238,11 @@ INSERT INTO party (id, tenant_id, name, code, party_class_id) VALUES
     ('9a247000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
      'Gloveco', 'GLOVECO', '9c1a0000-0000-0000-0000-000000000002');
 
+-- Who owns what Melbourne holds when nothing else says: a handover of goods
+-- picked elsewhere records this owner (D172).
+UPDATE site SET owner_party_id = '9a247000-0000-0000-0000-000000000001'
+ WHERE id = 'a5170000-0000-0000-0000-000000000001';
+
 -- D58. Where it came from and when it was made, neither of which anybody can
 -- reconstruct after the pallet has gone.
 INSERT INTO lot (id, tenant_id, item_id, code, expiry_date,

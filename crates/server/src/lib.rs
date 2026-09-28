@@ -24,6 +24,7 @@ pub mod credentials;
 pub mod despatch;
 pub mod despatching;
 pub mod findings;
+pub mod handover;
 pub mod error;
 pub mod health;
 pub mod images;
