@@ -91,7 +91,7 @@ export const USER_MENU_SCREENS = ["account", "keys"] as const;
  * Reached another way, so deliberately in no menu: a job opened from its
  * queue, a finding opened from the list, and the screens before sign-in.
  */
-export const REACHED_ANOTHER_WAY = ["pack-one", "finding", "sign-in", "setup", "where"] as const;
+export const REACHED_ANOTHER_WAY = ["pack-one", "order", "finding", "sign-in", "setup", "where"] as const;
 
 export function allItems(): NavItem[] {
   return [...NAV, SETTINGS].flatMap((g) => g.items);

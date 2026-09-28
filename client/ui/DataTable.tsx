@@ -140,7 +140,16 @@ export function DataTable<T>({
                   <tr
                     key={key}
                     className={cx(onRowClick && s.clickable, selectedKey === key && s.selected)}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    onClick={
+                      onRowClick
+                        ? (e) => {
+                            // A link or control in a cell does its own thing; the
+                            // row answering too would act twice for one click.
+                            if ((e.target as Element).closest("a, button, input, select, textarea, label")) return;
+                            onRowClick(row);
+                          }
+                        : undefined
+                    }
                     aria-selected={selectedKey !== undefined ? selectedKey === key : undefined}
                   >
                     {columns.map((c) => (

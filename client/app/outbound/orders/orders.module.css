@@ -25,3 +25,7 @@
 .none {
   color: var(--ui-text-muted);
 }
+.short {
+  color: var(--ui-warning);
+  font-weight: 600;
+}

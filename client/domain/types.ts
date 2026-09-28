@@ -813,6 +813,8 @@ export interface PackJob {
 /** One commitment against an order, with how far the floor has got. */
 export interface FulfilmentSummary {
   fulfilment_id: Uuid;
+  /** What it is called where it came from (an item fulfilment number). */
+  reference: string | null;
   state: string;
   site_id: Uuid | null;
   site_code: string | null;
@@ -843,6 +845,28 @@ export interface OrderMatch {
    *  so one reference can name a cancelled order and the one that replaced it. */
   supersedes_order_id: Uuid | null;
   fulfilments: FulfilmentSummary[];
+}
+
+/** One line of an order, across every fulfilment that serves it. */
+export interface OrderLineView {
+  order_line_id: Uuid;
+  line_number: number | null;
+  item_id: Uuid;
+  item_code: string;
+  description: string;
+  ordered_quantity: number;
+  /** Committed to fulfilments. Less than ordered is a short commitment. */
+  committed_quantity: number;
+  picked_quantity: number;
+  /** Reported picked by another system (D172), not moved here. */
+  external_picked_quantity: number;
+  packed_quantity: number;
+  despatched_quantity: number;
+}
+
+/** `GET /orders/{order_id}`: the order as `/orders` answers it, with its lines. */
+export interface OrderView extends OrderMatch {
+  lines: OrderLineView[];
 }
 
 /**

@@ -5178,6 +5178,9 @@ const LATEST_ORDERS: i64 = 20;
 #[derive(Serialize, Debug, PartialEq)]
 pub struct FulfilmentSummary {
     pub fulfilment_id: Uuid,
+    /// What the fulfilment is called where it came from (an item fulfilment
+    /// number), so two at one site can be told apart.
+    pub reference: Option<String>,
     pub state: String,
     pub site_id: Option<Uuid>,
     pub site_code: Option<String>,
@@ -5252,13 +5255,13 @@ pub async fn find_orders(
                 let orders = match &reference {
                     Some(r) => {
                         tx.query(
-                            "SELECT o.id, o.confirmation_number, o.external_ref, p.name,
-                                    o.state::text, o.placed_at, o.promised_to,
-                                    o.supersedes_order_id
+                            &format!(
+                                "SELECT {ORDER_COLUMNS}
                                FROM \"order\" o
                                LEFT JOIN party p ON p.id = o.customer_party_id
                               WHERE o.confirmation_number = $1 OR o.external_ref = $1
-                              ORDER BY o.placed_at DESC NULLS LAST, o.id",
+                              ORDER BY o.placed_at DESC NULLS LAST, o.id"
+                            ),
                             &[r],
                         )
                         .await?
@@ -5268,14 +5271,14 @@ pub async fn find_orders(
                     // queue follows rather than a second one.
                     None => {
                         tx.query(
-                            "SELECT o.id, o.confirmation_number, o.external_ref, p.name,
-                                    o.state::text, o.placed_at, o.promised_to,
-                                    o.supersedes_order_id
+                            &format!(
+                                "SELECT {ORDER_COLUMNS}
                                FROM \"order\" o
                                LEFT JOIN party p ON p.id = o.customer_party_id
                               WHERE ($1::uuid IS NULL OR o.site_id = $1)
                               ORDER BY o.placed_at DESC NULLS LAST, o.id
-                              LIMIT $2",
+                              LIMIT $2"
+                            ),
                             &[&site, &LATEST_ORDERS],
                         )
                         .await?
@@ -5284,66 +5287,186 @@ pub async fn find_orders(
 
                 let mut matches = vec![];
                 for o in &orders {
-                    let order_id: Uuid = o.get(0);
-                    // One row per fulfilment, folding its lines. A fulfilment has
-                    // few lines -- D25's own argument for computing this rather
-                    // than storing it.
-                    let fs = tx
-                        .query(
-                            "SELECT f.id, f.state::text, f.site_id, s.code,
-                                    count(fl.id),
-                                    coalesce(sum(fl.quantity), 0)::bigint,
-                                    coalesce(sum(fl.picked_quantity), 0)::bigint,
-                                    coalesce(sum(fl.packed_quantity), 0)::bigint,
-                                    coalesce(sum(fl.despatched_quantity), 0)::bigint,
-                                    bool_and(fl.picked_quantity >= fl.quantity),
-                                    -- The same read `ledger_views` uses for
-                                    -- `ProjectionProgress.as_at`, rather than a
-                                    -- second way of asking how old the numbers are.
-                                    (SELECT pf.last_run_at FROM projection_freshness pf
-                                      WHERE pf.function_name = 'projection_fulfilment_rebuild'
-                                        AND pf.tenant_id = f.tenant_id)
-                               FROM fulfilment f
-                               LEFT JOIN fulfilment_line fl ON fl.fulfilment_id = f.id
-                               LEFT JOIN site s ON s.id = f.site_id
-                              WHERE f.order_id = $1
-                              GROUP BY f.id, f.state, f.site_id, s.code, f.tenant_id
-                              ORDER BY f.id",
-                            &[&order_id],
-                        )
-                        .await?;
-
-                    matches.push(OrderMatch {
-                        order_id,
-                        confirmation_number: o.get(1),
-                        external_ref: o.get(2),
-                        customer_name: o.get(3),
-                        state: o.get(4),
-                        placed_at: o.get(5),
-                        promised_to: o.get(6),
-                        supersedes_order_id: o.get(7),
-                        fulfilments: fs
-                            .iter()
-                            .map(|r| FulfilmentSummary {
-                                fulfilment_id: r.get(0),
-                                state: r.get(1),
-                                site_id: r.get(2),
-                                site_code: r.get(3),
-                                line_count: r.get(4),
-                                committed_quantity: r.get(5),
-                                picked_quantity: r.get(6),
-                                packed_quantity: r.get(7),
-                                despatched_quantity: r.get(8),
-                                // NULL when the fulfilment has no lines, which is
-                                // not "fully picked" however the SQL reads.
-                                fully_picked: r.get::<_, Option<bool>>(9).unwrap_or(false)
-                                    && r.get::<_, i64>(4) > 0,
-                                as_at: r.get(10),
-                            })
-                            .collect(),
-                    });
+                    matches.push(order_match(tx, o).await?);
                 }
                 Ok(matches)
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(result))
+}
+
+/// The columns `order_match` reads, in its order. One string so the search and
+/// the by-id read cannot drift apart.
+const ORDER_COLUMNS: &str = "o.id, o.confirmation_number, o.external_ref, p.name,
+                             o.state::text, o.placed_at, o.promised_to,
+                             o.supersedes_order_id";
+
+/// An order row (`ORDER_COLUMNS`) with its fulfilments summarised.
+async fn order_match(
+    tx: &tokio_postgres::Transaction<'_>,
+    o: &tokio_postgres::Row,
+) -> Result<OrderMatch, ApiError> {
+    let order_id: Uuid = o.get(0);
+    let fs = tx
+        .query(
+            "SELECT f.id, f.state::text, f.site_id, s.code,
+                    count(fl.id),
+                    coalesce(sum(fl.quantity), 0)::bigint,
+                    coalesce(sum(fl.picked_quantity), 0)::bigint,
+                    coalesce(sum(fl.packed_quantity), 0)::bigint,
+                    coalesce(sum(fl.despatched_quantity), 0)::bigint,
+                    bool_and(fl.picked_quantity >= fl.quantity),
+                    -- The same read `ledger_views` uses for
+                    -- `ProjectionProgress.as_at`, rather than a
+                    -- second way of asking how old the numbers are.
+                    (SELECT pf.last_run_at FROM projection_freshness pf
+                      WHERE pf.function_name = 'projection_fulfilment_rebuild'
+                        AND pf.tenant_id = f.tenant_id),
+                    f.reference
+               FROM fulfilment f
+               LEFT JOIN fulfilment_line fl ON fl.fulfilment_id = f.id
+               LEFT JOIN site s ON s.id = f.site_id
+              WHERE f.order_id = $1
+              GROUP BY f.id, f.state, f.site_id, s.code, f.tenant_id, f.reference
+              ORDER BY f.id",
+            &[&order_id],
+        )
+        .await?;
+
+    Ok(OrderMatch {
+        order_id,
+        confirmation_number: o.get(1),
+        external_ref: o.get(2),
+        customer_name: o.get(3),
+        state: o.get(4),
+        placed_at: o.get(5),
+        promised_to: o.get(6),
+        supersedes_order_id: o.get(7),
+        fulfilments: fs
+            .iter()
+            .map(|r| FulfilmentSummary {
+                fulfilment_id: r.get(0),
+                reference: r.get(11),
+                state: r.get(1),
+                site_id: r.get(2),
+                site_code: r.get(3),
+                line_count: r.get(4),
+                committed_quantity: r.get(5),
+                picked_quantity: r.get(6),
+                packed_quantity: r.get(7),
+                despatched_quantity: r.get(8),
+                // NULL when the fulfilment has no lines, which is
+                // not "fully picked" however the SQL reads.
+                fully_picked: r.get::<_, Option<bool>>(9).unwrap_or(false)
+                    && r.get::<_, i64>(4) > 0,
+                as_at: r.get(10),
+            })
+            .collect(),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// One order, as a page of its own
+// ---------------------------------------------------------------------------
+
+/// One line of an order: what was asked for, and how far the floor has got
+/// with it across every fulfilment that serves it.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct OrderLineView {
+    pub order_line_id: Uuid,
+    pub line_number: Option<i32>,
+    pub item_id: Uuid,
+    pub item_code: String,
+    pub description: String,
+    pub ordered_quantity: i64,
+    /// Committed to fulfilments. Less than ordered is a short commitment.
+    pub committed_quantity: i64,
+    pub picked_quantity: i64,
+    /// Reported picked by a system that is not this one (D172), not moved here.
+    pub external_picked_quantity: i64,
+    pub packed_quantity: i64,
+    pub despatched_quantity: i64,
+}
+
+/// An order with its lines: what `/orders` answers per row, and the lines.
+#[derive(Serialize, Debug)]
+pub struct OrderView {
+    #[serde(flatten)]
+    pub order: OrderMatch,
+    pub lines: Vec<OrderLineView>,
+}
+
+/// One order by its id.
+///
+/// **A place, so it has a path.** `/orders?reference=` is a search, and one
+/// reference can answer two orders (D44); an id answers one, and the page it
+/// opens can be linked to, bookmarked and sent to somebody else.
+#[get("/orders/{order_id}")]
+pub async fn order_by_id(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let tenant = who.tenant_id;
+    let order_id = path.into_inner();
+    let mut scope = TenantScope::begin(&state.pool, tenant).await?;
+
+    let result = scope
+        .run(|tx| {
+            Box::pin(async move {
+                let Some(o) = tx
+                    .query_opt(
+                        &format!(
+                            "SELECT {ORDER_COLUMNS}
+                               FROM \"order\" o
+                               LEFT JOIN party p ON p.id = o.customer_party_id
+                              WHERE o.id = $1"
+                        ),
+                        &[&order_id],
+                    )
+                    .await?
+                else {
+                    return Err(ApiError::NotFound);
+                };
+                let order = order_match(tx, &o).await?;
+                let lines = tx
+                    .query(
+                        "SELECT ol.id, ol.line_number, i.id, i.code, i.description,
+                                ol.quantity_ordered,
+                                coalesce(sum(fl.quantity), 0)::bigint,
+                                coalesce(sum(fl.picked_quantity), 0)::bigint,
+                                coalesce(sum(fl.external_picked_quantity), 0)::bigint,
+                                coalesce(sum(fl.packed_quantity), 0)::bigint,
+                                coalesce(sum(fl.despatched_quantity), 0)::bigint
+                           FROM order_line ol
+                           JOIN item i ON i.id = ol.item_id
+                           LEFT JOIN fulfilment_line fl ON fl.order_line_id = ol.id
+                          WHERE ol.order_id = $1
+                          GROUP BY ol.id, ol.line_number, i.id, i.code, i.description,
+                                   ol.quantity_ordered
+                          ORDER BY ol.line_number NULLS LAST, i.code, ol.id",
+                        &[&order_id],
+                    )
+                    .await?
+                    .iter()
+                    .map(|r| OrderLineView {
+                        order_line_id: r.get(0),
+                        line_number: r.get(1),
+                        item_id: r.get(2),
+                        item_code: r.get(3),
+                        description: r.get(4),
+                        ordered_quantity: r.get(5),
+                        committed_quantity: r.get(6),
+                        picked_quantity: r.get(7),
+                        external_picked_quantity: r.get(8),
+                        packed_quantity: r.get(9),
+                        despatched_quantity: r.get(10),
+                    })
+                    .collect();
+                Ok(OrderView { order, lines })
             })
         })
         .await?;
@@ -9074,6 +9197,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(package_types)
         .service(package_contents)
         .service(find_orders)
+        .service(order_by_id)
         .service(record_consignment)
         .service(consignment)
         .service(record_allocation)

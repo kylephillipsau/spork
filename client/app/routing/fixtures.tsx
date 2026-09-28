@@ -69,7 +69,8 @@ import { WeighPage } from "@app/measurement/weigh/WeighPage";
 import { DISAGREED, WEIGH_CLEAR, fixtureBench as weighFixture } from "@app/measurement/weigh/fixture";
 
 import { OrdersPage } from "@app/outbound/orders/OrdersPage";
-import { FOUND, LATEST, NOTHING, SUPERSEDED, fixtureOrders } from "@app/outbound/orders/fixture";
+import { OrderPage } from "@app/outbound/orders/OrderPage";
+import { FOUND, LATEST, NOTHING, ORDER, ORDER_MISSING, SUPERSEDED, fixtureOrder, fixtureOrders } from "@app/outbound/orders/fixture";
 
 import { SetupPage } from "@app/setup/SetupPage";
 import { CLOSED, DONE, NEEDED, NO_TOKEN, fixtureSetup } from "@app/setup/fixture";
@@ -500,6 +501,10 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-orders-nothing", "/fixtures/orders/nothing", "Orders — nothing", "desk", { screen: "orders" }, () => (
     <OrdersPage desk={fixtureOrders(NOTHING)} />
+  )),
+  app("f-order", "/fixtures/order", "Order", "desk", { screen: "order" }, () => <OrderPage desk={fixtureOrder(ORDER)} />),
+  app("f-order-missing", "/fixtures/order/missing", "Order — missing", "desk", { screen: "order" }, () => (
+    <OrderPage desk={fixtureOrder(ORDER_MISSING)} />
   )),
 
   app("f-findings", "/fixtures/findings", "Findings", "desk", { screen: "findings" }, () => <FindingsPage desk={fixtureDesk()} />),

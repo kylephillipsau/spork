@@ -15,6 +15,7 @@ import { Alert, Button, Card, DataTable, EmptyState, Link, Page, PageHeader, Ske
 import { orderTotals } from "@app/outbound/orders/OrdersPage";
 import { DueBadge, Progress, StageBadge, StateBadge, ago, sentence, shortDate, signed } from "@app/common/cells";
 import { href } from "@app/routing/location";
+import { useNavigate } from "@app/routing/Router";
 import type { DiscrepancyRow, OrderMatch, PackJob } from "@domain/types";
 
 import type { DashboardBench, Read } from "./useDashboard";
@@ -25,6 +26,7 @@ const TOP = 8;
 
 export function Dashboard({ dash, site }: { dash: DashboardBench; site: string | null }) {
   const w = dash.work.kind === "ready" ? dash.work.data : null;
+  const navigate = useNavigate();
 
   return (
     <Page>
@@ -65,6 +67,7 @@ export function Dashboard({ dash, site }: { dash: DashboardBench; site: string |
                 columns={QUEUE_COLUMNS}
                 rows={jobs.filter((j) => j.stage !== "packed").slice(0, TOP)}
                 rowKey={(j) => j.fulfilment_id}
+                onRowClick={(j) => navigate(`/pack/${j.fulfilment_id}`)}
                 empty={<EmptyState icon={<Inbox />} title="Nothing waiting to pack" />}
               />
             )}
@@ -106,6 +109,7 @@ export function Dashboard({ dash, site }: { dash: DashboardBench; site: string |
               columns={ORDER_COLUMNS}
               rows={orders.slice(0, TOP)}
               rowKey={(o) => o.order_id}
+              onRowClick={(o) => navigate(`/orders/${o.order_id}`)}
               empty={<EmptyState icon={<ClipboardList />} title="No orders yet" description="Orders sent from NetSuite appear here." />}
             />
           )}
@@ -265,7 +269,7 @@ const ORDER_COLUMNS: Column<OrderMatch>[] = [
     header: "Order",
     cell: (o) => {
       const ref = o.confirmation_number ?? o.external_ref;
-      return ref ? <Link href={href(`/orders?reference=${encodeURIComponent(ref)}`)}>{ref}</Link> : "—";
+      return <Link href={href(`/orders/${o.order_id}`)}>{ref ?? "—"}</Link>;
     },
     sort: (o) => o.confirmation_number,
     mono: true,

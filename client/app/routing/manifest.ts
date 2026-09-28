@@ -95,6 +95,7 @@ export const SCREENS: readonly ScreenSpec[] = [
   spec("receiving", "/receiving", "Receiving", "floor", { claimsScan: true }),
   spec("putaway", "/putaway", "Put away", "floor", { claimsScan: true }),
   spec("orders", "/orders", "Orders", "desk"),
+  spec("order", "/orders/:order", "Order", "desk"),
   spec("findings", "/findings", "Findings", "desk"),
   // The screen D135 was waiting for: a finding is a row in the database, so a
   // link to one restores the queue, the tab and the evidence panel. Same title

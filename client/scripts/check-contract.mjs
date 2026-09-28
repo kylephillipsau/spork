@@ -193,6 +193,9 @@ const PAIRS = [
   ["PackJob", ["PackJob"]],
   ["FulfilmentSummary", ["FulfilmentSummary"]],
   ["OrderMatch", ["OrderMatch"]],
+  ["OrderLineView", ["OrderLineView"]],
+  // flattened on the wire, like BenchScreen
+  ["OrderView", ["OrderView", "OrderMatch"]],
   ["WorkWaiting", ["WorkWaiting"]],
   ["SiteRow", ["SiteRow"]],
   ["ChooseSiteRequest", ["ChooseSiteRequest"]],

@@ -21,6 +21,7 @@ import type {
   FindingActionResponse,
   PasswordChanged,
   OrderMatch,
+  OrderView,
   PackJob,
   SignOnRequest,
   SignOnResponse,
@@ -606,6 +607,9 @@ export const api = {
   /** The latest orders at this site, for somebody who has not been given a
    *  number to type. A way in rather than a report, so it is a fixed handful. */
   latestOrders: () => send<OrderMatch[]>("GET", "/orders"),
+
+  /** One order by id, with its lines: the order's own page. */
+  order: (orderId: Uuid) => send<OrderView>("GET", `/orders/${encodeURIComponent(orderId)}`),
 
   /** What is waiting for you, at this site, now (D112). One read, shared by
    *  the landing screen and the rail's badges so they cannot disagree. */

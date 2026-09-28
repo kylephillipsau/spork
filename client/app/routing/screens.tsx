@@ -58,6 +58,8 @@ import { useNavigate } from "@app/routing/Router";
 import { SignInPage } from "@app/session/SignInPage";
 import { useSignIn } from "@app/session/useSignIn";
 import { OrdersPage } from "@app/outbound/orders/OrdersPage";
+import { OrderPage } from "@app/outbound/orders/OrderPage";
+import { useOrder } from "@app/outbound/orders/useOrder";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
 import { useQueue } from "@app/outbound/pack/useQueue";
 import { useOrders } from "@app/outbound/orders/useOrders";
@@ -268,6 +270,11 @@ function LiveOrders() {
   return <OrdersPage desk={useOrders(reference)} />;
 }
 
+/** One order, by the id in the path. */
+function LiveOrder({ order }: { order: string }) {
+  return <OrderPage desk={useOrder(order)} />;
+}
+
 /** The dashboard (D171): counts, the packing queue, findings and orders. */
 function LiveHome() {
   const { session } = useSessionBench();
@@ -294,6 +301,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   receiving: () => <LiveReceiving />,
   putaway: () => <LivePutaway />,
   orders: () => <LiveOrders />,
+  order: (params) => <LiveOrder order={params["order"] ?? ""} />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,
   where: () => <LiveWhere />,

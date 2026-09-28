@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardList, History, Package } from "lucide-react";
+import { ClipboardList, ArrowRight, History, Package } from "lucide-react";
 
 import {
   Alert,
@@ -46,7 +46,8 @@ export function orderTotals(o: OrderMatch) {
 /**
  * Orders (D150, D171): the latest at this site, or the ones a confirmation
  * number or reference names — one reference can name a cancelled order and
- * the one that replaced it. A row opens the order in a drawer.
+ * the one that replaced it. A row opens the order in a drawer, and the drawer
+ * opens the order's own page.
  */
 export function OrdersPage({ desk }: { desk: OrdersDesk }) {
   const [open, setOpen] = useState<OrderMatch | null>(null);
@@ -139,14 +140,21 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
         description={open?.customer_name ?? undefined}
         width={560}
         footer={
-          open && open.fulfilments.length === 1 ? (
-            <Button
-              variant="primary"
-              icon={<Package />}
-              onClick={() => navigate(`/pack/${open.fulfilments[0]!.fulfilment_id}`)}
-            >
-              Open pack bench
-            </Button>
+          open ? (
+            <>
+              <Button icon={<ArrowRight />} onClick={() => navigate(`/orders/${open.order_id}`)}>
+                Open order
+              </Button>
+              {open.fulfilments.length === 1 && (
+                <Button
+                  variant="primary"
+                  icon={<Package />}
+                  onClick={() => navigate(`/pack/${open.fulfilments[0]!.fulfilment_id}`)}
+                >
+                  Open pack bench
+                </Button>
+              )}
+            </>
           ) : undefined
         }
       >
@@ -157,43 +165,60 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
 }
 
 function OrderDetail({ order }: { order: OrderMatch }) {
-  const t = orderTotals(order);
   return (
     <Stack gap={5}>
-      <Facts>
-        <Fact label="Status">
-          <StateBadge state={order.state} />
-          {order.supersedes_order_id && <Badge>Replaces an earlier order</Badge>}
-        </Fact>
-        <Fact label="Confirmation" always>
-          {order.confirmation_number ?? <Faint>—</Faint>}
-        </Fact>
-        <Fact label="External reference" always>
-          {order.external_ref ?? <Faint>—</Faint>}
-        </Fact>
-        <Fact label="Placed" always>
-          {order.placed_at ? dateTime(order.placed_at) : <Faint>—</Faint>}
-        </Fact>
-        <Fact label="Promised" always>
-          {order.promised_to ? dateTime(order.promised_to) : <Faint>—</Faint>}
-        </Fact>
-        <Fact label="Picked">
-          <span className={s.factProgress}>
-            <Progress done={t.picked} of={t.committed} />
-          </span>
-        </Fact>
-      </Facts>
-
+      <OrderFacts order={order} />
       <Section title="Fulfilments" count={order.fulfilments.length}>
-        {order.fulfilments.length === 0 ? (
-          <p className={s.none}>No stock committed to this order.</p>
-        ) : (
-          <Card padded={false}>
-            <DataTable aria-label="Fulfilments" columns={FULFILMENT_COLUMNS} rows={order.fulfilments} rowKey={(f) => f.fulfilment_id} />
-          </Card>
-        )}
+        <OrderFulfilments order={order} />
       </Section>
     </Stack>
+  );
+}
+
+/** What an order is and how far along: shared by the drawer and the order's page. */
+export function OrderFacts({ order }: { order: OrderMatch }) {
+  const t = orderTotals(order);
+  return (
+    <Facts>
+      <Fact label="Status">
+        <StateBadge state={order.state} />
+        {order.supersedes_order_id && <Badge>Replaces an earlier order</Badge>}
+      </Fact>
+      <Fact label="Confirmation" always>
+        {order.confirmation_number ?? <Faint>—</Faint>}
+      </Fact>
+      <Fact label="External reference" always>
+        {order.external_ref ?? <Faint>—</Faint>}
+      </Fact>
+      <Fact label="Placed" always>
+        {order.placed_at ? dateTime(order.placed_at) : <Faint>—</Faint>}
+      </Fact>
+      <Fact label="Promised" always>
+        {order.promised_to ? dateTime(order.promised_to) : <Faint>—</Faint>}
+      </Fact>
+      <Fact label="Picked">
+        <span className={s.factProgress}>
+          <Progress done={t.picked} of={t.committed} />
+        </span>
+      </Fact>
+    </Facts>
+  );
+}
+
+/** An order's fulfilments, each opening its pack bench. */
+export function OrderFulfilments({ order }: { order: OrderMatch }) {
+  const navigate = useNavigate();
+  if (order.fulfilments.length === 0) return <p className={s.none}>No stock committed to this order.</p>;
+  return (
+    <Card padded={false}>
+      <DataTable
+        aria-label="Fulfilments"
+        columns={FULFILMENT_COLUMNS}
+        rows={order.fulfilments}
+        rowKey={(f) => f.fulfilment_id}
+        onRowClick={(f) => navigate(`/pack/${f.fulfilment_id}`)}
+      />
+    </Card>
   );
 }
 
@@ -242,11 +267,13 @@ const COLUMNS: Column<OrderMatch>[] = [
 
 const FULFILMENT_COLUMNS: Column<FulfilmentSummary>[] = [
   {
-    key: "site",
-    header: "Site",
-    cell: (f) => <Link href={href(`/pack/${f.fulfilment_id}`)}>{f.site_code ?? "—"}</Link>,
-    width: "70px",
+    key: "reference",
+    header: "Fulfilment",
+    cell: (f) => <Link href={href(`/pack/${f.fulfilment_id}`)}>{f.reference ?? "—"}</Link>,
+    mono: true,
+    width: "120px",
   },
+  { key: "site", header: "Site", cell: (f) => f.site_code ?? <Faint>—</Faint>, width: "60px" },
   { key: "lines", header: "Lines", cell: (f) => f.line_count, align: "right", width: "60px" },
   { key: "picked", header: "Picked", cell: (f) => <Progress done={f.picked_quantity} of={f.committed_quantity} />, grow: true },
   { key: "packed", header: "Packed", cell: (f) => f.packed_quantity, align: "right", width: "70px" },

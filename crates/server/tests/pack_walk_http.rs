@@ -173,6 +173,39 @@ async fn the_pack_walkthrough_runs_end_to_end_over_http() {
         "the gate reports how far, not merely yes or no"
     );
 
+    // The order's own page: the same order by id, with its lines.
+    let order_id = order["order_id"].as_str().unwrap();
+    let one = common::ok_json(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/orders/{order_id}"))
+            .insert_header(("authorization", bearer.clone()))
+            .to_request(),
+        "GET /orders/{id}",
+    )
+    .await;
+    assert_eq!(one["confirmation_number"], "S260041");
+    assert_eq!(
+        one["fulfilments"], order["fulfilments"],
+        "one order reads its fulfilments the way the search does"
+    );
+    let lines = one["lines"].as_array().expect("lines");
+    assert!(!lines.is_empty(), "an order the walk packs has lines");
+    assert!(
+        lines.iter().all(|l| l["item_code"].is_string()
+            && l["ordered_quantity"].as_i64().unwrap() > 0),
+        "each line says what and how many, got {lines:?}"
+    );
+    let missing = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/orders/{}", Uuid::new_v4()))
+            .insert_header(("authorization", bearer.clone()))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(missing.status(), 404, "an order that is not here says so");
+
     // The line to pack. **From the open-work index**, which is what an operator
     // works from and what stops this walk grabbing a line the fixture has
     // already covered — `/allocations` refused that with J56's own sentence,
