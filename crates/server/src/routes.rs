@@ -6782,6 +6782,18 @@ pub struct FulfilmentIntake {
     /// The item fulfilment's number, the one a person quotes: `IF270947`.
     #[serde(default)]
     pub fulfilment_number: Option<String>,
+    /// The item fulfilment's status: `Picked`, `A` or `ItemShip:A`. A picked
+    /// one with a `fulfilment_id` and `observed_at` is reported as picked
+    /// elsewhere (D172).
+    #[serde(default)]
+    pub status: Option<String>,
+    /// When the item fulfilment last changed, per NetSuite. What orders one
+    /// report of its picks against the next.
+    #[serde(default)]
+    pub observed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Who picked it, as NetSuite names them.
+    #[serde(default)]
+    pub picked_by: Option<String>,
     pub lines: Vec<FulfilmentIntakeLine>,
 }
 
@@ -6805,6 +6817,10 @@ pub struct FulfilmentIntakeLine {
     /// The line's key within the item fulfilment (D172).
     #[serde(default)]
     pub external_line: Option<String>,
+    /// How many are picked on this line, when the page says. Absent on a
+    /// picked item fulfilment means all of `quantity`.
+    #[serde(default)]
+    pub picked: Option<f64>,
 }
 
 #[derive(Serialize, Debug)]
@@ -6812,6 +6828,8 @@ pub struct FulfilmentIntakeReport {
     pub order: String,
     pub lines: usize,
     pub loaded: crate::importing::orders::OrdersLoaded,
+    /// What was recorded as picked elsewhere, when the send reported picks.
+    pub picks: Option<crate::importing::picks::PicksRecorded>,
     pub arrival: Option<FileArrival>,
 }
 
@@ -6885,15 +6903,38 @@ pub async fn import_fulfilment(
     let actor = crate::importing::received::Actor::Token(machine.token_id);
     let filename = query.filename.clone();
     let options = crate::importing::orders::Options { create_items: true };
-    let (loaded, arrival) = scope
+    let report = crate::importing::picks::reportable(
+        intake.status.as_deref(),
+        intake.fulfilment_id.as_deref(),
+        intake.fulfilment_number.as_deref(),
+        intake.observed_at,
+        intake.picked_by.as_deref(),
+        &intake
+            .lines
+            .iter()
+            .map(|l| (l.external_line.clone(), l.picked.unwrap_or(l.quantity).round() as i64))
+            .collect::<Vec<_>>(),
+    );
+    let (loaded, picks, arrival) = scope
         .run(move |tx| {
             Box::pin(async move {
                 let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
                 let loaded = crate::importing::orders::load(tx, tenant, &rows, options, apply)
                     .await
                     .map_err(ApiError::Rejected)?;
+                // Picks are recorded under the act that stored this send, so a
+                // dry run (no act) and a replay of identical bytes (no new act,
+                // and the report is already on file) record nothing.
+                let picks = match (&report, arrival.and_then(|a| a.client_event_id)) {
+                    (Some(r), Some(event)) => Some(
+                        crate::importing::picks::record(tx, tenant, event, r)
+                            .await
+                            .map_err(ApiError::Rejected)?,
+                    ),
+                    _ => None,
+                };
                 read_through(tx, arrival).await?;
-                Ok((loaded, arrival))
+                Ok((loaded, picks, arrival))
             })
         })
         .await?;
@@ -6902,6 +6943,7 @@ pub async fn import_fulfilment(
         order,
         lines: intake.lines.len(),
         loaded,
+        picks,
         arrival: arrival.map(FileArrival::from),
     }))
 }

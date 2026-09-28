@@ -261,3 +261,108 @@ async fn each_item_fulfilment_is_its_own_fulfilment() {
         assert_eq!(row.3.as_deref(), Some(so_id.as_str()), "the order learnt its own id");
     }
 }
+
+/// D172: a pick made elsewhere is a level, reported, and never on the ledger.
+///
+/// What NetSuite says is picked lands in `external_picked_quantity`, and
+/// `picked_quantity` (this system's own ledger, J68) stays at nought. Reports
+/// are ordered by when NetSuite says they were so, not by when they arrived.
+#[actix_web::test]
+async fn a_pick_made_elsewhere_is_reported_as_a_level() {
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+
+    let session = common::bearer(&app).await;
+    let minted: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/tokens")
+            .insert_header(("authorization", session))
+            .set_json(json!({ "label": "the bridge, picks, from a test" }))
+            .to_request(),
+        "POST /tokens",
+    )
+    .await;
+    let token = format!("Bearer {}", minted["token"].as_str().unwrap());
+
+    let run = &Uuid::new_v4().simple().to_string()[..8];
+    let order = format!("S-pk-{run}");
+    let if_id = format!("if-pk-{run}");
+    let body = |picked: f64, at: &str| {
+        json!({
+            "order": order,
+            "customer": format!("Pick Test {run}"),
+            "order_id": format!("so-pk-{run}"),
+            "fulfilment_id": if_id,
+            "fulfilment_number": "IF-PK",
+            "status": "Picked",
+            "observed_at": at,
+            "picked_by": "Casual Melbourne",
+            "lines": [{ "line": 1, "item": "GLOVE-M", "location": "Melbourne Warehouse",
+                        "quantity": 4, "picked": picked, "external_line": "1" }]
+        })
+    };
+    let send = |b: Value, apply: bool| {
+        test::TestRequest::post()
+            .uri(if apply { "/import/fulfilment?apply=true" } else { "/import/fulfilment" })
+            .insert_header(("authorization", token.clone()))
+            .set_payload(b.to_string())
+            .to_request()
+    };
+
+    let (db, connection) = tokio_postgres::connect(&u, tokio_postgres::NoTls).await.expect("connect");
+    tokio::spawn(async move { let _ = connection.await; });
+    // Fold this tenant now rather than wait for the scheduler, then read the line.
+    let levels = || async {
+        let tenant: Uuid = db
+            .query_one("SELECT tenant_id FROM fulfilment WHERE external_id = $1", &[&if_id])
+            .await
+            .expect("the fulfilment")
+            .get(0);
+        db.execute("SELECT projection_fulfilment_rebuild($1)", &[&tenant]).await.expect("fold");
+        let row = db
+            .query_one(
+                "SELECT fl.external_picked_quantity, fl.picked_quantity
+                   FROM fulfilment_line fl JOIN fulfilment f ON f.id = fl.fulfilment_id
+                  WHERE f.external_id = $1",
+                &[&if_id],
+            )
+            .await
+            .expect("the line");
+        (row.get::<_, i64>(0), row.get::<_, i64>(1))
+    };
+
+    // ── a dry run records nothing ────────────────────────────────────────
+    let dry = common::ok_json(&app, send(body(4.0, "2026-09-28T09:00:00Z"), false), "dry").await;
+    assert!(dry["picks"].is_null(), "a dry run reported picks: {dry}");
+
+    // ── picked in NetSuite: a level, beside the ledger and not in it ─────
+    let first = common::ok_json(&app, send(body(4.0, "2026-09-28T09:00:00Z"), true), "first").await;
+    assert_eq!(first["picks"]["recorded"], json!(1), "{first}");
+    assert_eq!(levels().await, (4, 0), "reported as picked elsewhere; the ledger saw nothing");
+
+    // ── the same bytes again are the same arrival, and record nothing ────
+    let replay = common::ok_json(&app, send(body(4.0, "2026-09-28T09:00:00Z"), true), "replay").await;
+    assert!(replay["picks"].is_null(), "a replay recorded picks: {replay}");
+
+    // ── a later report replaces the level: an un-pick of two ─────────────
+    let later = common::ok_json(&app, send(body(2.0, "2026-09-28T10:00:00Z"), true), "later").await;
+    assert_eq!(later["picks"]["recorded"], json!(1), "{later}");
+    assert_eq!(levels().await, (2, 0), "the newest report is the level");
+
+    // ── an older report arriving late does not ────────────────────────────
+    let late = common::ok_json(&app, send(body(3.0, "2026-09-28T08:00:00Z"), true), "late").await;
+    assert_eq!(late["picks"]["recorded"], json!(1), "still recorded: it happened: {late}");
+    assert_eq!(levels().await, (2, 0), "but ordered by when NetSuite says, not when it arrived");
+
+    // ── a report for a line the fulfilment does not have ─────────────────
+    let mut stray = body(1.0, "2026-09-28T11:00:00Z");
+    stray["lines"][0]["external_line"] = json!("99");
+    stray["lines"][0]["line"] = json!(2);
+    let s = common::ok_json(&app, send(stray, true), "stray").await;
+    assert_eq!(s["picks"]["recorded"], json!(1), "line 99 was loaded by the same send, so it matches: {s}");
+}

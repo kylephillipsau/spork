@@ -26,5 +26,6 @@
 pub mod bins;
 pub mod items;
 pub mod orders;
+pub mod picks;
 pub mod received;
 pub mod stock;

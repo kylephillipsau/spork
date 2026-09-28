@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 73, "the register holds 73 job-asserted invariants");
+    assert_eq!(seen.len(), 74, "the register holds 74 job-asserted invariants");
 }
 
 #[test]
@@ -553,6 +553,49 @@ fn j68_finds_progress_that_disagrees_with_the_ledger() {
     assert!(
         messages.iter().any(|m| m.contains("despatched_quantity")),
         "twenty units left the building against this line and J68 did not say so: {messages:?}"
+    );
+}
+
+/// J74 can fail: a report on file that the line's column has not folded.
+///
+/// A pick reported from NetSuite and a maintainer that has not run is exactly
+/// the drift J74 exists to name. The report goes against a fixture line through
+/// the shared `manual` channel, so the test needs nothing the fixture lacks.
+#[test]
+fn j74_finds_a_reported_pick_the_line_has_not_folded() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+
+    const TENANT: &str = "11111111-1111-1111-1111-111111111111";
+    const LINE: &str = "f11e0000-0000-0000-0000-000000000002";
+    const EVENT: &str = "ce000000-0000-0000-0000-000000000009";
+    const REPORT: &str = "e7000000-0000-0000-0000-000000000074";
+
+    client
+        .batch_execute(&format!(
+            "INSERT INTO external_pick (id, tenant_id, client_event_id, fulfilment_line_id,
+                 source_channel_id, quantity, document, external_id, external_line, observed_at)
+             SELECT '{REPORT}', '{TENANT}', '{EVENT}', '{LINE}', sc.id, 7,
+                    'IF-J74', 'if-j74', '1', now()
+               FROM source_channel sc WHERE sc.tenant_id IS NULL AND sc.code = 'manual'"
+        ))
+        .expect("a pick reported against a fixture line");
+
+    let outcome = run(&mut client, spork_invariants::jobs::Id::J74);
+
+    client
+        .batch_execute(&format!("DELETE FROM external_pick WHERE id = '{REPORT}'"))
+        .expect("clean");
+
+    let (verdict, examined, findings) = outcome.expect("run J74");
+    assert_eq!(verdict, Verdict::Findings, "J74 examined {examined} and found nothing");
+    assert!(
+        findings.iter().any(|f| f.detail.contains(LINE) && f.detail.contains("folding to 7")),
+        "seven reported and none folded, and J74 did not say so: {:?}",
+        findings.iter().map(|f| f.detail.as_str()).collect::<Vec<_>>()
     );
 }
 

@@ -216,6 +216,7 @@ examined nothing.
 | J71 | No two active bins in one site claim the same `pick_sequence`. **A finding rather than a unique index**, for three reasons that point the same way: the real bin list has two such pairs, so uniqueness would refuse the import of true data; swapping two bins under a unique constraint has no legal intermediate state, and a column that exists to be reordered should be reorderable; and two bins at one position is a disagreement about the floor, which is the thing this system reports rather than refuses. The two pairs differ in what they mean — `K.32.01` and `K.32.02` are adjacent and were probably typed once, while `I.48.07` and `K.36.05` are two aisles apart and cannot both be reached at the same moment — and telling those apart is a person's job, not a constraint's. The practical cost is that a pick list ordered through either pair is non-deterministic | D46 | ● |
 | J72 | Every length, width or height **we** recorded against a single unit names the `presentation` it was measured in. An apron folded twice is 250×180×30 and the same apron in a heap is something else, so the number without the word is unreproducible and unarguable. `POST /observations` refuses one — and a rule that lives only in a writer is a rule the *second* writer breaks: the prepack loader, a repair script and any future import all reach this table and none of them go through that check. Scoped to `each`, because a carton has one arrangement and asking for the word would be ceremony; and scoped to observations that are ours, because a counterparty's asserted each dimension is theirs to qualify and a finding we can never clear trains people to ignore the list | D138 | ● |
 | J73 | Every table carrying a `tenant_id` **that `spork_app` can reach** forces row level security. J38 asserts this of the tables carrying an `@projection` column, and that set is narrower than it reads: `reported_stock` arrived with a tenant column, no projection column and row level security switched off, and **the whole suite stayed green** — the property nobody was checking was the one that decides whose rows a query returns. A tenant column is the declaration that rows belong to somebody; RLS is what makes the declaration true. **The privilege clause is not an allow-list.** RLS is not the only way to close a table and this schema uses the other one: `session` carries a `tenant_id` and has no policy at all, because the application holds no privilege on it and migration 70's `SECURITY DEFINER` functions are its only interface — demanding a policy there is a second lock on a welded door. Naming the exceptions would have worked and would have rotted, because a named exception stays true in the file long after it stops being true in the database. So the exemption *is* its reason, asked of Postgres at check time, and it audits itself: grant the application one column of `session` and this fires on the next run. Column privileges rather than table privileges, because this schema grants by column in several places and a table-level test reports no access while a column stands open | D18, D19 | ● |
+| J74 | `fulfilment_line.external_picked_quantity` equals the sum, over the line's external lines, of each one's **newest** `external_pick` by `observed_at`, then `recorded_at`, then `id`. **A level, not a delta**: a report says how many another system says are picked as at a moment, so the newest wins and an un-pick is a later report of fewer. Ordered by when the other system says it was so, not by when it reached us, so reports arriving out of order fold to the same answer. **Never `picked_quantity`**, which J68 holds to this system's own ledger: a reported pick added there would break J68 and fire J56's `picked > covered` on every NetSuite pick, since nothing allocates stock to a line this system holds none for | D172 | |
 
 ---
 
@@ -258,13 +259,13 @@ appears here as its current whole text.
 | | |
 |---|---|
 | Structural | 56 |
-| Job-asserted | 73 |
-| **Total** | **129** |
+| Job-asserted | 74 |
+| **Total** | **130** |
 | Marked for vacuity | 71 |
 | `specified` | 22 |
-| `implemented` | 107 |
+| `implemented` | 108 |
 
-Seventy-one of a hundred and twenty-nine assert an absence and pass on an empty population.
+Seventy-one of a hundred and thirty assert an absence and pass on an empty population.
 That is the number worth watching, because those are the entries that will report
 success on the day they stop being checked.
 
