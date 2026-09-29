@@ -1,69 +1,144 @@
-# Handoff: external picks, the bridge, the order page, and the 3D plan
+# Handoff: the bridge, the order page, and places
 
-Written 2026-09-28. Read this before continuing on the client's UI work, the
-order page, or anything spatial.
+Written 2026-09-28, updated 2026-09-29. Read this before continuing on the
+client's UI work, the order page, or anything spatial.
 
-The short version: **picks made on the WMS handheld now reach Spork (D172), a
-userscript feeds them in, and the UI pass has started.** The per-order page is
-built and passes every client gate, but is **not committed**: see "First, do
-this". The 3D warehouse view has been researched and has a recommended plan,
-which has not been agreed yet.
+The short version: **picks made on the WMS handheld reach Spork (D172), a
+userscript feeds them in, every order has its own page, and the warehouse
+layout exists.** The layout is **places** drawn relative to each other and never
+measured (D173). A first layout can be drafted from the bin list, and a scanned
+bin now lands on the face of the rack that holds it. The plan editor and the 3D
+view are next.
+
+Everything below is committed and pushed. The working tree was clean when this
+was written.
 
 ---
 
-## First, do this
+## Before you start
 
-The working tree holds the order page work **and** a crate-wide `cargo fmt`
-that reformatted about ninety server files it had no business touching. Strip
-the formatting before committing:
+**Toolchain in Git Bash.** Cargo builds need the OpenSSL environment that
+`scripts/local.ps1` sets in PowerShell:
 
 ```sh
-git status --short        # ~96 files
-git diff --stat           # the fmt-only files are the large, unrelated ones
+export OPENSSL_DIR='C:\Program Files\OpenSSL-Win64' \
+       OPENSSL_LIB_DIR='C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD' \
+       OPENSSL_INCLUDE_DIR='C:\Program Files\OpenSSL-Win64\include' \
+       PATH="/c/Program Files/OpenSSL-Win64/bin:/c/Program Files/PostgreSQL/18/bin:$PATH"
 ```
 
-Keep these, and restore everything else under `crates/` with `git checkout`:
+The Rust package is `spork-server`. To run a `.ps1` script from bash, call
+PowerShell explicitly:
+`powershell -ExecutionPolicy Bypass -File scripts/local.ps1 setup`.
 
-- `crates/server/src/routes.rs`: `ORDER_COLUMNS`, the `order_match` helper,
-  `GET /orders/{order_id}` (`order_by_id`, `OrderView`, `OrderLineView`), and
-  `FulfilmentSummary.reference`.
-- `crates/server/tests/pack_walk_http.rs`: the by-id read and a 404 case, after
-  the `?reference=S260041` search.
+**Do not run `cargo fmt` over the crate.** The tree is not rustfmt-clean, and a
+crate-wide format once reformatted about ninety unrelated files. Format only
+what you touch, if at all.
 
-Both files were fmt-ed whole, so either re-apply the edits to clean copies or
-keep the files and check that their diffs are only the intended hunks. Do not
-run `cargo fmt` over the crate again. Format only the files you touched, if at
-all.
+**Tests on a fresh database.** The suite is not re-runnable against a database
+it has written to:
 
-Client files, all intended:
+```sh
+psql -h localhost -p 55432 -U postgres -c "DROP DATABASE IF EXISTS spork_fresh" -c "CREATE DATABASE spork_fresh"
+export DATABASE_URL=postgres://postgres:spork@localhost:55432/spork_fresh
+scripts/verify-migrations.sh && scripts/migrate.sh --baseline
+cargo test --workspace --no-fail-fast
+```
 
-- `client/domain/types.ts`, `client/domain/api.ts` (`api.order`) and
-  `client/scripts/check-contract.mjs` (the `OrderView` and `OrderLineView` pairs).
-- `client/app/routing/manifest.ts`, `screens.tsx` and `fixtures.tsx`, plus
-  `client/app/shell/nav.ts`: the `order` route at `/orders/:order`.
-- `client/app/outbound/orders/`: `OrderPage.tsx` and `useOrder.ts` are new.
-  `OrdersPage.tsx` now exports `OrderFacts` and `OrderFulfilments`, and the
-  drawer has "Open order". The CSS module gains `.short`. `fixture.ts` gains
-  `ORDER` and `ORDER_MISSING`.
-- `client/app/home/Dashboard.tsx`: order and packing-queue rows are clickable.
-- `client/ui/DataTable.tsx`: a row click is ignored when it lands on a link or
-  control in a cell, so it does not act twice.
+Use `--no-fail-fast`, because without it cargo stops at the first failing
+binary and hides the rest. **Four tests fail in a full run, and they failed the
+same way before any of this work:** two in `pack_walk_http` (the packing list's
+order reference, and "nothing overdue") and two in `tenancy` (it expects one
+site per tenant, and `fulfilment_intake` adds a second). Each passes alone.
+They depend on which suites ran first, and nobody has fixed them yet.
 
-Verified before stopping:
+**Client gates.** `npm run verify` runs typecheck, tests, contract and laws. Run
+`npm run build:review` before `npm run render`, which reads `dist-review/` and
+otherwise renders a stale build.
 
-- `npm run verify`, `contract`, `laws` and `render` all pass. **Run
-  `npm run build:review` before `render`**, which reads `dist-review/` and
-  otherwise renders a stale build.
-- `pack_walk_http` against `spork_test`: the new assertions pass. Three later
-  tests fail, most likely because `spork_test` now holds bridge data (S900001).
-  This is unconfirmed; the fresh-database run was interrupted. Confirm it on a
-  fresh database as the README describes.
-
-`bcba4fe` (responsive tables, breadcrumbs) is committed and **not pushed**.
+**The local instance.** `scripts/local.ps1 setup` then `start` serves
+`http://localhost:18080`. The working `spork` database is at migration 96 and
+has no bins yet. Load a bin list on Settings › Import, or `seed` the demo data,
+before trying the layout.
 
 ---
 
-## What landed since the last handoff
+## What landed
+
+### D173: a place for every bin
+
+Written up in [domain-model.md](./domain-model.md) (D173), with a plain account
+in [layout.md](./layout.md). Migration 96. J76, J77 and J78 are new in the
+register.
+
+- **Places**: `place` rows, each a box inside a parent place (or the site), in
+  cells of the parent, turned by any whole degree, walk-through or solid, with a
+  free name. A walk-through place may have an outline (an L-shaped building). A
+  place with a grid is a rectangle.
+- **Every bin sits in one cell** (`location.place_id` and `slot_bay`,
+  `slot_level`, `slot_row`, `slot_position`), and a unique index keeps one bin
+  to a cell. The six millimetre columns on `location` are dropped.
+- **Positions on the site are never stored.** `layout::compose` and
+  `layout::frames` work them out from the chain of parents when read.
+- **Naming patterns** (`C-{bay:02}-{level}`, `{level:A}`) drop bins into cells,
+  with the first bay number and a step (2 for odd-only or even-only sides).
+- **Drafting from the bin list** (`POST /layout/draft`, previewed unless
+  `?apply=true`): bins go into places already drawn when a pattern names them,
+  and the rest are grouped by the shape of their codes into new places laid out
+  in rows. A bin is only placed where its pattern spells its code exactly, and
+  nothing already in a cell moves.
+- **Reads**: `GET /bins/{id}` (a bin, its cell and its place), `GET
+  /places/{id}`, `GET /layout`.
+- **Client**:
+  - a scanned or searched bin code goes to `/bins/:id`, the rack face: the way
+    in as chips, bays across and levels up with the labels as the rack prints
+    them, the bin's cell lit, and a plan of the building;
+  - `/places/:id` shows what is inside a place;
+  - Settings › Layout drafts and lists.
+- The first version of D173 (measured racks, rack and floor CSV imports) was
+  replaced before release. Its commit `d5ac37a` is in history, superseded by
+  `273a246`.
+
+### The interface, researched
+
+The user asked for the layout to be usable by a warehouse worker with little
+computer experience, and pleasant for power users, "like an Apple product". The
+research report is `reports/Apple style warehouse layout design.md`. It and its
+notes are kept out of the repository through `.git/info/exclude` on the machine
+it was written on. Its recommendation, which the work above follows:
+
+- **One place model, three depths, no modes.**
+  - *Find and check* (everyone): a scan opens the rack face.
+  - *Put it right* (trusted floor staff): correct which bin is in which cell by
+    scanning where it really is, never by dragging on a handheld.
+  - *Shape the layout* (desk): the editor.
+- **No global "advanced" switch.** Logic Pro removed its switch in January 2026.
+  Depth comes from role.
+- **2D answers "where"; 3D confirms.** Editing happens on the 2D plan. The
+  handheld never opens in 3D.
+- **The editor:**
+  - It opens on a draft, never an empty canvas.
+  - You edit inside one place at a time, with a breadcrumb out.
+  - Constraints replace error messages: children stay inside, solid places stop
+    flush, and deleting sends bins to an Unplaced tray.
+  - An inspector follows the selection, with one "More options".
+  - The naming pattern reads as a sentence, with live match counts.
+  - Undo is unlimited and named, and anything that moves bins between cells is
+    previewed.
+  - Every command has a visible home; shortcuts and search only duplicate it.
+- **Test on the floor first.** Time workers finding a bin with the rack face
+  against the bare bin code before polishing further.
+
+Scanning the building with a phone is out. Apple's RoomPlan is designed for
+rooms up to 15 m × 15 m and 3.6 m high.
+
+### The order page
+
+`GET /orders/{order_id}` (`OrderView`: what the search answers per order, plus
+its lines with ordered, committed, picked, picked elsewhere, packed and
+despatched). `/orders/:order` in the client, reached from the dashboard, the
+orders list's drawer ("Open order") and links. `FulfilmentSummary` gained the
+fulfilment's own `reference`.
 
 ### D172: a pick made elsewhere is reported, not moved
 
@@ -90,27 +165,21 @@ This lives in the separate `warehouse-scripts` repo as
   when its `lastmodifieddate` changes.
 - It uses `anonymous: true`. Spork reads a session cookie before a bearer
   token, so a cookie sent alongside the token gets the import refused.
-- It is tested end to end against the local test instance.
-
-### A local test instance
-
-Release binaries run against `spork_test` on `127.0.0.1:18080`, with
-`SPORK_CLIENT_DIR=client/dist`. See [local.md](./local.md) for the toolchain
-environment. The demo sign-in is in the seed. `spork_test` is disposable; the
-working `spork` database was left untouched.
 
 ---
 
 ## Next
 
-1. Commit the order page (above) and push both commits.
-2. **Present the 3D and spatial plan for agreement before building any of it.**
-   Agreed 2026-09-29, then reshaped: the layout is places drawn relative to
-   each other, never measured (D173, migration 96). Built: places and grids,
-   drafting a layout from the bin list (Settings > Layout), and the rack face a
-   scanned bin lands on. See [layout.md](./layout.md). Next: the plan editor and
-   3D view, and correcting a bin's cell by scanning it.
-3. Item pages, a bin view and a warehouse view. The order page's item codes
+1. **Try the layout on real data.** Load the bin list, draft, and read the
+   preview. Families the draft gets wrong are the first thing to fix.
+2. **Test the rack face on the floor** against the bare bin code, as above.
+3. **"Something's wrong here"** on the rack face: a worker scans the bin where
+   it really is and taps its cell. Trusted roles apply it, and others raise a
+   flag for the office.
+4. **The plan editor and the 3D view** (below).
+5. A history of layout changes (who moved what, and when), and roles for who
+   may edit. Until roles exist, anyone signed in can draft.
+6. Item pages, a bin view and a warehouse view. The order page's item codes
    will link to the item pages; `OrderLineView.item_id` is already on the wire.
 
 Deferred and not forgotten:
@@ -123,79 +192,34 @@ Deferred and not forgotten:
 
 ---
 
-## The 3D warehouse view: the recommendation
+## The editor and the 3D view: the plan
 
-Researched on 2026-09-28. Not yet agreed.
+**Stack.** three.js with React Three Fiber and a small subset of drei, on WebGL,
+**lazy-loaded as its own route chunk** so the rest of the app pays nothing.
+An imperative scene class owns the meshes and R3F only hosts it, which keeps a
+hand-written renderer possible later. Scene data sits in typed arrays outside
+React, redrawn on demand (`frameloop="demand"`). Why not the others: Babylon is
+heavier and its React binding has one maintainer. PlayCanvas's binding is still
+at 0.x. deck.gl is built for maps. Needle is commercially licensed.
 
-**What exists today.** `location` has had `x_mm`, `y_mm`, `z_mm`,
-`length_mm`, `width_mm` and `height_mm` since migration 1, but nothing writes
-them. The bin importer fills codes, the parsed aisle, bay, level and position,
-and `pick_sequence`. [warehouse-data-model.md](./warehouse-data-model.md)
-already says coordinates are "a warehouse survey, not a data import". **The
-layout data is the real gate, not the renderer.**
+**What it draws.** Places, from the same composition the rack face uses:
+`PlanShape` already carries each place's footprint on the site, its height and
+how far up it starts. Solid places are blocks and walk-through places are floor.
+A site-wide geometry read (every place and every cell) is the one new endpoint
+it needs. Picking is a ray against the places' boxes, which are few enough to
+test directly.
 
-**Stack.** three.js with React Three Fiber 9 and a small subset of drei, on
-the WebGL renderer, moving to WebGPU when R3F 10 is stable.
+**The editor** is the 2D plan with the 3D pane beside it, following the
+research above. Its first commands are drag to move, drag a handle to resize,
+rotate with quarter-turn snapping, add a box or an outline, add a grid, and set
+the naming pattern. Changes that move bins between cells are previewed, and the
+Unplaced tray holds bins nothing names. Writes are a person's act on a session,
+recorded with who and when.
 
-- It is MIT-licensed, supports React 19 natively, and has the largest
-  ecosystem (three-mesh-bvh, @three.ez/instanced-mesh, troika-three-text).
-- Its core is about 185 KB gzipped, **lazy-loaded as its own route chunk**, so
-  the rest of the app pays nothing.
-- Why not the others: Babylon is heavier and its React binding has one
-  maintainer. PlayCanvas's React binding is 0.x. deck.gl is geo-centric and
-  its WebGPU is experimental. Needle is commercially licensed. A hand-written
-  renderer would only pay off if R3F proves too slow.
+**Later.**
 
-**Architecture.**
-
-- An imperative `WarehouseScene` class owns the meshes, and R3F only hosts it.
-  This keeps the exit to a hand-written renderer open.
-- Scene data is held in typed arrays indexed by location, outside React.
-  Updates write the arrays and call `invalidate()` (`frameloop="demand"`), and
-  React renders only the chrome.
-- One `InstancedMesh` per bin shape, with a per-instance value and a colour
-  ramp, so changing the colour-by is a buffer swap.
-- Picking is a CPU ray-versus-box test over a BVH or grid built from the bins'
-  millimetre boxes.
-- Colour-by layers are computed by the server: fill, `pick_sequence`,
-  findings, count age, reported-versus-ledger difference, pick frequency.
-- One selection store shared by the tables, the detail panels and the 3D view.
-- A 2D plan is the same scene through a top-down orthographic camera, and is
-  the default on handhelds.
-
-**Data model.** Additive; `location` is left as it is.
-
-- `rack`: site, aisle, origin, rotation, face, bay widths, depth, level
-  heights, positions per level, and a code template.
-- `location.rack_id` and `location.geometry_source`
-  (`template`, `survey` or `manual`). Generated coordinates go into the
-  existing columns, and surveyed values beat template values.
-- `floor_area`: polygons for docks, staging, walkways, walls and floor stacks,
-  optionally linked to a `location`.
-- Authoring starts with a CSV rack import. The generator expands each rack and
-  diffs its codes against existing bins, reporting mismatches as findings
-  rather than refusing them. A 2D plan editor comes later.
-- The new tables need `tenant_id`, composite foreign keys, row-level security
-  and grants, like `zone` and `location`.
-
-**Phases.**
-
-0. `rack` and `floor_area`, the import, the generator, and laying out
-   Melbourne.
-1. A read-only 2D/2.5D plan of one site, coloured by fill. Clicking a bin opens
-   its panel, and search flies to it.
-2. Full 3D, with levels, orbit and plan cameras, the layers, and labels that
-   appear by distance.
-3. Pick paths and pick-frequency heatmaps.
-4. Packages inside bins, staging and docks, live updates.
-5. Slotting what-ifs, WebGPU, and a handheld mini-map.
-
-**Risks.**
-
-- The layout survey effort.
-- Handheld GPUs and WebView support for WebGPU. Default handhelds to 2D and
-  WebGL2.
-- Churn moving from R3F 9 to 10.
-- Label clutter, and troika's CPU cost past a few hundred labels.
-- Drift between template and survey coordinates; `geometry_source` makes the
-  precedence explicit.
+- Colour-by layers computed by the server: fill, findings, count age, and the
+  difference between reported and ledger stock.
+- Pick paths, which treat solid places as obstacles.
+- Stock inside places, updated live.
+- A handheld mini-map.
