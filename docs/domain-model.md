@@ -13582,8 +13582,7 @@ levels up with the labels as the rack prints them and the bin's cell lit, and a
 plan of the building the same way up every time. 2D, because which bay and
 which level is a question about relative position, which a flat drawing answers
 better than a 3D one. The research behind the interface is in
-`reports/Apple style warehouse layout design.md` (kept out of the repository),
-summarised as **one place model, three depths, no modes**: floor staff find and
+[layout-interface-analysis.md](./layout-interface-analysis.md), summarised as **one place model, three depths, no modes**: floor staff find and
 check, trusted staff correct by scanning, and geometry is edited only at a desk.
 
 **Rejects.** Millimetres, and the six columns on `location` that promised them,

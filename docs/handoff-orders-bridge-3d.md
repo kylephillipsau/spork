@@ -103,9 +103,9 @@ register.
 
 The user asked for the layout to be usable by a warehouse worker with little
 computer experience, and pleasant for power users, "like an Apple product". The
-research report is `reports/Apple style warehouse layout design.md`. It and its
-notes are kept out of the repository through `.git/info/exclude` on the machine
-it was written on. Its recommendation, which the work above follows:
+research report is [layout-interface-analysis.md](./layout-interface-analysis.md).
+Its working notes stayed on the machine it was written on. Its recommendation,
+which the work above follows:
 
 - **One place model, three depths, no modes.**
   - *Find and check* (everyone): a scan opens the rack face.
