@@ -48,6 +48,23 @@
 //! `SKU-6013 (6 UNITS)`, `WAA-001 (x12)`, `Bekina StepliteX (x5)`. Thirteen rows
 //! carry it and none of the thirteen has a row of its own, so for those items the
 //! carton is all there is.
+//!
+//! **A later export says more, in a person's shorthand.** The 313-row list of
+//! 2026-09-30 adds inners to the count: `SKU-0644 (CTN x10 box, 1000pcs)`,
+//! `SKU-0510 (CTN, 4x 10pack)`, `SKU-0822 (CTN 20 x box 12)`, and bare
+//! `SKU-9600 (CTN)`. [`contents`] reads the shapes that say one thing and
+//! nothing else, and leaves the rest unread rather than guessing: `(1 ROLL)`
+//! does not say whether a roll is the unit, so that carton's contents stay
+//! unrecorded and the dry run says so.
+//!
+//! **A name that says what is inside it is a product's carton, never a box.**
+//! Seventeen of the new rows put a bracket after a code, and read whole, as the
+//! first version of this did, every one of them looked like nothing in
+//! particular and so like a container. The bracket is split off before the
+//! catalogue is asked, and a name whose bracket states contents or says `CTN`
+//! is at worst unresolved. A box the business packs into does not state how
+//! many of something are in it. `Extra Small Box (1/2)` still reads as a box,
+//! because `1/2` states nothing.
 
 use std::collections::HashMap;
 
@@ -75,20 +92,35 @@ impl Catalogue {
     /// nothing; the inference lives here, where a person reads its output before
     /// anything is written.
     ///
-    /// A variant suffix is the last hyphenated segment when what precedes it is
-    /// itself a plausible code. `STY-7720-08` splits to `STY-7720` + `08`;
-    /// `SKU-0180` does not split, because `DGN` alone is not a code.
+    /// A code counts towards every style above it, not only the nearest, so a
+    /// row naming `SKU-3010` finds `SKU-3010B-06` through `SKU-3010B`. See
+    /// [`styles_of`].
+    ///
+    /// **One colour is still a colour of a family.** A hyphenated split needs two
+    /// members, because `SKU-7813-CTN` alone does not show that `-CTN` is a
+    /// variant rather than part of the code. A colour letter needs one: the
+    /// catalogue uses the same letters in 80 families, so a list naming
+    /// `SKU-7002` when only `SKU-7002B` is on file names a family whose other
+    /// colours are not stocked. Thirty-five rows of the 2026-09-30 list are
+    /// that, and the person reading its dry run said to record them so.
     pub fn new(item_codes: impl IntoIterator<Item = String>) -> Self {
         let mut codes = HashMap::new();
         let mut styles: HashMap<String, usize> = HashMap::new();
+        let mut colours: HashMap<String, ()> = HashMap::new();
         for code in item_codes {
-            if let Some(style) = style_of(&code) {
-                *styles.entry(style).or_insert(0) += 1;
+            let mut at = code.clone();
+            while let Some((up, by)) = split(&at) {
+                let up = up.to_string();
+                *styles.entry(up.clone()).or_insert(0) += 1;
+                if by == Split::Colour {
+                    colours.insert(up.clone(), ());
+                }
+                at = up;
             }
             codes.insert(code, ());
         }
         // A "style" with one member is just an item with a hyphen in it.
-        styles.retain(|_, n| *n >= 2);
+        styles.retain(|s, n| *n >= 2 || colours.contains_key(s));
         Self { codes, styles }
     }
 
@@ -101,22 +133,86 @@ impl Catalogue {
             Known::Nothing
         }
     }
+
+    /// The codes that begin with a name, for a person working out why it did
+    /// not resolve: `SKU-7813` against a catalogue holding only `SKU-7813-CTN`
+    /// is a near miss, which is a different gap from nothing at all.
+    pub fn starting_with(&self, name: &str) -> Vec<&str> {
+        let mut out: Vec<&str> = self
+            .codes
+            .keys()
+            .filter(|c| c.len() > name.len() && c.starts_with(name))
+            .map(String::as_str)
+            .collect();
+        out.sort_unstable();
+        out
+    }
 }
 
-/// `STY-7720-08` -> `STY-7720`. `SKU-0180` -> none.
+/// Which convention a split followed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Split {
+    Hyphen,
+    Colour,
+}
+
+/// The nearest style a code could be a variant of, by either convention.
+///
+/// **A hyphenated suffix.** A variant suffix is the last hyphenated segment
+/// when what precedes it is itself a plausible code. `STY-7720-08` splits to
+/// `STY-7720` + `08`; `SKU-0180` does not split, because `DGN` alone is not a
+/// code.
+///
+/// **A colour letter.** The 2026-09-30 catalogue marks colour with one capital
+/// straight after the number, no hyphen: `SKU-9600B`, `-9600G`, `-9600R` for
+/// blue, green and red, in 80 families of two or more. So a code ending in a
+/// digit and one letter splits there, when what precedes the letter is shaped
+/// like a code.
+///
+/// When both apply, the longer head is nearer. `U.AB-204V` is the `V` of
+/// `U.AB-204`, not a size `204V` of `U.AB`.
+fn split(code: &str) -> Option<(&str, Split)> {
+    let hyphen = code.rsplit_once('-').and_then(|(head, tail)| {
+        // A variant suffix is short and alphanumeric: a size, a colour, a length.
+        if tail.is_empty() || tail.len() > 5 || !tail.chars().all(|c| c.is_alphanumeric() || c == '.') {
+            return None;
+        }
+        // And what it hangs off has to look like a code in its own right, which is
+        // what stops `SKU-0180` becoming style `DGN`.
+        (head.contains(['-', '.']) || head.len() >= 4).then_some(head)
+    });
+    let colour = {
+        let mut rev = code.chars().rev();
+        match (rev.next(), rev.next()) {
+            (Some(letter), Some(digit)) if letter.is_ascii_uppercase() && digit.is_ascii_digit() => {
+                let head = &code[..code.len() - 1];
+                looks_like_code(head).then_some(head)
+            }
+            _ => None,
+        }
+    };
+    match (hyphen, colour) {
+        (Some(h), Some(c)) if c.len() > h.len() => Some((c, Split::Colour)),
+        (Some(h), _) => Some((h, Split::Hyphen)),
+        (None, c) => c.map(|c| (c, Split::Colour)),
+    }
+}
+
+/// `STY-7720-08` -> `STY-7720`, `SKU-9600B` -> `SKU-9600`. `SKU-0180` -> none.
 pub fn style_of(code: &str) -> Option<String> {
-    let (head, tail) = code.rsplit_once('-')?;
-    // A variant suffix is short and alphanumeric: a size, a colour, a length.
-    if tail.is_empty() || tail.len() > 5 || !tail.chars().all(|c| c.is_alphanumeric() || c == '.') {
-        return None;
+    split(code).map(|(head, _)| head.to_string())
+}
+
+/// Every style a code could be a variant of, nearest first: `SKU-3010B-06` is
+/// a size of `SKU-3010B`, which is a colour of `SKU-3010`.
+pub fn styles_of(code: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    let mut at = code.to_string();
+    while let Some(up) = style_of(&at) {
+        out.push(up.clone());
+        at = up;
     }
-    // And what it hangs off has to look like a code in its own right, which is
-    // what stops `SKU-0180` becoming style `DGN`.
-    if head.contains(['-', '.']) || head.len() >= 4 {
-        Some(head.to_string())
-    } else {
-        None
-    }
+    out
 }
 
 /// Two to four letters, a separator, then digits: `SKU-0180`, `U.73.132`.
@@ -135,34 +231,135 @@ pub fn looks_like_code(name: &str) -> bool {
         && tail.chars().any(|c| c.is_ascii_digit())
 }
 
-/// `SKU-6013 (6 UNITS)` -> (`SKU-6013`, 6). Case and wording vary because a
-/// person typed each one.
-pub fn multipack(name: &str) -> Option<(String, u32)> {
-    let open = name.rfind('(')?;
-    if !name.trim_end().ends_with(')') {
+/// What a name says is in the carton it describes.
+///
+/// `item_packing_config`'s own two columns, so what is read here is what is
+/// written, with no arithmetic in between. A bare count is units straight into
+/// the carton, stored as that many inners of one, which is the shape the first
+/// loader wrote for `(x12)`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Pack {
+    pub inners_per_carton: Option<u32>,
+    pub units_per_inner: Option<u32>,
+}
+
+impl std::fmt::Display for Pack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.inners_per_carton, self.units_per_inner) {
+            (Some(n), Some(1)) => write!(f, "{n} per carton"),
+            (Some(n), Some(u)) => write!(f, "{n} inners of {u}, {} per carton", n * u),
+            (Some(n), None) => write!(f, "{n} inners, their count unstated"),
+            (None, _) => write!(f, "a carton, its count unstated"),
+        }
+    }
+}
+
+/// A name split at its trailing bracket: `SKU-0644 (CTN x10 box)` becomes
+/// `SKU-0644` and `CTN x10 box`. `None` when the name does not end in one.
+pub fn bracket(name: &str) -> Option<(&str, &str)> {
+    let inner = name.trim().strip_suffix(')')?;
+    let open = inner.rfind('(')?;
+    let base = inner[..open].trim();
+    if base.is_empty() {
         return None;
     }
-    let inner = name[open + 1..name.trim_end().len() - 1].trim();
-    let digits: String = inner.chars().filter(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return None;
+    Some((base, inner[open + 1..].trim()))
+}
+
+/// Words, numbers and anything else, split where one becomes another, so
+/// `x10`, `20x` and `10pack` read the same as `x 10`, `20 x` and `10 pack`.
+fn words(said: &str) -> Vec<String> {
+    #[derive(PartialEq)]
+    enum Class {
+        Digit,
+        Letter,
+        Other,
     }
-    // Everything that is not the number must be `x`, `units`, `unit` or space —
-    // otherwise the parenthetical is a description, not a count.
-    let rest: String = inner
-        .chars()
-        .filter(|c| !c.is_ascii_digit())
-        .collect::<String>()
-        .to_ascii_lowercase()
-        .replace(['x', ' '], "");
-    if !matches!(rest.as_str(), "" | "units" | "unit") {
-        return None;
+    let class = |c: char| {
+        if c.is_ascii_digit() {
+            Class::Digit
+        } else if c.is_alphabetic() {
+            Class::Letter
+        } else {
+            Class::Other
+        }
+    };
+    let mut out: Vec<String> = vec![];
+    let mut last: Option<Class> = None;
+    for c in said.to_lowercase().chars() {
+        if c.is_whitespace() || c == ',' {
+            last = None;
+            continue;
+        }
+        let k = class(c);
+        match out.last_mut() {
+            Some(w) if last.as_ref() == Some(&k) => w.push(c),
+            _ => out.push(c.to_string()),
+        }
+        last = Some(k);
     }
-    let n: u32 = digits.parse().ok()?;
-    if n == 0 {
-        return None;
+    out
+}
+
+fn says_carton(said: &str) -> bool {
+    words(said)
+        .iter()
+        .any(|w| matches!(w.as_str(), "ctn" | "ctns" | "carton" | "cartons"))
+}
+
+/// What a bracket says about the carton, or `None` when it says something this
+/// does not read. Case and wording vary because a person typed each one.
+///
+/// The shapes read, each of which says one thing:
+///
+/// - `6 UNITS`, `x12`, `20x`: units in the carton.
+/// - `x6 box`, `4 x box`: inners in the carton, and nothing about what is in
+///   them.
+/// - `x8, box 40`, `20 x box 12`, `4x 10pack`: inners, and units in each.
+/// - `x10 box, 1000pcs`: inners, and units in the whole carton. Read only when
+///   the total divides evenly by the inners, because otherwise one of the two
+///   numbers is wrong and there is no telling which.
+/// - `CTN` alone: a carton, with nothing said about what is in it.
+///
+/// Anything else is not read: a fraction, a second product, a word this does
+/// not know. `1 ROLL` is one of those, because a roll might be the unit or
+/// might hold many of them.
+pub fn contents(said: &str) -> Option<Pack> {
+    #[derive(Clone, Copy)]
+    enum T {
+        N(u32),
+        Inner,
+        Unit,
     }
-    Some((name[..open].trim().to_string(), n))
+    let mut carton = false;
+    let mut ts = vec![];
+    for w in words(said) {
+        match w.as_str() {
+            "ctn" | "ctns" | "carton" | "cartons" => carton = true,
+            "x" => {}
+            "box" | "boxes" | "inner" | "inners" | "pack" | "packs" => ts.push(T::Inner),
+            "unit" | "units" | "pcs" | "pc" | "each" | "ea" => ts.push(T::Unit),
+            w => match w.parse::<u32>() {
+                Ok(n) if n > 0 => ts.push(T::N(n)),
+                _ => return None,
+            },
+        }
+    }
+    let pack = |inners: Option<u32>, units: Option<u32>| {
+        Some(Pack {
+            inners_per_carton: inners,
+            units_per_inner: units,
+        })
+    };
+    use T::*;
+    match ts.as_slice() {
+        [] if carton => pack(None, None),
+        [N(n)] | [N(n), Unit] => pack(Some(*n), Some(1)),
+        [N(n), Inner] => pack(Some(*n), None),
+        [N(n), Inner, N(u)] | [N(n), N(u), Inner] => pack(Some(*n), Some(*u)),
+        [N(n), Inner, N(total), Unit] if total % n == 0 => pack(Some(*n), Some(total / n)),
+        _ => None,
+    }
 }
 
 /// What a row is about, and what the importer should therefore write.
@@ -183,29 +380,63 @@ pub enum Subject {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decision {
     pub subject: Subject,
-    /// Units per carton, when the name said so.
-    pub per_carton: Option<u32>,
+    /// What is in the carton, when the name said and this could read it.
+    pub pack: Option<Pack>,
+    /// The name's bracket, when it had one this could not read.
+    pub unread: Option<String>,
     /// Why this row was read the way it was.
     pub because: String,
 }
 
 pub fn decide(name: &str, catalogue: &Catalogue) -> Decision {
     let name = name.trim();
-
-    if let Some((base, n)) = multipack(name) {
-        let (subject, because) = resolve(&base, catalogue);
-        return Decision {
+    let whole = || {
+        let (subject, because) = resolve(name, catalogue);
+        Decision {
             subject,
-            per_carton: Some(n),
-            because: format!("{because}; the name states {n} per carton"),
-        };
-    }
+            pack: None,
+            unread: None,
+            because,
+        }
+    };
 
-    let (subject, because) = resolve(name, catalogue);
-    Decision {
-        subject,
-        per_carton: None,
-        because,
+    // A code with a bracket in it is still that code.
+    if catalogue.lookup(name) != Known::Nothing {
+        return whole();
+    }
+    let Some((base, said)) = bracket(name) else {
+        return whole();
+    };
+
+    let pack = contents(said);
+    let unread = pack.is_none().then(|| said.to_string());
+    let reading = match pack {
+        Some(p) => format!("the name states {p}"),
+        None => format!(
+            "the name's ({said}) is not a count this reads, so what is in the carton is left \
+             unrecorded"
+        ),
+    };
+    match resolve(base, catalogue) {
+        // `Extra Small Box (1/2)`: nothing in the bracket says product.
+        (Subject::Container { .. }, _) if pack.is_none() && !says_carton(said) => whole(),
+        (Subject::Container { .. }, _) => Decision {
+            subject: Subject::Unresolved {
+                name: base.to_string(),
+            },
+            pack,
+            unread,
+            because: format!(
+                "the name says what is in it, so it is a product's carton and not a box, and \
+                 the catalogue has never heard of {base}; {reading}"
+            ),
+        },
+        (subject, because) => Decision {
+            subject,
+            pack,
+            unread,
+            because: format!("{because}; {reading}"),
+        },
     }
 }
 
@@ -288,25 +519,60 @@ mod tests {
         );
     }
 
+    fn pack(inners: u32, units: Option<u32>) -> Option<Pack> {
+        Some(Pack {
+            inners_per_carton: Some(inners),
+            units_per_inner: units,
+        })
+    }
+
     #[test]
     fn the_case_pack_is_read_out_of_the_name() {
-        assert_eq!(multipack("SKU-6013 (6 UNITS)"), Some(("SKU-6013".into(), 6)));
-        assert_eq!(multipack("SKU-0700 (X6)"), Some(("SKU-0700".into(), 6)));
-        assert_eq!(multipack("WAA-001 (x12)"), Some(("WAA-001".into(), 12)));
-        assert_eq!(multipack("SKU-2105 (12 units)"), Some(("SKU-2105".into(), 12)));
+        let read = |name: &str| bracket(name).and_then(|(_, said)| contents(said));
+        assert_eq!(bracket("SKU-6013 (6 UNITS)"), Some(("SKU-6013", "6 UNITS")));
+        assert_eq!(read("SKU-6013 (6 UNITS)"), pack(6, Some(1)));
+        assert_eq!(read("SKU-0700 (X6)"), pack(6, Some(1)));
+        assert_eq!(read("WAA-001 (x12)"), pack(12, Some(1)));
+        assert_eq!(read("SKU-2105 (12 units)"), pack(12, Some(1)));
+        assert_eq!(read("Trail Boot (x5)"), pack(5, Some(1)));
+    }
+
+    /// The shorthand of the 313-row export: a carton marker, inners, and units
+    /// in each inner or in the whole carton.
+    #[test]
+    fn inners_are_read_out_of_the_name() {
+        assert_eq!(contents("CTN, x25"), pack(25, Some(1)));
+        assert_eq!(contents("CTN, 20x"), pack(20, Some(1)));
+        assert_eq!(contents("CTN x6"), pack(6, Some(1)));
+        assert_eq!(contents("CTN, x6 box"), pack(6, None));
+        assert_eq!(contents("CTN, 4 x box"), pack(4, None));
+        assert_eq!(contents("CTN x8, box 40"), pack(8, Some(40)));
+        assert_eq!(contents("CTN 20 x box 12"), pack(20, Some(12)));
+        assert_eq!(contents("CTN, 4x 10pack"), pack(4, Some(10)));
+        assert_eq!(contents("CTN x10 box, 1000pcs"), pack(10, Some(100)));
         assert_eq!(
-            multipack("Bekina StepliteX (x5)"),
-            Some(("Bekina StepliteX".into(), 5))
+            contents("CTN"),
+            Some(Pack::default()),
+            "a carton, and nothing said about what is in it"
         );
     }
 
-    /// A parenthetical that is not a count must not be read as one.
+    /// A bracket that is not a count must not be read as one.
     #[test]
     fn a_description_in_brackets_is_not_a_case_pack() {
-        assert_eq!(multipack("Extra Small Box (1/2)"), None, "1/2 is not a count");
-        assert_eq!(multipack("Something (blue)"), None);
-        assert_eq!(multipack("Plain name"), None);
-        assert_eq!(multipack("Trailing ("), None);
+        assert_eq!(contents("1/2"), None, "1/2 is not a count");
+        assert_eq!(contents("blue"), None);
+        assert_eq!(contents("1 ROLL"), None, "a roll may be the unit or hold many");
+        assert_eq!(contents("CTN, 10x each + a free gift"), None, "a second thing in the box");
+        assert_eq!(
+            contents("CTN x7 box, 1000pcs"),
+            None,
+            "1000 does not divide into 7 boxes, so one of the numbers is wrong"
+        );
+        assert_eq!(contents(""), None);
+        assert_eq!(bracket("Plain name"), None);
+        assert_eq!(bracket("Trailing ("), None);
+        assert_eq!(bracket("(x6)"), None, "a bracket with nothing before it names nothing");
     }
 
     #[test]
@@ -363,7 +629,98 @@ mod tests {
         );
         let d = decide("SKU-6013 (6 UNITS)", &c);
         assert_eq!(d.subject, Subject::Style { code: "SKU-6013".into(), variants: 2 });
-        assert_eq!(d.per_carton, Some(6));
+        assert_eq!(d.pack, pack(6, Some(1)));
         assert!(d.because.contains("6 per carton"));
+    }
+
+    /// **The one that would have invented seventeen box types.** Read whole,
+    /// `SKU-0644 (CTN x10 box, 1000pcs)` is not shaped like a code, and a name
+    /// that is neither a code nor in the catalogue is a container.
+    #[test]
+    fn a_product_carton_is_never_a_box() {
+        let c = Catalogue::new(["SKU-0644", "SKU-9600"].into_iter().map(str::to_string));
+        let d = decide("SKU-0644 (CTN x10 box, 1000pcs)", &c);
+        assert_eq!(d.subject, Subject::Item { code: "SKU-0644".into() });
+        assert_eq!(d.pack, pack(10, Some(100)));
+        assert!(d.because.contains("10 inners of 100, 1000 per carton"), "{}", d.because);
+
+        let d = decide("SKU-9600 (CTN)", &c);
+        assert_eq!(d.subject, Subject::Item { code: "SKU-9600".into() });
+        assert_eq!(d.pack, Some(Pack::default()));
+
+        // Unknown to the catalogue, and still not a box.
+        assert_eq!(
+            decide("SKU-1015 (1 ROLL)", &c).subject,
+            Subject::Unresolved { name: "SKU-1015".into() }
+        );
+        for name in ["Trail Boot (x5)", "Trail Boot (CTN, 10x each + a free gift)"] {
+            let d = decide(name, &c);
+            assert_eq!(
+                d.subject,
+                Subject::Unresolved { name: "Trail Boot".into() },
+                "{name} states what is in it"
+            );
+        }
+    }
+
+    /// What was read and what was not, for the dry run to show.
+    #[test]
+    fn an_unread_bracket_is_kept_for_a_person() {
+        let c = Catalogue::new(["SKU-1015"].into_iter().map(str::to_string));
+        let d = decide("SKU-1015 (1 ROLL)", &c);
+        assert_eq!(d.subject, Subject::Item { code: "SKU-1015".into() });
+        assert_eq!(d.pack, None);
+        assert_eq!(d.unread.as_deref(), Some("1 ROLL"));
+        assert!(d.because.contains("left unrecorded"), "{}", d.because);
+    }
+
+    #[test]
+    fn a_box_with_a_note_is_still_a_box() {
+        let c = catalogue();
+        assert_eq!(
+            decide("Extra Small Box (1/2)", &c).subject,
+            Subject::Container { name: "Extra Small Box (1/2)".into() },
+            "1/2 says nothing about contents, so the name is read whole"
+        );
+        // A code with a bracket in it is still that code.
+        let c = Catalogue::new(["KIT-0100 (A)"].into_iter().map(str::to_string));
+        assert_eq!(
+            decide("KIT-0100 (A)", &c).subject,
+            Subject::Item { code: "KIT-0100 (A)".into() }
+        );
+    }
+
+    /// The colour letter, and a family two levels deep.
+    #[test]
+    fn a_colour_letter_is_a_variant() {
+        assert_eq!(style_of("SKU-9600B").as_deref(), Some("SKU-9600"));
+        assert_eq!(
+            style_of("U.AB-204V").as_deref(),
+            Some("U.AB-204"),
+            "the longer head is nearer"
+        );
+        assert_eq!(style_of("U.XQZ41B").as_deref(), Some("U.XQZ41"));
+        assert_eq!(style_of("SKU-9350BOX"), None, "a word is not a colour");
+        assert_eq!(style_of("SKU10207B"), None, "no separator, so nothing shaped like a code");
+        assert_eq!(styles_of("SKU-3010B-06"), vec!["SKU-3010B", "SKU-3010"]);
+
+        let c = Catalogue::new(
+            [
+                "SKU-9600B", "SKU-9600G", "SKU-9600R",
+                "SKU-3010B-06", "SKU-3010B-07", "SKU-3010W-06",
+                "SKU-7002B",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        );
+        assert_eq!(c.lookup("SKU-9600"), Known::Style(3));
+        assert_eq!(c.lookup("SKU-3010"), Known::Style(3), "every size of every colour");
+        assert_eq!(c.lookup("SKU-3010B"), Known::Style(2));
+        assert_eq!(c.lookup("SKU-7002"), Known::Style(1), "one colour is still a colour of a family");
+        assert_eq!(c.starting_with("SKU-3010B"), vec!["SKU-3010B-06", "SKU-3010B-07"]);
+        assert_eq!(
+            decide("SKU-9600 (CTN)", &c).subject,
+            Subject::Style { code: "SKU-9600".into(), variants: 3 }
+        );
     }
 }

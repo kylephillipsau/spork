@@ -8,6 +8,11 @@
 //! cargo run -p spork-server --example import_prepack -- ... --apply
 //! ```
 //!
+//! `--not-a-box NAME`, repeated, leaves out a name the report would make a box
+//! type when a person reading it knows better: a product's carton named by its
+//! brand, or a code the item export lacks that is not shaped like one. Nothing
+//! is written for it, and the report lists it.
+//!
 //! **Dry run by default.** It prints what it would write and writes nothing.
 //! Loading 186 rows under a wrong assumption is worse than not loading them, and
 //! the assumption most likely to be wrong is which rows are styles.
@@ -63,6 +68,8 @@ struct Args {
     person: Uuid,
     site: Uuid,
     apply: bool,
+    /// Names a person said are not boxes, whatever they look like.
+    not_boxes: Vec<String>,
     url: String,
 }
 
@@ -70,6 +77,7 @@ fn args() -> Result<Args, String> {
     let mut items = None;
     let mut prepack = None;
     let mut apply = false;
+    let mut not_boxes = vec![];
     let mut tenant = "11111111-1111-1111-1111-111111111111".to_string();
     let mut person = "77770000-0000-0000-0000-000000000001".to_string();
     let mut site = "a5170000-0000-0000-0000-000000000001".to_string();
@@ -82,6 +90,7 @@ fn args() -> Result<Args, String> {
             "--person" => person = it.next().unwrap_or_default(),
             "--site" => site = it.next().unwrap_or_default(),
             "--apply" => apply = true,
+            "--not-a-box" => not_boxes.extend(it.next()),
             other => return Err(format!("unknown argument {other}")),
         }
     }
@@ -92,6 +101,7 @@ fn args() -> Result<Args, String> {
         person: person.parse().map_err(|_| "bad --person")?,
         site: site.parse().map_err(|_| "bad --site")?,
         apply,
+        not_boxes,
         url: std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set")?,
     })
 }
@@ -105,6 +115,8 @@ struct Item {
 #[derive(Debug, Clone)]
 struct Row {
     line: usize,
+    /// NetSuite's internal id for the prepack record, when the export has one.
+    id: Option<String>,
     name: String,
     weight: Option<String>,
     length: Option<String>,
@@ -155,6 +167,7 @@ fn read_prepack(path: &PathBuf) -> Result<Vec<Row>, String> {
         }
         out.push(Row {
             line: i + 2, // header is line 1
+            id: some("ID"),
             name,
             weight: some("Weight"),
             length: some("Length"),
@@ -197,8 +210,27 @@ fn measures(row: &Row) -> Vec<Measure> {
     m
 }
 
-fn act_for(file: &str, line: usize, what: &str) -> Uuid {
-    Uuid::new_v5(&ACTS, format!("{file}#{line}#{what}").as_bytes())
+/// **By the record and what it says, when the export names the record.** A
+/// file and a line identify a row only until the next export, which has a
+/// different name and, once one record is added, different lines: loading it
+/// would record every unchanged carton again. NetSuite's id and the row's own
+/// values say the same thing in every export, so an unchanged row is a replay
+/// and a changed one is a new act. An export without ids keeps the old key.
+fn act_for(file: &str, row: &Row, what: &str) -> Uuid {
+    let key = match &row.id {
+        Some(id) => format!(
+            "netsuite-prepack#{id}#{}#{}#{}#{}#{}#{}#{}#{what}",
+            row.name,
+            row.weight.as_deref().unwrap_or(""),
+            row.weight_unit,
+            row.length.as_deref().unwrap_or(""),
+            row.width.as_deref().unwrap_or(""),
+            row.height.as_deref().unwrap_or(""),
+            row.size_unit,
+        ),
+        None => format!("{file}#{}#{what}", row.line),
+    };
+    Uuid::new_v5(&ACTS, key.as_bytes())
 }
 
 #[tokio::main]
@@ -206,7 +238,7 @@ async fn main() -> Result<(), String> {
     let args = match args() {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("{e}\n\nusage: --items <csv> --prepack <csv> [--apply]");
+            eprintln!("{e}\n\nusage: --items <csv> --prepack <csv> [--not-a-box <name>]... [--apply]");
             std::process::exit(2);
         }
     };
@@ -223,6 +255,28 @@ async fn main() -> Result<(), String> {
     for row in rows {
         let d = decide(&row.name, &catalogue);
         plans.push((row, d));
+    }
+
+    // **A person's word outranks the shape of a name**, and only in the one
+    // direction that writes less: a box type becomes nothing, never the reverse.
+    // A name given that matches no box is refused, because a typo here would
+    // otherwise make the box it was meant to stop.
+    let mut left_out: Vec<String> = vec![];
+    for name in &args.not_boxes {
+        let mut hit = false;
+        for (_, d) in plans.iter_mut() {
+            if matches!(&d.subject, Subject::Container { name: n } if n == name) {
+                d.subject = Subject::Unresolved { name: name.clone() };
+                d.because = "a person reading the dry run said this is not a box".into();
+                hit = true;
+            }
+        }
+        if !hit {
+            return Err(format!(
+                "--not-a-box {name:?} names no row this would make a box type"
+            ));
+        }
+        left_out.push(name.clone());
     }
 
     let mut seen: BTreeMap<String, Vec<usize>> = BTreeMap::new();
@@ -251,7 +305,8 @@ async fn main() -> Result<(), String> {
                 covered += variants;
             }
             Subject::Container { .. } => n_box += 1,
-            Subject::Unresolved { name } => unresolved.push(name),
+            Subject::Unresolved { name } if !left_out.contains(name) => unresolved.push(name),
+            Subject::Unresolved { .. } => {}
         }
     }
 
@@ -260,19 +315,90 @@ async fn main() -> Result<(), String> {
     println!("    {n_style:>4} styles, covering {covered} codes");
     println!("    {n_box:>4} containers -> package_type");
     println!("    {:>4} unresolved, written nowhere", unresolved.len());
+    if !left_out.is_empty() {
+        println!("    {:>4} not boxes, a person said; written nowhere", left_out.len());
+    }
     println!(
-        "    {:>4} rows state a case pack",
-        plans.iter().filter(|(_, d)| d.per_carton.is_some()).count()
+        "    {:>4} rows state what is in the carton",
+        plans
+            .iter()
+            .filter(|(_, d)| d.pack.is_some_and(|p| p.inners_per_carton.is_some()))
+            .count()
     );
 
     if !unresolved.is_empty() {
         println!(
-            "\n  {} rows name something shaped like a stock code that the item\n               export does not contain, in any form. Nothing is written for these —\n               the reading is that the export is incomplete, not that the warehouse\n               packs into a box called {}:",
+            "\n  {} rows name a product's carton that the item export does not contain\n  in any form. Nothing is written for these: the reading is that the export\n  is incomplete, not that the warehouse packs into a box of that name:",
             unresolved.len(),
-            unresolved[0]
         );
-        for chunk in unresolved.chunks(8) {
+        // One colour of a family is a different gap from no family at all, and
+        // the person deciding needs to see which is which.
+        let (alone, near): (Vec<&str>, Vec<&str>) = unresolved
+            .iter()
+            .copied()
+            .partition(|n| catalogue.starting_with(n).is_empty());
+        for chunk in alone.chunks(8) {
             println!("      {}", chunk.join("  "));
+        }
+        if !near.is_empty() {
+            println!(
+                "\n  {} of them begin codes the export does have, too few to call a family:",
+                near.len()
+            );
+            for name in near {
+                println!("      {name:<16} {}", catalogue.starting_with(name).join("  "));
+            }
+        }
+    }
+
+    if !left_out.is_empty() {
+        println!(
+            "\n  {} rows left out because a person said they are not boxes:\n      {}",
+            left_out.len(),
+            left_out.join("  |  ")
+        );
+    }
+
+    // **Every box type is named before it is made.** A package type says the
+    // warehouse packs into this, and it is the reading most likely to be wrong:
+    // it is what a name becomes when the item export lacks it and it is not
+    // shaped like a code.
+    let boxes: Vec<&str> = plans
+        .iter()
+        .filter_map(|(_, d)| match &d.subject {
+            Subject::Container { name } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    if !boxes.is_empty() {
+        println!(
+            "\n  {} rows become box types. Each should be something you pack into:",
+            boxes.len()
+        );
+        for chunk in boxes.chunks(6) {
+            println!("      {}", chunk.join("  |  "));
+        }
+    }
+
+    // What each bracket was read as, so a wrong reading is caught here rather
+    // than in a carton count on the floor.
+    let bracketed: Vec<&(Row, spork_server::prepack::Decision)> = plans
+        .iter()
+        .filter(|(_, d)| d.pack.is_some() || d.unread.is_some())
+        .collect();
+    if !bracketed.is_empty() {
+        println!("\n  what the names say is in the carton:");
+        for (r, d) in bracketed {
+            let reading = match (&d.pack, &d.unread) {
+                (Some(p), _) => p.to_string(),
+                (None, Some(said)) => format!("not read ({said}); left unrecorded"),
+                (None, None) => unreachable!("filtered above"),
+            };
+            let written = match d.subject {
+                Subject::Unresolved { .. } => "  (unresolved, written nowhere)",
+                _ => "",
+            };
+            println!("      {:<44} {reading}{written}", r.name);
         }
     }
 
@@ -394,12 +520,15 @@ async fn main() -> Result<(), String> {
 
     let mut codes: Vec<String> = vec![];
     let mut styles: Vec<Uuid> = vec![];
+    // The nearest style on file, so `SKU-3010B-06` joins `SKU-3010B` when the
+    // list measured that, and `SKU-3010` when it measured only the family.
     for i in &items {
-        if let Some(style) = spork_server::prepack::style_of(&i.code) {
-            if let Some(id) = style_ids.get(&style) {
-                codes.push(i.code.clone());
-                styles.push(*id);
-            }
+        let nearest = spork_server::prepack::styles_of(&i.code)
+            .iter()
+            .find_map(|s| style_ids.get(s).copied());
+        if let Some(id) = nearest {
+            codes.push(i.code.clone());
+            styles.push(id);
         }
     }
     let linked = tx
@@ -418,25 +547,31 @@ async fn main() -> Result<(), String> {
     // recorded what is in it", which is exactly the state of these thirteen.
     let mut configs = 0;
     for (_, d) in &plans {
-        let (target, per) = match (&d.subject, d.per_carton) {
-            (Subject::Item { code }, p) => (format!("code = '{}'", esc(code)), p),
-            (Subject::Style { code, .. }, p) => {
-                (format!("style_id = '{}'", style_ids[code]), p)
-            }
-            (Subject::Container { .. } | Subject::Unresolved { .. }, _) => continue,
+        let target = match &d.subject {
+            Subject::Item { code } => format!("code = '{}'", esc(code)),
+            Subject::Style { code, .. } => format!("style_id = '{}'", style_ids[code]),
+            Subject::Container { .. } | Subject::Unresolved { .. } => continue,
         };
+        let pack = d.pack.unwrap_or_default();
         let sql = format!(
             "INSERT INTO item_packing_config
                  (tenant_id, item_id, units_per_inner, inners_per_carton, effective_from)
-             SELECT $1, i.id, CASE WHEN $2::int IS NULL THEN NULL ELSE 1 END, $2::int,
-                    CURRENT_DATE
+             SELECT $1, i.id, $2::int, $3::int, CURRENT_DATE
                FROM item i
               WHERE i.tenant_id = $1 AND i.{target}
                 AND NOT EXISTS (SELECT 1 FROM item_packing_config c
                                  WHERE c.item_id = i.id)"
         );
+        let count = |n: Option<u32>| n.map(|n| n as i32);
         configs += tx
-            .execute(sql.as_str(), &[&args.tenant, &per.map(|p| p as i32)])
+            .execute(
+                sql.as_str(),
+                &[
+                    &args.tenant,
+                    &count(pack.units_per_inner),
+                    &count(pack.inners_per_carton),
+                ],
+            )
             .await
             .map_err(|e| format!("packing config: {e}"))?;
     }
@@ -553,7 +688,7 @@ async fn main() -> Result<(), String> {
             .get(0)
         };
 
-        let act = act_for(&file, row.line, "measure");
+        let act = act_for(&file, row, "measure");
         let already = tx
             .execute(
                 "INSERT INTO client_event
@@ -683,6 +818,19 @@ async fn main() -> Result<(), String> {
             )
             .await
             .map_err(|e| format!("finding for {key}: {e}"))?;
+    }
+
+    // **A writer of observations asks for the rebuild, as `POST /observations`
+    // does.** Without it the facts are on file and `observation_current` says
+    // nothing about them until something unrelated marks the tenant dirty, so
+    // every screen reading the projection shows a load that has not happened.
+    if acts > 0 {
+        tx.execute(
+            "SELECT projection_mark_dirty($1, 'prepack_import')",
+            &[&args.tenant],
+        )
+        .await
+        .map_err(|e| format!("asking for a rebuild: {e}"))?;
     }
 
     tx.commit().await.map_err(|e| e.to_string())?;
