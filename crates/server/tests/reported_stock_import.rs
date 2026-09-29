@@ -143,12 +143,15 @@ async fn a_report_lands_in_reported_stock_and_never_in_stock() {
     // **The arrival is `parsed`, and `stock` is untouched.** This report is not
     // a movement and migration 86 is emphatic about why: turning it into one
     // would have this system assert it holds goods it never recorded receiving.
+    //
+    // This arrival by its id, not the newest on file: the file's other test
+    // runs alongside this one and stores arrivals of its own.
+    let arrival = wet["arrival"]["party_message_id"].as_str().expect("the arrival").to_string();
     let conn = pool(&u).get().await.unwrap();
     let status: String = conn
         .query_one(
-            "SELECT m.parse_status::text FROM party_message m
-              ORDER BY m.recorded_at DESC LIMIT 1",
-            &[],
+            "SELECT m.parse_status::text FROM party_message m WHERE m.id = $1::text::uuid",
+            &[&arrival],
         )
         .await
         .unwrap()
