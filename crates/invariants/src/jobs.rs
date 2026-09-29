@@ -34,7 +34,7 @@ pub enum Id {
     J31, J32, J33, J34, J35, J36, J37, J38, J39, J40,
     J41, J42, J43, J44, J45, J46, J47, J48, J49, J50,
     J51, J52, J53, J54, J55, J56, J57, J58, J59, J60, J61, J62, J63, J64, J65, J66,
-    J67, J68, J69, J70, J71, J72, J73, J74, J75, J76, J77,
+    J67, J68, J69, J70, J71, J72, J73, J74, J75, J76, J77, J78,
 }
 
 impl fmt::Display for Id {
@@ -52,7 +52,7 @@ pub const ALL: &[Id] = &[
     Id::J50, Id::J51, Id::J52, Id::J53, Id::J54, Id::J55, Id::J56, Id::J57,
     Id::J58, Id::J59, Id::J60, Id::J61, Id::J62, Id::J63, Id::J64, Id::J65, Id::J66,
     Id::J67, Id::J68, Id::J69, Id::J70, Id::J71, Id::J72, Id::J73, Id::J74, Id::J75,
-    Id::J76, Id::J77,
+    Id::J76, Id::J77, Id::J78,
 ];
 
 /// What a failing job-asserted invariant produces.
@@ -329,11 +329,14 @@ pub fn spec(id: Id) -> Invariant {
             statement: "Every length, width or height we recorded against a single thing names the presentation it was measured in. The writer refuses one without it, and a rule enforced only in the writer is a rule the second writer breaks — a loader, an import, a repair script. Scoped to observations that are ours: a counterparty's claim about an each is theirs to qualify and we cannot make them",
             check: Check::Run(checks::j72_a_single_things_size_names_its_arrangement) },
         J76 => Invariant { id, owners: "D173", asserts_absence: true,
-            statement: "No two active bins in one site have boxes that share any volume. Touching faces do not count: two bins side by side in one bay meet along a face. A finding rather than a refusal, for J71's reason: two racks drawn through each other, or a survey that disagrees with a rack, is a disagreement about the floor, and which one is wrong is a person's question",
-            check: Check::Run(checks::j76_no_two_bins_share_space) },
+            statement: "No bin sits in a cell outside its place's grid. A cell is the exact half of the layout, and a grid shrunk under its bins would leave them in bays that are not drawn. The writer unplaces or moves them first; this is where a second writer that does not is caught",
+            check: Check::Run(checks::j76_every_bin_is_inside_its_grid) },
         J77 => Invariant { id, owners: "D173", asserts_absence: true,
-            statement: "Every active bin in an aisle that one of its site's active racks runs along has a box. A rack places the bins its template names; a bin in the same aisle that it does not name is a miscoded bin, a mistyped template, or a bin nobody has placed by hand, and the import report that said so has scrolled away",
-            check: Check::Run(checks::j77_a_racked_aisle_places_every_bin) },
+            statement: "Once a site has a layout, every active bin there sits in a cell. Before the first place is drawn nothing is missing; after it, a bin with no cell is one nobody can be sent to by the map, and it waits in the Unplaced tray until a person puts it somewhere",
+            check: Check::Run(checks::j77_a_laid_out_site_places_every_bin) },
+        J78 => Invariant { id, owners: "D173", asserts_absence: true,
+            statement: "No place is inside itself, however far up its parents are followed. A loop has no position on the site, since a position is composed from the site down, and a breadcrumb through it never ends",
+            check: Check::Run(checks::j78_no_place_is_inside_itself) },
     }
 }
 
@@ -3332,69 +3335,92 @@ pub mod checks {
     /// once, while `I.48.07` and `K.36.05` are two aisles apart and cannot both
     /// be reached at the same moment. A pick list ordered through either pair is
     /// non-deterministic, which is the practical cost.
-    /// D173. Two active bins at one site whose boxes share volume.
-    ///
-    /// A self-join along x, which `location_geometry_idx` serves; a site holds a
-    /// few thousand boxes, and this runs on the suite's schedule rather than on
-    /// a write.
-    pub fn j76_no_two_bins_share_space(
+    /// D173. Bins whose cell is past the edge of their place's grid.
+    pub fn j76_every_bin_is_inside_its_grid(
         c: &mut Client,
     ) -> Result<(usize, Vec<Finding>), postgres::Error> {
         let findings = c
             .query(
-                "SELECT s.code, a.code, b.code
-                   FROM location a
-                   JOIN location b
-                     ON b.tenant_id = a.tenant_id AND b.site_id = a.site_id AND b.id > a.id
-                    AND b.active AND b.x_mm IS NOT NULL
-                    AND b.x_mm < a.x_mm + a.length_mm AND a.x_mm < b.x_mm + b.length_mm
-                    AND b.y_mm < a.y_mm + a.width_mm AND a.y_mm < b.y_mm + b.width_mm
-                    AND b.z_mm < a.z_mm + a.height_mm AND a.z_mm < b.z_mm + b.height_mm
-                   JOIN site s ON s.id = a.site_id
-                  WHERE a.active AND a.x_mm IS NOT NULL
-                  ORDER BY s.code, a.code, b.code",
+                "SELECT s.code, l.code, p.name, l.slot_bay, l.slot_level
+                   FROM location l
+                   JOIN place p ON p.id = l.place_id
+                   JOIN site s ON s.id = l.site_id
+                  WHERE l.slot_bay > p.bays OR l.slot_level > p.levels OR l.slot_row > p.rows
+                     OR l.slot_position > coalesce(p.positions[l.slot_level], 1)
+                  ORDER BY s.code, l.code",
                 &[],
             )?
             .iter()
             .map(|r| {
-                finding(Id::J76, "space_claimed_twice",
-                    format!("site {} puts bins {} and {} in the same space, so at least one                              of them is not where it is drawn",
-                        r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2)))
+                finding(Id::J76, "cell_outside_grid",
+                    format!("site {} puts bin {} in bay {}, level {} of {}, which its grid does                              not have",
+                        r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, i32>(3),
+                        r.get::<_, i32>(4), r.get::<_, String>(2)))
             })
             .collect();
 
         let examined: i64 = c
-            .query_one("SELECT count(*) FROM location WHERE active AND x_mm IS NOT NULL", &[])?
+            .query_one("SELECT count(*) FROM location WHERE place_id IS NOT NULL", &[])?
             .get(0);
         Ok((examined as usize, findings))
     }
 
-    /// D173. Active bins with no box in an aisle an active rack runs along.
-    pub fn j77_a_racked_aisle_places_every_bin(
+    /// D173. Active bins with no cell at a site that has a layout.
+    pub fn j77_a_laid_out_site_places_every_bin(
         c: &mut Client,
     ) -> Result<(usize, Vec<Finding>), postgres::Error> {
-        const RACKED: &str = "FROM location l
-                              JOIN site s ON s.id = l.site_id
-                             WHERE l.active
-                               AND EXISTS (SELECT 1 FROM rack r
-                                            WHERE r.tenant_id = l.tenant_id
-                                              AND r.site_id = l.site_id
-                                              AND r.active AND r.aisle = l.aisle)";
+        const LAID_OUT: &str = "FROM location l
+                                JOIN site s ON s.id = l.site_id
+                               WHERE l.active
+                                 AND EXISTS (SELECT 1 FROM place p WHERE p.site_id = l.site_id)";
         let findings = c
             .query(
-                &format!("SELECT s.code, l.code, l.aisle {RACKED} AND l.x_mm IS NULL
+                &format!("SELECT s.code, l.code {LAID_OUT} AND l.place_id IS NULL
                            ORDER BY s.code, l.code"),
                 &[],
             )?
             .iter()
             .map(|r| {
                 finding(Id::J77, "bin_unplaced",
-                    format!("site {} has bin {} in aisle {}, which its racks run along, and                              no rack names it and nobody has placed it",
-                        r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2)))
+                    format!("site {} has a layout, and bin {} is not in it",
+                        r.get::<_, String>(0), r.get::<_, String>(1)))
             })
             .collect();
 
-        let examined: i64 = c.query_one(&format!("SELECT count(*) {RACKED}"), &[])?.get(0);
+        let examined: i64 = c.query_one(&format!("SELECT count(*) {LAID_OUT}"), &[])?.get(0);
+        Ok((examined as usize, findings))
+    }
+
+    /// D173. Places whose chain of parents comes back round.
+    pub fn j78_no_place_is_inside_itself(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "WITH RECURSIVE up (id, ancestor, path, looped) AS (
+                     SELECT id, parent_id, ARRAY[id], false FROM place WHERE parent_id IS NOT NULL
+                     UNION ALL
+                     SELECT up.id, p.parent_id, up.path || p.id, p.id = ANY (up.path)
+                       FROM up JOIN place p ON p.id = up.ancestor
+                      WHERE NOT up.looped
+                 )
+                 SELECT DISTINCT s.code, pl.name
+                   FROM up
+                   JOIN place pl ON pl.id = up.id
+                   JOIN site s ON s.id = pl.site_id
+                  WHERE up.looped
+                  ORDER BY 1, 2",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J78, "place_inside_itself",
+                    format!("site {}: following the places {} is in leads back to it",
+                        r.get::<_, String>(0), r.get::<_, String>(1)))
+            })
+            .collect();
+
+        let examined: i64 = c.query_one("SELECT count(*) FROM place", &[])?.get(0);
         Ok((examined as usize, findings))
     }
 

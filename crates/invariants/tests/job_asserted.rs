@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 77, "the register holds 77 job-asserted invariants");
+    assert_eq!(seen.len(), 78, "the register holds 78 job-asserted invariants");
 }
 
 #[test]
@@ -862,97 +862,113 @@ fn j71_finds_two_bins_at_one_walking_position() {
     );
 }
 
-/// J76 can fail: two bins drawn into one space.
+const J7X_TENANT: &str = "11111111-1111-1111-1111-111111111111";
+const J7X_SITE: &str = "a5170000-0000-0000-0000-000000000001";
+
+/// J76 can fail: a bin in bay 3 of a place two bays wide.
 ///
-/// Nothing in the fixture has a box, so without this J76 examines nothing and
-/// passes, which is the register's warning about every absence it asserts.
+/// Nothing in the fixture is on a layout, so without this J76 examines nothing
+/// and passes, which is the register's warning about every absence it asserts.
 #[test]
-fn j76_finds_two_bins_in_one_space() {
+fn j76_finds_a_bin_past_the_edge_of_its_grid() {
     let Some(url) = database_url() else {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
     let mut client = spork_invariants::connect_exclusive(&url);
-
-    const TENANT: &str = "11111111-1111-1111-1111-111111111111";
-    const SITE: &str = "a5170000-0000-0000-0000-000000000001";
-
-    // Two shelves entered by hand, the second starting halfway along the first;
-    // and a third that only touches the first's end face, which is not a clash.
     client
         .batch_execute(&format!(
-            "INSERT INTO location (id, tenant_id, site_id, code, kind, active, geometry_source,
-                                   x_mm, y_mm, z_mm, length_mm, width_mm, height_mm)
-             VALUES ('10c00000-0000-0000-0000-0000000076a1', '{TENANT}', '{SITE}', 'J76-ONE',
-                     'pick_face', true, 'manual', 0, 0, 0, 1000, 1000, 1000),
-                    ('10c00000-0000-0000-0000-0000000076a2', '{TENANT}', '{SITE}', 'J76-TWO',
-                     'pick_face', true, 'manual', 500, 0, 0, 1000, 1000, 1000),
-                    ('10c00000-0000-0000-0000-0000000076a3', '{TENANT}', '{SITE}', 'J76-NEXT',
-                     'pick_face', true, 'manual', 1500, 0, 0, 1000, 1000, 1000);"
+            "INSERT INTO place (id, tenant_id, site_id, name, solid, length, depth, height, bays)
+             VALUES ('7ac00000-0000-0000-0000-000000000076', '{J7X_TENANT}', '{J7X_SITE}',
+                     'J76 rack', true, 2, 1, 1, 2);
+             INSERT INTO location (id, tenant_id, site_id, code, kind, active, place_id,
+                                   slot_bay, slot_level, slot_row, slot_position)
+             VALUES ('10c00000-0000-0000-0000-0000000076a1', '{J7X_TENANT}', '{J7X_SITE}',
+                     'J76-3', 'pick_face', true, '7ac00000-0000-0000-0000-000000000076',
+                     3, 1, 1, 1);"
         ))
-        .expect("the bins");
+        .expect("a bin past the edge");
 
     let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J76);
 
     client
-        .batch_execute("DELETE FROM location WHERE code LIKE 'J76-%';")
-        .expect("the test removes the bins it added");
+        .batch_execute(
+            "DELETE FROM location WHERE code = 'J76-3';
+             DELETE FROM place WHERE name = 'J76 rack';",
+        )
+        .expect("the test removes what it added");
 
     let (_, examined, findings) = outcome.expect("J76 runs");
-    assert!(examined >= 3, "J76 examined {examined}, so it did not see the bins");
+    assert!(examined > 0, "J76 examined nothing, so it proved nothing");
     let said: Vec<&str> = findings.iter().map(|f| f.detail.as_str()).collect();
-    assert!(
-        said.iter().any(|d| d.contains("J76-ONE") && d.contains("J76-TWO")),
-        "J76 did not report two bins in one space: {said:?}"
-    );
-    assert!(
-        !said.iter().any(|d| d.contains("J76-ONE") && d.contains("J76-NEXT")),
-        "J76 called two bins that only touch a clash: {said:?}"
-    );
+    assert!(said.iter().any(|d| d.contains("J76-3")), "J76 did not report bay 3 of 2: {said:?}");
 }
 
-/// J77 can fail: a rack along an aisle, and a bin in it that no rack names.
+/// J77 can fail: the fixture's site gets a layout, and its bins are not in it.
 #[test]
-fn j77_finds_a_bin_its_aisle_s_racks_do_not_place() {
+fn j77_finds_a_bin_left_off_a_laid_out_site() {
     let Some(url) = database_url() else {
         eprintln!("DATABASE_URL unset: skipping");
         return;
     };
     let mut client = spork_invariants::connect_exclusive(&url);
-
-    const TENANT: &str = "11111111-1111-1111-1111-111111111111";
-    const SITE: &str = "a5170000-0000-0000-0000-000000000001";
-
     client
         .batch_execute(&format!(
-            "INSERT INTO rack (id, tenant_id, site_id, code, aisle, x_mm, y_mm, rotation,
-                               depth_mm, height_mm, first_bay, bay_widths_mm, level_z_mm,
-                               positions, code_template)
-             VALUES ('7ac00000-0000-0000-0000-000000000077', '{TENANT}', '{SITE}', 'J77-RACK',
-                     'J77', 0, 0, 0, 1000, 3000, 1, '{{2000}}', '{{0}}', '{{1}}',
-                     '{{aisle}}-{{bay}}-{{level}}');
-             INSERT INTO location (id, tenant_id, site_id, code, aisle, bay, level, kind, active)
-             VALUES ('10c00000-0000-0000-0000-0000000077a1', '{TENANT}', '{SITE}', 'J77-9-1',
-                     'J77', '9', '1', 'pick_face', true);"
+            "INSERT INTO place (id, tenant_id, site_id, name, length, depth, height)
+             VALUES ('7ac00000-0000-0000-0000-000000000077', '{J7X_TENANT}', '{J7X_SITE}',
+                     'J77 building', 10, 10, 3);"
         ))
-        .expect("the rack and the bin");
+        .expect("a layout");
 
     let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J77);
 
     client
-        .batch_execute(
-            "DELETE FROM location WHERE code = 'J77-9-1';
-             DELETE FROM rack WHERE code = 'J77-RACK';",
-        )
+        .batch_execute("DELETE FROM place WHERE name = 'J77 building';")
         .expect("the test removes what it added");
 
     let (_, examined, findings) = outcome.expect("J77 runs");
     assert!(examined > 0, "J77 examined nothing, so it proved nothing");
     let said: Vec<&str> = findings.iter().map(|f| f.detail.as_str()).collect();
     assert!(
-        said.iter().any(|d| d.contains("J77-9-1")),
-        "J77 did not report a bin its aisle's rack does not place: {said:?}"
+        said.iter().any(|d| d.contains("A-01-1")),
+        "J77 did not report the fixture's bins once their site had a layout: {said:?}"
     );
+}
+
+/// J78 can fail: two places, each inside the other.
+#[test]
+fn j78_finds_a_place_inside_itself() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    const A: &str = "7ac00000-0000-0000-0000-0000000078a1";
+    const B: &str = "7ac00000-0000-0000-0000-0000000078b2";
+    client
+        .batch_execute(&format!(
+            "INSERT INTO place (id, tenant_id, site_id, name, length, depth, height)
+             VALUES ('{A}', '{J7X_TENANT}', '{J7X_SITE}', 'J78 outer', 10, 10, 3);
+             INSERT INTO place (id, tenant_id, site_id, parent_id, name, length, depth, height)
+             VALUES ('{B}', '{J7X_TENANT}', '{J7X_SITE}', '{A}', 'J78 inner', 5, 5, 3);
+             UPDATE place SET parent_id = '{B}' WHERE id = '{A}';"
+        ))
+        .expect("a loop");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J78);
+
+    client
+        .batch_execute(&format!(
+            "UPDATE place SET parent_id = NULL WHERE id = '{A}';
+             DELETE FROM place WHERE id = '{B}';
+             DELETE FROM place WHERE id = '{A}';"
+        ))
+        .expect("the test removes what it added");
+
+    let (_, examined, findings) = outcome.expect("J78 runs");
+    assert!(examined >= 2, "J78 examined {examined}");
+    let said: Vec<&str> = findings.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|d| d.contains("J78 outer")), "J78 did not report the loop: {said:?}");
 }
 
 /// J72 can fail, demonstrated rather than asserted.

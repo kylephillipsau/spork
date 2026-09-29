@@ -32,4 +32,4 @@ export const UNKNOWN: Landing = { kind: "unknown", scanned: "09312345678907" };
 export const UNRECOGNISED: Landing = { kind: "unrecognised", scanned: "j@#f0 8" };
 
 /** Read correctly, and there is no screen for what it is. */
-export const NO_SCREEN: Landing = { kind: "nowhere", scanned: "A-01-1", what: "location" };
+export const NO_SCREEN: Landing = { kind: "nowhere", scanned: "PALLET-A", what: "package" };

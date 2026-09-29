@@ -53,6 +53,9 @@ export function screenFor(subject: Subject): string | null {
       // An item resolves to what can be measured about it, which is the one
       // screen that takes an item as its subject today.
       return subject.capture.length > 0 ? "/capture" : null;
+    case "location":
+      // A bin label is scanned to ask where it is: the face of its rack (D173).
+      return `/bins/${subject.id}`;
     default:
       return null;
   }

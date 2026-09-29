@@ -286,16 +286,16 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-One hundred and seventy-three recorded decisions, a hundred and thirty-three rules the design must always
+One hundred and seventy-three recorded decisions, a hundred and thirty-four rules the design must always
 satisfy, and a database that ninety-six migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
 suite rather than a document. Each rule carries its own metadata and its own
 identifier, so allocating the same number twice is a compile error rather than a
-mistake anyone can make. One hundred and eleven rules are implemented and none fails.
+mistake anyone can make. One hundred and twelve rules are implemented and none fails.
 
-Seventy-four of the rules state that something does not happen, and a rule of
+Seventy-five of the rules state that something does not happen, and a rule of
 that shape passes when there is nothing to check. The suite reports those
 separately: a check that examined nothing is recorded as proving nothing, rather
 than counted as a pass.

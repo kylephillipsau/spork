@@ -1,7 +1,7 @@
 import { FileSpreadsheet, FlaskConical, Upload } from "lucide-react";
 
 import { Alert, Badge, Button, Card, cx, DataTable, Page, PageHeader, Select, Stat, StatGrid, TextField, type Column } from "@ui/index";
-import type { FloorImportReport, ImportReport, ItemImportReport, RackImportReport, SitePlaced, SiteSurvey } from "@domain/types";
+import type { ImportReport, ItemImportReport, SiteSurvey } from "@domain/types";
 import { Faint } from "@app/common/cells";
 
 import type { ImportBench, Which } from "./useImport";
@@ -9,18 +9,9 @@ import s from "./settings.module.css";
 import imp from "./import-page.module.css";
 
 /**
- * Loading NetSuite exports (D158, D171) and the warehouse's layout (D173).
- * Always a dry run first: it is the load rolled back, so what it reports is
- * what applying does.
+ * Loading NetSuite exports (D158, D171). Always a dry run first: it is the
+ * load rolled back, so what it reports is what applying does.
  */
-
-/** What the empty file picker says, per kind of file. */
-const WHERE_FROM: Record<Which, string> = {
-  bins: "No file chosen. Export it from NetSuite as CSV.",
-  items: "No file chosen. Export it from NetSuite as CSV.",
-  racks: "No file chosen. One row per rack, as CSV.",
-  floor: "No file chosen. One row per area, as CSV.",
-};
 export function ImportPage({ bench }: { bench: ImportBench }) {
   const st = bench.state;
   const busy = st.kind === "working";
@@ -28,7 +19,7 @@ export function ImportPage({ bench }: { bench: ImportBench }) {
 
   return (
     <Page>
-      <PageHeader title="Import" description="Load exports from NetSuite, and the warehouse layout. Check the file with a dry run, then apply it." />
+      <PageHeader title="Import" description="Load exports from NetSuite. Check the file with a dry run, then apply it." />
 
       <Card title="File">
         <div className={s.stack}>
@@ -41,8 +32,6 @@ export function ImportPage({ bench }: { bench: ImportBench }) {
                 options={[
                   { value: "bins", label: "Bin list" },
                   { value: "items", label: "Item master" },
-                  { value: "racks", label: "Racks" },
-                  { value: "floor", label: "Floor areas" },
                 ]}
               />
             </div>
@@ -64,7 +53,7 @@ export function ImportPage({ bench }: { bench: ImportBench }) {
                   />
                 </label>
                 <span className={bench.file ? imp.fileName : s.muted}>
-                  {bench.file ? bench.file.name : WHERE_FROM[bench.which]}
+                  {bench.file ? bench.file.name : "No file chosen. Export it from NetSuite as CSV."}
                 </span>
               </div>
             </div>
@@ -114,10 +103,12 @@ export function ImportPage({ bench }: { bench: ImportBench }) {
         </Alert>
       )}
 
-      {reported?.which === "items" && <ItemsResult report={reported.report} applied={reported.applied} />}
-      {reported?.which === "bins" && <BinsResult report={reported.report} applied={reported.applied} />}
-      {reported?.which === "racks" && <RacksResult report={reported.report} applied={reported.applied} />}
-      {reported?.which === "floor" && <FloorResult report={reported.report} applied={reported.applied} />}
+      {reported &&
+        (reported.which === "items" ? (
+          <ItemsResult report={reported.report} applied={reported.applied} />
+        ) : (
+          <BinsResult report={reported.report} applied={reported.applied} />
+        ))}
     </Page>
   );
 }
@@ -189,66 +180,6 @@ function ItemsResult({ report, applied }: { report: ItemImportReport; applied: b
         <Stat label="Already on file" value={loaded.items_present.toLocaleString()} tone="muted" />
       </StatGrid>
       {notes.length > 0 && <p className={imp.note}>{notes.join(" ")}</p>}
-    </Card>
-  );
-}
-
-const count = (n: number) => (n ? n.toLocaleString() : <Faint>0</Faint>);
-
-const PLACED_COLUMNS: Column<SitePlaced>[] = [
-  { key: "site", header: "Site", cell: (x) => x.site, grow: true },
-  { key: "racks", header: "Racks", cell: (x) => count(x.racks), align: "right", width: "80px" },
-  { key: "slots", header: "Slots", cell: (x) => count(x.slots), align: "right", width: "90px" },
-  { key: "placed", header: "Placed", cell: (x) => count(x.bins_placed), align: "right", width: "90px" },
-  { key: "moved", header: "Moved", cell: (x) => count(x.bins_moved), align: "right", width: "90px" },
-  { key: "kept", header: "Measured, kept", cell: (x) => count(x.bins_kept_measured), align: "right", width: "130px" },
-  { key: "unplaced", header: "Unplaced", cell: (x) => count(x.bins_unplaced), align: "right", width: "100px" },
-];
-
-/** A few codes and how many more, so a long list reads as a number. */
-function sample(codes: string[], total: number): string {
-  const more = total - codes.length;
-  return codes.join(", ") + (more > 0 ? ` and ${more.toLocaleString()} more` : "");
-}
-
-function RacksResult({ report, applied }: { report: RackImportReport; applied: boolean }) {
-  const { loaded } = report;
-  const notes = loaded.sites.flatMap((x) => [
-    x.slots_without_bin > 0
-      ? `${x.site}: ${x.slots_without_bin.toLocaleString()} slots name no bin on file (${sample(x.slots_without_bin_sample, x.slots_without_bin)}). Racks place bins; they do not create them.`
-      : null,
-    x.bins_uncovered > 0
-      ? `${x.site}: ${x.bins_uncovered.toLocaleString()} bins are in a racked aisle but no rack names them (${sample(x.bins_uncovered_sample, x.bins_uncovered)}). Check their codes against the template.`
-      : null,
-  ]).filter((n): n is string => n !== null);
-  return (
-    <Card title={<ResultTitle applied={applied} what="Racks" />} padded={false}>
-      <StatGrid>
-        <Stat label="Racks created" value={loaded.racks_created.toLocaleString()} />
-        <Stat label="Racks changed" value={loaded.racks_changed.toLocaleString()} />
-        <Stat label="Unchanged" value={loaded.racks_unchanged.toLocaleString()} tone="muted" />
-      </StatGrid>
-      <DataTable aria-label="Bins by site" columns={PLACED_COLUMNS} rows={loaded.sites} rowKey={(x) => x.site} />
-      {notes.map((n) => (
-        <p key={n} className={imp.note}>
-          {n}
-        </p>
-      ))}
-      {report.arrival?.replay && <p className={imp.note}>This exact file was loaded before.</p>}
-    </Card>
-  );
-}
-
-function FloorResult({ report, applied }: { report: FloorImportReport; applied: boolean }) {
-  const { loaded } = report;
-  return (
-    <Card title={<ResultTitle applied={applied} what="Floor areas" />} padded={false}>
-      <StatGrid>
-        <Stat label="Created" value={loaded.areas_created.toLocaleString()} />
-        <Stat label="Changed" value={loaded.areas_changed.toLocaleString()} />
-        <Stat label="Unchanged" value={loaded.areas_unchanged.toLocaleString()} tone="muted" />
-      </StatGrid>
-      {report.arrival?.replay && <p className={imp.note}>This exact file was loaded before.</p>}
     </Card>
   );
 }

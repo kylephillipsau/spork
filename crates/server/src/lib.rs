@@ -40,6 +40,7 @@ pub mod packages;
 pub mod packing;
 pub mod passkeys;
 pub mod picking;
+pub mod places;
 pub mod putaway_list;
 pub mod receiving_list;
 pub mod picking_list;

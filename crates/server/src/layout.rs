@@ -1,107 +1,142 @@
-//! Where the racks stand, and where that puts every bin. D173.
+//! Where things are: places, their grids, and the names on their cells. D173.
 //!
-//! A rack is described in a few numbers: where its front-left corner is on the
-//! site plan, which way it faces, how wide each bay is, how high each level
-//! starts, how many bins share a bay at each level, and what the bins are
-//! called. [`expand`] turns that into every slot's code and box.
+//! A site's layout is boxes drawn inside other boxes. A place is positioned in
+//! cells of its parent, turned by some angle, and marked solid or walk-through;
+//! it may hold a grid of bays, levels, rows and positions, and every bin sits in
+//! one cell of one place. Nothing is measured.
 //!
-//! Pure, and tested without a database, for [`crate::bins`]' reason: the
-//! judgement is the difficulty, and the importer that writes the result is
-//! [`crate::importing::layout`].
+//! This module is the judgement, and pure: naming patterns, the labels a rack
+//! carries, composing a place's position on the site from its chain of parents,
+//! and drafting a first layout from a bin list. [`crate::places`] reads and
+//! writes the rows.
 //!
-//! # The frame
+//! # Exact and approximate
 //!
-//! One per site, in millimetres: `x` to the right on the plan, `y` up the page,
-//! `z` up from the floor. A slot's box is its corner nearest the origin and its
-//! extent along each axis, which is what `location`'s six columns now mean.
-//!
-//! A rack's own frame runs `u` along its front, left to right as you face it
-//! from the aisle, and `v` from its front into its depth. At rotation 0 those
-//! are `x` and `y`; each quarter turn counter-clockwise turns both. Only quarter
-//! turns, so every box stays aligned with the plan.
-//!
-//! # Names
-//!
-//! A template is literal text with fields in braces: `{aisle}`, `{bay}`,
-//! `{level}` and `{position}`. A numeric field may be zero-padded (`{bay:02}`)
-//! or lettered (`{level:A}`, where 1 is `A` and 27 is `AA`), because bin codes
-//! in the wild do both. `A-{bay:02}-{level}` names bay 3, level 1 `A-03-1`.
+//! A cell is exact: bay 3 is between bays 2 and 4 because the labels say so. A
+//! drawn position is an estimate, and it is only ever stored relative to its
+//! parent. [`compose`] turns a chain of those into a position on the site when
+//! somebody reads it, so there is one place the arithmetic happens and no copy
+//! of it to drift.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::Serialize;
 
-use crate::bins;
+// ---------------------------------------------------------------------------
+// Cells and grids
+// ---------------------------------------------------------------------------
 
-/// One rack, as its row says. The same fields as the `rack` table.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Rack {
-    pub code: String,
-    pub aisle: String,
-    pub x_mm: i32,
-    pub y_mm: i32,
-    pub rotation: i16,
-    pub depth_mm: i32,
-    pub height_mm: i32,
-    pub upright_mm: i32,
+/// A cell of a place's grid, each coordinate counted from 1.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+pub struct GridCell {
+    pub bay: i32,
+    pub level: i32,
+    pub row: i32,
+    pub position: i32,
+}
+
+/// A place's grid and how its labels are numbered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Grid {
+    pub bays: i32,
+    pub levels: i32,
+    pub rows: i32,
+    /// One count per level. Empty means one position everywhere.
+    pub positions: Vec<i32>,
     pub first_bay: i32,
     pub bay_step: i32,
-    pub bay_widths_mm: Vec<i32>,
     pub first_level: i32,
-    pub level_z_mm: Vec<i32>,
-    pub positions: Vec<i32>,
-    pub code_template: String,
 }
 
-/// An axis-aligned box on the site plan: a corner and an extent along each
-/// axis, exactly as `location` stores one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub struct Box3 {
-    pub x_mm: i32,
-    pub y_mm: i32,
-    pub z_mm: i32,
-    pub length_mm: i32,
-    pub width_mm: i32,
-    pub height_mm: i32,
-}
+impl Grid {
+    pub fn single() -> Grid {
+        Grid { bays: 1, levels: 1, rows: 1, positions: vec![], first_bay: 1, bay_step: 1, first_level: 1 }
+    }
 
-impl Box3 {
-    /// Whether two boxes share any volume. Touching faces do not: two bins side
-    /// by side in one bay meet along a face and are not in each other's way.
-    pub fn overlaps(&self, o: &Box3) -> bool {
-        self.x_mm < o.x_mm + o.length_mm
-            && o.x_mm < self.x_mm + self.length_mm
-            && self.y_mm < o.y_mm + o.width_mm
-            && o.y_mm < self.y_mm + self.width_mm
-            && self.z_mm < o.z_mm + o.height_mm
-            && o.z_mm < self.z_mm + self.height_mm
+    /// How many bins share a bay at this level (counted from 1).
+    pub fn positions_at(&self, level: i32) -> i32 {
+        self.positions.get((level - 1) as usize).copied().unwrap_or(1)
+    }
+
+    pub fn contains(&self, c: GridCell) -> bool {
+        c.bay >= 1
+            && c.bay <= self.bays
+            && c.level >= 1
+            && c.level <= self.levels
+            && c.row >= 1
+            && c.row <= self.rows
+            && c.position >= 1
+            && c.position <= self.positions_at(c.level)
+    }
+
+    /// Every cell, bay by bay, then level by level up, then row by row back,
+    /// then position by position along the bay.
+    pub fn cells(&self) -> Vec<GridCell> {
+        let mut out = vec![];
+        for bay in 1..=self.bays {
+            for level in 1..=self.levels {
+                for row in 1..=self.rows {
+                    for position in 1..=self.positions_at(level) {
+                        out.push(GridCell { bay, level, row, position });
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// The number on the bay's label.
+    pub fn bay_number(&self, bay: i32) -> i32 {
+        self.first_bay + (bay - 1) * self.bay_step
+    }
+
+    pub fn level_number(&self, level: i32) -> i32 {
+        self.first_level + level - 1
+    }
+
+    /// Everything wrong with this grid, one sentence each.
+    pub fn problems(&self) -> Vec<String> {
+        let mut p = vec![];
+        if self.bays < 1 || self.levels < 1 || self.rows < 1 {
+            p.push("a grid needs at least one bay, one level and one row".into());
+        }
+        if !self.positions.is_empty() && self.positions.len() != self.levels as usize {
+            p.push(format!(
+                "{} position counts for {} levels",
+                self.positions.len(),
+                self.levels
+            ));
+        }
+        if self.positions.iter().any(|n| *n < 1) {
+            p.push("a level with no positions".into());
+        }
+        if self.bay_step == 0 {
+            p.push("every bay would have the same number (a step of 0)".into());
+        }
+        if self.first_bay < 0 || self.bay_number(self.bays.max(1)) < 0 {
+            p.push("a bay numbered below zero".into());
+        }
+        if self.first_level < 0 {
+            p.push("a level numbered below zero".into());
+        }
+        p
     }
 }
 
-/// One slot of one rack: what it is called and where it is.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Slot {
-    pub code: String,
-    pub bay: i32,
-    pub level: i32,
-    pub position: i32,
-    pub r#box: Box3,
-}
-
 // ---------------------------------------------------------------------------
-// Templates
+// Naming patterns
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Field {
-    Aisle,
+pub enum Field {
     Bay,
     Level,
+    Row,
     Position,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Style {
+pub enum Style {
     Plain,
     Padded(usize),
     Letters,
@@ -113,12 +148,13 @@ enum Piece {
     Field(Field, Style),
 }
 
-/// A parsed `code_template`.
+/// A parsed `bin_pattern`: literal text with fields in braces. `C-{bay:02}-{level}`
+/// names bay 7, level 3 `C-07-3`; `{level:A}` letters it, 1 being `A`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Template(Vec<Piece>);
+pub struct Pattern(Vec<Piece>);
 
-impl Template {
-    pub fn parse(s: &str) -> Result<Template, String> {
+impl Pattern {
+    pub fn parse(s: &str) -> Result<Pattern, String> {
         let mut pieces = vec![];
         let mut text = String::new();
         let mut chars = s.chars();
@@ -143,24 +179,19 @@ impl Template {
                         None => (inner.trim(), None),
                     };
                     let field = match name {
-                        "aisle" => Field::Aisle,
                         "bay" => Field::Bay,
                         "level" => Field::Level,
+                        "row" => Field::Row,
                         "position" => Field::Position,
                         other => {
                             return Err(format!(
-                                "`{s}` names a field `{other}`; a template knows aisle, bay, \
-                                 level and position"
+                                "`{s}` names a field `{other}`; a pattern knows bay, level, row \
+                                 and position"
                             ))
                         }
                     };
                     let style = match spec {
                         None => Style::Plain,
-                        Some(_) if field == Field::Aisle => {
-                            return Err(format!(
-                                "`{s}` formats the aisle, which is text and is written as it is"
-                            ))
-                        }
                         Some("A") => Style::Letters,
                         Some(sp)
                             if sp.len() >= 2
@@ -171,8 +202,8 @@ impl Template {
                         }
                         Some(sp) => {
                             return Err(format!(
-                                "`{s}` formats a field as `{sp}`; say `02` to pad to two \
-                                 digits or `A` for letters"
+                                "`{s}` formats a field as `{sp}`; say `02` to pad to two digits \
+                                 or `A` for letters"
                             ))
                         }
                     };
@@ -185,48 +216,85 @@ impl Template {
         if !text.is_empty() {
             pieces.push(Piece::Text(text));
         }
-        let t = Template(pieces);
-        for (f, name) in [(Field::Bay, "bay"), (Field::Level, "level")] {
-            if !t.has(f) {
-                return Err(format!(
-                    "`{s}` has no {{{name}}}, so two slots of one rack would share a code"
-                ));
-            }
+        if !pieces.iter().any(|p| matches!(p, Piece::Field(..))) {
+            return Err(format!("`{s}` has no fields, so every cell would have the same name"));
         }
-        Ok(t)
+        Ok(Pattern(pieces))
     }
 
-    fn has(&self, f: Field) -> bool {
+    pub fn has(&self, f: Field) -> bool {
         self.0.iter().any(|p| matches!(p, Piece::Field(g, _) if *g == f))
     }
 
-    pub fn render(&self, aisle: &str, bay: i32, level: i32, position: i32) -> Result<String, String> {
+    pub fn style(&self, f: Field) -> Option<Style> {
+        self.0.iter().find_map(|p| match p {
+            Piece::Field(g, s) if *g == f => Some(*s),
+            _ => None,
+        })
+    }
+
+    /// Why this pattern cannot name every cell of this grid apart, if it
+    /// cannot: a field is missing for an axis with more than one cell.
+    pub fn gap(&self, grid: &Grid) -> Option<String> {
+        let needs = [
+            (grid.bays > 1, Field::Bay, "bay"),
+            (grid.levels > 1, Field::Level, "level"),
+            (grid.rows > 1, Field::Row, "row"),
+            (grid.positions.iter().any(|n| *n > 1), Field::Position, "position"),
+        ];
+        needs
+            .iter()
+            .find(|(needed, f, _)| *needed && !self.has(*f))
+            .map(|(_, _, name)| format!("it has no {{{name}}}, so two cells would share a name"))
+    }
+
+    pub fn render(&self, grid: &Grid, c: GridCell) -> Result<String, String> {
         let mut out = String::new();
         for p in &self.0 {
             match p {
                 Piece::Text(t) => out.push_str(t),
-                Piece::Field(Field::Aisle, _) => out.push_str(aisle),
                 Piece::Field(f, style) => {
                     let n = match f {
-                        Field::Bay => bay,
-                        Field::Level => level,
-                        Field::Position => position,
-                        Field::Aisle => unreachable!(),
+                        Field::Bay => grid.bay_number(c.bay),
+                        Field::Level => grid.level_number(c.level),
+                        Field::Row => c.row,
+                        Field::Position => c.position,
                     };
-                    match style {
-                        Style::Plain => out.push_str(&n.to_string()),
-                        Style::Padded(w) => out.push_str(&format!("{n:0w$}", w = *w)),
-                        Style::Letters => out.push_str(&letters(n)?),
-                    }
+                    out.push_str(&format_number(n, *style)?);
                 }
             }
         }
         Ok(out)
     }
+
+    /// Every cell and its bin's name, refusing a pattern that cannot tell two
+    /// cells apart.
+    pub fn names(&self, grid: &Grid) -> Result<Vec<(GridCell, String)>, String> {
+        if let Some(g) = self.gap(grid) {
+            return Err(g);
+        }
+        let mut seen = HashSet::new();
+        let mut out = vec![];
+        for c in grid.cells() {
+            let name = self.render(grid, c)?;
+            if !seen.insert(name.clone()) {
+                return Err(format!("it names two cells `{name}`"));
+            }
+            out.push((c, name));
+        }
+        Ok(out)
+    }
 }
 
-/// 1 is `A`, 26 is `Z`, 27 is `AA`: the spreadsheet column numbering, which is
-/// what a lettered level runs out into if a rack is ever that tall.
+pub fn format_number(n: i32, style: Style) -> Result<String, String> {
+    match style {
+        Style::Plain => Ok(n.to_string()),
+        Style::Padded(w) => Ok(format!("{n:0w$}")),
+        Style::Letters => letters(n),
+    }
+}
+
+/// 1 is `A`, 26 is `Z`, 27 is `AA`.
 fn letters(n: i32) -> Result<String, String> {
     if n < 1 {
         return Err(format!("{n} has no letter: lettering starts at 1, which is A"));
@@ -241,234 +309,130 @@ fn letters(n: i32) -> Result<String, String> {
     Ok(s.into_iter().rev().collect())
 }
 
-// ---------------------------------------------------------------------------
-// Expansion
-// ---------------------------------------------------------------------------
-
-impl Rack {
-    /// How long the rack is along its front: every bay and every upright,
-    /// including one at each end.
-    pub fn length_mm(&self) -> i32 {
-        self.upright_mm + self.bay_widths_mm.iter().map(|w| w + self.upright_mm).sum::<i32>()
+fn from_letters(s: &str) -> Option<i32> {
+    if s.is_empty() || !s.chars().all(|c| c.is_ascii_uppercase()) {
+        return None;
     }
-
-    /// The whole rack's box, for drawing it and for telling two racks apart.
-    pub fn footprint(&self) -> Box3 {
-        self.place(0, self.length_mm(), 0, self.height_mm)
-    }
-
-    /// A box in the rack's frame (`u0..u1` along the front, the full depth,
-    /// `z0..z1` up) put onto the site plan.
-    fn place(&self, u0: i32, u1: i32, z0: i32, z1: i32) -> Box3 {
-        let (ux, uy, vx, vy) = match self.rotation {
-            0 => (1, 0, 0, 1),
-            90 => (0, 1, -1, 0),
-            180 => (-1, 0, 0, -1),
-            _ => (0, -1, 1, 0),
-        };
-        let corner = |u: i32, v: i32| (self.x_mm + u * ux + v * vx, self.y_mm + u * uy + v * vy);
-        let (ax, ay) = corner(u0, 0);
-        let (bx, by) = corner(u1, self.depth_mm);
-        Box3 {
-            x_mm: ax.min(bx),
-            y_mm: ay.min(by),
-            z_mm: z0,
-            length_mm: (ax - bx).abs(),
-            width_mm: (ay - by).abs(),
-            height_mm: z1 - z0,
-        }
-    }
-
-    /// Everything wrong with this row, as one sentence each. Empty when it can
-    /// be expanded.
-    ///
-    /// The table's CHECKs hold most of this too; saying it here first turns a
-    /// constraint name into a sentence about the rack, and holds what a CHECK
-    /// cannot: that the levels ascend, and that the codes read back as this
-    /// rack's aisle.
-    pub fn problems(&self) -> Vec<String> {
-        let mut p = vec![];
-        let r = &self.code;
-        if self.code.trim().is_empty() {
-            p.push("a rack with no code cannot be told from the next one".into());
-        }
-        if self.aisle.trim().is_empty() {
-            p.push(format!("rack {r} names no aisle"));
-        }
-        if ![0, 90, 180, 270].contains(&self.rotation) {
-            p.push(format!(
-                "rack {r} is turned {} degrees; racks turn in quarter turns (0, 90, 180, 270)",
-                self.rotation
-            ));
-        }
-        if self.depth_mm <= 0 || self.height_mm <= 0 {
-            p.push(format!("rack {r} needs a depth and a height above zero"));
-        }
-        if self.upright_mm < 0 {
-            p.push(format!("rack {r} has an upright narrower than nothing"));
-        }
-        if self.bay_widths_mm.is_empty() {
-            p.push(format!("rack {r} has no bays"));
-        }
-        if self.bay_widths_mm.iter().any(|w| *w <= 0) {
-            p.push(format!("rack {r} has a bay no wider than zero"));
-        }
-        if self.bay_step == 0 {
-            p.push(format!("rack {r} numbers every bay the same (bay_step 0)"));
-        }
-        let last_bay = self.first_bay + (self.bay_widths_mm.len() as i32 - 1) * self.bay_step;
-        if self.first_bay < 0 || last_bay < 0 {
-            p.push(format!("rack {r} numbers a bay below zero"));
-        }
-        if self.first_level < 0 {
-            p.push(format!("rack {r} numbers a level below zero"));
-        }
-        if self.level_z_mm.is_empty() {
-            p.push(format!("rack {r} has no levels"));
-        } else {
-            if self.level_z_mm[0] < 0 {
-                p.push(format!("rack {r} has a level below the floor"));
-            }
-            if self.level_z_mm.windows(2).any(|w| w[1] <= w[0]) {
-                p.push(format!(
-                    "rack {r}'s level heights do not rise ({:?}); give them lowest first",
-                    self.level_z_mm
-                ));
-            }
-            if *self.level_z_mm.last().unwrap() >= self.height_mm {
-                p.push(format!("rack {r}'s top level starts at or above its height"));
-            }
-        }
-        if self.positions.len() != self.level_z_mm.len() {
-            p.push(format!(
-                "rack {r} gives {} position counts for {} levels",
-                self.positions.len(),
-                self.level_z_mm.len()
-            ));
-        }
-        if self.positions.iter().any(|n| *n <= 0) {
-            p.push(format!("rack {r} has a level with no positions"));
-        }
-        match Template::parse(&self.code_template) {
-            Err(e) => p.push(format!("rack {r}: {e}")),
-            Ok(t) => {
-                if self.positions.iter().any(|n| *n > 1) && !t.has(Field::Position) {
-                    p.push(format!(
-                        "rack {r} puts more than one bin in a bay on some level, and \
-                         `{}` has no {{position}} to tell them apart",
-                        self.code_template
-                    ));
-                }
-            }
-        }
-        p
-    }
-
-    /// Every slot, bay by bay along the front, then level by level up, then
-    /// position by position along the bay.
-    ///
-    /// Refuses a rack with [`Rack::problems`], and one whose codes do not read
-    /// back as its own aisle: J77 finds a bin a rack should place by the aisle
-    /// its code decomposes to, so a rack whose codes decompose elsewhere would
-    /// place bins the check then looks for somewhere else.
-    pub fn expand(&self) -> Result<Vec<Slot>, String> {
-        let problems = self.problems();
-        if !problems.is_empty() {
-            return Err(problems.join("; "));
-        }
-        let t = Template::parse(&self.code_template)?;
-        let mut slots = vec![];
-        let mut u = self.upright_mm;
-        for (i, w) in self.bay_widths_mm.iter().enumerate() {
-            let bay = self.first_bay + i as i32 * self.bay_step;
-            for (j, z0) in self.level_z_mm.iter().enumerate() {
-                let z1 = self.level_z_mm.get(j + 1).copied().unwrap_or(self.height_mm);
-                let level = self.first_level + j as i32;
-                let n = self.positions[j];
-                for k in 0..n {
-                    // Split with the remainder spread, so the positions tile the
-                    // bay exactly whatever it divides into.
-                    let a = u + w * k / n;
-                    let b = u + w * (k + 1) / n;
-                    let position = k + 1;
-                    let code = t.render(&self.aisle, bay, level, position)?;
-                    let parsed = bins::decompose(&code);
-                    if parsed.aisle.as_deref() != Some(self.aisle.as_str()) {
-                        return Err(format!(
-                            "rack {} names a bin `{code}`, which reads as aisle {}, not {}",
-                            self.code,
-                            parsed.aisle.as_deref().unwrap_or("(none)"),
-                            self.aisle
-                        ));
-                    }
-                    slots.push(Slot { code, bay, level, position, r#box: self.place(a, b, *z0, z1) });
-                }
-            }
-            u += w + self.upright_mm;
-        }
-        Ok(slots)
-    }
+    Some(s.chars().fold(0, |n, c| n * 26 + (c as i32 - 'A' as i32 + 1)))
 }
 
-/// Expand every rack of one site together, refusing a code two slots share.
-///
-/// Across racks as well as within one: two racks naming one bin would each
-/// place it, and whichever was written last would win without anybody deciding.
-pub fn expand_site(racks: &[Rack]) -> Result<Vec<(usize, Slot)>, String> {
-    let mut seen: HashMap<String, usize> = HashMap::new();
-    let mut out = vec![];
-    for (i, r) in racks.iter().enumerate() {
-        for s in r.expand()? {
-            if let Some(j) = seen.insert(s.code.clone(), i) {
-                return Err(if i == j {
-                    format!("rack {} names `{}` twice", r.code, s.code)
-                } else {
-                    format!("racks {} and {} both name `{}`", racks[j].code, r.code, s.code)
-                });
-            }
-            out.push((i, s));
-        }
-    }
-    Ok(out)
+/// The labels along a place's face, as its racks would print them: the bay
+/// numbers across, the level numbers up.
+pub fn labels(grid: &Grid, pattern: Option<&Pattern>) -> (Vec<String>, Vec<String>) {
+    let style = |f| pattern.and_then(|p| p.style(f)).unwrap_or(Style::Plain);
+    let label = |n: i32, s: Style| format_number(n, s).unwrap_or_else(|_| n.to_string());
+    let bays = (1..=grid.bays).map(|b| label(grid.bay_number(b), style(Field::Bay))).collect();
+    let levels = (1..=grid.levels)
+        .map(|l| label(grid.level_number(l), style(Field::Level)))
+        .collect();
+    (bays, levels)
 }
 
 // ---------------------------------------------------------------------------
-// Floor outlines
+// Positions on the site
 // ---------------------------------------------------------------------------
 
-/// Read `x,y x,y ...` into points.
-pub fn parse_outline(s: &str) -> Result<Vec<(i32, i32)>, String> {
-    let mut pts = vec![];
-    for pair in s.split(|c: char| c.is_whitespace() || c == ';').filter(|p| !p.is_empty()) {
-        let Some((x, y)) = pair.split_once(',') else {
-            return Err(format!("`{pair}` is not a point; write each as x,y"));
-        };
-        let n = |v: &str| v.trim().parse::<i32>().map_err(|_| format!("`{pair}` is not a point in millimetres"));
-        pts.push((n(x)?, n(y)?));
-    }
-    Ok(pts)
+/// Where a place's corner is on the site, and which way it faces: its own box
+/// composed with every parent's.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct Frame {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    /// Degrees counter-clockwise, 0 to 360.
+    pub turn: f64,
 }
 
-/// What is wrong with an outline, or nothing.
-///
-/// An outline is a simple polygon: at least three corners, some area, and no
-/// edge crossing or touching another except its neighbours at their shared
-/// corner. One that crosses itself has no inside anybody agrees on, and "is
-/// this spot in the staging lane" is the question it exists to answer.
-pub fn outline_problem(pts: &[(i32, i32)]) -> Option<String> {
-    let mut pts = pts.to_vec();
+impl Frame {
+    pub const SITE: Frame = Frame { x: 0.0, y: 0.0, z: 0.0, turn: 0.0 };
+
+    /// A point in this frame's cells, on the site.
+    pub fn point(&self, u: f64, v: f64) -> [f64; 2] {
+        let (s, c) = self.turn.to_radians().sin_cos();
+        [self.x + u * c - v * s, self.y + u * s + v * c]
+    }
+}
+
+/// A child's frame on the site, from its parent's and its own box.
+pub fn compose(parent: &Frame, x: f64, y: f64, z: f64, turn: f64) -> Frame {
+    let [wx, wy] = parent.point(x, y);
+    Frame { x: wx, y: wy, z: parent.z + z, turn: (parent.turn + turn).rem_euclid(360.0) }
+}
+
+/// A place's footprint on the site: its outline, or its rectangle.
+pub fn footprint(frame: &Frame, length: f64, depth: f64, outline: Option<&[f64]>) -> Vec<[f64; 2]> {
+    match outline {
+        Some(o) if o.len() >= 6 => o.chunks(2).map(|p| frame.point(p[0], p[1])).collect(),
+        _ => vec![
+            frame.point(0.0, 0.0),
+            frame.point(length, 0.0),
+            frame.point(length, depth),
+            frame.point(0.0, depth),
+        ],
+    }
+}
+
+/// Frames for every place, given each one's parent and box, walking from the
+/// site down. A place whose chain of parents loops (J78) gets no frame rather
+/// than an endless walk.
+pub fn frames<K: Copy + Eq + std::hash::Hash>(
+    places: &HashMap<K, (Option<K>, f64, f64, f64, f64)>,
+) -> HashMap<K, Frame> {
+    let mut out: HashMap<K, Frame> = HashMap::new();
+    for &start in places.keys() {
+        let mut chain = vec![];
+        let mut seen = HashSet::new();
+        let mut at = Some(start);
+        let mut base = Frame::SITE;
+        let mut looped = false;
+        while let Some(k) = at {
+            if let Some(f) = out.get(&k) {
+                base = *f;
+                break;
+            }
+            if !seen.insert(k) {
+                looped = true;
+                break;
+            }
+            chain.push(k);
+            at = places.get(&k).and_then(|p| p.0);
+        }
+        if looped {
+            continue;
+        }
+        for k in chain.into_iter().rev() {
+            let (_, x, y, z, turn) = places[&k];
+            base = compose(&base, x, y, z, turn);
+            out.insert(k, base);
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Outlines
+// ---------------------------------------------------------------------------
+
+/// What is wrong with an outline, or nothing. At least three corners, no edge
+/// crossing or touching another except its neighbours at their shared corner,
+/// and some area.
+pub fn outline_problem(flat: &[f64]) -> Option<String> {
+    if flat.len() % 2 != 0 {
+        return Some("an outline is pairs of numbers".into());
+    }
+    let mut pts: Vec<(f64, f64)> = flat.chunks(2).map(|p| (p[0], p[1])).collect();
     if pts.len() > 1 && pts.first() == pts.last() {
         pts.pop();
     }
     if pts.len() < 3 {
         return Some("an outline needs at least three corners".into());
     }
+    if pts.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+        return Some("an outline's corners must be numbers".into());
+    }
     let n = pts.len();
     for i in 0..n {
         for j in i + 1..n {
-            // Neighbouring edges share a corner and nothing else is asked of them,
-            // beyond not folding back over each other, which the area and the
-            // crossing test between the others catch.
             if j == i + 1 || (i == 0 && j == n - 1) {
                 continue;
             }
@@ -482,34 +446,38 @@ pub fn outline_problem(pts: &[(i32, i32)]) -> Option<String> {
             }
         }
     }
-    // After the crossings: a bowtie's two halves cancel, and "its edges cross"
-    // says more than "it has no area".
-    let area2: i64 = (0..n)
+    // After the crossings: a bowtie's halves cancel, and "its edges cross" says
+    // more than "it has no area".
+    let area2: f64 = (0..n)
         .map(|i| {
             let (a, b) = (pts[i], pts[(i + 1) % n]);
-            a.0 as i64 * b.1 as i64 - b.0 as i64 * a.1 as i64
+            a.0 * b.1 - b.0 * a.1
         })
         .sum();
-    if area2 == 0 {
+    if area2.abs() < 1e-9 {
         return Some("the outline encloses no area".into());
     }
     None
 }
 
-fn orient(a: (i32, i32), b: (i32, i32), c: (i32, i32)) -> i64 {
-    let v = (b.0 as i64 - a.0 as i64) * (c.1 as i64 - a.1 as i64)
-        - (b.1 as i64 - a.1 as i64) * (c.0 as i64 - a.0 as i64);
-    v.signum()
+fn orient(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> i8 {
+    let v = (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0);
+    if v.abs() < 1e-12 {
+        0
+    } else if v > 0.0 {
+        1
+    } else {
+        -1
+    }
 }
 
-fn on_segment(a: (i32, i32), b: (i32, i32), p: (i32, i32)) -> bool {
+fn on_segment(a: (f64, f64), b: (f64, f64), p: (f64, f64)) -> bool {
     p.0 >= a.0.min(b.0) && p.0 <= a.0.max(b.0) && p.1 >= a.1.min(b.1) && p.1 <= a.1.max(b.1)
 }
 
-/// Whether two segments share any point, touching included.
-fn segments_meet(a: (i32, i32), b: (i32, i32), c: (i32, i32), d: (i32, i32)) -> bool {
+fn segments_meet(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
     let (o1, o2, o3, o4) = (orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b));
-    if o1 != o2 && o3 != o4 && o1 * o2 <= 0 && o3 * o4 <= 0 {
+    if o1 != o2 && o3 != o4 {
         return true;
     }
     (o1 == 0 && on_segment(a, b, c))
@@ -518,170 +486,363 @@ fn segments_meet(a: (i32, i32), b: (i32, i32), c: (i32, i32), d: (i32, i32)) -> 
         || (o4 == 0 && on_segment(c, d, b))
 }
 
-/// A list of millimetres as a person writes one: `1200 1200 900`, or
-/// `10x2700 1800` for ten bays of 2700 and one of 1800. Commas and semicolons
-/// separate as well as spaces do.
-pub fn parse_list(s: &str) -> Result<Vec<i32>, String> {
-    let mut out = vec![];
-    for tok in s
-        .split(|c: char| c.is_whitespace() || c == ',' || c == ';')
-        .filter(|t| !t.is_empty())
-    {
-        match tok.split_once(['x', 'X', '*']) {
-            Some((n, v)) => {
-                let n: usize = n.parse().map_err(|_| format!("`{tok}` is not a count times a value"))?;
-                let v: i32 = v.parse().map_err(|_| format!("`{tok}` is not a count times a value"))?;
-                if n == 0 || n > 1000 {
-                    return Err(format!("`{tok}` repeats {n} times; say between 1 and 1000"));
-                }
-                out.extend(std::iter::repeat_n(v, n));
-            }
-            None => out.push(tok.parse().map_err(|_| format!("`{tok}` is not a number"))?),
+// ---------------------------------------------------------------------------
+// A first draft, from the bin list
+// ---------------------------------------------------------------------------
+
+/// One place the draft proposes, and the bins it takes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Drafted {
+    pub name: String,
+    pub solid: bool,
+    pub pattern: String,
+    pub grid: Grid,
+    pub bins: Vec<(String, GridCell)>,
+}
+
+/// What a bin list suggests, before anything is drawn.
+#[derive(Debug, Default, PartialEq)]
+pub struct Draft {
+    pub places: Vec<Drafted>,
+    /// Codes that follow no pattern the draft could see: `3PL`, `ASSEMBLY-BIN`.
+    /// They wait to be placed by hand.
+    pub unmatched: Vec<String>,
+}
+
+/// A code split at its separators: `C-07-3` is `C`, `07`, `3` with `-`, `-`.
+fn split(code: &str) -> (Vec<&str>, Vec<char>) {
+    let mut parts = vec![];
+    let mut seps = vec![];
+    let mut start = 0;
+    for (i, ch) in code.char_indices() {
+        if matches!(ch, '-' | '.' | '_' | '/' | ' ') {
+            parts.push(&code[start..i]);
+            seps.push(ch);
+            start = i + ch.len_utf8();
         }
     }
-    Ok(out)
+    parts.push(&code[start..]);
+    (parts, seps)
+}
+
+/// A numbered token and how it is written.
+fn read_number(t: &str, letters_ok: bool) -> Option<(i32, Style)> {
+    if !t.is_empty() && t.chars().all(|c| c.is_ascii_digit()) && t.len() <= 6 {
+        let n: i32 = t.parse().ok()?;
+        let style = if t.len() > 1 && t.starts_with('0') { Style::Padded(t.len()) } else { Style::Plain };
+        return Some((n, style));
+    }
+    if letters_ok && t.len() <= 2 {
+        return from_letters(t).map(|n| (n, Style::Letters));
+    }
+    None
+}
+
+/// The style most of a group's tokens are written in. A padded width wins over
+/// plain when any token needs it: `07` and `10` are both `{bay:02}`.
+fn common_style(styles: &[Style]) -> Style {
+    if styles.contains(&Style::Letters) {
+        return Style::Letters;
+    }
+    styles
+        .iter()
+        .filter_map(|s| match s {
+            Style::Padded(w) => Some(*w),
+            _ => None,
+        })
+        .max()
+        .map(Style::Padded)
+        .unwrap_or(Style::Plain)
+}
+
+/// Propose one place per family of codes.
+///
+/// A family is codes that share their first part and their shape: `C-07-3` and
+/// `C-12-1` are one, `DOCK-1` to `DOCK-6` another. The first part names it and
+/// the parts after it are bay, level and position, in that order, because that
+/// is how bin codes are written wherever this has been seen. The grid spans
+/// the lowest to the highest number found, stepping by two when every bay is
+/// odd or every bay is even.
+///
+/// **Every bin the draft places, its pattern names back exactly.** A code that
+/// does not round-trip is left unmatched rather than put in a cell it only
+/// resembles.
+pub fn draft(bins: &[(String, bool)]) -> Draft {
+    // (first part, separators, how many parts) -> codes, and whether most are
+    // racking (solid).
+    let mut families: BTreeMap<(String, String, usize), Vec<(&str, bool)>> = BTreeMap::new();
+    let mut out = Draft::default();
+    for (code, solid) in bins {
+        let (parts, seps) = split(code);
+        let head = parts[0];
+        let numbered = parts.len() >= 2
+            && parts.len() <= 4
+            && !head.is_empty()
+            && read_number(parts[1], false).is_some()
+            && parts[2..].iter().all(|p| read_number(p, true).is_some());
+        if !numbered {
+            out.unmatched.push(code.clone());
+            continue;
+        }
+        families
+            .entry((head.to_string(), seps.iter().collect(), parts.len()))
+            .or_default()
+            .push((code.as_str(), *solid));
+    }
+
+    let mut taken: HashMap<String, usize> = HashMap::new();
+    for ((head, seps, n), codes) in families {
+        let sep: Vec<char> = seps.chars().collect();
+        let read: Vec<(&str, Vec<(i32, Style)>)> = codes
+            .iter()
+            .map(|(c, _)| {
+                let (parts, _) = split(c);
+                (*c, parts[1..].iter().map(|p| read_number(p, true).unwrap()).collect())
+            })
+            .collect();
+        let axis = |i: usize| -> (Vec<i32>, Style) {
+            let nums: Vec<i32> = read.iter().filter_map(|(_, v)| v.get(i).map(|x| x.0)).collect();
+            let styles: Vec<Style> = read.iter().filter_map(|(_, v)| v.get(i).map(|x| x.1)).collect();
+            (nums, common_style(&styles))
+        };
+
+        let (bays, bay_style) = axis(0);
+        let (min_b, max_b) = (*bays.iter().min().unwrap(), *bays.iter().max().unwrap());
+        let same_parity = bays.iter().all(|b| (b - min_b) % 2 == 0);
+        let bay_step = if same_parity && max_b > min_b { 2 } else { 1 };
+
+        let (levels, level_style) = if n >= 3 { axis(1) } else { (vec![1], Style::Plain) };
+        let (min_l, max_l) = (*levels.iter().min().unwrap(), *levels.iter().max().unwrap());
+
+        let mut grid = Grid {
+            bays: (max_b - min_b) / bay_step + 1,
+            levels: max_l - min_l + 1,
+            rows: 1,
+            positions: vec![],
+            first_bay: min_b,
+            bay_step,
+            first_level: min_l,
+        };
+        let mut position_style = Style::Plain;
+        if n == 4 {
+            let (_, style) = axis(2);
+            position_style = style;
+            let mut most = vec![1; grid.levels as usize];
+            for (_, v) in &read {
+                let l = (v[1].0 - min_l) as usize;
+                most[l] = most[l].max(v[2].0);
+            }
+            if most.iter().any(|m| *m > 1) {
+                grid.positions = most;
+            }
+        }
+
+        let mut text = head.clone();
+        let fields = [
+            (Field::Bay, bay_style),
+            (Field::Level, level_style),
+            (Field::Position, position_style),
+        ];
+        for (i, (field, style)) in fields.iter().take(n - 1).enumerate() {
+            text.push(sep[i]);
+            let name = match field {
+                Field::Bay => "bay",
+                Field::Level => "level",
+                _ => "position",
+            };
+            let spec = match style {
+                Style::Plain => String::new(),
+                Style::Padded(w) => format!(":0{w}"),
+                Style::Letters => ":A".into(),
+            };
+            text.push_str(&format!("{{{name}{spec}}}"));
+        }
+        // Braces in a code would be read as fields; such a code is left alone.
+        let Ok(pattern) = Pattern::parse(&text) else {
+            out.unmatched.extend(codes.iter().map(|(c, _)| c.to_string()));
+            continue;
+        };
+        // A family spanning bay 1 to bay 90,000 is two codes that look alike,
+        // not a rack.
+        let cells: i64 = grid.bays as i64
+            * grid.rows as i64
+            * (1..=grid.levels).map(|l| grid.positions_at(l) as i64).sum::<i64>();
+        if cells > MOST_CELLS {
+            out.unmatched.extend(codes.iter().map(|(c, _)| c.to_string()));
+            continue;
+        }
+        let by_name: HashMap<String, GridCell> = match pattern.names(&grid) {
+            Ok(v) => v.into_iter().map(|(c, s)| (s, c)).collect(),
+            Err(_) => {
+                out.unmatched.extend(codes.iter().map(|(c, _)| c.to_string()));
+                continue;
+            }
+        };
+        let mut placed = vec![];
+        for (code, _) in &codes {
+            match by_name.get(*code) {
+                Some(cell) => placed.push((code.to_string(), *cell)),
+                None => out.unmatched.push(code.to_string()),
+            }
+        }
+        if placed.is_empty() {
+            continue;
+        }
+        placed.sort_by_key(|(_, c)| *c);
+        let solid = codes.iter().filter(|(_, s)| *s).count() * 2 >= codes.len();
+        let base = if solid { format!("Rack {head}") } else { head.clone() };
+        let name = distinct(&mut taken, &base);
+        out.places.push(Drafted { name, solid, pattern: text, grid, bins: placed });
+    }
+    out.unmatched.sort();
+    out
+}
+
+/// The most cells the draft will give one place.
+const MOST_CELLS: i64 = 20_000;
+
+/// `Rack C`, then `Rack C (2)` for a second family with the same first part.
+pub fn distinct(taken: &mut HashMap<String, usize>, base: &str) -> String {
+    let n = taken.entry(base.to_string()).or_insert(0);
+    *n += 1;
+    if *n == 1 {
+        base.to_string()
+    } else {
+        format!("{base} ({n})")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn rack() -> Rack {
-        Rack {
-            code: "A-L".into(),
-            aisle: "A".into(),
-            x_mm: 1000,
-            y_mm: 2000,
-            rotation: 0,
-            depth_mm: 1100,
-            height_mm: 6000,
-            upright_mm: 100,
-            first_bay: 1,
-            bay_step: 2,
-            bay_widths_mm: vec![2700, 2700, 1800],
-            first_level: 1,
-            level_z_mm: vec![0, 1500, 3000],
-            positions: vec![3, 1, 1],
-            code_template: "{aisle}-{bay:02}-{level}-{position}".into(),
-        }
+    fn grid(bays: i32, levels: i32) -> Grid {
+        Grid { bays, levels, ..Grid::single() }
     }
 
     #[test]
-    fn a_template_says_what_a_slot_is_called() {
-        let t = Template::parse("{aisle}.{bay:02}.{level:A}").unwrap();
-        assert_eq!(t.render("K", 7, 2, 1).unwrap(), "K.07.B");
-        assert_eq!(t.render("K", 123, 28, 1).unwrap(), "K.123.AB");
-        assert!(Template::parse("{aisle}-{bay}").unwrap_err().contains("{level}"));
-        assert!(Template::parse("{aisle}-{bay}-{lvl}").is_err());
-        assert!(Template::parse("{aisle:02}-{bay}-{level}").is_err());
-        assert!(Template::parse("{aisle}-{bay}-{level").is_err());
-        assert!(Template::parse("{bay:2}-{level}").is_err(), "pad with a leading zero");
+    fn a_pattern_names_every_cell_and_refuses_to_name_two_alike() {
+        let p = Pattern::parse("C-{bay:02}-{level:A}").unwrap();
+        let g = Grid { first_bay: 1, bay_step: 2, ..grid(3, 2) };
+        let names: Vec<String> = p.names(&g).unwrap().into_iter().map(|(_, n)| n).collect();
+        assert_eq!(names, ["C-01-A", "C-01-B", "C-03-A", "C-03-B", "C-05-A", "C-05-B"]);
+        assert!(Pattern::parse("C-{bay}").unwrap().names(&grid(3, 2)).unwrap_err().contains("{level}"));
+        assert!(Pattern::parse("C-{shelf}").is_err());
+        assert!(Pattern::parse("C-01").is_err(), "no fields names every cell alike");
+        assert!(Pattern::parse("C-{bay:2}").is_err(), "pad with a leading zero");
+        assert!(Pattern::parse("DOCK-{bay}").unwrap().names(&grid(6, 1)).is_ok(), "one level needs no {{level}}");
     }
 
     #[test]
-    fn slots_run_bay_by_bay_and_tile_each_bay_exactly() {
-        let slots = rack().expand().unwrap();
-        // Three bays of (3 + 1 + 1) slots.
-        assert_eq!(slots.len(), 15);
-        let codes: Vec<&str> = slots.iter().take(6).map(|s| s.code.as_str()).collect();
-        assert_eq!(codes, ["A-01-1-1", "A-01-1-2", "A-01-1-3", "A-01-2-1", "A-01-3-1", "A-03-1-1"]);
-
-        // Bay 1 starts after the first upright, and its three positions meet
-        // exactly across its 2700.
-        let b1: Vec<Box3> = slots[..3].iter().map(|s| s.r#box).collect();
-        assert_eq!(b1[0].x_mm, 1100);
-        assert_eq!(b1.iter().map(|b| b.length_mm).sum::<i32>(), 2700);
-        assert_eq!(b1[0].x_mm + b1[0].length_mm, b1[1].x_mm);
-        assert_eq!(b1[1].x_mm + b1[1].length_mm, b1[2].x_mm);
-        assert!(b1.iter().all(|b| b.y_mm == 2000 && b.width_mm == 1100 && b.z_mm == 0 && b.height_mm == 1500));
-
-        // The top level reaches the rack's height; bay 5 follows bay 3's upright.
-        let top = &slots[4].r#box;
-        assert_eq!((top.z_mm, top.height_mm), (3000, 3000));
-        let b5 = slots.iter().find(|s| s.code == "A-05-1-1").unwrap();
-        assert_eq!(b5.r#box.x_mm, 1000 + 100 + 2700 + 100 + 2700 + 100);
-        assert_eq!(rack().length_mm(), 100 + 2800 + 2800 + 1900);
+    fn labels_read_as_the_rack_prints_them() {
+        let p = Pattern::parse("C-{bay:02}-{level:A}").unwrap();
+        let (bays, levels) = labels(&Grid { first_bay: 2, bay_step: 2, ..grid(3, 3) }, Some(&p));
+        assert_eq!(bays, ["02", "04", "06"]);
+        assert_eq!(levels, ["A", "B", "C"]);
+        let (bays, _) = labels(&Grid { first_bay: 5, bay_step: -1, ..grid(3, 1) }, None);
+        assert_eq!(bays, ["5", "4", "3"], "counting down");
     }
 
     #[test]
-    fn a_turned_rack_keeps_every_slot_inside_its_footprint_and_apart() {
-        for rotation in [0, 90, 180, 270] {
-            let r = Rack { rotation, ..rack() };
-            let fp = r.footprint();
-            let slots = r.expand().unwrap();
-            for s in &slots {
-                let b = s.r#box;
-                assert!(b.length_mm > 0 && b.width_mm > 0 && b.height_mm > 0);
-                assert!(
-                    b.x_mm >= fp.x_mm && b.x_mm + b.length_mm <= fp.x_mm + fp.length_mm
-                        && b.y_mm >= fp.y_mm && b.y_mm + b.width_mm <= fp.y_mm + fp.width_mm,
-                    "{rotation}: {} outside the rack",
-                    s.code
-                );
-            }
-            for (i, a) in slots.iter().enumerate() {
-                for b in &slots[i + 1..] {
-                    assert!(!a.r#box.overlaps(&b.r#box), "{rotation}: {} and {} overlap", a.code, b.code);
-                }
-            }
-        }
-        // A quarter turn about the origin: the rack now runs up the page, with
-        // its depth off to the left.
-        let fp = Rack { rotation: 90, ..rack() }.footprint();
-        assert_eq!((fp.x_mm, fp.y_mm, fp.length_mm, fp.width_mm), (1000 - 1100, 2000, 1100, rack().length_mm()));
-        let first = &Rack { rotation: 180, ..rack() }.expand().unwrap()[0];
-        assert_eq!(first.r#box.x_mm + first.r#box.length_mm, 1000 - 100, "180 runs leftwards from the origin");
+    fn a_child_moves_with_its_parent_and_turns_with_it() {
+        // A building turned a quarter; a rack 10 cells along it, 2 in.
+        let building = compose(&Frame::SITE, 100.0, 50.0, 0.0, 90.0);
+        let rack = compose(&building, 10.0, 2.0, 0.0, 0.0);
+        assert!((rack.x - 98.0).abs() < 1e-9 && (rack.y - 60.0).abs() < 1e-9, "{rack:?}");
+        assert_eq!(rack.turn, 90.0);
+        let corners = footprint(&rack, 4.0, 1.0, None);
+        assert!((corners[1][0] - 98.0).abs() < 1e-9 && (corners[1][1] - 64.0).abs() < 1e-9, "{corners:?}");
+        // A mezzanine up in the air carries its children up with it.
+        let mezz = compose(&Frame::SITE, 0.0, 0.0, 6.0, 0.0);
+        assert_eq!(compose(&mezz, 1.0, 1.0, 1.0, 0.0).z, 7.0);
     }
 
     #[test]
-    fn a_rack_that_contradicts_itself_says_how() {
-        let bad = |f: fn(&mut Rack)| {
-            let mut r = rack();
-            f(&mut r);
-            r.expand().unwrap_err()
-        };
-        assert!(bad(|r| r.rotation = 45).contains("quarter turns"));
-        assert!(bad(|r| r.level_z_mm = vec![0, 3000, 1500]).contains("do not rise"));
-        assert!(bad(|r| r.positions = vec![1, 1]).contains("3 levels"));
-        assert!(bad(|r| r.code_template = "{aisle}-{bay}-{level}".into()).contains("{position}"));
-        assert!(bad(|r| r.bay_step = 0).contains("bay_step 0"));
-        assert!(bad(|r| { r.first_bay = 3; r.bay_step = -2 }).contains("below zero"));
-        // The template spells a different aisle from the rack's own.
-        assert!(bad(|r| r.code_template = "B-{bay}-{level}-{position}".into()).contains("aisle B, not A"));
+    fn frames_are_composed_from_the_site_down_and_a_loop_has_none() {
+        let mut places = HashMap::new();
+        places.insert(1, (None, 10.0, 0.0, 0.0, 0.0));
+        places.insert(2, (Some(1), 5.0, 5.0, 0.0, 0.0));
+        places.insert(3, (Some(2), 1.0, 0.0, 0.0, 0.0));
+        places.insert(8, (Some(9), 0.0, 0.0, 0.0, 0.0));
+        places.insert(9, (Some(8), 0.0, 0.0, 0.0, 0.0));
+        let f = frames(&places);
+        assert_eq!((f[&3].x, f[&3].y), (16.0, 5.0));
+        assert!(!f.contains_key(&8) && !f.contains_key(&9));
     }
 
     #[test]
-    fn two_racks_cannot_name_one_bin() {
-        let a = rack();
-        let b = Rack { code: "A-R".into(), first_bay: 5, ..rack() };
-        let e = expand_site(&[a.clone(), b]).unwrap_err();
-        assert!(e.contains("A-L and A-R") && e.contains("A-05-1-1"), "{e}");
-        let b = Rack { code: "A-R".into(), first_bay: 2, ..rack() };
-        assert_eq!(expand_site(&[a, b]).unwrap().len(), 30);
-    }
-
-    #[test]
-    fn lists_are_written_the_way_a_survey_writes_them() {
-        assert_eq!(parse_list("10x2700 1800").unwrap().len(), 11);
-        assert_eq!(parse_list("0, 1500;3000").unwrap(), vec![0, 1500, 3000]);
-        assert!(parse_list("2700 wide").is_err());
-        assert!(parse_list("0x2700").is_err());
-    }
-
-    #[test]
-    fn an_outline_must_have_an_inside() {
-        let sq = parse_outline("0,0 1000,0 1000,500 0,500").unwrap();
-        assert_eq!(outline_problem(&sq), None);
-        let closed = parse_outline("0,0 1000,0 1000,500 0,500 0,0").unwrap();
-        assert_eq!(outline_problem(&closed), None, "repeating the first corner is fine");
-        let bowtie = parse_outline("0,0 1000,500 1000,0 0,500").unwrap();
-        assert!(outline_problem(&bowtie).unwrap().contains("meets"));
-        let flat = parse_outline("0,0 500,0 1000,0").unwrap();
-        assert!(outline_problem(&flat).unwrap().contains("no area"));
-        assert!(outline_problem(&sq[..2]).is_some());
-        // An L-shaped staging lane is not a crossing.
-        let l = parse_outline("0,0 2000,0 2000,500 500,500 500,2000 0,2000").unwrap();
+    fn an_l_shaped_outline_is_an_outline_and_a_bowtie_is_not() {
+        let l = [0.0, 0.0, 60.0, 0.0, 60.0, 20.0, 25.0, 20.0, 25.0, 40.0, 0.0, 40.0];
         assert_eq!(outline_problem(&l), None);
-        assert!(parse_outline("0,0 10 5,5").is_err());
+        let bowtie = [0.0, 0.0, 10.0, 5.0, 10.0, 0.0, 0.0, 5.0];
+        assert!(outline_problem(&bowtie).unwrap().contains("meets"));
+        assert!(outline_problem(&[0.0, 0.0, 5.0, 0.0, 10.0, 0.0]).unwrap().contains("no area"));
+        assert!(outline_problem(&[0.0, 0.0, 1.0, 1.0]).is_some());
+    }
+
+    fn codes(list: &[&str]) -> Vec<(String, bool)> {
+        list.iter().map(|c| (c.to_string(), true)).collect()
+    }
+
+    #[test]
+    fn a_draft_finds_a_rack_in_its_codes() {
+        let mut bins: Vec<String> = vec![];
+        for bay in [1, 3, 5, 9] {
+            for level in 1..=4 {
+                bins.push(format!("C-{bay:02}-{level}"));
+            }
+        }
+        let refs: Vec<&str> = bins.iter().map(String::as_str).collect();
+        let d = draft(&codes(&refs));
+        assert_eq!(d.unmatched, Vec::<String>::new());
+        let c = &d.places[0];
+        assert_eq!(c.name, "Rack C");
+        assert_eq!(c.pattern, "C-{bay:02}-{level}");
+        // Odd bays only, and bay 7 missing: the grid still runs 1 to 9 by twos.
+        assert_eq!((c.grid.bays, c.grid.first_bay, c.grid.bay_step, c.grid.levels), (5, 1, 2, 4));
+        assert_eq!(c.bins.len(), 16);
+        let nine = c.bins.iter().find(|(code, _)| code == "C-09-4").unwrap().1;
+        assert_eq!(nine, GridCell { bay: 5, level: 4, row: 1, position: 1 });
+    }
+
+    #[test]
+    fn a_draft_keeps_families_apart_and_leaves_what_it_cannot_read() {
+        let d = draft(&[
+            ("A.1.1".to_string(), true),
+            ("A.2.1".to_string(), true),
+            ("A.2.2".to_string(), true),
+            ("DOCK-1".to_string(), false),
+            ("DOCK-2".to_string(), false),
+            ("DOCK-6".to_string(), false),
+            ("3PL".to_string(), false),
+            ("ASSEMBLY-BIN".to_string(), false),
+            ("K-1-A".to_string(), true),
+            ("K-1-C".to_string(), true),
+        ]);
+        let by: HashMap<&str, &Drafted> = d.places.iter().map(|p| (p.name.as_str(), p)).collect();
+        assert_eq!(by["Rack A"].pattern, "A.{bay}.{level}");
+        assert_eq!(by["DOCK"].pattern, "DOCK-{bay}");
+        assert!(!by["DOCK"].solid, "docks are floor");
+        assert_eq!(by["DOCK"].grid.bays, 6, "1 to 6, with gaps");
+        assert_eq!(by["Rack K"].pattern, "K-{bay}-{level:A}");
+        assert_eq!(by["Rack K"].grid.levels, 3, "A to C");
+        assert_eq!(d.unmatched, ["3PL", "ASSEMBLY-BIN"]);
+    }
+
+    #[test]
+    fn a_draft_splits_a_bay_into_positions_where_the_codes_do() {
+        let d = draft(&codes(&["B-01-1-1", "B-01-1-2", "B-01-1-3", "B-01-2-1", "B-02-2-1"]));
+        let b = &d.places[0];
+        assert_eq!(b.pattern, "B-{bay:02}-{level}-{position}");
+        assert_eq!(b.grid.positions, vec![3, 1]);
+        assert_eq!(b.bins.len(), 5);
+    }
+
+    #[test]
+    fn a_code_the_pattern_would_spell_differently_is_not_forced_into_a_cell() {
+        // `7` among `07` and `10`: the pattern pads, so `C-7-1` is not its name.
+        let d = draft(&codes(&["C-07-1", "C-10-1", "C-7-1"]));
+        assert_eq!(d.unmatched, ["C-7-1"]);
+        assert_eq!(d.places[0].bins.len(), 2);
     }
 }

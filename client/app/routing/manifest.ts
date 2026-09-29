@@ -96,6 +96,10 @@ export const SCREENS: readonly ScreenSpec[] = [
   spec("putaway", "/putaway", "Put away", "floor", { claimsScan: true }),
   spec("orders", "/orders", "Orders", "desk"),
   spec("order", "/orders/:order", "Order", "desk"),
+  // Where a bin is (D173). A floor screen, because a bin label is scanned on
+  // the floor and the answer is read standing in the aisle.
+  spec("bin", "/bins/:bin", "Bin", "floor"),
+  spec("place", "/places/:place", "Place", "floor"),
   spec("findings", "/findings", "Findings", "desk"),
   // The screen D135 was waiting for: a finding is a row in the database, so a
   // link to one restores the queue, the tab and the evidence panel. Same title
@@ -104,6 +108,7 @@ export const SCREENS: readonly ScreenSpec[] = [
   spec("where", "/where", "Select warehouse", "plain"),
   spec("account", "/account", "Account", "plain"),
   spec("workspace", "/workspace", "Workspace", "desk"),
+  spec("layout", "/layout", "Layout", "desk"),
   spec("import", "/import", "Import", "desk"),
   spec("tokens", "/tokens", "Import tokens", "desk"),
   spec("keys", "/keys", "Passkeys", "plain"),

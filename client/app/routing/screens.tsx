@@ -60,6 +60,10 @@ import { useSignIn } from "@app/session/useSignIn";
 import { OrdersPage } from "@app/outbound/orders/OrdersPage";
 import { OrderPage } from "@app/outbound/orders/OrderPage";
 import { useOrder } from "@app/outbound/orders/useOrder";
+import { BinPage, PlacePage } from "@app/layout/PlacePage";
+import { LayoutPage } from "@app/layout/LayoutPage";
+import { useBin, usePlace } from "@app/layout/usePlace";
+import { useLayout } from "@app/layout/useLayout";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
 import { useQueue } from "@app/outbound/pack/useQueue";
 import { useOrders } from "@app/outbound/orders/useOrders";
@@ -275,6 +279,21 @@ function LiveOrder({ order }: { order: string }) {
   return <OrderPage desk={useOrder(order)} />;
 }
 
+/** Where a bin is: the face of the rack that holds it (D173). */
+function LiveBin({ bin }: { bin: string }) {
+  return <BinPage desk={useBin(bin)} />;
+}
+
+/** One place, by the id in the path. */
+function LivePlace({ place }: { place: string }) {
+  return <PlacePage desk={usePlace(place)} />;
+}
+
+/** The site's layout, and drafting one from the bin list. */
+function LiveLayout() {
+  return <LayoutPage desk={useLayout()} />;
+}
+
 /** The dashboard (D171): counts, the packing queue, findings and orders. */
 function LiveHome() {
   const { session } = useSessionBench();
@@ -302,6 +321,9 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   putaway: () => <LivePutaway />,
   orders: () => <LiveOrders />,
   order: (params) => <LiveOrder order={params["order"] ?? ""} />,
+  bin: (params) => <LiveBin bin={params["bin"] ?? ""} />,
+  place: (params) => <LivePlace place={params["place"] ?? ""} />,
+  layout: () => <LiveLayout />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,
   where: () => <LiveWhere />,

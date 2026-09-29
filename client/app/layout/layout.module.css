@@ -1,0 +1,237 @@
+/* Places (D173): the face of a rack, the way out of it, and the plan. */
+
+.code {
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+}
+
+/* ── the way out: big chips a thumb can hit ─────────────────────────────── */
+
+.trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ui-control);
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-full);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: var(--ui-text-base);
+  font-weight: 500;
+}
+.here {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-soft-fg);
+}
+.trailSep {
+  width: var(--ui-icon-sm);
+  height: var(--ui-icon-sm);
+  color: var(--ui-text-faint);
+}
+
+/* ── the face: bays across, levels up ───────────────────────────────────── */
+
+.rows {
+  padding: var(--ui-space-3) var(--ui-space-4) 0;
+}
+/* A long rack scrolls inside its card, never the page. */
+.faceScroll {
+  overflow-x: auto;
+  padding: var(--ui-space-4);
+}
+.face {
+  display: grid;
+  grid-template-columns: auto repeat(var(--bays), minmax(4.5rem, 1fr));
+  gap: var(--ui-space-1);
+  min-width: min-content;
+}
+.levelLabel,
+.axis,
+.bayLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
+.levelLabel {
+  padding: 0 var(--ui-space-2);
+}
+/* The level numbers and the corner stay put while a long rack scrolls past. */
+.levelLabel,
+.axis {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ui-surface);
+}
+.axis {
+  color: var(--ui-text-faint);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--ui-tracking-caps);
+}
+.bayLabel {
+  padding-top: var(--ui-space-1);
+}
+.bay {
+  display: flex;
+  gap: var(--ui-space-0-5);
+}
+.slot {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: var(--ui-control);
+  padding: var(--ui-space-1);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+}
+.empty {
+  border-style: dashed;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--ui-surface-sunken) 0 var(--ui-space-1),
+    var(--ui-surface) var(--ui-space-1) var(--ui-space-2)
+  );
+}
+.lit {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-fg);
+  box-shadow: 0 0 0 var(--ui-space-0-5) var(--ui-ring);
+}
+.slotCode {
+  overflow: hidden;
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lit .slotCode {
+  font-size: var(--ui-text-sm);
+  font-weight: 700;
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tip {
+  margin: 0;
+  padding: 0 var(--ui-space-4) var(--ui-space-4);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+/* ── what is inside ─────────────────────────────────────────────────────── */
+
+.children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.children li + li {
+  border-top: 1px solid var(--ui-border);
+}
+.child {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  min-height: var(--ui-control-lg);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  color: var(--ui-text);
+}
+.child:hover {
+  background: var(--ui-surface-hover);
+}
+.childIcon {
+  flex: none;
+  width: var(--ui-icon);
+  height: var(--ui-icon);
+  color: var(--ui-text-muted);
+}
+.childName {
+  flex: 1 1 auto;
+  font-size: var(--ui-text-base);
+  font-weight: 500;
+}
+.childMeta {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+/* ── the plan: the same way up every time ───────────────────────────────── */
+
+.plan {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 16rem;
+}
+.shape {
+  stroke: var(--ui-border-strong);
+  stroke-width: 1;
+}
+.outer {
+  fill: var(--ui-surface-sunken);
+}
+.floor {
+  fill: var(--ui-surface);
+  stroke-dasharray: 4 3;
+}
+.solid {
+  fill: var(--ui-border);
+}
+.focus {
+  fill: var(--ui-accent);
+  stroke: var(--ui-accent);
+}
+.outer.focus {
+  fill: var(--ui-accent-soft);
+}
+
+/* ── the layout list ────────────────────────────────────────────────────── */
+
+.note {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+.previewFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4);
+  border-top: 1px solid var(--ui-border);
+}
+.treeName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.treeIcon {
+  flex: none;
+  width: var(--ui-icon-sm);
+  height: var(--ui-icon-sm);
+  color: var(--ui-text-muted);
+}

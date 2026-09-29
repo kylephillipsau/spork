@@ -14,6 +14,7 @@ import {
   ClipboardList,
   KeyRound,
   LayoutDashboard,
+  Map as MapIcon,
   Package,
   PackageOpen,
   ScanLine,
@@ -79,6 +80,7 @@ export const SETTINGS: NavGroup = {
   label: "Settings",
   items: [
     { id: "workspace", label: "Workspace", path: "/workspace", icon: Building2 },
+    { id: "layout", label: "Layout", path: "/layout", icon: MapIcon },
     { id: "import", label: "Import", path: "/import", icon: Upload },
     { id: "tokens", label: "Import tokens", path: "/tokens", icon: KeyRound },
   ],
@@ -91,7 +93,7 @@ export const USER_MENU_SCREENS = ["account", "keys"] as const;
  * Reached another way, so deliberately in no menu: a job opened from its
  * queue, a finding opened from the list, and the screens before sign-in.
  */
-export const REACHED_ANOTHER_WAY = ["pack-one", "order", "finding", "sign-in", "setup", "where"] as const;
+export const REACHED_ANOTHER_WAY = ["pack-one", "order", "bin", "place", "finding", "sign-in", "setup", "where"] as const;
 
 export function allItems(): NavItem[] {
   return [...NAV, SETTINGS].flatMap((g) => g.items);

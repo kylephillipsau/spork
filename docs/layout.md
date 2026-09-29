@@ -1,87 +1,67 @@
-# Writing a site's layout
+# How the layout works
 
-A site's layout is two CSV files, loaded on the Import screen as **Racks** and
-**Floor areas** (D173). Both are dry-run first, like every import, and both can
-be loaded again: a rack or area is matched by its site and code, and a file
-that changes nothing reports nothing.
+A site's layout is **places**: boxes drawn inside other boxes (D173). Nothing is
+measured. This page says what a place is, how bins get into one, and what is
+built so far.
 
-The site must already exist: load its bin list first. A layout never creates a
-warehouse, and racks never create bins. They place the bins the bin list has.
+## Places
 
-## The frame
+A place is a box inside another place, or standing on the site. It has:
 
-Pick one corner of the building as the origin and measure everything in
-millimetres from it: `x` to the right on the plan, `y` up the page. Heights are
-from the floor. Every number is a whole number of millimetres.
+- **A name**, which is whatever people call it: *Main*, *Rack C*, *Side wall
+  shelving*, *Returns (reserved)*, *Mezzanine*.
+- **Walk-through or solid.** A room, a walkway or a reserved area is
+  walk-through; racking, a wall or a column is solid. It is the only thing about
+  a place the system reasons with.
+- **A box in its parent's cells**: where its corner is, how long, deep and tall
+  it is, how far up (a mezzanine), and how far it is turned. Positions are
+  estimates. Only relationships are exact.
+- **An outline**, optionally, when a walk-through place is not a rectangle: an
+  L-shaped building, a notch, an angled wall.
 
-## Racks
+A place's position on the site is never stored. It is worked out from its
+parent's, and its parent's, when it is read, so moving a building moves
+everything in it.
 
-One row per run of bays along one aisle face. Back-to-back racks are two rows.
+## Grids and bins
 
-| Column | Required | Meaning |
-|---|---|---|
-| `site` | yes | The site's code, as the Workspace shows it. |
-| `rack` | yes | This rack's code, unique within the site. |
-| `aisle` | yes | The aisle its bins' codes start with. Every code the template makes must read as this aisle. |
-| `x_mm`, `y_mm` | yes | The corner at the left end of the rack's front, standing in the aisle facing it. |
-| `rotation` | yes | `0`, `90`, `180` or `270`, counter-clockwise. At `0` the rack runs to the right along `x` and is faced from lower `y`. |
-| `depth_mm`, `height_mm` | yes | Front to back, and floor to top. |
-| `upright_mm` | no, `0` | The frame between bays and at each end. Bay widths are clear widths. |
-| `first_bay` | no, `1` | The number of the leftmost bay, facing the rack. |
-| `bay_step` | no, `1` | How the number changes bay to bay: `2` when odd bays face one side of the aisle and even the other, `-1` when they count down. |
-| `bay_widths_mm` | yes | Each bay's width, left to right. `12x2700` is twelve bays of 2700; `12x2700 1800` adds a narrow one. |
-| `first_level` | no, `1` | The number of the bottom level. |
-| `level_z_mm` | yes | Each level's floor height, lowest first: `0 1500 3000`. A level reaches up to the next; the top one reaches `height_mm`. |
-| `positions` | no, `1` | How many bins share a bay at each level, one per level (`3 1 1`), or one number for all of them. |
-| `template` | yes | How the bins are named. See below. |
+A place can hold a **grid**: bays along its length, levels up, rows into its
+depth, and, level by level, how many bins share a bay. **Every bin sits in one
+cell of one place**, and one cell holds one bin. A single floor spot is a place
+with one cell.
 
-**Templates** are the bin code with the numbers replaced by fields: `{aisle}`,
-`{bay}`, `{level}` and `{position}`. Pad a number with a leading-zero width
-(`{bay:02}` makes `07`) or letter it (`{level:A}` makes 1 `A`, 2 `B`). A
-template needs `{bay}` and `{level}`, and `{position}` when any level holds more
-than one bin per bay.
+A **naming pattern** says what a place's bins are called, so the bins from the
+bin list drop into the right cells:
 
-```csv
-site,rack,aisle,x_mm,y_mm,rotation,depth_mm,height_mm,upright_mm,first_bay,bay_step,bay_widths_mm,level_z_mm,positions,template
-NORTH,C-S,C,59890,7100,180,1100,6500,90,39,-2,20x2700,0 1600 3200 4800,3 1 1 1,{aisle}-{bay:02}-{level}-{position}
-NORTH,C-N,C,4000,9100,0,1100,6500,90,2,2,20x2700,0 1600 3200 4800,3 1 1 1,{aisle}-{bay:02}-{level}-{position}
-```
+| Pattern | Names bay 7, level 3 |
+|---|---|
+| `C-{bay:02}-{level}` | `C-07-3` |
+| `C-{bay}.{level:A}` | `C-7.C` |
+| `D-{bay:02}-{level}-{position}` | `D-07-3-1` (position 1) |
 
-Aisle C is 2 m wide, between `y` 7100 and 9100, with a rack on each side
-running from `x` 4000 to 59890 (20 bays of 2700 and 21 uprights of 90). C-N is
-faced from the aisle below it, so it takes rotation 0 and its left end is the
-west end. C-S is faced from the aisle above it, so it is turned half round, and
-its left end, as you face it, is the **east** end: that is its `x_mm`. Its bays
-count down from 39 so that bay 1 is opposite bay 2. Positions within a bay also
-run left to right as you face it, so on C-S position 1 is at the bay's east end.
+`{bay:02}` pads to two digits and `{level:A}` letters the level (1 is A). The
+numbers on the labels start where the place says and can step by two, for racks
+numbered odd on one side of an aisle and even on the other, or count down.
 
-**What the report says.** For each site: how many slots the racks make, how many
-bins were placed, moved or left alone because they were measured, and two lists
-worth reading before applying:
+## A first layout, from the bin list
 
-- slots whose code is no bin on file, which usually means the template spells
-  codes differently from the bin list, or the racks describe bays the bin list
-  does not have;
-- bins in an aisle a rack runs along that no rack names, which is J77.
+On **Settings › Layout**, a site with bins and no layout offers **Draft from bin
+list**. It groups the bins by the shape of their codes, proposes a place for
+each family with a grid and a pattern, and shows what it would make before
+making anything. Bins whose codes follow no pattern (`3PL`, `ASSEMBLY-BIN`) are
+listed as not on the layout, and wait to be placed by hand. Run it again later
+and it only puts new bins in: into places already drawn if their pattern names
+them, otherwise into new places. It never moves a bin that is already in a cell.
 
-A rack loaded again with fewer bays takes back the boxes it gave; a bin with a
-measured box keeps it.
+## Where it shows
 
-## Floor areas
+Scan a bin label, or type it into the search box, and Spork opens the **rack
+face**: the way into the place, the front of the rack with the bin's cell lit,
+labelled the way the rack's own labels read, and a small plan of the building.
+The plan is always drawn the same way up.
 
-One row per area.
+## Not built yet
 
-| Column | Required | Meaning |
-|---|---|---|
-| `site` | yes | The site's code. |
-| `area` | yes | This area's code, unique within the site. |
-| `kind` | yes | `dock`, `staging`, `packing`, `walkway`, `wall`, `floor_stack`, `office` or `restricted`. |
-| `outline` | yes | Its corners in order, as `x,y` pairs separated by spaces. Quote the cell, because it contains commas. At least three corners, and no edges crossing. |
-| `height_mm` | no | How tall, for anything drawn standing: a wall, a floor stack. |
-| `location` | no | The code of the location this area is, such as a staging bin, so what is held there can be drawn there. |
-
-```csv
-site,area,kind,outline,height_mm,location
-NORTH,STAGE-1,staging,"500,500 6500,500 6500,3000 500,3000",,STAGE-1
-NORTH,WALL-S,wall,"0,0 60000,0 60000,200 0,200",6000,
-```
+- The plan editor, for drawing and arranging places, and the 3D view.
+- Correcting a bin's cell by scanning it at the shelf.
+- A history of who changed the layout, and roles for who may.

@@ -105,10 +105,11 @@ working `spork` database was left untouched.
 
 1. Commit the order page (above) and push both commits.
 2. **Present the 3D and spatial plan for agreement before building any of it.**
-   Agreed 2026-09-29. Phase 0 is built: D173, migration 96, `POST /import/racks`
-   and `/import/floor` (on the Import screen), J76 and J77. The columns are in
-   [layout.md](./layout.md). What phase 0 still needs is the site's survey, as
-   a rack file. Phase 1, the read-only plan, is next.
+   Agreed 2026-09-29, then reshaped: the layout is places drawn relative to
+   each other, never measured (D173, migration 96). Built: places and grids,
+   drafting a layout from the bin list (Settings > Layout), and the rack face a
+   scanned bin lands on. See [layout.md](./layout.md). Next: the plan editor and
+   3D view, and correcting a bin's cell by scanning it.
 3. Item pages, a bin view and a warehouse view. The order page's item codes
    will link to the item pages; `OrderLineView.item_id` is already on the wire.
 

@@ -1120,52 +1120,138 @@ export interface ItemImportReport {
   arrival: FileArrival | null;
 }
 
-/**
- * One site's bins after its racks were expanded together (D173).
- *
- * A rack names bins; it never creates them. So a slot with no bin on file is
- * counted here and nothing more, and a bin in a racked aisle that no rack
- * names is J77 before it is a finding.
- */
-export interface SitePlaced {
-  site: string;
-  racks: number;
-  slots: number;
-  /** Had no box, and now have one from their rack. */
+// ── places (D173) ─────────────────────────────────────────────────────────
+//
+// A site's layout: boxes drawn inside other boxes, positioned relative to their
+// parent and never measured. A place can hold a grid, and every bin sits in one
+// cell of one place.
+
+/** A cell of a place's grid, each coordinate counted from 1. */
+export interface GridCell {
+  bay: number;
+  level: number;
+  row: number;
+  position: number;
+}
+
+/** A step on the way up out of a place. */
+export interface PlaceCrumb {
+  place_id: Uuid;
+  name: string;
+}
+
+/** A place inside the one being shown. */
+export interface ChildPlace {
+  place_id: Uuid;
+  name: string;
+  solid: boolean;
+  /** Bins in it and in everything inside it. */
+  bins: number;
+}
+
+/** A bin in a cell of the place being shown. */
+export interface CellBin {
+  location_id: Uuid;
+  code: string;
+  kind: string;
+  cell: GridCell;
+}
+
+/** One place on the plan, as a footprint on the site. */
+export interface PlanShape {
+  place_id: Uuid;
+  name: string;
+  solid: boolean;
+  /** How many places it is inside, counted from the plan's outermost. */
+  nesting: number;
+  /** Corners on the site, in cells, in order around the edge. */
+  corners: [number, number][];
+  /** How far above the site's floor it starts, and how tall it is, in cells. */
+  z: number;
+  height: number;
+}
+
+/** `GET /places/{id}`: one place, as a page. */
+export interface PlaceView {
+  place_id: Uuid;
+  name: string;
+  solid: boolean;
+  bays: number;
+  levels: number;
+  rows: number;
+  /** How many bins share a bay at each level, lowest first. */
+  positions: number[];
+  pattern: string | null;
+  /** The numbers on the bays' labels, left to right as you face it. */
+  bay_labels: string[];
+  /** The numbers on the levels' labels, lowest first. */
+  level_labels: string[];
+  /** From the outermost place down to this one's parent. */
+  trail: PlaceCrumb[];
+  children: ChildPlace[];
+  bins: CellBin[];
+  /** The outermost place this is in, and everything inside it. */
+  plan: PlanShape[];
+}
+
+/** `GET /bins/{id}`: a bin, and where it is. */
+export interface BinView {
+  location_id: Uuid;
+  code: string;
+  kind: string;
+  active: boolean;
+  /** Its cell, when it is on the layout. */
+  cell: GridCell | null;
+  place: PlaceView | null;
+}
+
+/** One place in the site's list. */
+export interface LayoutPlace {
+  place_id: Uuid;
+  parent_id: Uuid | null;
+  name: string;
+  solid: boolean;
+  bays: number;
+  levels: number;
+  rows: number;
+  pattern: string | null;
+  /** Bins in its own cells, not counting places inside it. */
+  bins: number;
+}
+
+/** `GET /layout`: the site's layout, as a list. */
+export interface LayoutView {
+  site_code: string;
+  places: LayoutPlace[];
+  /** Active bins at the site. */
+  bins: number;
+  /** Active bins with no cell: J77, once the site has places. */
+  unplaced: number;
+  unplaced_sample: string[];
+}
+
+/** A place the draft made, or would make. */
+export interface DraftedPlace {
+  name: string;
+  solid: boolean;
+  pattern: string;
+  bays: number;
+  levels: number;
+  bins: number;
+}
+
+/** `POST /layout/draft`: what drafting did, or would have done. */
+export interface DraftReport {
+  /** The place the draft put new places in. */
+  inside: string | null;
+  inside_created: boolean;
+  places: DraftedPlace[];
+  /** Bins that dropped into places already there, by their patterns. */
+  bins_filled: number;
+  /** Bins placed in the places the draft made. */
   bins_placed: number;
-  /** Their rack changed, so their box did. */
-  bins_moved: number;
-  /** Surveyed or entered by hand, and left where they were measured. */
-  bins_kept_measured: number;
-  /** No rack names them any more, so they lose the box a rack gave them. */
-  bins_unplaced: number;
-  slots_without_bin: number;
-  slots_without_bin_sample: string[];
-  bins_uncovered: number;
-  bins_uncovered_sample: string[];
-}
-
-export interface RacksLoaded {
-  racks_created: number;
-  racks_changed: number;
-  racks_unchanged: number;
-  sites: SitePlaced[];
+  /** Active bins still with no cell. */
+  unplaced: number;
+  unplaced_sample: string[];
   applied: boolean;
-}
-
-export interface RackImportReport {
-  loaded: RacksLoaded;
-  arrival: FileArrival | null;
-}
-
-export interface FloorLoaded {
-  areas_created: number;
-  areas_changed: number;
-  areas_unchanged: number;
-  applied: boolean;
-}
-
-export interface FloorImportReport {
-  loaded: FloorLoaded;
-  arrival: FileArrival | null;
 }

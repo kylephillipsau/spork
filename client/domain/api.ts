@@ -13,8 +13,10 @@ import type {
   Workspace,
   ImportReport,
   ItemImportReport,
-  RackImportReport,
-  FloorImportReport,
+  BinView,
+  DraftReport,
+  LayoutView,
+  PlaceView,
   ChooseSiteRequest,
   CurrentSession,
   ConsignmentResponse,
@@ -680,27 +682,21 @@ export const api = {
       token,
     ),
 
-  /**
-   * Load a site's racks, which places the bins they name (D173). Same
-   * credential rules as `importBins`: a layout is written by a person, but it
-   * arrives on the import path so that each version of it is kept.
-   */
-  importRacks: (token: string, csv: string, q: { apply?: boolean }) =>
-    sendRaw<RackImportReport>(
-      "POST",
-      `/import/racks${q.apply ? "?apply=true" : ""}`,
-      csv,
-      token,
-    ),
+  /** A bin, its cell, and the place around it: where a bin scan lands (D173). */
+  bin: (locationId: Uuid) => send<BinView>("GET", `/bins/${encodeURIComponent(locationId)}`),
 
-  /** Load a site's floor areas: docks, staging, walkways, walls (D173). */
-  importFloor: (token: string, csv: string, q: { apply?: boolean }) =>
-    sendRaw<FloorImportReport>(
-      "POST",
-      `/import/floor${q.apply ? "?apply=true" : ""}`,
-      csv,
-      token,
-    ),
+  /** One place, the way out of it, what is inside it, and its bins by cell. */
+  place: (placeId: Uuid) => send<PlaceView>("GET", `/places/${encodeURIComponent(placeId)}`),
+
+  /** The layout of the site the session is working at. */
+  layout: () => send<LayoutView>("GET", "/layout"),
+
+  /**
+   * Draft the layout from the bin list. **A dry run unless `apply`**, like the
+   * imports: the report is what applying does, because it is the apply undone.
+   */
+  draftLayout: (q: { apply?: boolean }) =>
+    send<DraftReport>("POST", `/layout/draft${q.apply ? "?apply=true" : ""}`),
 
   /** The organisation and its warehouses. */
   workspace: () => send<Workspace>("GET", "/workspace"),

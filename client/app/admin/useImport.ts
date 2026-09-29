@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { api, reason } from "@domain/api";
-import type { FloorImportReport, ImportReport, ItemImportReport, RackImportReport } from "@domain/types";
+import type { ImportReport, ItemImportReport } from "@domain/types";
 
 /**
  * Loading a bin list from the browser (D158).
@@ -31,20 +31,14 @@ export interface Options {
   includeExternal: boolean;
 }
 
-/**
- * Which file this is. They have nothing in common but being CSV: two are
- * NetSuite's exports, and two are the warehouse's layout (D173), which a person
- * writes from a survey.
- */
-export type Which = "bins" | "items" | "racks" | "floor";
+/** Which export this is. The two files have nothing in common but being CSV. */
+export type Which = "bins" | "items";
 
 export type ImportState =
   | { kind: "idle" }
   | { kind: "working"; what: "dry" | "apply" }
   | { kind: "reported"; which: "bins"; report: ImportReport; applied: boolean }
   | { kind: "reported"; which: "items"; report: ItemImportReport; applied: boolean }
-  | { kind: "reported"; which: "racks"; report: RackImportReport; applied: boolean }
-  | { kind: "reported"; which: "floor"; report: FloorImportReport; applied: boolean }
   | { kind: "failed"; message: string };
 
 export interface ImportBench {
@@ -98,12 +92,6 @@ export function useImport(): ImportBench {
         if (which === "items") {
           const report = await api.importItems(minted.token, csv, { apply });
           if (live.current) setState({ kind: "reported", which: "items", report, applied: apply });
-        } else if (which === "racks") {
-          const report = await api.importRacks(minted.token, csv, { apply });
-          if (live.current) setState({ kind: "reported", which: "racks", report, applied: apply });
-        } else if (which === "floor") {
-          const report = await api.importFloor(minted.token, csv, { apply });
-          if (live.current) setState({ kind: "reported", which: "floor", report, applied: apply });
         } else {
           const report = await api.importBins(minted.token, csv, {
             apply,

@@ -13519,68 +13519,79 @@ migration 91's storage-only rule, which it had not.
 Folding reports into `picked_quantity`. The polymorphic `external_reference`
 table. Inventing an owner for a site that has not said.
 
-### D173 — Where the racks stand: a layout is declared per rack, and bins take their place from it
+### D173 — A place for every bin: layouts are drawn relative, never measured
 
-*Adopted 2026-09-29, with migration 96. Phase 0 of the warehouse view: the
-layout data every map, heat map and pick path reads.*
+*Adopted 2026-09-29, with migration 96. Phase 0 of the warehouse view, and the
+data every map, rack face, pick path and heat map reads. It replaces a first
+version of this decision, never released, that placed racks by millimetre.*
 
-**Decision.** A site's physical layout is recorded as **racks** and **floor
-areas**, and a bin's box in space is **generated from the rack that holds it**
-unless somebody measured it. A `rack` is one run of bays along one aisle face: an
-origin on the floor plan, a rotation, bay widths, level heights, positions per
-level, and a template that says what its bins are called. Expanding a rack gives
-every slot's code and box; each slot whose code is a bin on file gets that box,
-and is marked as placed by that rack. A `floor_area` is a polygon on the plan:
-a dock, a staging lane, a walkway, a wall, a floor stack.
+**Decision.** A site's layout is **places**: boxes drawn inside other boxes. A
+place has a parent (another place, or the site), a box in its parent's cells
+(where it is, how big, turned by how many degrees), a name, and one fact the
+system needs about it: whether you can **walk through** it or it is **solid**.
+A place can hold a **grid** of bays, levels, rows and positions, and **every bin
+sits in one cell of one place**. A naming pattern on a place, such as
+`C-{bay:02}-{level}`, drops the bins whose codes it spells into their cells.
 
-**One frame per site.** Millimetres, integers, on the site's own plan: `x` to
-the right, `y` up the page, `z` up from the floor, from an origin the survey
-chooses. A bin's `x_mm`, `y_mm`, `z_mm` is the corner of its box nearest that
-origin, and `length_mm`, `width_mm`, `height_mm` are its extent **along x, y and
-z**, not its frontage and depth. Migration 1 created the six columns without
-saying which; saying it now costs nothing, since nothing has written them.
+**Why not measure.** Nobody will survey a warehouse to the millimetre, and
+nothing that uses the layout needs it to be. A pick path needs to know which
+racks are in the way; a worker needs to know which bay and which level. The
+first version of this decision asked for rack origins, rotations and bay widths
+in millimetres and was the wrong shape for that reason.
 
-**Rotation in quarter turns only.** A rack turns by 0, 90, 180 or 270 degrees,
-so every bin is an axis-aligned box. That keeps the six columns meaningful
-without a seventh, and keeps picking in the view a ray against boxes. A rack
-set at an angle is rare enough to wait for, and relaxing the CHECK is a decision
-of its own, since a rotated rack's box is no longer its footprint.
+**Exact where it can be, approximate where it must be.** Which bay comes next
+and which level is above are cell numbers, as exact as the labels on the racks.
+Where a place is drawn is somebody's honest estimate, in cells of its parent. No
+position relative to the whole site is stored: it is composed from the chain of
+parents when it is read (`layout::compose`), so moving a building moves
+everything in it and no copy can drift.
 
-**Declared geometry, then generated, then measured.** Each placed bin says
-where its box came from, in `geometry_source`: `template` (generated from its
-rack), `survey` (measured) or `manual` (entered). A generator writes only where
-the source is empty or `template`, so a measured box is never overwritten by a
-drawing of what the rack should be. A bin a rack stops placing, because the rack
-was re-imported with fewer bays, loses its template box instead of keeping one
-that is no longer true.
+**Why so few kinds.** Walk-through or solid is the only thing about a place the
+system reasons with; everything else a place is (a mezzanine, a reserved area,
+a column, a dock strip, shelving along a side wall) is its name. A fixed
+vocabulary of areas, aisles and walls was proposed and rejected: it describes
+the warehouses it was written for. An aisle is the space between two solid
+places; a wall is the edge of the place around it.
 
-**Bins come from the bin list, not from racks.** The rack says where; the bin
-list says what exists. A slot with no bin on file is reported by the import and
-not created, because creating it would assert a bin that the system of record
-does not have. A bin that a rack's aisle covers but no slot places is **J77**,
-which is where a miscoded bin or a mistyped template shows up after the import
-report has scrolled away.
+**Any shape, any angle.** A walk-through place may have an **outline** instead
+of its rectangle: an L-shaped building, a notch, an angled wall. A place turns
+by any whole degree; an editor snaps to quarter turns. **A place with a grid is a
+rectangle**, because a grid is rows and columns; an L-shaped run of shelving is
+two runs meeting at the corner, which is also how people name and walk them.
 
-**Refused at the import, because it is the file contradicting itself.**
-A template that produces one code twice. A generated code that does not decompose
-to the rack's own aisle, which would make J77 unanswerable. A floor outline
-with fewer than three points or with edges that cross. An unknown site: a layout
-never creates a warehouse, for the bin importer's reason.
+**One bin to a cell, refused at the write.** A cell is a physical slot, and two
+bins in one would make a pick list that cannot say which to take. So it is a
+unique index, not a finding. What *is* a finding: a bin whose cell has fallen
+outside its place's grid (**J76**), an active bin at a laid-out site that has no
+cell (**J77**, the Unplaced tray), and a place that is inside itself (**J78**).
 
-**Reported, not refused, because it is a disagreement about the floor.** Two
-bins whose boxes overlap in space (**J76**). Whether the racks or the survey
-are wrong is a person's question, and J71 made the same choice for two bins at
-one pick position.
+**A first layout comes from the bin list.** `POST /layout/draft` groups the bins
+with no cell into families by the shape of their codes (`C-07-3`, `DOCK-4`),
+proposes one place per family with a grid spanning the numbers found and a
+pattern that spells them, and lays them out in rows inside the site's first
+walk-through place, making one if there is none. Bays that are all odd or all
+even are numbered by twos. A bin is only ever put in a cell whose name the
+pattern spells back exactly; the rest wait to be placed by hand. Bins that a
+place already drawn names drop into it first. It is a person's act on a
+session, previewed first: the preview is the write rolled back, as for every
+import. **Nothing already in a cell moves.**
 
-**How it arrives.** `POST /import/racks` and `POST /import/floor` take a CSV
-each, under the import token (D158), stored as an arrival and dry-run unless
-told to apply, like every other import. A layout is authored by a person,
-usually from a survey spreadsheet, but keeping it on the import path keeps
-"the import endpoints are reached by an import token" true, and keeps each
-version of the layout on file as it arrived. The columns are in
-[layout.md](./layout.md).
+**Where it is seen.** A scanned bin code goes to its **rack face**
+(`/bins/{id}`): the way into the place as chips, the face drawn bays across and
+levels up with the labels as the rack prints them and the bin's cell lit, and a
+plan of the building the same way up every time. 2D, because which bay and
+which level is a question about relative position, which a flat drawing answers
+better than a 3D one. The research behind the interface is in
+`reports/Apple style warehouse layout design.md` (kept out of the repository),
+summarised as **one place model, three depths, no modes**: floor staff find and
+check, trusted staff correct by scanning, and geometry is edited only at a desk.
 
-**Rejects.** A slot table: a slot is a function of its rack row, so storing it
-is a second copy to drift. Free rotation. Racks creating bins. A traversable
-graph stored beside the layout: it is derived from the layout when pick paths
-need it (phase 3). PostGIS for a few thousand boxes and a few dozen polygons.
+**Rejects.** Millimetres, and the six columns on `location` that promised them,
+now dropped. A rack table with an origin and a rotation. A fixed vocabulary of
+kinds of space. A slot table (a cell is a function of its place's grid). Phone
+scanning of the building: Apple's RoomPlan is designed for rooms up to 15 m
+square and 3.6 m high. A global "advanced mode".
+
+**Not yet.** The plan editor and the 3D view; correcting a bin's cell by
+scanning it at the shelf; a history of who changed the layout; roles for who
+may edit it. Until roles exist, any signed-in person may draft.

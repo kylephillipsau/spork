@@ -62,11 +62,19 @@ test("a well-formed identifier nobody holds is not the same as a smudge", () => 
 });
 
 test("something real with no screen says so rather than going nowhere", () => {
-  const location: Subject = { ...item("A-01-1"), kind: "location", capture: [] };
-  const landing = destinationFor(resolution({ subjects: [location] }));
+  const pallet: Subject = { ...item("PALLET-A"), kind: "package", capture: [] };
+  const landing = destinationFor(resolution({ subjects: [pallet] }));
   assert.equal(landing.kind, "nowhere");
   if (landing.kind !== "nowhere") return;
-  assert.equal(landing.what, "location");
+  assert.equal(landing.what, "package");
+});
+
+test("a bin label goes to the face of the rack that holds it", () => {
+  const bin: Subject = { ...item("C-05-3"), kind: "location", capture: [] };
+  const landing = destinationFor(resolution({ subjects: [bin] }));
+  assert.equal(landing.kind, "go");
+  if (landing.kind !== "go") return;
+  assert.equal(landing.path, `/bins/${bin.id}`);
 });
 
 test("an item nothing can be measured about has no screen either", () => {

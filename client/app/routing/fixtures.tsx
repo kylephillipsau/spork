@@ -71,6 +71,20 @@ import { DISAGREED, WEIGH_CLEAR, fixtureBench as weighFixture } from "@app/measu
 import { OrdersPage } from "@app/outbound/orders/OrdersPage";
 import { OrderPage } from "@app/outbound/orders/OrderPage";
 import { FOUND, LATEST, NOTHING, ORDER, ORDER_MISSING, SUPERSEDED, fixtureOrder, fixtureOrders } from "@app/outbound/orders/fixture";
+import { BinPage, PlacePage } from "@app/layout/PlacePage";
+import { LayoutPage } from "@app/layout/LayoutPage";
+import {
+  BIN,
+  BIN_UNPLACED,
+  BUILDING,
+  DRAFTED,
+  LAID_OUT,
+  NO_LAYOUT,
+  SHELF,
+  fixtureBin,
+  fixtureLayout,
+  fixturePlace,
+} from "@app/layout/fixture";
 
 import { SetupPage } from "@app/setup/SetupPage";
 import { CLOSED, DONE, NEEDED, NO_TOKEN, fixtureSetup } from "@app/setup/fixture";
@@ -88,7 +102,7 @@ import { FAILED as KEYS_FAILED, NONE as KEYS_NONE, READY as KEYS_READY, fixtureK
 import { TokensPage } from "@app/admin/TokensPage";
 import { FAILED as TOKENS_FAILED, MINTED, NONE as TOKENS_NONE, READY as TOKENS_READY, fixtureTokens } from "@app/admin/fixture";
 import { ImportPage } from "@app/admin/ImportPage";
-import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, RACKS as IMP_RACKS, fixtureImport } from "@app/admin/import-fixture";
+import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
@@ -503,6 +517,25 @@ export const FIXTURES: readonly Screen[] = [
     <OrdersPage desk={fixtureOrders(NOTHING)} />
   )),
   app("f-order", "/fixtures/order", "Order", "desk", { screen: "order" }, () => <OrderPage desk={fixtureOrder(ORDER)} />),
+
+  // D173: a scanned bin lands on the face of its rack with its spot lit; a bin
+  // not on the layout says so; a building lists what is inside it; a shelf
+  // splits its bottom level three ways.
+  app("f-bin", "/fixtures/bin", "Bin", "floor", { screen: "bin" }, () => <BinPage desk={fixtureBin(BIN)} />),
+  app("f-bin-unplaced", "/fixtures/bin/unplaced", "Bin — not on the layout", "floor", { screen: "bin" }, () => (
+    <BinPage desk={fixtureBin(BIN_UNPLACED)} />
+  )),
+  app("f-place", "/fixtures/place", "Place", "floor", { screen: "place" }, () => <PlacePage desk={fixturePlace(BUILDING)} />),
+  app("f-place-shelf", "/fixtures/place/shelf", "Place — shelf", "floor", { screen: "place" }, () => (
+    <PlacePage desk={fixturePlace(SHELF)} />
+  )),
+  app("f-layout-none", "/fixtures/layout/none", "Layout — none yet", "desk", { screen: "layout" }, () => (
+    <LayoutPage desk={fixtureLayout(NO_LAYOUT)} />
+  )),
+  app("f-layout-draft", "/fixtures/layout/draft", "Layout — draft", "desk", { screen: "layout" }, () => (
+    <LayoutPage desk={fixtureLayout(NO_LAYOUT, { kind: "previewed", report: DRAFTED })} />
+  )),
+  app("f-layout", "/fixtures/layout", "Layout", "desk", { screen: "layout" }, () => <LayoutPage desk={fixtureLayout(LAID_OUT)} />),
   app("f-order-missing", "/fixtures/order/missing", "Order — missing", "desk", { screen: "order" }, () => (
     <OrderPage desk={fixtureOrder(ORDER_MISSING)} />
   )),
@@ -590,9 +623,6 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-import-items", "/fixtures/import/items", "Import — item master", "desk", { screen: "import" }, () => (
     <ImportPage bench={fixtureImport(IMP_ITEMS)} />
-  )),
-  app("f-import-racks", "/fixtures/import/racks", "Import — racks", "desk", { screen: "import" }, () => (
-    <ImportPage bench={fixtureImport(IMP_RACKS)} />
   )),
   app("f-import-failed", "/fixtures/import/failed", "Import — refused", "desk", { screen: "import" }, () => (
     <ImportPage bench={fixtureImport(IMP_FAILED)} />

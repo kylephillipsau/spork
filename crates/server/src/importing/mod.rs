@@ -25,7 +25,6 @@
 
 pub mod bins;
 pub mod items;
-pub mod layout;
 pub mod orders;
 pub mod picks;
 pub mod received;

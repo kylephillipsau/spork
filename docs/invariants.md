@@ -218,8 +218,9 @@ examined nothing.
 | J73 | Every table carrying a `tenant_id` **that `spork_app` can reach** forces row level security. J38 asserts this of the tables carrying an `@projection` column, and that set is narrower than it reads: `reported_stock` arrived with a tenant column, no projection column and row level security switched off, and **the whole suite stayed green** — the property nobody was checking was the one that decides whose rows a query returns. A tenant column is the declaration that rows belong to somebody; RLS is what makes the declaration true. **The privilege clause is not an allow-list.** RLS is not the only way to close a table and this schema uses the other one: `session` carries a `tenant_id` and has no policy at all, because the application holds no privilege on it and migration 70's `SECURITY DEFINER` functions are its only interface — demanding a policy there is a second lock on a welded door. Naming the exceptions would have worked and would have rotted, because a named exception stays true in the file long after it stops being true in the database. So the exemption *is* its reason, asked of Postgres at check time, and it audits itself: grant the application one column of `session` and this fires on the next run. Column privileges rather than table privileges, because this schema grants by column in several places and a table-level test reports no access while a column stands open | D18, D19 | ● |
 | J74 | `fulfilment_line.external_picked_quantity` equals the sum, over the line's external lines, of each one's **newest** `external_pick` by `observed_at`, then `recorded_at`, then `id`. **A level, not a delta**: a report says how many another system says are picked as at a moment, so the newest wins and an un-pick is a later report of fewer. Ordered by when the other system says it was so, not by when it reached us, so reports arriving out of order fold to the same answer. **Never `picked_quantity`**, which J68 holds to this system's own ledger: a reported pick added there would break J68 and fire J56's `picked > covered` on every NetSuite pick, since nothing allocates stock to a line this system holds none for | D172 | |
 | J75 | No line has more **handed over** (net of corrections) than another system now reports picked on it. The write only warns, because a count made at the bench outranks a report read off a screen, and a later report can lower the level under goods already here: an un-pick, a line reduced in NetSuite. Either way the difference is for a person to resolve, which is what makes it a finding rather than a refusal. It is the default answer to "the item fulfilment changed under an open fulfilment"; cancelling instead is a separate, per-site choice | D172 | ● |
-| J76 | No two active bins in one site have boxes that share any volume. Touching faces do not count: two bins side by side in one bay meet along a face and are in nobody's way. **A finding rather than a refusal**, for J71's reason: two racks drawn through each other, or a surveyed box that disagrees with its rack's drawing, is a disagreement about the floor, and which of the two is wrong is a person's question. The import cannot refuse it either, because the other half of the overlap may be a rack or a survey that is not in the file | D173 | ● |
-| J77 | Every active bin in an aisle that one of its site's active racks runs along has a box. A rack places the bins its template names and no others (D173: racks do not create bins, and the bin list does not place them), so a bin in the same aisle that no rack names is a miscoded bin, a template that spells the codes differently from the bin list, or a floor-standing bin nobody has placed by hand. The rack import reports the same thing as it loads; this is where it stays reported after that | D173 | ● |
+| J76 | No bin sits in a cell outside its place's grid. Which bin is in which cell is the **exact** half of the layout (D173): it comes from the labels on the racks, and a pick list is built from it. A grid shrunk under its bins would leave them in bays that are no longer drawn, so the writer moves or unplaces them first, and this is where a second writer that does not is caught | D173 | ● |
+| J77 | Once a site has a layout, every active bin there sits in a cell. Before the first place is drawn nothing is missing, because nothing was promised; after it, a bin with no cell is one the map cannot send anybody to. It is the Unplaced tray's population, and a finding rather than a refusal because the bin list arrives from another system and may name bins before anybody has put them anywhere | D173 | ● |
+| J78 | No place is inside itself, however far up its parents are followed. A position on the site is composed from the site down (D173), so a loop has none, and a breadcrumb through it never ends. The reads guard against a loop so it cannot hang a request; this is what says one exists | D173 | ● |
 
 ---
 
@@ -262,13 +263,13 @@ appears here as its current whole text.
 | | |
 |---|---|
 | Structural | 56 |
-| Job-asserted | 77 |
-| **Total** | **133** |
-| Marked for vacuity | 74 |
+| Job-asserted | 78 |
+| **Total** | **134** |
+| Marked for vacuity | 75 |
 | `specified` | 22 |
-| `implemented` | 111 |
+| `implemented` | 112 |
 
-Seventy-four of a hundred and thirty-three assert an absence and pass on an empty population.
+Seventy-five of a hundred and thirty-four assert an absence and pass on an empty population.
 That is the number worth watching, because those are the entries that will report
 success on the day they stop being checked.
 
