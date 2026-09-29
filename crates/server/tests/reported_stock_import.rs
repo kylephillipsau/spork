@@ -175,6 +175,63 @@ async fn a_report_lands_in_reported_stock_and_never_in_stock() {
     assert_eq!(row.get::<_, &str>(0), "9", "two copies of a snapshot is not twice the stock");
 }
 
+/// **Lots on one shelf are one balance, and less than nothing is not stock.**
+/// The export breaks a shelf out by `Inventory Number`, so an item appears once
+/// per lot. Written one over another, the last lot read as the whole shelf.
+#[actix_web::test]
+async fn lots_on_one_shelf_are_summed_and_a_negative_balance_is_left_out() {
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    let bearer = token(&app).await;
+
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let source = format!("test-lots-{}", nonce % 1_000_000);
+    let file = "Item,Bin Number,Location,Inventory Number,Status,On Hand,Available\n\
+                GLOVE-M,A-01-1,Melbourne Warehouse,LOT-A,Good,4,4\n\
+                GLOVE-M,A-01-1,Melbourne Warehouse,LOT-B,Good,1.5,1.5\n\
+                GLOVE-M,,Melbourne Warehouse,LOT-C,Good,-3,0\n";
+
+    let report: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!(
+                "/import/stock?as_at=2026-09-10T02:00:00Z&source={source}&apply=true"
+            ))
+            .insert_header(("authorization", bearer.clone()))
+            .set_payload(file)
+            .to_request(),
+        "a shelf in two lots",
+    )
+    .await;
+    assert_eq!(report["loaded"]["rows_written"], 1, "one balance for the shelf");
+    assert_eq!(report["loaded"]["rows_summed"], 1, "the second lot joined the first");
+    assert_eq!(
+        report["loaded"]["rows_negative"], 1,
+        "a warehouse balance of -3 is a record to correct, not stock"
+    );
+
+    let conn = pool(&u).get().await.unwrap();
+    let row = conn
+        .query_one(
+            "SELECT on_hand::text, available::text, status, location_id IS NOT NULL
+               FROM reported_stock WHERE source = $1",
+            &[&source],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, &str>(0), "5.5", "four of one lot and one and a half of another");
+    assert_eq!(row.get::<_, &str>(1), "5.5");
+    assert_eq!(row.get::<_, Option<&str>>(2), Some("Good"), "both lots said Good");
+    assert!(row.get::<_, bool>(3), "the shelf row, not the negative warehouse row");
+}
+
 #[actix_web::test]
 async fn a_file_that_is_not_the_size_it_was_said_to_be_loads_nothing() {
     let Some(u) = url() else {

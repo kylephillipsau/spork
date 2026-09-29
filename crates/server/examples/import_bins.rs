@@ -36,6 +36,12 @@
 //! bins, one of them called `3PL`. Creating a site asserts this business has a
 //! building there. `--include-external` overrides.
 //!
+//! **Warehouses you did not ask for, when you name one.** `--only "North
+//! Warehouse"` loads that warehouse's bins and leaves every other row out
+//! before anything is surveyed, for a deployment that runs in one building.
+//! The export lists every warehouse the business has, and a site created here
+//! is a site every screen then offers.
+//!
 //! **A site whose clock nobody knows.** `site.timezone` is NOT NULL, and
 //! defaulting a new warehouse to Melbourne's clock is wrong in Brisbane twice a
 //! year. An unknown site is reported and skipped.
@@ -72,6 +78,7 @@ struct Args {
     apply: bool,
     assume_kind: Option<String>,
     include_external: bool,
+    only: Option<String>,
     url: String,
 }
 
@@ -80,6 +87,7 @@ fn args() -> Result<Args, String> {
     let mut apply = false;
     let mut assume_kind = None;
     let mut include_external = false;
+    let mut only = None;
     let mut tenant = "11111111-1111-1111-1111-111111111111".to_string();
     let mut recorded_by: Option<String> = None;
     let mut it = std::env::args().skip(1);
@@ -90,6 +98,7 @@ fn args() -> Result<Args, String> {
             "--recorded-by" => recorded_by = it.next(),
             "--assume-kind" => assume_kind = it.next(),
             "--include-external" => include_external = true,
+            "--only" => only = it.next(),
             "--apply" => apply = true,
             other => return Err(format!("unknown argument {other}")),
         }
@@ -126,6 +135,7 @@ fn args() -> Result<Args, String> {
         apply,
         assume_kind,
         include_external,
+        only,
         url: std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set")?,
     })
 }
@@ -136,7 +146,7 @@ async fn main() -> Result<(), String> {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}\n\nusage: --bins <csv> [--apply --recorded-by <person>] \
-                       [--assume-kind <kind>] [--include-external]");
+                       [--assume-kind <kind>] [--include-external] [--only <warehouse>]");
             std::process::exit(2);
         }
     };
@@ -146,7 +156,16 @@ async fn main() -> Result<(), String> {
     // the loader read.
     let payload = std::fs::read(&args.bins)
         .map_err(|e| format!("{}: {e}", args.bins.display()))?;
-    let rows = importing::bins::read(payload.as_slice())?;
+    let mut rows = importing::bins::read(payload.as_slice())?;
+    if let Some(only) = &args.only {
+        let before = rows.len();
+        rows.retain(|r| r.location.eq_ignore_ascii_case(only));
+        if rows.is_empty() {
+            return Err(format!("--only {only:?} matches no row's Location"));
+        }
+        println!("
+  --only {only}: {} of {before} rows kept", rows.len());
+    }
     let survey = importing::bins::survey(&rows, args.include_external);
 
     println!("\n  {} bins\n", survey.bins);

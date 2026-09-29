@@ -1093,12 +1093,17 @@ export interface StockSurvey {
 }
 
 export interface StockLoaded {
+  /** Balances written: one per item per shelf, however many rows made it. */
   rows_written: number;
   /** Rows the previous load of this source left behind, now cleared. */
   rows_replaced: number;
   items_unknown: number;
   bins_unknown: number;
   warehouses_unknown: number;
+  /** Rows summed into another naming the same item on the same shelf (lots, statuses). */
+  rows_summed: number;
+  /** Rows left out because the shelf's balance came to less than nothing. */
+  rows_negative: number;
   applied: boolean;
 }
 

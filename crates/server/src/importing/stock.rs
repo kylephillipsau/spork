@@ -219,6 +219,7 @@ pub fn shortfall(rows: usize, expect: Option<usize>) -> Option<String> {
 /// What the database did, or would have done.
 #[derive(Debug, Default, Serialize)]
 pub struct StockLoaded {
+    /// Balances written: one per item per shelf, however many rows made it.
     pub rows_written: usize,
     /// Rows the previous load of this source left behind, now cleared.
     pub rows_replaced: usize,
@@ -228,8 +229,22 @@ pub struct StockLoaded {
     /// stating no type.
     pub bins_unknown: usize,
     pub warehouses_unknown: usize,
+    /// Rows folded into another naming the same item on the same shelf: the
+    /// export's lots and statuses, summed into one balance.
+    pub rows_summed: usize,
+    /// Rows left out because the shelf's balance came to less than nothing.
+    pub rows_negative: usize,
     /// False when the writes were rolled back.
     pub applied: bool,
+}
+
+/// The rows of one item on one shelf, gathered before they are summed.
+#[derive(Default)]
+struct Held {
+    rows: usize,
+    on_hand: Vec<String>,
+    available: Vec<Option<String>>,
+    statuses: Vec<Option<String>>,
 }
 
 /// Write the report, or find out what writing it would do.
@@ -264,6 +279,16 @@ pub async fn load(
     let mut sites: HashMap<String, Option<Uuid>> = HashMap::new();
     let mut items: HashMap<String, Option<Uuid>> = HashMap::new();
     let mut bins: HashMap<(Uuid, String), Option<Uuid>> = HashMap::new();
+
+    // **Rows naming the same item on the same shelf are one balance.** The
+    // export breaks a shelf out by lot (`Inventory Number`) and by status, and
+    // `reported_stock` holds one figure per item per shelf, so they are summed.
+    // The first version wrote each row over the last, which kept whichever lot
+    // came last: a bin holding four of one lot and one of another read as one.
+    // Keyed by what the row resolves to rather than by its words, so two
+    // spellings of one warehouse are still one shelf.
+    let mut held: Vec<((Uuid, Uuid, Option<Uuid>), Held)> = vec![];
+    let mut at: HashMap<(Uuid, Uuid, Option<Uuid>), usize> = HashMap::new();
 
     for r in rows {
         // The same matching `bins::load` does, so a warehouse named one way in
@@ -338,49 +363,69 @@ pub async fn load(
             }
         }
 
-        // `$n::text::numeric` because `on_hand` is numeric and the quantity
-        // arrives as text.
+        let key = (site_id, item_id, location_id);
+        let i = *at.entry(key).or_insert_with(|| {
+            held.push((key, Held::default()));
+            held.len() - 1
+        });
+        let h = &mut held[i].1;
+        h.rows += 1;
+        h.on_hand.push(r.on_hand.clone());
+        h.available.push(r.available.clone());
+        h.statuses.push(r.status.clone());
+    }
+
+    for ((site_id, item_id, location_id), h) in &held {
+        // One status when the rows agree on one, and none when they do not:
+        // `Good` beside `Damaged` is not a status of the shelf.
+        let status = if h.statuses.windows(2).all(|w| w[0] == w[1]) {
+            h.statuses[0].clone()
+        } else {
+            None
+        };
+        // Available only when every row stated it, because a sum over some of
+        // the lots understates the shelf.
+        let available: Option<Vec<String>> = h.available.iter().cloned().collect();
+
+        // **Summed in the statement, as text cast to numeric**, because
+        // `on_hand` is numeric and this crate has no decimal dependency: a
+        // float would round `25.5 + 0.1` and the database does not.
         //
-        // **Two conflict targets, because migration 86 built two partial unique
-        // indexes**: one keyed on the shelf and one for rows that name none.
-        // A single `ON CONFLICT` naming the first infers nothing for a row whose
-        // `location_id` is NULL, so a file listing one item twice at a warehouse
-        // with no bin would raise a duplicate key rather than replace. The
-        // statements are otherwise identical and differ only in what they match.
-        const SET: &str = "DO UPDATE SET on_hand = EXCLUDED.on_hand,
-                                         available = EXCLUDED.available,
-                                         status = EXCLUDED.status,
-                                         as_at = EXCLUDED.as_at,
-                                         loaded_at = now()";
-        let sql = format!(
-            "INSERT INTO reported_stock
-                 (tenant_id, site_id, item_id, location_id,
-                  on_hand, available, status, as_at, source)
-             VALUES ($1, $2, $3, $4, $5::text::numeric, $6::text::numeric, $7, $8, $9)
-             ON CONFLICT {target} {SET}",
-            target = if location_id.is_some() {
-                "(tenant_id, site_id, item_id, location_id, source) WHERE location_id IS NOT NULL"
-            } else {
-                "(tenant_id, site_id, item_id, source) WHERE location_id IS NULL"
-            },
-        );
-        tx.execute(
-            &sql,
-            &[
-                &tenant,
-                &site_id,
-                &item_id,
-                &location_id,
-                &r.on_hand,
-                &r.available,
-                &r.status,
-                &as_at,
-                &source,
-            ],
-        )
-        .await
-        .map_err(|e| format!("{} at {}: {e}", r.item_code, r.bin_code))?;
-        out.rows_written += 1;
+        // **Less than nothing is not written.** NetSuite reports a balance
+        // below zero when it has recorded more going out than coming in, and
+        // `reported_stock_on_hand_ck` refuses one, because no shelf holds -5.
+        // It is a record to correct there, not stock to report here, so it is
+        // counted and left out rather than aborting the whole load on its row.
+        let n = tx
+            .execute(
+                "INSERT INTO reported_stock
+                     (tenant_id, site_id, item_id, location_id,
+                      on_hand, available, status, as_at, source)
+                 SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid, q.on_hand, q.available,
+                        $7::text, $8::timestamptz, $9::text
+                   FROM (SELECT (SELECT sum(v::numeric) FROM unnest($5::text[]) v) AS on_hand,
+                                (SELECT sum(v::numeric) FROM unnest($6::text[]) v) AS available) q
+                  WHERE q.on_hand >= 0 AND (q.available IS NULL OR q.available >= 0)",
+                &[
+                    &tenant,
+                    site_id,
+                    item_id,
+                    location_id,
+                    &h.on_hand,
+                    &available,
+                    &status,
+                    &as_at,
+                    &source,
+                ],
+            )
+            .await
+            .map_err(|e| format!("reported stock: {e}"))?;
+        if n == 1 {
+            out.rows_written += 1;
+            out.rows_summed += h.rows - 1;
+        } else {
+            out.rows_negative += h.rows;
+        }
     }
 
     if apply {
