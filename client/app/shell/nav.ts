@@ -70,6 +70,7 @@ export const NAV: readonly NavGroup[] = [
     label: "Inventory",
     items: [
       { id: "items", label: "Items", path: "/items", icon: Boxes },
+      { id: "warehouse", label: "Warehouse", path: "/warehouse", icon: MapIcon },
       { id: "findings", label: "Findings", path: "/findings", icon: TriangleAlert, badge: "findings" },
       { id: "weigh", label: "Weigh", path: "/weigh", icon: Scale },
       { id: "capture", label: "Capture", path: "/capture", icon: Camera },
@@ -82,7 +83,6 @@ export const SETTINGS: NavGroup = {
   label: "Settings",
   items: [
     { id: "workspace", label: "Workspace", path: "/workspace", icon: Building2 },
-    { id: "layout", label: "Layout", path: "/layout", icon: MapIcon },
     { id: "import", label: "Import", path: "/import", icon: Upload },
     { id: "tokens", label: "Import tokens", path: "/tokens", icon: KeyRound },
   ],

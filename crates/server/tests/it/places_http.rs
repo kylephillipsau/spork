@@ -21,6 +21,8 @@ async fn clear(c: &tokio_postgres::Client) {
         "UPDATE location SET place_id = NULL, slot_bay = NULL, slot_level = NULL,
                              slot_row = NULL, slot_position = NULL
           WHERE site_id = '{SITE}';
+         DELETE FROM reported_stock WHERE item_id IN (SELECT id FROM item WHERE code LIKE 'LT-ITEM-%');
+         DELETE FROM item WHERE code LIKE 'LT-ITEM-%';
          DELETE FROM location WHERE code LIKE 'LT-%';
          DELETE FROM place WHERE site_id = '{SITE}';"
     ))
@@ -63,6 +65,19 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     ))
     .await
     .expect("the bins");
+    // What NetSuite last said is on one of them: two items, the fewer first.
+    db.batch_execute(&format!(
+        "INSERT INTO item (tenant_id, code, description, base_unit_id, tracking)
+         SELECT '{TENANT}', c, 'For the bins list', u.id, 'none'
+           FROM unit u, unnest(ARRAY['LT-ITEM-1', 'LT-ITEM-2']) c WHERE u.code = 'ea';
+         INSERT INTO reported_stock (tenant_id, site_id, item_id, location_id, on_hand, as_at, source)
+         SELECT '{TENANT}', '{SITE}', i.id, l.id, v.q, now(), 'test'
+           FROM (VALUES ('LT-ITEM-1', 4), ('LT-ITEM-2', 30)) v(code, q)
+           JOIN item i ON i.tenant_id = '{TENANT}' AND i.code = v.code
+           JOIN location l ON l.site_id = '{SITE}' AND l.code = 'LT-03-2';"
+    ))
+    .await
+    .expect("the report");
 
     let state = web::Data::new(AppState { pool: pool(&u) });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
@@ -158,6 +173,39 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     let (_, after) = call(&app, test::TestRequest::get().uri("/layout").insert_header(auth.clone())).await;
     assert!(after["places"].as_array().unwrap().len() >= 2, "{after}");
     assert!(after["unplaced_sample"].as_array().unwrap().iter().any(|c| c == "LT-FLOOR"), "{after}");
+
+    // ── the whole site as a plan: what the warehouse view draws ─────────
+    let site_plan = after["plan"].as_array().expect("the site's plan");
+    assert!(site_plan.iter().any(|s| s["name"] == "Building" && s["nesting"] == 0), "{after}");
+    let rack = site_plan.iter().find(|s| s["name"] == "Rack LT").expect("the rack on the site's plan");
+    assert_eq!(rack["nesting"], 1, "inside the building");
+    assert_eq!(rack["corners"].as_array().unwrap().len(), 4);
+    assert!(rack["height"].as_f64().unwrap() > 0.0, "tall enough to draw in 3D");
+
+    // ── the bins list: one place's, the tray's, and a search ────────────
+    let rack_id = rack["place_id"].as_str().unwrap();
+    let (status, in_rack) =
+        call(&app, test::TestRequest::get().uri(&format!("/bins?place={rack_id}")).insert_header(auth.clone())).await;
+    assert_eq!(status, 200, "{in_rack}");
+    let bins = in_rack["bins"].as_array().unwrap();
+    assert_eq!(bins.len(), 4, "{in_rack}");
+    let b = bins.iter().find(|b| b["code"] == "LT-03-2").unwrap();
+    assert_eq!(b["whereabouts"], "bay 03, level 2", "in the words the rack's labels use");
+    assert_eq!(b["place_name"], "Rack LT");
+    assert_eq!(b["reported_items"], 2, "{b}");
+    assert_eq!(b["reported"][0]["item_code"], "LT-ITEM-2", "the most first: {b}");
+    assert_eq!(b["reported"][0]["on_hand"], "30");
+    assert_eq!(b["held"], 0);
+    let bare = bins.iter().find(|b| b["code"] == "LT-01-1").unwrap();
+    assert_eq!(bare["reported_items"], 0, "nothing reported is none, not an error: {bare}");
+    assert_eq!(bare["reported"], Value::Array(vec![]));
+    let (_, tray) = call(&app, test::TestRequest::get().uri("/bins?unplaced=true").insert_header(auth.clone())).await;
+    let tray = tray["bins"].as_array().unwrap();
+    assert!(tray.iter().any(|b| b["code"] == "LT-FLOOR"), "the bins the draft left");
+    assert!(tray.iter().all(|b| b["place_id"].is_null() && b["whereabouts"].is_null()));
+    let (_, searched) = call(&app, test::TestRequest::get().uri("/bins?q=LT-01").insert_header(auth.clone())).await;
+    let searched = searched["bins"].as_array().unwrap();
+    assert!(!searched.is_empty() && searched.iter().all(|b| b["code"].as_str().unwrap().contains("LT-01")));
 
     // ── what is not there says so ────────────────────────────────────────
     let (status, _) = call(

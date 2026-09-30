@@ -218,6 +218,9 @@ const PAIRS = [
   ["PlanShape", ["PlanShape"]],
   ["PlaceView", ["PlaceView"]],
   ["BinView", ["BinView"]],
+  ["BinContent", ["BinContent"]],
+  ["BinRow", ["BinRow"]],
+  ["BinsList", ["BinsList"]],
   // an item's own page
   ["ItemView", ["ItemView"]],
   ["ItemRow", ["ItemRow"]],

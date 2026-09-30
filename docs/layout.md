@@ -45,7 +45,7 @@ numbered odd on one side of an aisle and even on the other, or count down.
 
 ## A first layout, from the bin list
 
-On **Settings › Layout**, a site with bins and no layout offers **Draft from bin
+On **Inventory › Warehouse**, a site with bins and no layout offers **Draft from bin
 list**. It groups the bins by the shape of their codes, proposes a place for
 each family with a grid and a pattern, and shows what it would make before
 making anything. Bins whose codes follow no pattern (`3PL`, `ASSEMBLY-BIN`) are
@@ -54,6 +54,14 @@ and it only puts new bins in: into places already drawn if their pattern names
 them, otherwise into new places. It never moves a bin that is already in a cell.
 
 ## Where it shows
+
+**Inventory › Warehouse** lists the site's places, each under the one it is
+inside, beside a plan of the whole site. Choose a place on either and its bins
+are listed with their cell in the rack's own words ("bay 03, level 2"), what
+NetSuite's last inventory balance put on the shelf, and what Spork's own ledger
+holds there. The two are separate columns because they are separate records. A
+search finds a bin anywhere on the site, and the bins no pattern fitted are
+listed as not on the layout.
 
 Scan a bin label, or type it into the search box, and Spork opens the **rack
 face**: the way into the place, the front of the rack with the bin's cell lit,

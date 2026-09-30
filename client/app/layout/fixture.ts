@@ -1,6 +1,6 @@
-import type { BinView, CellBin, DraftReport, LayoutView, PlaceView, PlanShape } from "@domain/types";
+import type { BinRow, BinView, BinsList, CellBin, DraftReport, LayoutView, PlaceView, PlanShape } from "@domain/types";
 
-import type { DraftState, LayoutDesk } from "./useLayout";
+import type { Chosen, DraftState, WarehouseDesk } from "./useWarehouse";
 import type { BinDesk, PlaceDesk } from "./usePlace";
 
 /**
@@ -135,7 +135,7 @@ export const BUILDING: PlaceView = {
 export const fixtureBin = (value: BinView): BinDesk => ({ read: { kind: "ready", value } });
 export const fixturePlace = (value: PlaceView): PlaceDesk => ({ read: { kind: "ready", value } });
 
-// ── the layout page ──────────────────────────────────────────────────────
+// ── the warehouse ────────────────────────────────────────────────────────
 
 export const NO_LAYOUT: LayoutView = {
   site_code: "NORTH",
@@ -143,6 +143,7 @@ export const NO_LAYOUT: LayoutView = {
   bins: 1284,
   unplaced: 1284,
   unplaced_sample: [],
+  plan: [],
 };
 
 export const DRAFTED: DraftReport = {
@@ -174,14 +175,98 @@ export const LAID_OUT: LayoutView = {
   bins: 47,
   unplaced: 3,
   unplaced_sample: ["3PL", "ASSEMBLY-BIN", "C-FLOOR"],
+  plan: PLAN,
 };
 
-export function fixtureLayout(value: LayoutView, draft: DraftState = { kind: "idle" }): LayoutDesk {
+const ITEM = (k: number) => `01990000-0000-7000-8000-0000000b${String(k).padStart(4, "0")}`;
+
+/** Rack C's bins, as the list reads them: most hold one item, a few several. */
+const RACK_C_ROWS: BinRow[] = C_BINS.map((b, i) => {
+  const items = i % 7 === 3 ? 0 : i % 5 === 2 ? 3 : 1;
+  const reported = Array.from({ length: Math.min(items, 3) }, (_, j) => ({
+    item_id: ITEM(i * 3 + j),
+    item_code: `SKU-${5100 + i * 3 + j}${j === 0 ? "B" : ""}`,
+    on_hand: String([24, 6, 2][j]! * (1 + (i % 3))),
+  }));
+  return {
+    location_id: b.location_id,
+    code: b.code,
+    kind: b.kind,
+    place_id: RACK_C,
+    place_name: "Rack C",
+    cell: b.cell,
+    whereabouts: `bay ${C_LABELS[b.cell.bay - 1]}, level ${b.cell.level}`,
+    pick_sequence: i + 1,
+    reported,
+    reported_items: items,
+    held: i === 0 ? 12 : i === 4 ? 3 : 0,
+  };
+});
+
+export const RACK_C_BINS: BinsList = { bins: RACK_C_ROWS, total: RACK_C_ROWS.length };
+
+/** The tray: bins whose codes the draft could not read. */
+export const UNPLACED_BINS: BinsList = {
+  bins: ["3PL", "ASSEMBLY-BIN", "C-FLOOR"].map((code, i) => ({
+    location_id: `01990000-0000-7000-8000-0000000000${(0xf0 + i).toString(16)}`,
+    code,
+    kind: "bulk",
+    place_id: null,
+    place_name: null,
+    cell: null,
+    whereabouts: null,
+    pick_sequence: null,
+    reported: i === 2 ? [{ item_id: ITEM(900), item_code: "SKU-5120B", on_hand: "40" }] : [],
+    reported_items: i === 2 ? 1 : 0,
+    held: 0,
+  })),
+  total: 3,
+};
+
+/** A search across the site for "01": bay 01 of two racks, and the dock's first door. */
+export const FOUND_BINS: BinsList = {
+  bins: [
+    RACK_C_ROWS[0]!,
+    RACK_C_ROWS[1]!,
+    {
+      ...RACK_C_ROWS[2]!,
+      location_id: "01990000-0000-7000-8000-0000000000d1",
+      code: "D-01-1-1",
+      place_id: RACK_D,
+      place_name: "Rack D",
+      whereabouts: "bay 01, level 1",
+      held: 0,
+    },
+    {
+      ...UNPLACED_BINS.bins[0]!,
+      location_id: "01990000-0000-7000-8000-0000000000e1",
+      code: "DOCK-01",
+      kind: "dock",
+      place_id: DOCK,
+      place_name: "Dock",
+      whereabouts: "bay 1",
+    },
+  ],
+  total: 4,
+};
+
+export function fixtureWarehouse(
+  value: LayoutView,
+  opts: { draft?: DraftState; chosen?: Chosen; bins?: BinsList; asked?: string } = {},
+): WarehouseDesk {
+  const asked = opts.asked ?? "";
   return {
     read: { kind: "ready", value },
-    draft,
+    draft: opts.draft ?? { kind: "idle" },
     preview: async () => {},
     apply: async () => {},
     dismiss: () => {},
+    chosen: opts.chosen ?? null,
+    choose: () => {},
+    bins: opts.bins ? { kind: "ready", value: opts.bins } : { kind: "idle" },
+    asked,
+    typed: asked,
+    type: () => {},
+    search: () => {},
   };
 }

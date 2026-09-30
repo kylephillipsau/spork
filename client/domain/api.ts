@@ -14,6 +14,7 @@ import type {
   ImportReport,
   ItemImportReport,
   BinView,
+  BinsList,
   ItemView,
   ItemsList,
   OwnerSet,
@@ -700,6 +701,16 @@ export const api = {
       csv,
       token,
     ),
+
+  /** Bins at the working site: one place's, the ones on no place, or a code search. */
+  bins: (query: { place?: Uuid; unplaced?: boolean; q?: string }) => {
+    const p = new URLSearchParams();
+    if (query.place) p.set("place", query.place);
+    if (query.unplaced) p.set("unplaced", "true");
+    if (query.q) p.set("q", query.q);
+    const qs = p.toString();
+    return send<BinsList>("GET", `/bins${qs ? `?${qs}` : ""}`);
+  },
 
   /** A bin, its cell, and the place around it: where a bin scan lands (D173). */
   bin: (locationId: Uuid) => send<BinView>("GET", `/bins/${encodeURIComponent(locationId)}`),

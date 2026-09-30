@@ -61,9 +61,9 @@ import { OrdersPage } from "@app/outbound/orders/OrdersPage";
 import { OrderPage } from "@app/outbound/orders/OrderPage";
 import { useOrder } from "@app/outbound/orders/useOrder";
 import { BinPage, PlacePage } from "@app/layout/PlacePage";
-import { LayoutPage } from "@app/layout/LayoutPage";
+import { WarehousePage } from "@app/layout/WarehousePage";
 import { useBin, usePlace } from "@app/layout/usePlace";
-import { useLayout } from "@app/layout/useLayout";
+import { chosenFrom, useWarehouse } from "@app/layout/useWarehouse";
 import { ItemPage } from "@app/items/ItemPage";
 import { useItem } from "@app/items/useItem";
 import { ItemsPage } from "@app/items/ItemsPage";
@@ -303,9 +303,9 @@ function LivePlace({ place }: { place: string }) {
   return <PlacePage desk={usePlace(place)} />;
 }
 
-/** The site's layout, and drafting one from the bin list. */
-function LiveLayout() {
-  return <LayoutPage desk={useLayout()} />;
+/** The site's places and their bins, and drafting them from the bin list. */
+function LiveWarehouse() {
+  return <WarehousePage desk={useWarehouse(chosenFrom(window.location.search))} />;
 }
 
 /** The dashboard (D171): counts, the packing queue, findings and orders. */
@@ -339,7 +339,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   place: (params) => <LivePlace place={params["place"] ?? ""} />,
   items: () => <LiveItems />,
   item: (params) => <LiveItem item={params["item"] ?? ""} />,
-  layout: () => <LiveLayout />,
+  warehouse: () => <LiveWarehouse />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,
   where: () => <LiveWhere />,

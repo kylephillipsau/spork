@@ -1380,6 +1380,41 @@ export interface LayoutView {
   /** Active bins with no cell: J77, once the site has places. */
   unplaced: number;
   unplaced_sample: string[];
+  /** Every place on the site, as footprints: what the plan and the 3D view draw. */
+  plan: PlanShape[];
+}
+
+/** Something NetSuite last reported on a shelf. */
+export interface BinContent {
+  item_id: Uuid;
+  item_code: string;
+  on_hand: string;
+}
+
+/** One bin in `GET /bins`: where it is, and what each record says is in it. */
+export interface BinRow {
+  location_id: Uuid;
+  code: string;
+  kind: string;
+  place_id: Uuid | null;
+  place_name: string | null;
+  cell: GridCell | null;
+  /** Its cell in the rack's own label words: "bay 05, level 3". */
+  whereabouts: string | null;
+  pick_sequence: number | null;
+  /** NetSuite's last report on this shelf, most first, three at most. */
+  reported: BinContent[];
+  /** How many items NetSuite reported here in all. */
+  reported_items: number;
+  /** What Spork's own ledger holds here. */
+  held: number;
+}
+
+/** `GET /bins`: bins at the working site, in code order. */
+export interface BinsList {
+  bins: BinRow[];
+  /** How many match, when more than were sent. */
+  total: number;
 }
 
 /** A place the draft made, or would make. */

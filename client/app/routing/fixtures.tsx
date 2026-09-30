@@ -72,18 +72,21 @@ import { OrdersPage } from "@app/outbound/orders/OrdersPage";
 import { OrderPage } from "@app/outbound/orders/OrderPage";
 import { FOUND, LATEST, NOTHING, ORDER, ORDER_MISSING, SUPERSEDED, fixtureOrder, fixtureOrders } from "@app/outbound/orders/fixture";
 import { BinPage, PlacePage } from "@app/layout/PlacePage";
-import { LayoutPage } from "@app/layout/LayoutPage";
+import { WarehousePage } from "@app/layout/WarehousePage";
 import {
   BIN,
   BIN_UNPLACED,
   BUILDING,
   DRAFTED,
+  FOUND_BINS,
   LAID_OUT,
   NO_LAYOUT,
+  RACK_C_BINS,
   SHELF,
+  UNPLACED_BINS,
   fixtureBin,
-  fixtureLayout,
   fixturePlace,
+  fixtureWarehouse,
 } from "@app/layout/fixture";
 
 import { SetupPage } from "@app/setup/SetupPage";
@@ -555,13 +558,23 @@ export const FIXTURES: readonly Screen[] = [
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureItem(ITEM_UNKNOWN)} />
   )),
-  app("f-layout-none", "/fixtures/layout/none", "Layout — none yet", "desk", { screen: "layout" }, () => (
-    <LayoutPage desk={fixtureLayout(NO_LAYOUT)} />
+  // The warehouse: none yet, its draft previewed, a rack chosen with its
+  // bins, the tray of bins no pattern fits, and a search across the site.
+  app("f-warehouse-none", "/fixtures/warehouse/none", "Warehouse — none yet", "desk", { screen: "warehouse" }, () => (
+    <WarehousePage desk={fixtureWarehouse(NO_LAYOUT)} />
   )),
-  app("f-layout-draft", "/fixtures/layout/draft", "Layout — draft", "desk", { screen: "layout" }, () => (
-    <LayoutPage desk={fixtureLayout(NO_LAYOUT, { kind: "previewed", report: DRAFTED })} />
+  app("f-warehouse-draft", "/fixtures/warehouse/draft", "Warehouse — draft", "desk", { screen: "warehouse" }, () => (
+    <WarehousePage desk={fixtureWarehouse(NO_LAYOUT, { draft: { kind: "previewed", report: DRAFTED } })} />
   )),
-  app("f-layout", "/fixtures/layout", "Layout", "desk", { screen: "layout" }, () => <LayoutPage desk={fixtureLayout(LAID_OUT)} />),
+  app("f-warehouse", "/fixtures/warehouse", "Warehouse", "desk", { screen: "warehouse" }, () => (
+    <WarehousePage desk={fixtureWarehouse(LAID_OUT, { chosen: LAID_OUT.places[1]!.place_id, bins: RACK_C_BINS })} />
+  )),
+  app("f-warehouse-unplaced", "/fixtures/warehouse/unplaced", "Warehouse — not on the layout", "desk", { screen: "warehouse" }, () => (
+    <WarehousePage desk={fixtureWarehouse(LAID_OUT, { chosen: "unplaced", bins: UNPLACED_BINS })} />
+  )),
+  app("f-warehouse-found", "/fixtures/warehouse/found", "Warehouse — search", "desk", { screen: "warehouse" }, () => (
+    <WarehousePage desk={fixtureWarehouse(LAID_OUT, { chosen: LAID_OUT.places[1]!.place_id, bins: FOUND_BINS, asked: "01" })} />
+  )),
   app("f-order-missing", "/fixtures/order/missing", "Order — missing", "desk", { screen: "order" }, () => (
     <OrderPage desk={fixtureOrder(ORDER_MISSING)} />
   )),

@@ -224,14 +224,76 @@
   padding: var(--ui-space-4);
   border-top: 1px solid var(--ui-border);
 }
-.treeName {
-  display: inline-flex;
+
+/* ── the warehouse: the places beside what is chosen ────────────────────── */
+
+.desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ui-space-5);
+  align-items: start;
+}
+/* A third for the places, which read down; the rest for the plan and the
+   bins, whose rows carry the most. */
+@media (min-width: 1100px) {
+  .desk {
+    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
+  }
+}
+.chosen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-5);
+  min-width: 0;
+}
+.sitePlan {
+  max-height: 20rem;
+}
+.target {
+  cursor: pointer;
+}
+.target:hover:not(.focus) {
+  stroke: var(--ui-accent);
+}
+.search {
+  display: flex;
   align-items: center;
   gap: var(--ui-space-2);
+  width: min(320px, 100%);
 }
-.treeIcon {
-  flex: none;
-  width: var(--ui-icon-sm);
-  height: var(--ui-icon-sm);
-  color: var(--ui-text-muted);
+.inset {
+  padding: var(--ui-space-4);
+}
+.named {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.reported {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.foot {
+  padding: var(--ui-space-3) var(--ui-space-4);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.pick {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.picked,
+.picked:hover {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-soft-fg);
+  box-shadow: inset var(--ui-space-0-5) 0 0 var(--ui-accent);
+}
+.picked .childIcon,
+.picked .childMeta {
+  color: inherit;
 }

@@ -409,6 +409,58 @@ pub struct LayoutView {
     /// Active bins with no cell: what J77 reports once the site has places.
     pub unplaced: i64,
     pub unplaced_sample: Vec<String>,
+    /// Every place on the site, as footprints: what the warehouse's plan and
+    /// its 3D view draw.
+    pub plan: Vec<PlanShape>,
+}
+
+/// Every place on the site as it stands there, outermost first.
+///
+/// The same composition a place's page draws its plan from, over every place
+/// standing on the site rather than the one around a single place: positions
+/// are worked out from the chain of parents when read, never stored (D173).
+fn site_plan(places: &[Row]) -> Vec<PlanShape> {
+    let by_id: HashMap<Uuid, &Row> = places.iter().map(|p| (p.id, p)).collect();
+    let mut kids: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    let mut roots = vec![];
+    for p in places {
+        match p.parent_id.filter(|id| by_id.contains_key(id)) {
+            Some(parent) => kids.entry(parent).or_default().push(p.id),
+            // A parent that is not on the site is treated as the site, so a
+            // place is never lost from the plan.
+            None => roots.push(p.id),
+        }
+    }
+    let boxes: HashMap<Uuid, (Option<Uuid>, f64, f64, f64, f64)> = places
+        .iter()
+        .map(|p| (p.id, (p.parent_id, p.x, p.y, p.z, p.turn)))
+        .collect();
+    let frames = layout::frames(&boxes);
+    let mut out = vec![];
+    let mut visited = HashSet::new();
+    for root in roots {
+        let mut stack = vec![(root, 0usize)];
+        while let Some((id, nesting)) = stack.pop() {
+            // J78's guard: a loop in the parents cannot hang the read.
+            if !visited.insert(id) {
+                continue;
+            }
+            let (Some(p), Some(f)) = (by_id.get(&id), frames.get(&id)) else { continue };
+            out.push(PlanShape {
+                place_id: id,
+                name: p.name.clone(),
+                solid: p.solid,
+                nesting,
+                corners: layout::footprint(f, p.length, p.depth, p.outline.as_deref()),
+                z: f.z,
+                height: p.height,
+            });
+            for k in kids.get(&id).into_iter().flatten().rev() {
+                stack.push((*k, nesting + 1));
+            }
+        }
+    }
+    out
 }
 
 /// The site the caller is working at, or a refusal that says what to do.
@@ -444,8 +496,9 @@ pub async fn site_layout(
                     .iter()
                     .map(|r| (r.get(0), r.get(1)))
                     .collect();
-                let places = site_places(tx, site)
-                    .await?
+                let rows = site_places(tx, site).await?;
+                let plan = site_plan(&rows);
+                let places = rows
                     .into_iter()
                     .map(|p| LayoutPlace {
                         place_id: p.id,
@@ -477,11 +530,206 @@ pub async fn site_layout(
                     .iter()
                     .map(|r| r.get(0))
                     .collect();
-                Ok(LayoutView { site_code, places, bins: r.get(0), unplaced: r.get(1), unplaced_sample })
+                Ok(LayoutView {
+                    site_code,
+                    places,
+                    bins: r.get(0),
+                    unplaced: r.get(1),
+                    unplaced_sample,
+                    plan,
+                })
             })
         })
         .await?;
     Ok(HttpResponse::Ok().json(view))
+}
+
+// ---------------------------------------------------------------------------
+// The bins, as a list
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Debug)]
+pub struct BinsQuery {
+    /// The bins in this place's own cells.
+    pub place: Option<Uuid>,
+    /// The bins in no cell at all: the tray the draft left.
+    #[serde(default)]
+    pub unplaced: bool,
+    /// Part of a bin's code.
+    pub q: Option<String>,
+}
+
+/// Something NetSuite last reported on a shelf.
+#[derive(Serialize, Debug)]
+pub struct BinContent {
+    pub item_id: Uuid,
+    pub item_code: String,
+    /// Text, as the report carried it.
+    pub on_hand: String,
+}
+
+/// One bin, where it is, and what each record says is in it.
+#[derive(Serialize, Debug)]
+pub struct BinRow {
+    pub location_id: Uuid,
+    pub code: String,
+    pub kind: String,
+    pub place_id: Option<Uuid>,
+    pub place_name: Option<String>,
+    pub cell: Option<GridCell>,
+    /// Its cell in the words the rack's labels use: "bay 05, level 3".
+    pub whereabouts: Option<String>,
+    pub pick_sequence: Option<i32>,
+    /// What NetSuite's last inventory balance put on this shelf, most first,
+    /// three at most; and how many items in all.
+    pub reported: Vec<BinContent>,
+    pub reported_items: i64,
+    /// What this system's own ledger holds here.
+    pub held: i64,
+}
+
+#[derive(Serialize, Debug)]
+pub struct BinsList {
+    pub bins: Vec<BinRow>,
+    /// How many match, when that is more than were sent.
+    pub total: i64,
+}
+
+/// How many bins one read sends. A rack is a few hundred; the site is
+/// thousands, and a screen asks for one place at a time.
+const BINS_AT_ONCE: i64 = 500;
+
+/// The bins at the caller's site, in code order, with what is in them.
+#[get("/bins")]
+pub async fn bin_list(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<BinsQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let site = working_site(who.site_id)?;
+    let place = query.place;
+    let unplaced = query.unplaced;
+    let like = query
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|q| !q.is_empty())
+        .map(|q| format!("%{}%", q.replace(['%', '_'], "")));
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                // The labels a place's pattern gives its bays and levels, so a
+                // cell reads as the rack does.
+                let labels: HashMap<Uuid, (Vec<String>, Vec<String>, bool, bool)> = site_places(tx, site)
+                    .await?
+                    .iter()
+                    .map(|p| {
+                        let pattern = p.pattern.as_deref().and_then(|s| Pattern::parse(s).ok());
+                        let (bays, levels) = layout::labels(&p.grid, pattern.as_ref());
+                        (p.id, (bays, levels, p.grid.levels > 1, p.grid.rows > 1))
+                    })
+                    .collect();
+                let rows = tx
+                    .query(
+                        "SELECT l.id, l.code, l.kind, l.place_id, p.name,
+                                l.slot_bay, l.slot_level, l.slot_row, l.slot_position,
+                                l.pick_sequence,
+                                coalesce(rep.items, 0), rep.ids, rep.codes, rep.qtys,
+                                coalesce(held.q, 0)::bigint,
+                                count(*) OVER ()
+                           FROM location l
+                           LEFT JOIN place p ON p.id = l.place_id
+                           -- The report totalled once for the site: it has no
+                           -- index by bin, and a lookup per bin read it whole
+                           -- each time.
+                           LEFT JOIN (
+                               SELECT rs.location_id,
+                                      count(*) AS items,
+                                      (array_agg(i.id ORDER BY rs.on_hand DESC, i.code))[1:3] AS ids,
+                                      (array_agg(i.code ORDER BY rs.on_hand DESC, i.code))[1:3] AS codes,
+                                      (array_agg(rs.on_hand::text ORDER BY rs.on_hand DESC, i.code))[1:3]
+                                          AS qtys
+                                 FROM reported_stock rs
+                                 JOIN item i ON i.id = rs.item_id
+                                WHERE rs.site_id = $1 AND rs.location_id IS NOT NULL
+                                GROUP BY rs.location_id
+                           ) rep ON rep.location_id = l.id
+                           LEFT JOIN LATERAL (
+                               SELECT sum(s.quantity) AS q FROM stock s
+                                WHERE s.holder_location_id = l.id AND s.quantity > 0
+                           ) held ON true
+                          WHERE l.site_id = $1 AND l.active
+                            AND ($2::uuid IS NULL OR l.place_id = $2)
+                            AND (NOT $3::bool OR l.place_id IS NULL)
+                            AND ($4::text IS NULL OR l.code ILIKE $4)
+                          ORDER BY l.code
+                          LIMIT $5",
+                        &[&site, &place, &unplaced, &like, &BINS_AT_ONCE],
+                    )
+                    .await?;
+                let total: i64 = rows.first().map(|r| r.get(15)).unwrap_or(0);
+                let bins = rows
+                    .iter()
+                    .map(|r| {
+                        let place_id: Option<Uuid> = r.get(3);
+                        let cell = r.get::<_, Option<i32>>(5).map(|bay| GridCell {
+                            bay,
+                            level: r.get(6),
+                            row: r.get(7),
+                            position: r.get(8),
+                        });
+                        let whereabouts = match (place_id.and_then(|p| labels.get(&p)), &cell) {
+                            (Some((bays, levels, stacked, rowed)), Some(c)) => {
+                                let mut parts = vec![format!(
+                                    "bay {}",
+                                    bays.get((c.bay - 1) as usize).cloned().unwrap_or_else(|| c.bay.to_string())
+                                )];
+                                if *stacked {
+                                    parts.push(format!(
+                                        "level {}",
+                                        levels
+                                            .get((c.level - 1) as usize)
+                                            .cloned()
+                                            .unwrap_or_else(|| c.level.to_string())
+                                    ));
+                                }
+                                if *rowed {
+                                    parts.push(if c.row == 1 { "front row".into() } else { format!("row {}", c.row) });
+                                }
+                                Some(parts.join(", "))
+                            }
+                            _ => None,
+                        };
+                        let ids: Vec<Uuid> = r.get::<_, Option<Vec<Uuid>>>(11).unwrap_or_default();
+                        let codes: Vec<String> = r.get::<_, Option<Vec<String>>>(12).unwrap_or_default();
+                        let qtys: Vec<String> = r.get::<_, Option<Vec<String>>>(13).unwrap_or_default();
+                        BinRow {
+                            location_id: r.get(0),
+                            code: r.get(1),
+                            kind: r.get(2),
+                            place_id,
+                            place_name: r.get(4),
+                            cell,
+                            whereabouts,
+                            pick_sequence: r.get(9),
+                            reported: ids
+                                .into_iter()
+                                .zip(codes)
+                                .zip(qtys)
+                                .map(|((item_id, item_code), on_hand)| BinContent { item_id, item_code, on_hand })
+                                .collect(),
+                            reported_items: r.get(10),
+                            held: r.get(14),
+                        }
+                    })
+                    .collect();
+                Ok(BinsList { bins, total })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
 }
 
 // ---------------------------------------------------------------------------
