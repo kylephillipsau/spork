@@ -54,10 +54,15 @@ pub struct Bench {
     pub customer: String,
     pub site: String,
     /// Where a new carton comes into existence. D97: `created` asserts placement.
+    /// The site's pack location (migration 97), absent until the site says.
     pub dock_id: Option<Uuid>,
-    /// Where goods picked elsewhere are put down before they are boxed: the
-    /// site's staging location, when it has one (D172).
+    /// Where goods picked elsewhere are put down before they are boxed (D172).
+    /// The same pack location: the bench is where they are put down.
     pub staging_id: Option<Uuid>,
+    /// What this site has not set up that packing here needs, said as a
+    /// sentence, or absent when nothing is missing. A bench that cannot start a
+    /// carton says why before somebody tries.
+    pub unready: Option<String>,
     pub lines: Vec<BenchLine>,
 }
 
@@ -223,24 +228,38 @@ pub async fn bench_view(
                     .ok_or(ApiError::NotFound)?;
                 let site_id: Option<Uuid> = head.get(3);
 
-                // A dock to bring cartons into being at. Any location at the
-                // site will do for the demo; D97 only requires that `created`
-                // says where.
-                let dock_id: Option<Uuid> = tx
+                // **Where the site says it packs, and nowhere else** (migration
+                // 97). The first version took the first location by code for
+                // the carton and the first `staging` one for the goods, which
+                // on a real bin list are a rack bin and a rack's top level.
+                let (pack_at, owned): (Option<Uuid>, bool) = match tx
                     .query_opt(
-                        "SELECT id FROM location WHERE site_id = $1 ORDER BY code LIMIT 1",
+                        "SELECT pack_location_id, owner_party_id IS NOT NULL
+                           FROM site WHERE id = $1",
                         &[&site_id],
                     )
                     .await?
-                    .map(|r| r.get(0));
-                let staging_id: Option<Uuid> = tx
-                    .query_opt(
-                        "SELECT id FROM location
-                          WHERE site_id = $1 AND kind = 'staging' ORDER BY code LIMIT 1",
-                        &[&site_id],
-                    )
-                    .await?
-                    .map(|r| r.get(0));
+                {
+                    Some(r) => (r.get(0), r.get(1)),
+                    None => (None, false),
+                };
+                let dock_id = pack_at;
+                let staging_id = pack_at;
+                let site_code: String = head.get(2);
+                let unready = match (pack_at.is_some(), owned) {
+                    (true, true) => None,
+                    (false, true) => Some(format!(
+                        "{site_code} doesn't say where it packs yet. Set it in Workspace."
+                    )),
+                    (true, false) => Some(format!(
+                        "{site_code} doesn't say who owns the stock it holds, so goods picked \
+                         elsewhere can't be handed over. Set it in Workspace."
+                    )),
+                    (false, false) => Some(format!(
+                        "{site_code} doesn't say where it packs or who owns its stock yet. Set \
+                         both in Workspace."
+                    )),
+                };
 
                 let lines = tx
                     .query(
@@ -344,6 +363,7 @@ pub async fn bench_view(
                     site: head.get(2),
                     dock_id,
                     staging_id,
+                    unready,
                     lines: out,
                 })
             })

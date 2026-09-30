@@ -15,6 +15,8 @@ import type {
   ItemImportReport,
   BinView,
   ItemView,
+  OwnerSet,
+  PackLocationSet,
   DraftReport,
   LayoutView,
   PlaceView,
@@ -704,6 +706,14 @@ export const api = {
 
   /** The organisation and its warehouses. */
   workspace: () => send<Workspace>("GET", "/workspace"),
+
+  /** Say where a site packs, by a location code; a code the site lacks is made. */
+  setPackLocation: (siteId: Uuid, code: string) =>
+    send<PackLocationSet>("POST", `/workspace/sites/${encodeURIComponent(siteId)}/pack-location`, { code }),
+
+  /** Say that a site's stock belongs to this business. */
+  setSiteOwner: (siteId: Uuid) =>
+    send<OwnerSet>("POST", `/workspace/sites/${encodeURIComponent(siteId)}/owner`, { owner: "business" }),
 
   /** Every import token this tenant has, spent ones included (D158). */
   apiTokens: () => send<ApiToken[]>("GET", "/tokens"),

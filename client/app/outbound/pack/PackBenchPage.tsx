@@ -192,6 +192,12 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
           {bench.problem}
         </Alert>
       )}
+      {/* Said before somebody tries, rather than as the refusal after. */}
+      {screen.unready && (
+        <Alert tone="warning">
+          {screen.unready} <Link href="/workspace">Open Workspace</Link>
+        </Alert>
+      )}
 
       <div className={s.split}>
         <Card
@@ -244,7 +250,12 @@ function NewCarton({ screen, bench }: { screen: BenchScreen; bench: PackBench })
             placeholder="No presets"
           />
         </div>
-        <Button type="submit" variant={bench.openCarton ? "secondary" : "primary"} icon={<PackageOpen />} disabled={bench.busy || !preset}>
+        <Button
+          type="submit"
+          variant={bench.openCarton ? "secondary" : "primary"}
+          icon={<PackageOpen />}
+          disabled={bench.busy || !preset || !screen.dock_id}
+        >
           Start carton
         </Button>
       </form>

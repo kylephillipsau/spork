@@ -243,6 +243,11 @@ INSERT INTO party (id, tenant_id, name, code, party_class_id) VALUES
 UPDATE site SET owner_party_id = '9a247000-0000-0000-0000-000000000001'
  WHERE id = 'a5170000-0000-0000-0000-000000000001';
 
+-- Where Melbourne packs: the packing station, which is where a new carton is
+-- made and where goods picked elsewhere are put down (migration 97).
+UPDATE site SET pack_location_id = '10c00000-0000-0000-0000-000000000004'
+ WHERE id = 'a5170000-0000-0000-0000-000000000001';
+
 -- D58. Where it came from and when it was made, neither of which anybody can
 -- reconstruct after the pallet has gone.
 INSERT INTO lot (id, tenant_id, item_id, code, expiry_date,

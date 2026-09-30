@@ -115,8 +115,10 @@ export interface BenchScreen {
   customer: string;
   site: string;
   dock_id: Uuid | null;
-  /** The site's staging location, where goods picked elsewhere are put down (D172). */
+  /** The site's pack location, where goods picked elsewhere are put down (D172). */
   staging_id: Uuid | null;
+  /** What the site has not set up that packing needs, as a sentence; null when ready. */
+  unready: string | null;
   lines: BenchLine[];
   cartons: CartonSummary[];
   presets: Preset[];
@@ -1001,6 +1003,24 @@ export interface WorkspaceSite {
   /** Of those, how many carry a walking position. */
   sequenced: number;
   current: boolean;
+  /** The code of the location it packs at, when it has said (migration 97). */
+  pack_location: string | null;
+  /** Whose goods it holds, by name, when it has said. */
+  owner: string | null;
+}
+
+/** `POST /workspace/sites/{id}/pack-location`: what setting it did. */
+export interface PackLocationSet {
+  code: string;
+  /** True when the site had no location with that code, and one was made. */
+  created: boolean;
+}
+
+/** `POST /workspace/sites/{id}/owner`: what setting it did. */
+export interface OwnerSet {
+  owner: string;
+  /** True when the organisation had no party of its own, and one was made. */
+  created: boolean;
 }
 
 export interface Workspace {

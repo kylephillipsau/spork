@@ -19,7 +19,7 @@ import { Dock, DockHost } from "@app/shell/dock";
 import { SessionProvider } from "@app/session/SessionContext";
 import type { Badge } from "@app/shell/nav";
 import { pattern } from "@domain/routing";
-import type { Resolution, SiteRow } from "@domain/types";
+import type { BenchScreen, Resolution, SiteRow } from "@domain/types";
 import { SCREENS } from "./manifest";
 import type { Landing } from "@app/scan/destination";
 import { AMBIGUOUS, NO_SCREEN, UNKNOWN, UNRECOGNISED, fixtureScan } from "@app/scan/fixture";
@@ -239,12 +239,12 @@ const noop = async () => {};
 
 /* ---- states that need more than one line --------------------------------- */
 
-function packBench() {
+function packBench(screen: BenchScreen = PACK_FIXTURE) {
   return (
     <PackBenchPage
       bench={{
-        status: { kind: "ready", screen: PACK_FIXTURE },
-        openCarton: PACK_FIXTURE.cartons.find((c) => !c.sealed)?.id ?? null,
+        status: { kind: "ready", screen },
+        openCarton: screen.cartons.find((c) => !c.sealed)?.id ?? null,
         busy: false,
         problem: null,
         dismiss: () => {},
@@ -348,7 +348,18 @@ export const FIXTURES: readonly Screen[] = [
     <Dashboard dash={DASHBOARD} site="MEL" />
   )),
 
-  app("f-pack", "/fixtures/pack", "Pack order", "bench", { screen: "pack-one" }, packBench),
+  app("f-pack", "/fixtures/pack", "Pack order", "bench", { screen: "pack-one" }, () => packBench()),
+  // A site that has not said where it packs or whose stock it holds (migration
+  // 97): the bench says so before anybody tries to start a carton.
+  app("f-pack-unready", "/fixtures/pack/unready", "Pack order — site not set up", "bench", { screen: "pack-one" }, () =>
+    packBench({
+      ...PACK_FIXTURE,
+      dock_id: null,
+      staging_id: null,
+      unready: "MEL doesn't say where it packs or who owns its stock yet. Set both in Workspace.",
+      cartons: [],
+    }),
+  ),
   app("f-queue", "/fixtures/queue", "Packing", "bench", { screen: "pack" }, () => <PackQueuePage bench={fixtureQueue(QUEUE)} />),
   app("f-queue-clear", "/fixtures/queue/clear", "Packing — nothing waiting", "bench", { screen: "pack" }, () => (
     <PackQueuePage bench={fixtureQueue(CLEAR)} />

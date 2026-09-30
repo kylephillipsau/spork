@@ -18,6 +18,7 @@ export const PACK_FIXTURE: BenchScreen = {
   site: "MEL",
   dock_id: "10c00000-0000-0000-0000-000000000003",
   staging_id: "10c00000-0000-0000-0000-000000000004",
+  unready: null,
   lines: [
     {
       line_id: "f11e0000-0000-0000-0000-000000000001",

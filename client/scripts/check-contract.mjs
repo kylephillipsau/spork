@@ -235,6 +235,8 @@ const PAIRS = [
   ["StockImportReport", ["StockImportReport"]],
   ["Organisation", ["Organisation"]],
   ["WorkspaceSite", ["WorkspaceSite"]],
+  ["PackLocationSet", ["PackLocationSet"]],
+  ["OwnerSet", ["OwnerSet"]],
   ["Workspace", ["Workspace"]],
   ["ApiToken", ["TokenRow"]],
   ["MintTokenRequest", ["MintRequest"]],

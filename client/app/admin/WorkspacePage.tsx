@@ -1,7 +1,22 @@
+import { useState } from "react";
 import { Warehouse } from "lucide-react";
 
-import { Alert, Badge, Card, DataTable, EmptyState, Fact, Facts, Page, PageHeader, Skeleton, type Column } from "@ui/index";
-import type { WorkspaceSite } from "@domain/types";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Fact,
+  Facts,
+  Page,
+  PageHeader,
+  Skeleton,
+  TextField,
+  type Column,
+} from "@ui/index";
+import type { Organisation, WorkspaceSite } from "@domain/types";
 import { Faint, Progress, shortDate } from "@app/common/cells";
 
 import type { WorkspaceBench } from "./useWorkspace";
@@ -11,6 +26,7 @@ import s from "./settings.module.css";
 export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
   const st = bench.state;
   const ws = st.kind === "ready" ? st.workspace : null;
+  const here = ws ? current(ws.sites) : null;
 
   return (
     <Page>
@@ -37,6 +53,8 @@ export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
         )}
       </Card>
 
+      {ws && here && <Packing site={here} organisation={ws.organisation} bench={bench} />}
+
       <Card title="Warehouses" padded={false}>
         <DataTable
           aria-label="Warehouses"
@@ -48,6 +66,66 @@ export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
         />
       </Card>
     </Page>
+  );
+}
+
+const current = (sites: WorkspaceSite[]) => sites.find((x) => x.current) ?? null;
+
+/**
+ * What packing at the current warehouse needs the site to say (migrations 95
+ * and 97): where packing happens, and whose stock it holds. Until both are
+ * said, the pack bench cannot make a carton or take goods picked in NetSuite.
+ */
+function Packing({ site, organisation, bench }: { site: WorkspaceSite; organisation: Organisation; bench: WorkspaceBench }) {
+  const [code, setCode] = useState(site.pack_location ?? "PACK");
+  return (
+    <Card
+      title={`Packing at ${site.code}`}
+      description="Where new cartons are made and where goods picked in NetSuite are put down, and who owns the stock here."
+    >
+      <div className={s.stack}>
+        {bench.problem && (
+          <Alert tone="danger" onDismiss={bench.dismiss}>
+            {bench.problem}
+          </Alert>
+        )}
+        <Facts columns={2}>
+          <Fact label="Packs at" always>
+            {site.pack_location ? <span className={s.mono}>{site.pack_location}</span> : <Faint>Not set</Faint>}
+          </Fact>
+          <Fact label="Stock belongs to" always>
+            {site.owner ?? <Faint>Not set</Faint>}
+          </Fact>
+        </Facts>
+        <form
+          className={s.formRow}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (code.trim()) void bench.setPackLocation(site.id, code.trim());
+          }}
+        >
+          <div className={s.grow} style={{ maxWidth: 320 }}>
+            <TextField
+              label="Packing location"
+              hint="A code this warehouse doesn't have yet becomes a new location."
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              disabled={bench.busy}
+            />
+          </div>
+          <Button type="submit" disabled={bench.busy || !code.trim() || code.trim() === site.pack_location}>
+            Pack here
+          </Button>
+        </form>
+        {!site.owner && (
+          <div className={s.actions}>
+            <Button variant="primary" disabled={bench.busy} onClick={() => void bench.setOwner(site.id)}>
+              The stock here belongs to {organisation.name}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 

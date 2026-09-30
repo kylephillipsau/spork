@@ -9189,6 +9189,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::places::site_layout)
         .service(crate::places::draft_layout)
         .service(crate::workspace::workspace)
+        .service(crate::workspace::set_pack_location)
+        .service(crate::workspace::set_owner)
         .service(record_correction)
         .service(record_adjustment)
         .service(record_count)

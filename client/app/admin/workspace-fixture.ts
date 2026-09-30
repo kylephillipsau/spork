@@ -16,13 +16,17 @@ const WORKSPACE: Workspace = {
     // a warehouse appears in the export, and leaves its bins out when they
     // state no type. A site with none is expected, not broken.
     { id: "5171e000-0000-0000-0000-000000000001", code: "BRI", name: "Brisbane",
-      timezone: "Australia/Brisbane", active: true, locations: 2140, sequenced: 2035, current: false },
+      timezone: "Australia/Brisbane", active: true, locations: 2140, sequenced: 2035, current: false,
+      pack_location: "DESP-1", owner: "Harbourline" },
     { id: "5171e000-0000-0000-0000-000000000002", code: "PER", name: "Perth",
-      timezone: "Australia/Perth", active: true, locations: 0, sequenced: 0, current: false },
+      timezone: "Australia/Perth", active: true, locations: 0, sequenced: 0, current: false,
+      pack_location: null, owner: null },
     { id: "5171e000-0000-0000-0000-000000000003", code: "MEL", name: "Melbourne",
-      timezone: "Australia/Melbourne", active: true, locations: 1620, sequenced: 1620, current: true },
+      timezone: "Australia/Melbourne", active: true, locations: 1620, sequenced: 1620, current: true,
+      pack_location: null, owner: null },
     { id: "5171e000-0000-0000-0000-000000000004", code: "SYD", name: "Sydney",
-      timezone: "Australia/Sydney", active: true, locations: 2160, sequenced: 2150, current: false },
+      timezone: "Australia/Sydney", active: true, locations: 2160, sequenced: 2150, current: false,
+      pack_location: "PACK", owner: "Harbourline" },
   ],
 };
 
@@ -36,6 +40,8 @@ export const FAILED: WorkspaceState = {
   message: "The server could not be reached.",
 };
 
+const noop = async () => {};
+
 export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
-  return { state };
+  return { state, busy: false, problem: null, dismiss: () => {}, setPackLocation: noop, setOwner: noop };
 }
