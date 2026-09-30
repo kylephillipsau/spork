@@ -46,11 +46,19 @@ cargo test --workspace --no-fail-fast
 ```
 
 Use `--no-fail-fast`, because without it cargo stops at the first failing
-binary and hides the rest. **Four tests fail in a full run, and they failed the
-same way before any of this work:** two in `pack_walk_http` (the packing list's
-order reference, and "nothing overdue") and two in `tenancy` (it expects one
-site per tenant, and `fulfilment_intake` adds a second). Each passes alone.
-They depend on which suites ran first, and nobody has fixed them yet.
+binary and hides the rest. **The full suite passes.** The four tests that used
+to fail in a full run, because they depended on which suites ran first, were
+fixed on 2026-09-30 to assert against their own data, and the walks that took
+the first open line in the queue now take one with stock behind it: a
+fulfilment picked in NetSuite has none, by design.
+
+**The server's integration tests are one program**, `crates/server/tests/it`,
+one module per file, so a change to the server links once rather than forty
+times. Tests from different files never run at once (`common::file_gate`),
+which is the isolation the suite was written for. Run one file with a filter:
+`cargo test -p spork-server --test it pack_walk_http::`. On this machine a
+fresh database takes about 20 s, rebuilding the tests after a server change
+about 30 s, and the whole suite about three and a half minutes.
 
 **Client gates.** `npm run verify` runs typecheck, tests, contract and laws. Run
 `npm run build:review` before `npm run render`, which reads `dist-review/` and

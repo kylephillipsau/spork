@@ -16,7 +16,7 @@
 //! # What these pages may not do
 //!
 //! **Write.** Every mutation goes to the JSON API that already exists, is
-//! authenticated, and is covered by the walk in `tests/pack_walk_http.rs`. A
+//! authenticated, and is covered by the walk in `tests/it/pack_walk_http.rs`. A
 //! second write path rendering its own SQL is how a packing list starts
 //! disagreeing with the ledger it claims to describe. So these handlers read,
 //! render, and hand the browser a `fetch` for anything that changes.

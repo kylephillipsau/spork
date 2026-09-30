@@ -23,7 +23,7 @@
 //! D144 removed the hazard rather than tolerating it. The API lives under
 //! `/api` in a scope with its own `default_service`, so an unmatched endpoint
 //! is answered — and answered with an empty 404 — before anything here is
-//! reached. `crates/server/tests/api_mount.rs` asserts exactly that, and it was
+//! reached. `crates/server/tests/it/api_mount.rs` asserts exactly that, and it was
 //! written a commit early, while it still passed trivially, because it is the
 //! guard for this change rather than for that one.
 //!

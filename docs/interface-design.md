@@ -1121,7 +1121,7 @@ picture.
 **What it does not do.** Move the client. That is a separate commit, so that a
 URL problem and a behaviour problem cannot arrive in the same bisect, and so
 this can sit on the deployment for a release first. The test that guards it —
-`crates/server/tests/api_mount.rs`, asserting that an unmatched `/api/*` answers
+`crates/server/tests/it/api_mount.rs`, asserting that an unmatched `/api/*` answers
 404 with an empty body — is written now, where it passes trivially, because a
 guard written after a deploy has already gone quiet is a guard written too late.
 
@@ -1201,7 +1201,7 @@ incident, and the argument was sound: a single-page application's catch-all,
 mounted at the root, swallows unmatched API paths and turns a diagnostic empty
 404 into a 200 and an HTML document. D144 removed the hazard by giving the API
 its own scope with its own `default_service`. The guard is
-`crates/server/tests/api_mount.rs`, written a commit early while it still passed
+`crates/server/tests/it/api_mount.rs`, written a commit early while it still passed
 trivially, because a guard written after a deploy has gone quiet is written too
 late.
 

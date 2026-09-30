@@ -50,8 +50,13 @@ touched nothing.
 ```sh
 scripts/verify-migrations.sh               # every migration up and down
 DATABASE_URL=... cargo test --workspace
+DATABASE_URL=... cargo test -p spork-server --test it pack_walk_http::   # one file
 cd client && npm run verify
 ```
+
+The server's integration tests are one program, `crates/server/tests/it`, with
+one module per file. Tests from different files never run at the same time;
+see `file_gate` in `tests/it/common`.
 
 Build the database fresh for a run. The suite is not re-runnable against one it
 has already written to.

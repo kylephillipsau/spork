@@ -10271,7 +10271,7 @@ migration because the check said so.
 
 #### The harness that existed and was switched off
 
-`crates/server/tests/tenancy.rs` holds three tests of the application role and
+`crates/server/tests/it/tenancy.rs` holds three tests of the application role and
 **every one of them skipped on every run**, printing `DATABASE_URL_APP unset` and
 reporting success — because every role here is NOLOGIN and that variable names a
 connection nobody had made. A suite whose entire premise is that a vacuous pass is
