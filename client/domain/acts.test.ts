@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { anAct, pressing } from "./acts.ts";
+import { anAct, partOf, pressing } from "./acts.ts";
 
 /** A counter and a clock, so the assertions are about the rule. */
 function fake() {
@@ -20,6 +20,19 @@ test("an act mints each name once and answers the same thing after", () => {
   assert.equal(act.id("event"), act.id("event"), "one name, one id");
   assert.notEqual(act.id("event"), act.id("package"), "two names, two ids");
   assert.equal(f.minted(), 2, "and only the two");
+});
+
+test("the parts of one act name apart, and keep its moment", () => {
+  // Three cartons from one press: each part's `event` is its own, a retry of
+  // the press answers every part the same, and nobody pressed three times.
+  const f = fake();
+  const act = anAct(f.mintId, f.clock);
+  const one = partOf(act, "carton-1:make");
+  const two = partOf(act, "carton-2:make");
+  assert.notEqual(one.id("event"), two.id("event"), "two parts, two events");
+  assert.equal(one.id("event"), partOf(act, "carton-1:make").id("event"), "a retry is the same part");
+  assert.equal(one.at, act.at);
+  assert.equal(two.at, act.at, "one press, one moment");
 });
 
 test("the moment is read once, not once per attempt", () => {

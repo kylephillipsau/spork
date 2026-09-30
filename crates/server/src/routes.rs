@@ -1615,6 +1615,10 @@ pub struct CreatePackageRequest {
     pub fulfilment_id: Option<Uuid>,
     pub sequence: Option<i32>,
     pub package_type_id: Option<Uuid>,
+    /// One carton of this case pack: the product's own carton rather than a box
+    /// type (migration 98). Not both.
+    #[serde(default)]
+    pub item_packing_config_id: Option<Uuid>,
     /// Where the package comes into existence (D97: created asserts placement).
     pub location_id: Uuid,
     pub barcode: Option<String>,
@@ -1692,15 +1696,40 @@ pub async fn create_package(
                     sscc: body.sscc.clone(),
                     source: source.clone(),
                 };
-                let problems = packages::check(&proposed, fulfilment.as_ref(), location.as_ref());
+                let mut problems = packages::check(&proposed, fulfilment.as_ref(), location.as_ref())
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>();
+                // **A product's own carton is a carton of something on the order.**
+                // A case pack for an item the fulfilment does not carry is a
+                // mistake the bench cannot make and a caller can.
+                if let Some(config) = body.item_packing_config_id {
+                    if body.package_type_id.is_some() {
+                        problems.push(
+                            "a package is a box type or a product's own carton, not both".into(),
+                        );
+                    }
+                    let on_order: Option<bool> = tx
+                        .query_opt(
+                            "SELECT $2::uuid IS NULL OR EXISTS (
+                                     SELECT 1 FROM fulfilment_line fl
+                                       JOIN order_line ol ON ol.id = fl.order_line_id
+                                      WHERE fl.fulfilment_id = $2 AND ol.item_id = c.item_id)
+                               FROM item_packing_config c WHERE c.id = $1",
+                            &[&config, &body.fulfilment_id],
+                        )
+                        .await?
+                        .map(|r| r.get(0));
+                    match on_order {
+                        None => problems.push("no such case pack".into()),
+                        Some(false) => problems.push(
+                            "that case pack is for an item this fulfilment does not carry".into(),
+                        ),
+                        Some(true) => {}
+                    }
+                }
                 if !problems.is_empty() {
-                    return Err(ApiError::Rejected(
-                        problems
-                            .iter()
-                            .map(|p| p.to_string())
-                            .collect::<Vec<_>>()
-                            .join("; "),
-                    ));
+                    return Err(ApiError::Rejected(problems.join("; ")));
                 }
 
                 let act = client_events::claim_act(
@@ -1733,14 +1762,16 @@ pub async fn create_package(
                 // Column-level INSERT only: no barcode/sscc/status (projections).
                 tx.execute(
                     "INSERT INTO package (
-                         id, tenant_id, fulfilment_id, package_type_id, sequence)
-                     VALUES ($1, $2, $3, $4, $5)",
+                         id, tenant_id, fulfilment_id, package_type_id, sequence,
+                         item_packing_config_id)
+                     VALUES ($1, $2, $3, $4, $5, $6)",
                     &[
                         &package_id,
                         &tenant,
                         &body.fulfilment_id,
                         &body.package_type_id,
                         &body.sequence,
+                        &body.item_packing_config_id,
                     ],
                 )
                 .await?;

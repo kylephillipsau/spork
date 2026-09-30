@@ -277,6 +277,21 @@ export const api = {
     }),
 
   /**
+   * One carton of an item, as it came: a package that is the product's own
+   * carton rather than a box type (migration 98). Made where the site packs,
+   * like any carton.
+   */
+  startOwnCarton: (input: { fulfilment: Uuid; config: Uuid; dock: Uuid; act: Act }) =>
+    send<unknown>("POST", "/packages", {
+      id: input.act.id("package"),
+      fulfilment_id: input.fulfilment,
+      item_packing_config_id: input.config,
+      location_id: input.dock,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
+
+  /**
    * Claim, then record. **A pick with no claim behind it drives picked past
    * covered, which J56 raises as a finding** — so the allocation is not a
    * formality, it is what stops the bench seeding findings for everyone else.

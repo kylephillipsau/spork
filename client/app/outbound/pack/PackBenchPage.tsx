@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, PackageOpen, Plus, Trash2 } from "lucide-react";
+import { Boxes, FileText, PackageOpen, Plus, Trash2 } from "lucide-react";
 
 import {
   Alert,
@@ -20,7 +20,7 @@ import {
   Toolbar,
   type Column,
 } from "@ui/index";
-import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, PackedRow } from "@domain/types";
+import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OwnCarton, PackedRow, StatedSize } from "@domain/types";
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { Faint } from "@app/common/cells";
@@ -76,6 +76,23 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
     const n = Number.parseInt(draft(l).qty, 10);
     if (canHand(l) && n > 0) void bench.handOver({ line: l.line_id, quantity: n });
   };
+  // Whole cartons of a line, shipped as they came (migration 98): from the bin
+  // chosen when this site holds the stock, else handed over.
+  const wholeCartons = (l: BenchLine) => (l.own_carton ? Math.floor(Math.max(0, l.remaining) / l.own_carton.units) : 0);
+  const canShipOwn = (l: BenchLine) =>
+    wholeCartons(l) > 0 && !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere);
+  const shipOwn = (l: BenchLine) => {
+    const own = l.own_carton;
+    if (!own || !canShipOwn(l)) return;
+    const stock = l.cells.length > 0 ? draft(l).cell : undefined;
+    void bench.shipOwnCartons({
+      line: l.line_id,
+      config: own.item_packing_config_id,
+      units: own.units,
+      cartons: wholeCartons(l),
+      ...(stock ? { stock } : {}),
+    });
+  };
   const add = (l: BenchLine) => {
     const d = draft(l);
     const n = Number.parseInt(d.qty, 10);
@@ -122,14 +139,35 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
             }))}
           />
         ),
-      width: "240px",
+      width: "200px",
     },
     { key: "left", header: "Left", cell: (l) => (l.remaining > 0 ? <strong>{l.remaining}</strong> : <Faint>0</Faint>), align: "right", width: "64px" },
     {
       key: "add",
       header: "Add",
-      cell: (l) =>
-        l.cells.length > 0 && l.remaining > 0 ? (
+      cell: (l) => (
+        <div className={s.actions}>
+          {addForm(l)}
+          {l.own_carton && wholeCartons(l) > 0 && (
+            <Button
+              size="sm"
+              icon={<Boxes />}
+              disabled={!canShipOwn(l)}
+              onClick={() => shipOwn(l)}
+              title={describeOwn(l.own_carton)}
+            >
+              {shipLabel(wholeCartons(l), l.own_carton.units)}
+            </Button>
+          )}
+        </div>
+      ),
+      align: "right",
+      width: "190px",
+    },
+  ];
+
+  function addForm(l: BenchLine) {
+    return l.cells.length > 0 && l.remaining > 0 ? (
           <form
             className={s.add}
             onSubmit={(e) => {
@@ -169,11 +207,8 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
               {bench.openCarton ? "Into carton" : "To staging"}
             </Button>
           </form>
-        ) : null,
-      align: "right",
-      width: "150px",
-    },
-  ];
+        ) : null;
+  }
 
   return (
     <Page>
@@ -296,6 +331,7 @@ function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) 
         <span className={s.cartonTitle}>
           Carton {carton.sequence}
           {carton.package_type && <Badge>{carton.package_type}</Badge>}
+          {carton.own_carton_of && <Badge>{carton.own_carton_of} carton</Badge>}
           {carton.sealed ? (
             <Badge tone="success" dot>
               Sealed
@@ -331,8 +367,20 @@ function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) 
               <span className={s.big}>{kg(carton.gross_weight_g)}</span>
             </Fact>
             {carton.expected && <ExpectedFact expected={carton.expected} />}
+            {carton.listed_weight_g !== null && (
+              <Fact label="Listed">
+                <span>
+                  {kg(carton.listed_weight_g)}
+                  <span className={s.note}>by the record, not weighed</span>
+                </span>
+              </Fact>
+            )}
             <Fact label="Height">{carton.height_mm !== null ? `${carton.height_mm} mm` : null}</Fact>
-            <Fact label="Footprint">{footprint}</Fact>
+            {carton.own_carton_of && carton.stated_size ? (
+              <Fact label="Size">{sized(carton.stated_size)}</Fact>
+            ) : (
+              <Fact label="Footprint">{footprint}</Fact>
+            )}
           </Facts>
         </div>
       ) : (
@@ -378,6 +426,23 @@ function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) 
       )}
     </Card>
   );
+}
+
+/** "2 own cartons of 6": what the press will do, in words short enough for the column. */
+function shipLabel(cartons: number, units: number): string {
+  return `${cartons} own carton${cartons === 1 ? "" : "s"} of ${units}`;
+}
+
+/** What one of its cartons measures and weighs by the record, and whose figures. */
+function describeOwn(own: OwnCarton): string {
+  const parts = [own.size ? sized(own.size) : "size not recorded"];
+  if (own.listed_weight_g !== null) parts.push(`${kg(own.listed_weight_g)} listed`);
+  if (own.source === "style" && own.style_code) parts.push(`the ${own.style_code} family's`);
+  return parts.join(" · ");
+}
+
+function sized(size: StatedSize): string {
+  return `${size.length_mm} × ${size.width_mm} × ${size.height_mm} mm`;
 }
 
 /** What this carton has weighed before, and on what basis. */

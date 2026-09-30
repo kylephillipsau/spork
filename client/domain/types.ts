@@ -31,6 +31,24 @@ export interface BenchLine {
   cells: Cell[];
   /** Present when another system says this line was picked there (D172). */
   elsewhere: PickedElsewhere | null;
+  /** Present when a carton of this item has a known count, so whole cartons can
+   *  ship as they are (migration 98). */
+  own_carton: OwnCarton | null;
+}
+
+/** The product's own carton: how many are in one, and what one measures by the record. */
+export interface OwnCarton {
+  item_packing_config_id: Uuid;
+  /** Units one carton holds. */
+  units: number;
+  size: StatedSize | null;
+  /** By the record, e.g. a prepack list. **Listed, not weighed**: never an expectation. */
+  listed_weight_g: number | null;
+  /** How the figures were come by (`transcribed`, …). */
+  method: string | null;
+  /** `own`, `style` or `mixed` (D108). */
+  source: string | null;
+  style_code: string | null;
 }
 
 /** A line picked elsewhere: what is reported, and what is handed over (D172). */
@@ -100,6 +118,10 @@ export interface CartonSummary {
   id: Uuid;
   sequence: string;
   package_type: string | null;
+  /** The item, when this is one carton of it rather than a box type (migration 98). */
+  own_carton_of: string | null;
+  /** A product's own carton's weight by the record. Listed, never weighed here. */
+  listed_weight_g: number | null;
   sealed: boolean;
   gross_weight_g: number | null;
   height_mm: number | null;

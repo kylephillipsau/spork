@@ -236,6 +236,7 @@ const PAIRS = [
   ["Organisation", ["Organisation"]],
   ["WorkspaceSite", ["WorkspaceSite"]],
   ["PackLocationSet", ["PackLocationSet"]],
+  ["OwnCarton", ["OwnCarton"]],
   ["OwnerSet", ["OwnerSet"]],
   ["Workspace", ["Workspace"]],
   ["ApiToken", ["TokenRow"]],

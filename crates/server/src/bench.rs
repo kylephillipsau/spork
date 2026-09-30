@@ -77,6 +77,32 @@ pub struct BenchLine {
     pub cells: Vec<Cell>,
     /// Present when another system says this line was picked there (D172).
     pub elsewhere: Option<PickedElsewhere>,
+    /// Present when a carton of this item has a known count, so whole cartons
+    /// of it can ship as they are (migration 98).
+    pub own_carton: Option<OwnCarton>,
+}
+
+/// The product's own carton, as its case pack and its carton's measurements say.
+///
+/// **Offered only when the count is known.** A carton nobody has said the
+/// contents of cannot be filled to a known number, and filling it to a guess is
+/// the case pack the prepack loader refused to invent.
+#[derive(Serialize)]
+pub struct OwnCarton {
+    pub item_packing_config_id: Uuid,
+    /// Units one carton holds: units per inner times inners per carton.
+    pub units: i64,
+    /// What a carton of it measures, when that is recorded.
+    pub size: Option<StatedSize>,
+    /// What a carton of it weighs by the record. **A listed figure, not a
+    /// weighing of any carton on this bench**, which is why it is not
+    /// `expected`: that is built from weighings and says how many.
+    pub listed_weight_g: Option<i64>,
+    /// How the listed figures were come by, `transcribed` from a prepack list
+    /// for most, and whether they are this code's or its family's (D108).
+    pub method: Option<String>,
+    pub source: Option<String>,
+    pub style_code: Option<String>,
 }
 
 /// A line picked elsewhere: what is reported, and what has been handed over.
@@ -133,6 +159,12 @@ pub struct CartonSummary {
     pub id: Uuid,
     pub sequence: String,
     pub package_type: Option<String>,
+    /// The item, when this is one carton of it rather than a box type
+    /// (migration 98).
+    pub own_carton_of: Option<String>,
+    /// A product's own carton's weight by the record, when there is one. Listed,
+    /// never weighed here: see [`OwnCarton::listed_weight_g`].
+    pub listed_weight_g: Option<i64>,
     pub sealed: bool,
     pub gross_weight_g: Option<i64>,
     pub height_mm: Option<i32>,
@@ -338,8 +370,10 @@ pub async fn bench_view(
                             document: r.get(2),
                             picked_by: r.get(3),
                         });
+                    let own_carton = own_carton(tx, item_id).await?;
                     out.push(BenchLine {
                         elsewhere,
+                        own_carton,
                         line_id: l.get(0),
                         item_code: l.get(1),
                         description: l.get(2),
@@ -369,6 +403,61 @@ pub async fn bench_view(
             })
         })
         .await
+}
+
+/// A carton of this item, when its case pack in force says how many are in one.
+///
+/// The newest case pack by `effective_from`, the rule `receiving` reads it by,
+/// and the carton's figures from [`crate::routes::measurements_of`], so the
+/// bench and the item page cannot disagree about what a carton measures.
+async fn own_carton(
+    tx: &tokio_postgres::Transaction<'_>,
+    item_id: Uuid,
+) -> Result<Option<OwnCarton>, ApiError> {
+    let Some(c) = tx
+        .query_opt(
+            "SELECT id, units_per_inner, inners_per_carton
+               FROM item_packing_config
+              WHERE item_id = $1 AND effective_from <= CURRENT_DATE
+              ORDER BY effective_from DESC, id DESC
+              LIMIT 1",
+            &[&item_id],
+        )
+        .await?
+    else {
+        return Ok(None);
+    };
+    let (Some(per_inner), Some(inners)) = (c.get::<_, Option<i32>>(1), c.get::<_, Option<i32>>(2))
+    else {
+        return Ok(None);
+    };
+    let units = i64::from(per_inner) * i64::from(inners);
+    if units <= 0 {
+        return Ok(None);
+    }
+    let carton = crate::routes::measurements_of(tx, item_id)
+        .await?
+        .into_iter()
+        .find(|m| m.packaging_level == "carton");
+    Ok(Some(OwnCarton {
+        item_packing_config_id: c.get(0),
+        units,
+        size: carton.as_ref().and_then(size_of),
+        listed_weight_g: carton.as_ref().and_then(|m| m.gross_weight_g),
+        method: carton.as_ref().and_then(|m| m.method.clone()),
+        source: carton.as_ref().map(|m| m.source.clone()),
+        style_code: carton.and_then(|m| m.style_code),
+    }))
+}
+
+/// All three lengths, or nothing: two of three is not a carton's size.
+fn size_of(m: &crate::routes::ItemMeasurements) -> Option<StatedSize> {
+    let whole = |v: Option<i64>| v.and_then(|v| i32::try_from(v).ok());
+    Some(StatedSize {
+        length_mm: whole(m.length_mm)?,
+        width_mm: whole(m.width_mm)?,
+        height_mm: whole(m.height_mm)?,
+    })
 }
 
 /// An `adjustment_reason` by code, for the acts that require one.
@@ -450,9 +539,11 @@ pub async fn cartons_on(
                         "SELECT p.id, coalesce(p.sequence::text, '—'), pt.name,
                                 w.kind = 'sealed', p.gross_weight_g, p.height_mm,
                                 pt.dimensions_fixed, pt.length_mm, pt.width_mm,
-                                pt.height_mm, pt.tare_weight_g
+                                pt.height_mm, pt.tare_weight_g, own.item_id, own_item.code
                            FROM package p
                            LEFT JOIN package_type pt ON pt.id = p.package_type_id
+                           LEFT JOIN item_packing_config own ON own.id = p.item_packing_config_id
+                           LEFT JOIN item own_item ON own_item.id = own.item_id
                            LEFT JOIN LATERAL (
                                SELECT e.kind FROM package_event e
                                 WHERE e.package_id = p.id
@@ -512,10 +603,22 @@ pub async fn cartons_on(
                             .map(|c| (c.get::<_, Uuid>(4), c.get::<_, i64>(3)))
                             .collect(),
                     });
+                    // A product's own carton states the size its item's carton
+                    // is recorded at, read here rather than copied onto it.
+                    let own_item: Option<Uuid> = r.get(11);
+                    let own_figures = match own_item {
+                        Some(item) => crate::routes::measurements_of(tx, item)
+                            .await?
+                            .into_iter()
+                            .find(|m| m.packaging_level == "carton"),
+                        None => None,
+                    };
                     out.push(CartonSummary {
                         id,
                         sequence: r.get(1),
                         package_type: r.get(2),
+                        own_carton_of: r.get(12),
+                        listed_weight_g: own_figures.as_ref().and_then(|m| m.gross_weight_g),
                         sealed: r.get::<_, Option<bool>>(3).unwrap_or(false),
                         gross_weight_g: r.get(4),
                         height_mm: r.get(5),
@@ -535,7 +638,7 @@ pub async fn cartons_on(
                                 width_mm: w,
                                 height_mm: h,
                             }),
-                            _ => None,
+                            _ => own_figures.as_ref().and_then(size_of),
                         },
                         // Filled in below, once every item on the screen can be
                         // asked about together.

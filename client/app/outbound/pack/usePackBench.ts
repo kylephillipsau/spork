@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
+import { partOf } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
 import type { BenchScreen, Uuid } from "@domain/types";
 
@@ -37,6 +38,12 @@ export interface PackBench {
   addToCarton: (input: { line: Uuid; stock: Uuid; quantity: number }) => Promise<void>;
   /** Goods picked elsewhere: into the open carton, else to the staging spot. */
   handOver: (input: { line: Uuid; quantity: number }) => Promise<void>;
+  /**
+   * Whole cartons of a line, shipped as they came (migration 98): each one made
+   * at the pack location, filled with one carton's worth, and sealed, because
+   * it arrived sealed. From a bin when `stock` is named, else handed over.
+   */
+  shipOwnCartons: (input: { line: Uuid; config: Uuid; units: number; cartons: number; stock?: Uuid }) => Promise<void>;
   measure: (input: { carton: Uuid; weightKg?: string; heightMm?: string }) => Promise<void>;
   takeOut: (input: { picks: [Uuid, number][]; quantity: number }) => Promise<void>;
   seal: (carton: Uuid) => Promise<void>;
@@ -125,6 +132,25 @@ export function usePackBench(fulfilment: Uuid): PackBench {
         const staging = screen?.staging_id;
         if (!staging) throw new ApiError("Start a carton first. This site has no staging location.", 409);
         await api.handOver({ line, quantity, location: staging, act });
+      }),
+
+    shipOwnCartons: ({ line, config, units, cartons, stock }) =>
+      press(`own:${line}:${cartons}`, async (act) => {
+        const dock = screen?.dock_id;
+        if (!dock) throw new ApiError("This site doesn't say where it packs yet. Set it in Workspace.", 409);
+        if (!(cartons > 0) || !(units > 0)) throw new ApiError("How many cartons?", 400);
+        // One carton at a time, whole: made, filled, sealed. A failure part way
+        // leaves the cartons before it complete and this one open, and a retry
+        // replays every part already done as the same write.
+        for (let n = 1; n <= cartons; n++) {
+          const make = partOf(act, `carton-${n}:make`);
+          await api.startOwnCarton({ fulfilment, config, dock, act: make });
+          const carton = make.id("package");
+          const fill = partOf(act, `carton-${n}:fill`);
+          if (stock) await api.pickInto({ line, stock, carton, quantity: units, act: fill });
+          else await api.handOver({ line, quantity: units, carton, act: fill });
+          await api.seal(carton, partOf(act, `carton-${n}:seal`));
+        }
       }),
 
     measure: ({ carton, weightKg, heightMm }) =>

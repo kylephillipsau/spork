@@ -220,12 +220,35 @@ async fn the_pack_walkthrough_runs_end_to_end_over_http() {
         "GET /sites/{id}/open-lines",
     )
     .await;
+    // **And one this site holds stock for on a shelf.** A fulfilment picked in
+    // NetSuite is open work with no cell behind it by design (D172): its goods
+    // are handed over, not picked. Another suite's import leaves one in the
+    // queue, and a walk that took it would find nothing to pick.
+    let shelved = common::ok_json(
+        &app,
+        test::TestRequest::get()
+            .uri("/stock")
+            .insert_header(("authorization", bearer.clone()))
+            .to_request(),
+        "GET /stock",
+    )
+    .await;
+    let on_a_shelf = |code: &str| {
+        shelved.as_array().is_some_and(|rows| {
+            rows.iter().any(|r| {
+                r["item_code"].as_str() == Some(code)
+                    && r["location_code"].is_string()
+                    && r["quantity"].as_i64().unwrap_or(0) >= 2
+            })
+        })
+    };
     let line = open
         .as_array()
         .expect("open work")
         .iter()
         .find(|l| {
             l["quantity"].as_i64().unwrap_or(0) - l["covered_quantity"].as_i64().unwrap_or(0) > 0
+                && l["item_code"].as_str().is_some_and(on_a_shelf)
         })
         .expect("a line with room left to claim");
     let line_id = line["fulfilment_line_id"].as_str().unwrap().to_string();
@@ -838,11 +861,27 @@ async fn a_packer_can_change_their_mind() {
         test::call_service(&app, get(format!("/sites/{SITE}/open-lines"), bearer.clone())).await,
     )
     .await;
+    // One this site holds on a shelf, for the walk's reason above.
+    let shelved: Value =
+        test::read_body_json(test::call_service(&app, get("/stock".into(), bearer.clone())).await)
+            .await;
+    let on_a_shelf = |code: &str| {
+        shelved.as_array().is_some_and(|rows| {
+            rows.iter().any(|r| {
+                r["item_code"].as_str() == Some(code)
+                    && r["location_code"].is_string()
+                    && r["quantity"].as_i64().unwrap_or(0) >= 2
+            })
+        })
+    };
     let line = open
         .as_array()
         .unwrap()
         .iter()
-        .find(|l| l["quantity"].as_i64().unwrap_or(0) - l["covered_quantity"].as_i64().unwrap_or(0) > 0)
+        .find(|l| {
+            l["quantity"].as_i64().unwrap_or(0) - l["covered_quantity"].as_i64().unwrap_or(0) > 0
+                && l["item_code"].as_str().is_some_and(on_a_shelf)
+        })
         .expect("a line with room");
     let line_id = line["fulfilment_line_id"].as_str().unwrap().to_string();
     let fulfilment_id = line["fulfilment_id"].as_str().unwrap().to_string();

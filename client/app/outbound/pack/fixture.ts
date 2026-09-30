@@ -26,6 +26,7 @@ export const PACK_FIXTURE: BenchScreen = {
       description: "Nitrile glove, blue, medium",
       remaining: 0,
       elsewhere: null,
+      own_carton: null,
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000001",
@@ -41,6 +42,7 @@ export const PACK_FIXTURE: BenchScreen = {
       description: "Hair net, disposable, white",
       remaining: 0,
       elsewhere: null,
+      own_carton: null,
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000002",
@@ -56,6 +58,7 @@ export const PACK_FIXTURE: BenchScreen = {
       description: "Apron, polythene, clear, large",
       remaining: 1,
       elsewhere: null,
+      own_carton: null,
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000003",
@@ -77,9 +80,21 @@ export const PACK_FIXTURE: BenchScreen = {
       description: "Oversleeve, polythene, blue",
       remaining: 20,
       cells: [],
+      // **Thirty picked, ten already shipped in their own carton.** Ten to a
+      // carton, so the other twenty are two more cartons as they came, which is
+      // the press the fixture exists to show (migration 98).
+      own_carton: {
+        item_packing_config_id: "9ac40000-0000-0000-0000-00000000000b",
+        units: 10,
+        size: { length_mm: 420, width_mm: 310, height_mm: 260 },
+        listed_weight_g: 3600,
+        method: "transcribed",
+        source: "style",
+        style_code: "SLV-PE",
+      },
       elsewhere: {
-        reported: 20,
-        handed: 0,
+        reported: 30,
+        handed: 10,
         document: "IF400187",
         picked_by: "Casual Melbourne",
         provenance: "Picked in NetSuite · IF400187 · by Casual Melbourne",
@@ -91,6 +106,8 @@ export const PACK_FIXTURE: BenchScreen = {
       id: "ca470000-0000-0000-0000-000000000001",
       sequence: "1",
       package_type: "small box",
+      own_carton_of: null,
+      listed_weight_g: null,
       sealed: true,
       gross_weight_g: 4200,
       height_mm: 190,
@@ -120,6 +137,8 @@ export const PACK_FIXTURE: BenchScreen = {
       id: "ca470000-0000-0000-0000-000000000002",
       sequence: "2",
       package_type: "PALLET",
+      own_carton_of: null,
+      listed_weight_g: null,
       sealed: false,
       gross_weight_g: null,
       height_mm: null,
@@ -160,6 +179,8 @@ export const PACK_FIXTURE: BenchScreen = {
       id: "ca470000-0000-0000-0000-000000000003",
       sequence: "3",
       package_type: "SKID",
+      own_carton_of: null,
+      listed_weight_g: null,
       sealed: false,
       gross_weight_g: null,
       height_mm: null,
@@ -169,6 +190,29 @@ export const PACK_FIXTURE: BenchScreen = {
       // full one.
       expected: null,
       contents: [],
+    },
+    {
+      // **The product's own carton**, as it came: no box type, the size its
+      // item's carton is recorded at, and a listed weight nobody here weighed.
+      id: "ca470000-0000-0000-0000-000000000004",
+      sequence: "4",
+      package_type: null,
+      own_carton_of: "SLV-PE-BLU",
+      listed_weight_g: 3600,
+      sealed: true,
+      gross_weight_g: null,
+      height_mm: null,
+      stated_size: { length_mm: 420, width_mm: 310, height_mm: 260 },
+      expected: null,
+      contents: [
+        {
+          item_code: "SLV-PE-BLU",
+          description: "Oversleeve, polythene, blue",
+          lot_code: null,
+          quantity: 10,
+          picks: [["3f0e0000-0000-0000-0000-000000000004", 10]],
+        },
+      ],
     },
   ],
   presets: [

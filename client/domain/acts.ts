@@ -118,6 +118,20 @@ export function anAct(mintId: () => Uuid = uuid, clock: () => string = now): Act
 }
 
 /**
+ * One part of an act that is several writes, each needing names of its own.
+ *
+ * Shipping three cartons as they came is one press and nine writes: make,
+ * fill and seal, three times. Each write takes an `event` id, and one act has
+ * one `event`, so the parts are named apart: `carton-2:fill` mints
+ * `carton-2:fill:event`. Every name is still minted once and answered the
+ * same on a retry, and every part shares the act's moment, because the
+ * operator pressed once.
+ */
+export function partOf(act: Act, part: string): Act {
+  return { id: (name) => act.id(`${part}:${name}`), at: act.at };
+}
+
+/**
  * Somewhere for a screen to keep the acts it has not landed yet.
  *
  * Held per screen rather than globally, which is the honest boundary: an

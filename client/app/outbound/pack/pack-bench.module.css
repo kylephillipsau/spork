@@ -8,9 +8,11 @@
   gap: var(--ui-space-5);
   align-items: start;
 }
+/* Two thirds for the lines, which carry the bench's acts; a third for the
+   cartons, which read down. At 7:5 the lines' act column was cut off at 1440. */
 @media (min-width: 1200px) {
   .split {
-    grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
+    grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
   }
 }
 .cartons {
@@ -100,4 +102,11 @@
   display: block;
   color: var(--ui-text-faint);
   font-size: var(--ui-text-xs);
+}
+/* The line's acts, stacked: add a count, or ship whole cartons as they came. */
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--ui-space-1-5);
 }
