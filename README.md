@@ -80,7 +80,15 @@ Spork takes work from NetSuite without writing to it. The Spork Bridge
 userscript (in the separate `warehouse-scripts` repo) reads item fulfilments the
 handheld has marked Picked, using SuiteQL as the signed-in user, and sends each
 to `POST /api/import/fulfilment` with an import token minted under Import
-tokens. Spork records these as picks made elsewhere (D172), ready to pack.
+tokens. Spork records these as picks made elsewhere (D172), ready to pack. It
+runs while a NetSuite tab is open, and shows nothing unless it can't sync.
+
+The rest comes from NetSuite's CSV exports:
+- the item master and the bin list, uploaded under Import;
+- the prepack list and the inventory balance, loaded from the terminal.
+
+NetSuite's balance is kept as its report, beside Spork's own ledger and never
+merged into it. [docs/local.md](docs/local.md) has the commands.
 
 ## The design record
 

@@ -310,18 +310,26 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of sixty-seven endpoints and a projection
-scheduler, and above that a React client of fifteen screens: the pack bench, the
-picking list, despatch, capture and weighing, the findings queue, order search,
-and the administrative screens behind them. There is no separate handheld build;
-a phone gets the same client, laid out for the width it has.
+policy resolver. Above it sits an API of eighty-five endpoints and a projection
+scheduler. Above that is a React client of twenty-six screens:
+- the pack bench and its queue, picking, receiving, put away and despatch;
+- capture and weighing;
+- orders, items and the warehouse, each with a page per order, item, place and
+  bin;
+- the findings queue;
+- the administrative screens behind them.
 
-The gap worth naming is on the writing half of that API. Fourteen of its
-thirty-seven writing endpoints have never been exercised over HTTP, and four of
-those are among the six paths that write the ledger. The pure modules they call
-are covered; the handlers wrapping them are not, so the transaction handling,
-the idempotency claim and the ledger insert itself are asserted nowhere. That is
-the first thing being fixed, endpoint by endpoint in order of what each writes.
+There is no separate handheld build. A phone gets the same client, laid out for
+the width it has.
+
+The gap worth naming is still on the writing half of that API, though it is much
+smaller. In August, fourteen of thirty-seven writing endpoints had never been
+exercised over HTTP. Now five of forty-three are never called by an HTTP test:
+- accepting a discrepancy;
+- investigating a discrepancy;
+- the item import;
+- putting one package inside another;
+- finishing a passkey sign-in.
 
 Fifty-seven questions remain
 open: thirty-five deferred against a stated trigger, seven wanting a written

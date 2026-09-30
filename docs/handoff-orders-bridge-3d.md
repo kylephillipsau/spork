@@ -1,14 +1,23 @@
-# Handoff: the bridge, the order page, and places
+# Handoff: the bridge, orders, items, packing, and the warehouse
 
-Written 2026-09-28, updated 2026-09-29. Read this before continuing on the
-client's UI work, the order page, or anything spatial.
+Written 2026-09-28, updated 2026-09-30. Read this before continuing on the
+client's UI work, packing, items, or anything spatial.
 
-The short version: **picks made on the WMS handheld reach Spork (D172), a
-userscript feeds them in, every order has its own page, and the warehouse
-layout exists.** The layout is **places** drawn relative to each other and never
-measured (D173). A first layout can be drafted from the bin list, and a scanned
-bin now lands on the face of the rack that holds it. The plan editor and the 3D
-view are next.
+The short version:
+- Picks made on the WMS handheld reach Spork (D172). A userscript feeds them
+  in, and it stays out of sight unless something is wrong.
+- Every order and every item has its own page, and there is an item list to
+  work from.
+- The packing bench knows where the site packs and whose stock it holds. It
+  ships a product in its own carton.
+- The warehouse has a layout: **places**, drawn relative to each other and
+  never measured (D173). Inventory › Warehouse drafts it from the bin list and
+  lists each place's bins beside a plan of the site. A scanned bin lands on the
+  face of the rack that holds it.
+- The local instance runs on the business's own data, read from NetSuite
+  exports.
+
+**The 3D view is next, then the plan editor.**
 
 Everything below is committed and pushed. The working tree was clean when this
 was written.
@@ -24,6 +33,7 @@ was written.
 export OPENSSL_DIR='C:\Program Files\OpenSSL-Win64' \
        OPENSSL_LIB_DIR='C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD' \
        OPENSSL_INCLUDE_DIR='C:\Program Files\OpenSSL-Win64\include' \
+       CARGO_HTTP_CHECK_REVOKE=false \
        PATH="/c/Program Files/OpenSSL-Win64/bin:/c/Program Files/PostgreSQL/18/bin:$PATH"
 ```
 
@@ -39,42 +49,125 @@ what you touch, if at all.
 it has written to:
 
 ```sh
-psql -h localhost -p 55432 -U postgres -c "DROP DATABASE IF EXISTS spork_fresh" -c "CREATE DATABASE spork_fresh"
+psql -h localhost -p 55432 -U postgres -c "DROP DATABASE IF EXISTS spork_fresh WITH (FORCE)" -c "CREATE DATABASE spork_fresh"
 export DATABASE_URL=postgres://postgres:spork@localhost:55432/spork_fresh
 scripts/verify-migrations.sh && scripts/migrate.sh --baseline
 cargo test --workspace --no-fail-fast
 ```
 
 Use `--no-fail-fast`, because without it cargo stops at the first failing
-binary and hides the rest. **The full suite passes.** The four tests that used
-to fail in a full run, because they depended on which suites ran first, were
-fixed on 2026-09-30 to assert against their own data, and the walks that took
-the first open line in the queue now take one with stock behind it: a
-fulfilment picked in NetSuite has none, by design.
+binary and hides the rest. **The full suite passes.**
+- Four tests used to fail in a full run, because they depended on which suites
+  ran first. On 2026-09-30 they were changed to assert against their own data.
+- The walks that took the first open line in the queue now take one with stock
+  behind it. A fulfilment picked in NetSuite has none, by design.
 
 **The server's integration tests are one program**, `crates/server/tests/it`,
 one module per file, so a change to the server links once rather than forty
 times. Tests from different files never run at once (`common::file_gate`),
 which is the isolation the suite was written for. Run one file with a filter:
-`cargo test -p spork-server --test it pack_walk_http::`. On this machine a
-fresh database takes about 20 s, rebuilding the tests after a server change
-about 30 s, and the whole suite about three and a half minutes.
+`cargo test -p spork-server --test it pack_walk_http::`.
 
-**Client gates.** `npm run verify` runs typecheck, tests, contract and laws. Run
-`npm run build:review` before `npm run render`, which reads `dist-review/` and
-otherwise renders a stale build.
+On this machine:
+- a fresh database takes about 20 s;
+- rebuilding the tests after a server change takes about 30 s;
+- the whole suite takes about three and a half minutes.
+
+Two things made it that fast (50ea84c): rust-lld links on Windows
+(`.cargo/config.toml`), and debug builds carry only line tables, none for
+dependencies. `migrate.sh` and `verify-migrations.sh` no longer launch psql per
+row or per file.
+
+**Client gates.** `npm run verify` runs typecheck, tests, contract and laws.
+Run `npm run build:review` before `npm run render`. The render reads
+`dist-review/`, so without the build it renders a stale one. Screenshots land
+in `client/.render/`.
 
 **The local instance.** `scripts/local.ps1 setup` then `start` serves
 `http://localhost:18080`. Since 2026-09-30 the working `spork` database holds
-the business's own data, read from NetSuite exports and never written back: the
-item master, the prepack list, one warehouse's bins and its inventory balance.
-The terminal importers load them: `import_prepack`, `import_bins --only` and
-`import_stock`. No layout is drafted yet. Real codes stay out of the
-repository, as everywhere else.
+the business's own data, read from NetSuite exports and never written back:
+- the item master;
+- the prepack list's box types and carton measurements;
+- one warehouse's bins;
+- its inventory balance.
+
+[local.md](./local.md) has the importers and their flags. A draft of the real
+layout has been previewed, not applied: apply it from Inventory › Warehouse
+once it reads right. Real codes stay out of the repository, as everywhere else.
 
 ---
 
 ## What landed
+
+### The warehouse screen (52c09e3)
+
+`/warehouse`, under Inventory, replaces Settings › Layout.
+- **Places** on the left, each under the one it is inside, with "Not on the
+  layout" last. It is a list rather than a table, because a table in a column
+  that narrow stacks.
+- **The site's plan** on the right. Clicking a place on the plan chooses it,
+  as the list does.
+- **The chosen place's bins** below the plan, with a search across the site.
+  Each bin shows:
+  - its cell in the rack's own words ("bay 03, level 2");
+  - what NetSuite's last balance put on the shelf;
+  - what Spork's ledger holds there.
+
+  A row opens the rack face.
+- The choice and the search live in the query string (`?place=`, `?q=`),
+  rewritten in place.
+- Drafting, its preview and the empty state are unchanged.
+
+The server side:
+- `GET /layout` gained `plan`: every place on the site as a `PlanShape`
+  (corners on the site, `z`, `height`, `nesting`, `solid`). Positions are
+  composed when read, as before.
+- `GET /bins` lists bins by `place`, `unplaced=true` or `q`, 500 at a time, in
+  code order, with the total.
+- NetSuite's report is totalled once for the site and joined on. It has no
+  index by bin, and a lookup per bin took 760 ms on the real bin list. It now
+  takes 36 ms.
+
+### Items: the page, the list, and the loaders
+
+- **The item page** (ab8cefc): `/items/:id` and `GET /items/{id}`. It shows:
+  - what the item is, its photo and its family (D108);
+  - its carton and measurements, its own or its family's;
+  - where it is, with NetSuite's report kept apart from Spork's own ledger
+    (migration 86).
+
+  An item scan lands there, and order lines link to it.
+- **The item list** (c78e238): `/items` and `GET /items`. It searches code,
+  description and barcode, 50 at a time. It can be narrowed to "in stock here"
+  and to "needs measuring" or "needs a photo": the list to work from when
+  recording photos, measurements and weights. A figure copied from a list is
+  not a measurement, so the prepack list's cartons still count as needing it.
+- **The prepack importer** (8971567) reads the export's carton notes after the
+  code, such as `(CTN, x25)`, and the one-letter colour families.
+  - A product's carton is never made a box type.
+  - `--not-a-box` leaves out names a person knows better.
+  - Its acts are keyed by NetSuite's record id, so a re-export is a replay.
+- **The stock loader** (8ebd0f4) sums a shelf's lots into one balance. It skips
+  and counts negative balances instead of aborting. `import_stock` is its
+  terminal front end, and `import_bins --only` loads one warehouse.
+
+### Packing: where a site packs, whose stock, and whole cartons
+
+- **Migration 97** (7860049): `site.pack_location_id`. The bench used to
+  guess the location from the first code and the first staging location. It
+  now reads only this one, and says so when a site hasn't set it or hasn't set
+  an owner (migration 95). Workspace has a "Packing at <site>" card:
+  - `POST /workspace/sites/{id}/pack-location` names a location by code, and
+    makes a staging location if there is none;
+  - `POST /workspace/sites/{id}/owner` takes `business`.
+- **Migration 98** (ac6b3f3): `package.item_packing_config_id`. A package is a
+  box type or a product's own carton, never both. A line that fills whole
+  cartons offers "2 own cartons of 10". The press makes, fills and seals each
+  carton at the pack location, with parts named by `acts::partOf` so a retry
+  replays. A listed weight is shown as listed, never as an expectation.
+- **The site's clock** (3e3f510): "due today" and "due tomorrow" are read in the
+  site's time zone, not UTC. Before this, a site ahead of UTC read tomorrow's
+  promises as due today every morning.
 
 ### D173: a place for every bin
 
@@ -98,14 +191,14 @@ register.
   and the rest are grouped by the shape of their codes into new places laid out
   in rows. A bin is only placed where its pattern spells its code exactly, and
   nothing already in a cell moves.
-- **Reads**: `GET /bins/{id}` (a bin, its cell and its place), `GET
-  /places/{id}`, `GET /layout`.
+- **Reads**: `GET /bins/{id}` (a bin, its cell and its place),
+  `GET /places/{id}`, `GET /layout` (now with the site's plan) and `GET /bins`.
 - **Client**:
   - a scanned or searched bin code goes to `/bins/:id`, the rack face: the way
     in as chips, bays across and levels up with the labels as the rack prints
     them, the bin's cell lit, and a plan of the building;
   - `/places/:id` shows what is inside a place;
-  - Settings › Layout drafts and lists.
+  - Inventory › Warehouse drafts, lists and finds (above).
 - The first version of D173 (measured racks, rack and floor CSV imports) was
   replaced before release. Its commit `d5ac37a` is in history, superseded by
   `273a246`.
@@ -145,11 +238,14 @@ rooms up to 15 m × 15 m and 3.6 m high.
 
 ### The order page
 
-`GET /orders/{order_id}` (`OrderView`: what the search answers per order, plus
-its lines with ordered, committed, picked, picked elsewhere, packed and
-despatched). `/orders/:order` in the client, reached from the dashboard, the
-orders list's drawer ("Open order") and links. `FulfilmentSummary` gained the
-fulfilment's own `reference`.
+`GET /orders/{order_id}` returns an `OrderView`: what the search answers per
+order, plus its lines with ordered, committed, picked, picked elsewhere, packed
+and despatched. In the client it is `/orders/:order`, reached from:
+- the dashboard;
+- the orders list's drawer ("Open order");
+- links.
+
+`FulfilmentSummary` gained the fulfilment's own `reference`.
 
 ### D172: a pick made elsewhere is reported, not moved
 
@@ -164,16 +260,26 @@ the amended J56 in the invariant register. Migrations 93 to 95.
 - Packing progress is `greatest(picked, boxed)`. The bench shows "picked
   elsewhere" with its provenance.
 
-### The Spork Bridge userscript
+### The Spork Bridge userscript (0.3.0)
 
 This lives in the separate `warehouse-scripts` repo as
-`public/spork-bridge.user.js`, and is deployed on push to main.
+`public/spork-bridge.user.js`. **A push to its main deploys to everyone who has
+it installed.**
 
 - **Read-only against NetSuite.** It reads Picked item fulfilments at one
   location with SuiteQL through the page's own `require(['N/query'])`, and
   POSTs each one to `/api/import/fulfilment?apply=true` with an import token.
-- One tab syncs at a time, under a lease. An item fulfilment is only resent
-  when its `lastmodifieddate` changes.
+  An item fulfilment is only resent when its `lastmodifieddate` changes.
+- **Out of the way unless something is wrong** (0.2.0). While syncing works,
+  nothing shows on the page. The last sync is the first line of the Tampermonkey
+  menu, and choosing it syncs now. When a sync fails, a small red dot appears in
+  the bottom-left corner. Hovering says why, and a click retries.
+- **One tab syncs, by Web Lock** (0.3.0). Every NetSuite screen is a new page,
+  so the old lease in storage stayed with the page just left. Now:
+  - `navigator.locks` elects the syncing page, and the browser hands the lock on
+    the moment that page goes away;
+  - a second lock keeps "sync now" from running beside the timer;
+  - the status reaches every tab through `GM_addValueChangeListener`.
 - It uses `anonymous: true`. Spork reads a session cookie before a bearer
   token, so a cookie sent alongside the token gets the import refused.
 
@@ -181,58 +287,73 @@ This lives in the separate `warehouse-scripts` repo as
 
 ## Next
 
-1. **Try the layout on real data.** Load the bin list, draft, and read the
-   preview. Families the draft gets wrong are the first thing to fix.
-2. **Test the rack face on the floor** against the bare bin code, as above.
-3. **"Something's wrong here"** on the rack face: a worker scans the bin where
+1. **Apply the layout on real data.** Open Inventory › Warehouse, preview the
+   draft, and read it. Families the draft gets wrong are the first thing to
+   fix. Bins no pattern fits wait in the tray to be placed by hand.
+2. **The 3D view** beside the plan on the Warehouse screen (below).
+3. **Record photos, measurements and weights**, working from the item list
+   narrowed to "in stock here" and "needs measuring" or "needs a photo".
+4. **Test the rack face on the floor** against the bare bin code, as above.
+5. **"Something's wrong here"** on the rack face: a worker scans the bin where
    it really is and taps its cell. Trusted roles apply it, and others raise a
    flag for the office.
-4. **The plan editor and the 3D view** (below).
-5. A history of layout changes (who moved what, and when), and roles for who
+6. **The plan editor** (below).
+7. A history of layout changes (who moved what, and when), and roles for who
    may edit. Until roles exist, anyone signed in can draft.
-6. A bin view and a warehouse view. **Item pages are built** (`/items/:id`,
-   `GET /items/{id}`): what it is, its photo and family, its carton and
-   measurements, and where it is, with NetSuite's report kept apart from
-   Spork's own ledger. An item scan lands there, and order lines link to it.
 
 Deferred and not forgotten:
 
 - a per-site option to cancel instead of raising a finding when an item
   fulfilment changes;
-- a Workspace UI for `site.owner_party_id`;
+- an owner other than the business itself. Workspace sets only `business`, so a
+  site holding a customer's stock can't say so yet;
 - NetSuite write-back;
 - MachShip.
 
 ---
 
-## The editor and the 3D view: the plan
+## The 3D view and the editor: the plan
 
 **Stack.** three.js with React Three Fiber and a small subset of drei, on WebGL,
-**lazy-loaded as its own route chunk** so the rest of the app pays nothing.
-An imperative scene class owns the meshes and R3F only hosts it, which keeps a
-hand-written renderer possible later. Scene data sits in typed arrays outside
-React, redrawn on demand (`frameloop="demand"`). Why not the others: Babylon is
-heavier and its React binding has one maintainer. PlayCanvas's binding is still
-at 0.x. deck.gl is built for maps. Needle is commercially licensed.
+**lazy-loaded as its own route chunk** so the rest of the app pays nothing. The
+main chunk is already about 570 kB in the review build, and Vite warns. An imperative scene
+class owns the meshes and R3F only hosts it, which keeps a hand-written
+renderer possible later. Scene data sits in typed arrays outside React, redrawn
+on demand (`frameloop="demand"`).
 
-**What it draws.** Places, from the same composition the rack face uses:
-`PlanShape` already carries each place's footprint on the site, its height and
-how far up it starts. Solid places are blocks and walk-through places are floor.
-A site-wide geometry read (every place and every cell) is the one new endpoint
-it needs. Picking is a ray against the places' boxes, which are few enough to
-test directly.
+Why not the alternatives:
+- Babylon is heavier, and its React binding has one maintainer.
+- PlayCanvas's binding is still at 0.x.
+- deck.gl is built for maps.
+- Needle is commercially licensed.
+
+**What it draws.** `GET /layout`'s `plan` is already the input: every place's
+footprint on the site, how far up it starts and how tall it is. That is the
+same data the Warehouse screen's 2D plan draws. Solid places are blocks and
+walk-through places are floor.
+- **Selection.** The pane shares the screen's selection (`WarehouseDesk.chosen`),
+  so choosing a rack in the list, on the plan or in 3D is one choice.
+- **Controls.** Orbit and zoom only. Nothing is edited in 3D.
+- **Picking.** A ray against the places' boxes, which are few enough to test
+  directly.
+- **Cells are not in the plan.** Drawing a rack's bays and levels needs its
+  grid. `GET /places/{id}` has it per place; a site-wide view would need it
+  added to `plan`.
 
 **The editor** is the 2D plan with the 3D pane beside it, following the
-research above. Its first commands are drag to move, drag a handle to resize,
-rotate with quarter-turn snapping, add a box or an outline, add a grid, and set
-the naming pattern. Changes that move bins between cells are previewed, and the
-Unplaced tray holds bins nothing names. Writes are a person's act on a session,
-recorded with who and when.
+research above.
+- Its first commands: drag to move, drag a handle to resize, rotate with
+  quarter-turn snapping, add a box or an outline, add a grid, and set the
+  naming pattern.
+- Changes that move bins between cells are previewed.
+- The Unplaced tray holds bins nothing names.
+- Writes are a person's act on a session, recorded with who and when.
 
 **Later.**
 
 - Colour-by layers computed by the server: fill, findings, count age, and the
-  difference between reported and ledger stock.
+  difference between reported and ledger stock. `GET /bins` already carries
+  both numbers per bin.
 - Pick paths, which treat solid places as obstacles.
 - Stock inside places, updated live.
 - A handheld mini-map.

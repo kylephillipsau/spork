@@ -63,21 +63,58 @@ Two limits apply until the site has a certificate:
 - **Traffic is not encrypted.** Passwords cross the WiFi in plain text. That's
   why LAN mode is opt-in.
 
-## NetSuite: sending fulfilments to Spork
+## Loading NetSuite exports
 
-The **Spork Sync** userscript (in `warehouse-scripts`) adds a *Send to Spork*
-button to NetSuite's Item Fulfillment page. It sends the lines marked to fulfil
-to `POST /api/import/fulfilment`, and Spork loads them as work to pick.
+The local database can hold the business's own data, read from NetSuite exports
+and never written back. Each importer is a dry run by default: it prints what it
+would write and writes nothing until you add `--apply`. Re-running one on a new
+export is safe, since each replays or replaces what the last one wrote.
+
+```sh
+# The item master and the prepack list: items, families, box types, cartons.
+cargo run -p spork-server --example import_prepack --     --tenant <tenant> --person <person> --site <site>     --items items.csv --prepack prepack.csv [--not-a-box NAME ...]
+
+# One warehouse's bins, from the bin list.
+cargo run -p spork-server --example import_bins --     --tenant <tenant> --recorded-by <person> --bins bins.csv --only "<warehouse>"
+
+# Where NetSuite says each thing is: the inventory balance.
+cargo run -p spork-server --example import_stock --     --tenant <tenant> --recorded-by <person> --stock balance.csv     --as-at 2026-09-30T09:10:00+10:00 --source netsuite-inventory-balance
+```
+
+- The ids are rows in the local database: the tenant, a person in it, and the
+  site.
+- `--not-a-box` leaves out a name the prepack report would make a box type when
+  you know it's a product's carton.
+- `--as-at` is when the export was taken. It is required, because a balance
+  that can't say how old it is gets read as current.
+- NetSuite's balance is stored as its report (`reported_stock`), never as
+  Spork's own stock. Screens show the two side by side.
+
+Then, in Spork:
+- **Inventory › Warehouse** drafts the layout from the bin list. Preview it,
+  then make the places.
+- **Workspace › Packing at <site>** says where the site packs and who owns its
+  stock. The pack bench won't start a carton until both are set.
+
+## NetSuite: sending picks to Spork
+
+The **Spork Bridge** userscript (in `warehouse-scripts`) keeps Spork's packing
+queue fed while a NetSuite tab is open. Once a minute it reads the item
+fulfilments the handheld has marked Picked at your location, and sends each to
+`POST /api/import/fulfilment`. Nobody opens an item fulfilment to sync it.
 
 1. In Spork, open **Import tokens** (`/tokens`) and mint a token labelled for the
    userscript. Copy it: it is shown once.
-2. Install Spork Sync in Tampermonkey. From the Tampermonkey menu on a NetSuite
+2. Install Spork Bridge in Tampermonkey. From the Tampermonkey menu on a NetSuite
    page, set the Spork address (`http://localhost:18080` on this PC, or the LAN
-   address) and paste the token.
-3. Open an Item Fulfillment and click *Send to Spork*. The first time, Tampermonkey
-   asks to allow the connection.
+   address), paste the token, and set the location to sync. The first time,
+   Tampermonkey asks to allow the connection.
 
-Sending the same fulfilment again writes nothing. If a quantity has changed since
-the last send, Spork reports the difference and leaves its copy as it was. Items
-Spork hasn't seen are created from the page's code and description. Lines at a
-warehouse Spork doesn't know are skipped and listed in the reply.
+While it works, nothing shows on the page. The first line of the Tampermonkey
+menu says when it last synced, and choosing it syncs now. If it can't sync
+(Spork unreachable, a refused token, not set up), a small red dot appears in the
+bottom-left corner. Hover over it for why, or click it to try again.
+
+Only one NetSuite tab syncs at a time, and moving between NetSuite screens hands
+the job on without a gap. Sending the same fulfilment again writes nothing. Items
+Spork hasn't seen are created from the fulfilment's code and description.

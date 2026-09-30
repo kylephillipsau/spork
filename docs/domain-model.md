@@ -13581,7 +13581,11 @@ import. **Nothing already in a cell moves.**
 levels up with the labels as the rack prints them and the bin's cell lit, and a
 plan of the building the same way up every time. 2D, because which bay and
 which level is a question about relative position, which a flat drawing answers
-better than a 3D one. The research behind the interface is in
+better than a 3D one. At a desk, the **warehouse** screen (`/warehouse`) lists
+the site's places beside a plan of the whole site, drawn from `GET /layout`'s
+`plan`. Choosing a place lists its bins (`GET /bins`), each with its cell in the
+rack's own words and NetSuite's report beside Spork's ledger, never merged. The
+research behind the interface is in
 [layout-interface-analysis.md](./layout-interface-analysis.md), summarised as **one place model, three depths, no modes**: floor staff find and
 check, trusted staff correct by scanning, and geometry is edited only at a desk.
 
