@@ -105,7 +105,8 @@ import { ImportPage } from "@app/admin/ImportPage";
 import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { ItemPage } from "@app/items/ItemPage";
-import { ITEM, ITEM_UNKNOWN, fixtureItem } from "@app/items/fixture";
+import { ITEM, ITEM_UNKNOWN, ITEMS_NONE, ITEMS_PAGE, fixtureItem, fixtureItems } from "@app/items/fixture";
+import { ItemsPage } from "@app/items/ItemsPage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
 import type { Screen, Surface } from "./Router";
@@ -545,6 +546,11 @@ export const FIXTURES: readonly Screen[] = [
   )),
   // An item's page: where NetSuite says it is beside Spork's own record, its
   // carton from the family's prepack row; and one nobody has recorded at all.
+  // The item list: a page of a long list, and a search that found nothing.
+  app("f-items", "/fixtures/items", "Items", "desk", { screen: "items" }, () => <ItemsPage desk={fixtureItems(ITEMS_PAGE)} />),
+  app("f-items-none", "/fixtures/items/none", "Items — nothing matches", "desk", { screen: "items" }, () => (
+    <ItemsPage desk={fixtureItems(ITEMS_NONE, { q: "SKU-0000", stock: "here", needs: "photo" })} />
+  )),
   app("f-item", "/fixtures/item", "Item", "floor", { screen: "item" }, () => <ItemPage desk={fixtureItem(ITEM)} />),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureItem(ITEM_UNKNOWN)} />

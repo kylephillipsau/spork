@@ -9,6 +9,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowDownToLine,
+  Boxes,
   Building2,
   Camera,
   ClipboardList,
@@ -68,6 +69,7 @@ export const NAV: readonly NavGroup[] = [
   {
     label: "Inventory",
     items: [
+      { id: "items", label: "Items", path: "/items", icon: Boxes },
       { id: "findings", label: "Findings", path: "/findings", icon: TriangleAlert, badge: "findings" },
       { id: "weigh", label: "Weigh", path: "/weigh", icon: Scale },
       { id: "capture", label: "Capture", path: "/capture", icon: Camera },

@@ -1,6 +1,7 @@
-import type { ItemView } from "@domain/types";
+import type { ItemRow, ItemView } from "@domain/types";
 
 import type { ItemDesk } from "./useItem";
+import type { Asked, ItemsDesk, ItemsState } from "./useItems";
 
 /**
  * Items with no network.
@@ -95,3 +96,35 @@ export const ITEM_UNKNOWN: ItemView = {
 };
 
 export const fixtureItem = (item: ItemView): ItemDesk => ({ read: { kind: "ready", item } });
+
+let row = 0;
+const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): ItemRow => ({
+  item_id: `01990000-0000-7000-8000-00000000c${String(++row).padStart(3, "0")}`,
+  active: true,
+  style_code: null,
+  picture: null,
+  figures: "none",
+  reported_on_hand: null,
+  reported_bins: 0,
+  held: 0,
+  ...over,
+});
+
+/** A page of the list: in stock and not, measured and not, a family's and its own. */
+export const ITEMS: ItemRow[] = [
+  ROW({ code: "SKU-3928", description: "Label roll, 100 × 150 mm", reported_on_hand: "140", reported_bins: 3 }),
+  ROW({ code: "SKU-5120B", description: "Floor brush, 450 mm, blue", style_code: "SKU-5120", figures: "listed", reported_on_hand: "24", reported_bins: 2, held: 4 }),
+  ROW({ code: "SKU-5120G", description: "Floor brush, 450 mm, green", style_code: "SKU-5120", figures: "listed", reported_on_hand: "12", reported_bins: 1 }),
+  ROW({ code: "SKU-7461", description: "Wet floor sign, folding", figures: "measured", reported_on_hand: "7.5", reported_bins: 1 }),
+  ROW({ code: "SKU-8837", description: "Tape gun, 50 mm" }),
+];
+
+const noop = () => {};
+
+export function fixtureItems(state: ItemsState, asked: Partial<Asked> = {}): ItemsDesk {
+  const a = { q: "", stock: "", needs: "", ...asked } as Asked;
+  return { state, asked: a, typed: a.q, type: noop, search: noop, narrow: noop, more: async () => {} };
+}
+
+export const ITEMS_PAGE: ItemsState = { kind: "ready", items: ITEMS, total: 9181, next: "SKU-8837", more: false };
+export const ITEMS_NONE: ItemsState = { kind: "ready", items: [], total: 0, next: null, more: false };

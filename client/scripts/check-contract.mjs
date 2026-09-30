@@ -220,6 +220,8 @@ const PAIRS = [
   ["BinView", ["BinView"]],
   // an item's own page
   ["ItemView", ["ItemView"]],
+  ["ItemRow", ["ItemRow"]],
+  ["ItemsList", ["ItemsList"]],
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
   ["ItemHeld", ["ItemHeld"]],

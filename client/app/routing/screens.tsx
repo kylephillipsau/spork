@@ -66,6 +66,8 @@ import { useBin, usePlace } from "@app/layout/usePlace";
 import { useLayout } from "@app/layout/useLayout";
 import { ItemPage } from "@app/items/ItemPage";
 import { useItem } from "@app/items/useItem";
+import { ItemsPage } from "@app/items/ItemsPage";
+import { askedFrom, useItems } from "@app/items/useItems";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
 import { useQueue } from "@app/outbound/pack/useQueue";
 import { useOrders } from "@app/outbound/orders/useOrders";
@@ -286,6 +288,11 @@ function LiveBin({ bin }: { bin: string }) {
   return <BinPage desk={useBin(bin)} />;
 }
 
+/** Every item. The question arrives in the query string, as the orders search's does. */
+function LiveItems() {
+  return <ItemsPage desk={useItems(askedFrom(window.location.search))} />;
+}
+
 /** An item: what it is, and where each record says it is. */
 function LiveItem({ item }: { item: string }) {
   return <ItemPage desk={useItem(item)} />;
@@ -330,6 +337,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   order: (params) => <LiveOrder order={params["order"] ?? ""} />,
   bin: (params) => <LiveBin bin={params["bin"] ?? ""} />,
   place: (params) => <LivePlace place={params["place"] ?? ""} />,
+  items: () => <LiveItems />,
   item: (params) => <LiveItem item={params["item"] ?? ""} />,
   layout: () => <LiveLayout />,
   findings: () => <LiveFindings at={null} />,

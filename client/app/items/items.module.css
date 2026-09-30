@@ -59,3 +59,42 @@
   color: var(--ui-text-muted);
   font-size: var(--ui-text-sm);
 }
+
+/* ---- the list ---- */
+.needs {
+  width: 220px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  width: min(440px, 100%);
+}
+
+.inset {
+  padding: var(--ui-space-4);
+}
+
+.named {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.described {
+  overflow: hidden;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}

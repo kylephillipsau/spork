@@ -15,6 +15,7 @@ import type {
   ItemImportReport,
   BinView,
   ItemView,
+  ItemsList,
   OwnerSet,
   PackLocationSet,
   DraftReport,
@@ -702,6 +703,14 @@ export const api = {
 
   /** A bin, its cell, and the place around it: where a bin scan lands (D173). */
   bin: (locationId: Uuid) => send<BinView>("GET", `/bins/${encodeURIComponent(locationId)}`),
+
+  /** Items, searched and narrowed, a page at a time in code order. */
+  items: (query: { q?: string; stock?: "here"; needs?: "measuring" | "photo"; after?: string }) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v) p.set(k, v);
+    const qs = p.toString();
+    return send<ItemsList>("GET", `/items${qs ? `?${qs}` : ""}`);
+  },
 
   /** An item: what it is, what it measures, and where each record says it is. */
   item: (itemId: Uuid) => send<ItemView>("GET", `/items/${encodeURIComponent(itemId)}`),

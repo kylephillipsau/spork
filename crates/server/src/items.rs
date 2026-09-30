@@ -222,3 +222,193 @@ pub async fn item_page(
         .await?;
     Ok(HttpResponse::Ok().json(view))
 }
+
+// ---------------------------------------------------------------------------
+// The list
+// ---------------------------------------------------------------------------
+
+/// The methods that make a figure a measurement, rather than one copied.
+///
+/// **A figure copied from a list is not a measurement**, which is the whole
+/// distinction this column is for. The prepack list gives a thousand items a
+/// carton size and weight, `transcribed`; nobody here put any of those cartons
+/// on a scale. Somebody asking "what have we not measured yet" is asking about
+/// the second kind, so an item with only listed figures still needs measuring.
+const MEASURED_METHODS: &str = "('instrument', 'scan', 'keyed', 'derived', 'photographed')";
+
+#[derive(serde::Deserialize, Debug)]
+pub struct ItemsQuery {
+    /// Code, description or barcode. A barcode is normalised the way a scan is.
+    pub q: Option<String>,
+    /// `here`: on hand at the caller's site, by either record.
+    pub stock: Option<String>,
+    /// `measuring`: nothing measured here, whatever a list says. `photo`: no
+    /// picture of its front, its own or its family's.
+    pub needs: Option<String>,
+    /// The last code of the page before. Codes are unique, so they page.
+    pub after: Option<String>,
+    pub limit: Option<i64>,
+}
+
+/// One item in the list.
+#[derive(Serialize, Debug)]
+pub struct ItemRow {
+    pub item_id: Uuid,
+    pub code: String,
+    pub description: String,
+    pub active: bool,
+    pub style_code: Option<String>,
+    pub picture: Option<Picture>,
+    /// `measured`, `listed` (figures copied from a list, and none measured) or
+    /// `none`.
+    pub figures: String,
+    /// What NetSuite last reported on hand at this site, as text, when it
+    /// reported any; and on how many shelves.
+    pub reported_on_hand: Option<String>,
+    pub reported_bins: i64,
+    /// What this system's own ledger holds at this site.
+    pub held: i64,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ItemsList {
+    pub items: Vec<ItemRow>,
+    /// How many match, across every page.
+    pub total: i64,
+    /// Pass as `after` for the next page; absent on the last.
+    pub next: Option<String>,
+}
+
+/// Items, searched and filtered, fifty at a time in code order.
+///
+/// **The stock columns are this site's**, the site the session works at, and
+/// every site's when it names none. NetSuite's report and this system's ledger
+/// stay two columns for the item page's reason (migration 86).
+#[get("/items")]
+pub async fn item_list(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ItemsQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let site = who.site_id;
+    let asked = query
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|q| !q.is_empty())
+        .map(str::to_string);
+    // The wildcards a person did not mean are dropped, not escaped: nobody
+    // searches for a percent sign in a stock code.
+    let like = asked.as_ref().map(|q| format!("%{}%", q.replace(['%', '_'], "")));
+    let codes: Vec<String> = asked
+        .iter()
+        .flat_map(|q| [Some(q.clone()), crate::barcodes::normalise_gtin(q)])
+        .flatten()
+        .collect();
+    let here = query.stock.as_deref() == Some("here");
+    let (measuring, photo) = match query.needs.as_deref() {
+        Some("measuring") => (true, false),
+        Some("photo") => (false, true),
+        Some(other) => {
+            return Err(ApiError::Rejected(format!(
+                "needs is measuring or photo, not {other}"
+            )))
+        }
+        None => (false, false),
+    };
+    let after = query.after.clone().filter(|a| !a.is_empty());
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let sql = format!(
+                    "WITH {picture},
+                     candidates AS (
+                         SELECT i.id, i.code, i.description, i.active, i.style_id,
+                                (SELECT max(CASE WHEN oc.method::text IN {MEASURED_METHODS}
+                                                 THEN 2 ELSE 1 END)
+                                   FROM observable o
+                                   JOIN observation_current oc ON oc.observable_id = o.id
+                                  WHERE o.item_id = i.id
+                                     OR (i.style_id IS NOT NULL AND o.item_style_id = i.style_id))
+                                  AS figures
+                           FROM item i
+                          WHERE ($1::text IS NULL OR i.code ILIKE $1 OR i.description ILIKE $1
+                                 OR EXISTS (SELECT 1 FROM item_barcode b
+                                             WHERE b.item_id = i.id AND b.barcode = ANY($2::text[])))
+                            AND (NOT $3::bool
+                                 OR EXISTS (SELECT 1 FROM reported_stock rs
+                                             WHERE rs.item_id = i.id AND rs.on_hand > 0
+                                               AND ($4::uuid IS NULL OR rs.site_id = $4))
+                                 OR EXISTS (SELECT 1 FROM stock s
+                                             WHERE s.item_id = i.id AND s.quantity > 0
+                                               AND ($4::uuid IS NULL OR s.site_id = $4)))
+                     ),
+                     needed AS (
+                         SELECT c.* FROM candidates c
+                          WHERE (NOT $5::bool OR coalesce(c.figures, 0) < 2)
+                            AND (NOT $6::bool
+                                 OR NOT EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
+                     )
+                     SELECT n.id, n.code, n.description, n.active, st.code, n.figures,
+                            pic.digest, pic.source, rep.on_hand, rep.bins, held.q,
+                            (SELECT count(*) FROM needed)
+                       FROM needed n
+                       LEFT JOIN item_style st ON st.id = n.style_id
+                       LEFT JOIN picture pic ON pic.item_id = n.id
+                       LEFT JOIN LATERAL (
+                           SELECT sum(rs.on_hand)::text AS on_hand,
+                                  count(DISTINCT rs.location_id) AS bins
+                             FROM reported_stock rs
+                            WHERE rs.item_id = n.id AND ($4::uuid IS NULL OR rs.site_id = $4)
+                       ) rep ON true
+                       LEFT JOIN LATERAL (
+                           SELECT coalesce(sum(s.quantity), 0)::bigint AS q
+                             FROM stock s
+                            WHERE s.item_id = n.id AND s.quantity > 0
+                              AND ($4::uuid IS NULL OR s.site_id = $4)
+                       ) held ON true
+                      WHERE ($7::text IS NULL OR n.code > $7)
+                      ORDER BY n.code
+                      LIMIT $8",
+                    picture = pictures::PICTURE_CTE
+                );
+                let rows = tx
+                    .query(
+                        &sql,
+                        &[&like, &codes, &here, &site, &measuring, &photo, &after, &(limit + 1)],
+                    )
+                    .await?;
+                let total: i64 = rows.first().map(|r| r.get(11)).unwrap_or(0);
+                let more = rows.len() as i64 > limit;
+                let items: Vec<ItemRow> = rows
+                    .iter()
+                    .take(limit as usize)
+                    .map(|r| ItemRow {
+                        item_id: r.get(0),
+                        code: r.get(1),
+                        description: r.get(2),
+                        active: r.get(3),
+                        style_code: r.get(4),
+                        figures: match r.get::<_, Option<i32>>(5) {
+                            Some(2) => "measured",
+                            Some(_) => "listed",
+                            None => "none",
+                        }
+                        .to_string(),
+                        picture: pictures::from_row(r.get(6), r.get(7)),
+                        reported_on_hand: r.get(8),
+                        reported_bins: r.get(9),
+                        held: r.get(10),
+                    })
+                    .collect();
+                let next = if more { items.last().map(|i| i.code.clone()) } else { None };
+                Ok(ItemsList { items, total, next })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}

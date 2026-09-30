@@ -1319,6 +1319,33 @@ export interface ItemView {
   reported: ItemReported[];
 }
 
+/** One item in `GET /items`. */
+export interface ItemRow {
+  item_id: Uuid;
+  code: string;
+  description: string;
+  active: boolean;
+  style_code: string | null;
+  picture: Picture | null;
+  /** `measured`, `listed` (figures copied from a list, none measured here) or `none`. */
+  figures: "measured" | "listed" | "none";
+  /** NetSuite's last report of on hand at this site, as text; null when it reported none. */
+  reported_on_hand: string | null;
+  /** On how many shelves NetSuite reported it. */
+  reported_bins: number;
+  /** What Spork's own ledger holds at this site. */
+  held: number;
+}
+
+/** `GET /items`: one page of the list. */
+export interface ItemsList {
+  items: ItemRow[];
+  /** How many match, across every page. */
+  total: number;
+  /** Pass as `after` for the next page; null on the last. */
+  next: string | null;
+}
+
 /** `GET /bins/{id}`: a bin, and where it is. */
 export interface BinView {
   location_id: Uuid;

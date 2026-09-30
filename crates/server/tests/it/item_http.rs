@@ -102,3 +102,69 @@ async fn an_item_says_what_it_is_and_where_netsuite_reported_it() {
         .await
         .expect("tidy");
 }
+
+/// The list: found by code, description or barcode; narrowed to what is here,
+/// or to what still needs measuring or a photo; paged by code.
+#[actix_web::test]
+async fn the_item_list_finds_narrows_and_pages() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    let auth = ("authorization", common::bearer(&app).await);
+
+    let list = |query: &str| {
+        let uri = format!("/items{query}");
+        let auth = auth.clone();
+        let app = &app;
+        async move {
+            let r = test::call_service(app, test::TestRequest::get().uri(&uri).insert_header(auth).to_request()).await;
+            let status = r.status().as_u16();
+            let body: Value = serde_json::from_slice(&test::read_body(r).await).unwrap_or(Value::Null);
+            (status, body)
+        }
+    };
+    let codes = |page: &Value| -> Vec<String> {
+        page["items"].as_array().unwrap().iter().map(|i| i["code"].as_str().unwrap().to_string()).collect()
+    };
+
+    // ── by code, and by description ─────────────────────────────────────
+    let (status, found) = list("?q=GLOVE-M").await;
+    assert_eq!(status, 200, "{found}");
+    assert!(codes(&found).contains(&"GLOVE-M".to_string()), "{found}");
+    let glove = found["items"].as_array().unwrap().iter().find(|i| i["code"] == "GLOVE-M").unwrap();
+    assert!(glove["item_id"].is_string());
+    assert!(["measured", "listed", "none"].contains(&glove["figures"].as_str().unwrap()));
+    let (_, described) = list("?q=nitrile").await;
+    assert!(codes(&described).contains(&"GLOVE-M".to_string()), "a description matches too: {described}");
+
+    // ── here: the fixture holds gloves at Melbourne in its own ledger ───
+    let (_, here) = list("?q=GLOVE-M&stock=here").await;
+    let g = here["items"].as_array().unwrap().iter().find(|i| i["code"] == "GLOVE-M").expect("gloves are here");
+    assert!(g["held"].as_i64().unwrap() > 0, "this system's own count, as its own column: {g}");
+
+    // ── paging: one at a time, in code order, until there are no more ───
+    let (_, first) = list("?limit=1").await;
+    let (_, second) = list(&format!("?limit=1&after={}", first["next"].as_str().expect("more than one item"))).await;
+    assert_eq!(codes(&first).len(), 1);
+    assert!(codes(&second)[0] > codes(&first)[0], "code order: {first} then {second}");
+    assert_eq!(first["total"], second["total"], "the total is every page's, not this one's");
+    let (_, nothing) = list("?q=no-such-item-anywhere").await;
+    assert_eq!(nothing["total"], 0);
+    assert!(nothing["next"].is_null(), "no next page after nothing");
+
+    // ── needs: a filter that is not one is refused, not ignored ─────────
+    let (status, _) = list("?needs=everything").await;
+    assert_eq!(status, 400);
+    let (status, unmeasured) = list("?needs=measuring").await;
+    assert_eq!(status, 200);
+    assert!(
+        unmeasured["items"].as_array().unwrap().iter().all(|i| i["figures"] != "measured"),
+        "needs measuring lists nothing already measured: {unmeasured}"
+    );
+    let (status, _) = list("?needs=photo").await;
+    assert_eq!(status, 200);
+}
