@@ -49,6 +49,24 @@ applied() {
 # already relies on.
 all() { ls -1 migrations | sort; }
 
+# Record every migration up to and including $1 as applied, in one statement.
+#
+# **One psql, not one per name.** This used to insert each name with its own
+# psql, and it runs after every migration, so applying the whole set from empty
+# was ninety-odd launches for the last migration alone and thousands in all.
+# A launch is cheap on Linux and a fraction of a second on Windows, where that
+# was minutes of every fresh database. The names are directory names and
+# carry no quotes, as `psql_q -c` needs.
+record_through() {
+    vals=""
+    for done_m in $(all); do
+        vals="$vals${vals:+, }('$done_m')"
+        [ "$done_m" = "$1" ] && break
+    done
+    psql_q -c "INSERT INTO schema_migration (name) VALUES $vals
+               ON CONFLICT (name) DO NOTHING" >/dev/null
+}
+
 pending() {
     have=$(applied | sort)
     for m in $(all); do
@@ -116,12 +134,8 @@ if [ "$MODE" = baseline ]; then
             esac
         done
     fi
-    n=0
-    for m in $(all); do
-        psql_q -c "INSERT INTO schema_migration (name) VALUES ('$m')
-                   ON CONFLICT (name) DO NOTHING" >/dev/null
-        n=$((n + 1))
-    done
+    record_through "$(all | tail -1)"
+    n=$(all | wc -l | tr -d ' ')
     echo "baseline — $n migration(s) recorded as applied, none run"
     exit 0
 fi
@@ -196,11 +210,7 @@ for m in $left; do
         # applied — migrations run in order — so the backfill happens here
         # rather than as eighty hardcoded names inside 80's own up.sql.
         if have_ledger; then
-            for done_m in $(all); do
-                psql_q -c "INSERT INTO schema_migration (name) VALUES ('$done_m')
-                           ON CONFLICT (name) DO NOTHING" >/dev/null
-                [ "$done_m" = "$m" ] && break
-            done
+            record_through "$m"
         fi
         echo "ok"
     else

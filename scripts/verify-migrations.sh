@@ -40,18 +40,23 @@ reset() {
 # The migrations grant what they need (1, 48 and now 77). A harness that
 # repairs the thing it is checking is worse than no harness.
 
+# **One psql for the whole chain**, reading each file in turn with `\i`. It
+# was one psql per file, and a psql launch is a fraction of a second on
+# Windows, which made the chain up and down twice a minute and a half of
+# launches. One session runs the files in the same order and, like the old
+# loop, outside any transaction, and no migration sets anything a later one
+# would inherit. ON_ERROR_STOP still stops at the first failure, and psql's own
+# message names the file and the line.
 ups() {
-    for m in migrations/*/up.sql; do
-        psql_q -f "$m" >/dev/null || { echo "FAIL  up $m"; exit 1; }
-    done
+    for m in migrations/*/up.sql; do printf '\\i %s\n' "$m"; done \
+        | psql_q -f - >/dev/null || { echo "FAIL  up: psql names the file above"; exit 1; }
 }
 
 # Reverse order. `ls -r` over the date-ordered directory names is the reverse
 # sequence, which is what a down chain has to be.
 downs() {
-    for d in $(ls -rd migrations/*/); do
-        psql_q -f "$d/down.sql" >/dev/null || { echo "FAIL  down $d"; exit 1; }
-    done
+    for d in $(ls -rd migrations/*/); do printf '\\i %s\n' "${d}down.sql"; done \
+        | psql_q -f - >/dev/null || { echo "FAIL  down: psql names the file above"; exit 1; }
 }
 
 # Nothing left behind. Types are checked as well as tables because a dropped
