@@ -20,7 +20,7 @@
 //! signed on — and until D145 that was null on every browser session, so this
 //! filter silently did nothing.
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -142,7 +142,7 @@ pub async fn queue(
                                 count(fl.id),
                                 coalesce(sum(fl.quantity), 0)::bigint,
                                 coalesce(sum(greatest(fl.picked_quantity, bx.q)), 0)::bigint,
-                                o.promised_to,
+                                (o.promised_to AT TIME ZONE coalesce(st.timezone, 'UTC'))::date,
                                 (SELECT count(*) FROM package pk
                                   WHERE pk.fulfilment_id = f.id),
                                 coalesce(sum(fl.external_picked_quantity), 0)::bigint,
@@ -154,9 +154,11 @@ pub async fn queue(
                                   ORDER BY ep.observed_at DESC, ep.recorded_at DESC LIMIT 1),
                                 EXISTS (SELECT 1 FROM external_pick ep
                                           JOIN fulfilment_line el ON el.id = ep.fulfilment_line_id
-                                         WHERE el.fulfilment_id = f.id)
+                                         WHERE el.fulfilment_id = f.id),
+                                (now() AT TIME ZONE coalesce(st.timezone, 'UTC'))::date
                            FROM fulfilment f
                            JOIN \"order\" o ON o.id = f.order_id
+                           LEFT JOIN site st ON st.id = f.site_id
                            LEFT JOIN party p ON p.id = o.customer_party_id
                            LEFT JOIN fulfilment_line fl ON fl.fulfilment_id = f.id
                            LEFT JOIN LATERAL (
@@ -174,19 +176,25 @@ pub async fn queue(
                                  OR o.external_ref ILIKE $2
                                  OR p.name ILIKE $2)
                           GROUP BY f.id, f.reference, o.confirmation_number,
-                                   o.external_ref, p.name, o.promised_to, f.source_channel_id
+                                   o.external_ref, p.name, o.promised_to, f.source_channel_id,
+                                   st.timezone
                           ORDER BY o.promised_to NULLS LAST, f.id",
                         &[&site, &like],
                     )
                     .await?;
 
-                let today = Utc::now().date_naive();
+                // **Today and the promise, both on the site's clock.** Read in UTC,
+                // an Australian morning is still yesterday until ten or eleven, so
+                // a promise for tomorrow read "due today" and one for today read
+                // "overdue" for the first part of every shift. A fulfilment with no
+                // site has no clock of its own, and reads in UTC as all did before.
                 Ok(rows
                     .iter()
                     .map(|r| {
                         let committed: i64 = r.get(5);
                         let picked: i64 = r.get(6);
-                        let promised: Option<DateTime<Utc>> = r.get(7);
+                        let promised: Option<NaiveDate> = r.get(7);
+                        let today: NaiveDate = r.get(13);
                         let reference: Option<String> = r.get(1);
                         let provenance = r.get::<_, bool>(12).then(|| {
                             picked_elsewhere(r.get(10), reference.as_deref(), r.get(11))
@@ -202,7 +210,7 @@ pub async fn queue(
                             cartons: r.get(8),
                             reported: r.get(9),
                             provenance,
-                            due: promised.map(|p| due(p.date_naive(), today)),
+                            due: promised.map(|p| due(p, today)),
                             stage: stage(picked, committed),
                         }
                     })
