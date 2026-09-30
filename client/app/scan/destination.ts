@@ -50,9 +50,10 @@ export interface Option {
 export function screenFor(subject: Subject): string | null {
   switch (subject.kind) {
     case "item":
-      // An item resolves to what can be measured about it, which is the one
-      // screen that takes an item as its subject today.
-      return subject.capture.length > 0 ? "/capture" : null;
+      // A product is scanned to ask what it is and where it lives, which is
+      // its own page. It used to land on capture, the only screen that took an
+      // item then, and an item with nothing to capture landed nowhere.
+      return `/items/${subject.id}`;
     case "location":
       // A bin label is scanned to ask where it is: the face of its rack (D173).
       return `/bins/${subject.id}`;

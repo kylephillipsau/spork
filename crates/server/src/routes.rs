@@ -7158,100 +7158,109 @@ pub async fn item_measurements(
     let rows = scope
         .run(move |tx| {
             Box::pin(async move {
-                // `observation_current` is the fold that already answers "the
-                // winning value per subject per metric", so this pivots it
-                // rather than re-deciding which observation wins. D25: one
-                // answer, one place that computes it.
-                // **Most specific wins, per fact rather than per subject.**
-                // D22's rule one level down, applied to each metric on its own:
-                // a code weighed here but never measured still inherits its
-                // style's dimensions. Resolving by subject instead would let one
-                // weight against the SKU hide every other number the style has,
-                // which is worse than not having recorded the weight.
-                //
-                // `DISTINCT ON (level, metric) ORDER BY … rank` is the whole
-                // resolution. A style is exactly one hop, so there is no closure
-                // table here and no walk.
-                let rows = tx
-                    .query(
-                        "WITH subject AS (
-                             SELECT o.id, o.packaging_level, o.item_packing_config_id,
-                                    'own'::text AS src, NULL::text AS style_code, 0 AS rank
-                               FROM observable o
-                              WHERE o.item_id = $1
-                             UNION ALL
-                             SELECT o.id, o.packaging_level, o.item_packing_config_id,
-                                    'style', s.code, 1
-                               FROM observable o
-                               JOIN item_style s ON s.id = o.item_style_id
-                               JOIN item i ON i.style_id = s.id
-                              WHERE i.id = $1
-                         ),
-                         resolved AS (
-                             SELECT DISTINCT ON (s.packaging_level, oc.metric_id)
-                                    s.packaging_level, s.item_packing_config_id,
-                                    s.src, s.style_code, oc.metric_id,
-                                    oc.value_numeric, oc.method, oc.observed_at
-                               FROM subject s
-                               JOIN observation_current oc ON oc.observable_id = s.id
-                              ORDER BY s.packaging_level, oc.metric_id, s.rank
-                         )
-                         SELECT r.packaging_level::text,
-                                (array_agg(r.item_packing_config_id
-                                    ORDER BY CASE WHEN r.src = 'own' THEN 0 ELSE 1 END))[1],
-                                (max(r.value_numeric)
-                                     FILTER (WHERE m.code = 'length'))::bigint,
-                                (max(r.value_numeric)
-                                     FILTER (WHERE m.code = 'width'))::bigint,
-                                (max(r.value_numeric)
-                                     FILTER (WHERE m.code = 'height'))::bigint,
-                                (max(r.value_numeric)
-                                     FILTER (WHERE m.code = 'gross_weight'))::bigint,
-                                (max(r.value_numeric)
-                                     FILTER (WHERE m.code = 'net_weight'))::bigint,
-                                (max(r.value_numeric)
-                                     FILTER (WHERE m.code = 'tare_weight'))::bigint,
-                                (array_agg(r.method ORDER BY r.observed_at DESC))[1],
-                                max(r.observed_at),
-                                CASE WHEN bool_and(r.src = 'own') THEN 'own'
-                                     WHEN bool_and(r.src = 'style') THEN 'style'
-                                     ELSE 'mixed' END,
-                                max(r.style_code)
-                           FROM resolved r
-                           JOIN metric m ON m.id = r.metric_id
-                          GROUP BY r.packaging_level
-                          ORDER BY r.packaging_level",
-                        &[&item_id],
-                    )
-                    .await?;
-                Ok(rows
-                    .iter()
-                    .map(|r| {
-                        // Cast to bigint in the query rather than decoded as
-                        // a decimal here: `value_numeric` is numeric because a
-                        // temperature is not whole, and a length or a mass in
-                        // canonical units always is.
-                        ItemMeasurements {
-                            packaging_level: r.get(0),
-                            item_packing_config_id: r.get(1),
-                            length_mm: r.get(2),
-                            width_mm: r.get(3),
-                            height_mm: r.get(4),
-                            gross_weight_g: r.get(5),
-                            net_weight_g: r.get(6),
-                            tare_weight_g: r.get(7),
-                            method: r.get(8),
-                            observed_at: r.get(9),
-                            source: r.get(10),
-                            style_code: r.get(11),
-                        }
-                    })
-                    .collect::<Vec<_>>())
+                measurements_of(tx, item_id).await
             })
         })
         .await?;
 
     Ok(HttpResponse::Ok().json(rows))
+}
+
+/// What a thing of this kind measures, per packaging level: the read behind
+/// [`item_measurements`] and the item page, so the two cannot disagree.
+pub async fn measurements_of(
+    tx: &tokio_postgres::Transaction<'_>,
+    item_id: Uuid,
+) -> Result<Vec<ItemMeasurements>, ApiError> {
+    // `observation_current` is the fold that already answers "the
+    // winning value per subject per metric", so this pivots it
+    // rather than re-deciding which observation wins. D25: one
+    // answer, one place that computes it.
+    // **Most specific wins, per fact rather than per subject.**
+    // D22's rule one level down, applied to each metric on its own:
+    // a code weighed here but never measured still inherits its
+    // style's dimensions. Resolving by subject instead would let one
+    // weight against the SKU hide every other number the style has,
+    // which is worse than not having recorded the weight.
+    //
+    // `DISTINCT ON (level, metric) ORDER BY … rank` is the whole
+    // resolution. A style is exactly one hop, so there is no closure
+    // table here and no walk.
+    let rows = tx
+        .query(
+            "WITH subject AS (
+                 SELECT o.id, o.packaging_level, o.item_packing_config_id,
+                        'own'::text AS src, NULL::text AS style_code, 0 AS rank
+                   FROM observable o
+                  WHERE o.item_id = $1
+                 UNION ALL
+                 SELECT o.id, o.packaging_level, o.item_packing_config_id,
+                        'style', s.code, 1
+                   FROM observable o
+                   JOIN item_style s ON s.id = o.item_style_id
+                   JOIN item i ON i.style_id = s.id
+                  WHERE i.id = $1
+             ),
+             resolved AS (
+                 SELECT DISTINCT ON (s.packaging_level, oc.metric_id)
+                        s.packaging_level, s.item_packing_config_id,
+                        s.src, s.style_code, oc.metric_id,
+                        oc.value_numeric, oc.method, oc.observed_at
+                   FROM subject s
+                   JOIN observation_current oc ON oc.observable_id = s.id
+                  ORDER BY s.packaging_level, oc.metric_id, s.rank
+             )
+             SELECT r.packaging_level::text,
+                    (array_agg(r.item_packing_config_id
+                        ORDER BY CASE WHEN r.src = 'own' THEN 0 ELSE 1 END))[1],
+                    (max(r.value_numeric)
+                         FILTER (WHERE m.code = 'length'))::bigint,
+                    (max(r.value_numeric)
+                         FILTER (WHERE m.code = 'width'))::bigint,
+                    (max(r.value_numeric)
+                         FILTER (WHERE m.code = 'height'))::bigint,
+                    (max(r.value_numeric)
+                         FILTER (WHERE m.code = 'gross_weight'))::bigint,
+                    (max(r.value_numeric)
+                         FILTER (WHERE m.code = 'net_weight'))::bigint,
+                    (max(r.value_numeric)
+                         FILTER (WHERE m.code = 'tare_weight'))::bigint,
+                    (array_agg(r.method ORDER BY r.observed_at DESC))[1],
+                    max(r.observed_at),
+                    CASE WHEN bool_and(r.src = 'own') THEN 'own'
+                         WHEN bool_and(r.src = 'style') THEN 'style'
+                         ELSE 'mixed' END,
+                    max(r.style_code)
+               FROM resolved r
+               JOIN metric m ON m.id = r.metric_id
+              GROUP BY r.packaging_level
+              ORDER BY r.packaging_level",
+            &[&item_id],
+        )
+        .await?;
+    Ok(rows
+        .iter()
+        .map(|r| {
+            // Cast to bigint in the query rather than decoded as
+            // a decimal here: `value_numeric` is numeric because a
+            // temperature is not whole, and a length or a mass in
+            // canonical units always is.
+            ItemMeasurements {
+                packaging_level: r.get(0),
+                item_packing_config_id: r.get(1),
+                length_mm: r.get(2),
+                width_mm: r.get(3),
+                height_mm: r.get(4),
+                gross_weight_g: r.get(5),
+                net_weight_g: r.get(6),
+                tare_weight_g: r.get(7),
+                method: r.get(8),
+                observed_at: r.get(9),
+                source: r.get(10),
+                style_code: r.get(11),
+            }
+        })
+        .collect::<Vec<_>>())
 }
 
 #[get("/package-types")]
@@ -9176,6 +9185,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::handover::record_handover)
         .service(crate::places::bin_page)
         .service(crate::places::place_page)
+        .service(crate::items::item_page)
         .service(crate::places::site_layout)
         .service(crate::places::draft_layout)
         .service(crate::workspace::workspace)

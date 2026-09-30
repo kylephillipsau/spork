@@ -26,7 +26,7 @@ const resolution = (over: Partial<Resolution>): Resolution => ({
 test("one subject goes straight there, with no results page", () => {
   // D111: "One subject. Navigate. No intermediate results page, ever."
   const landing = destinationFor(resolution({ subjects: [item("STY-7720-08")] }));
-  assert.deepEqual(landing, { kind: "go", path: "/capture" });
+  assert.deepEqual(landing, { kind: "go", path: "/items/id-STY-7720-08" });
 });
 
 test("several subjects are a choice, never a silent preference", () => {
@@ -77,9 +77,14 @@ test("a bin label goes to the face of the rack that holds it", () => {
   assert.equal(landing.path, `/bins/${bin.id}`);
 });
 
-test("an item nothing can be measured about has no screen either", () => {
-  // Not a default to /capture: sending it there because that is the only screen
-  // built would be the silent preference D111 forbids, one level up.
-  assert.equal(screenFor(item("X", 0)), null);
+test("an item goes to its own page, whether or not anything can be measured", () => {
+  // Its page is where it is and what it is; capture is one link from there.
+  assert.equal(screenFor(item("X", 0)), "/items/id-X");
+  assert.equal(screenFor(item("Y", 2)), "/items/id-Y");
+});
+
+test("a package still has no screen, and says so rather than borrowing one", () => {
+  // Not a default to another screen: that would be the silent preference D111
+  // forbids, one level up.
   assert.equal(screenFor({ ...item("P"), kind: "package" }), null);
 });

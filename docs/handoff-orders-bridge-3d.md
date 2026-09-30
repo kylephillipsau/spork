@@ -57,9 +57,12 @@ They depend on which suites ran first, and nobody has fixed them yet.
 otherwise renders a stale build.
 
 **The local instance.** `scripts/local.ps1 setup` then `start` serves
-`http://localhost:18080`. The working `spork` database is at migration 96 and
-has no bins yet. Load a bin list on Settings › Import, or `seed` the demo data,
-before trying the layout.
+`http://localhost:18080`. Since 2026-09-30 the working `spork` database holds
+the business's own data, read from NetSuite exports and never written back: the
+item master, the prepack list, one warehouse's bins and its inventory balance.
+The terminal importers load them: `import_prepack`, `import_bins --only` and
+`import_stock`. No layout is drafted yet. Real codes stay out of the
+repository, as everywhere else.
 
 ---
 
@@ -179,8 +182,10 @@ This lives in the separate `warehouse-scripts` repo as
 4. **The plan editor and the 3D view** (below).
 5. A history of layout changes (who moved what, and when), and roles for who
    may edit. Until roles exist, anyone signed in can draft.
-6. Item pages, a bin view and a warehouse view. The order page's item codes
-   will link to the item pages; `OrderLineView.item_id` is already on the wire.
+6. A bin view and a warehouse view. **Item pages are built** (`/items/:id`,
+   `GET /items/{id}`): what it is, its photo and family, its carton and
+   measurements, and where it is, with NetSuite's report kept apart from
+   Spork's own ledger. An item scan lands there, and order lines link to it.
 
 Deferred and not forgotten:
 

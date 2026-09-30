@@ -64,6 +64,8 @@ import { BinPage, PlacePage } from "@app/layout/PlacePage";
 import { LayoutPage } from "@app/layout/LayoutPage";
 import { useBin, usePlace } from "@app/layout/usePlace";
 import { useLayout } from "@app/layout/useLayout";
+import { ItemPage } from "@app/items/ItemPage";
+import { useItem } from "@app/items/useItem";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
 import { useQueue } from "@app/outbound/pack/useQueue";
 import { useOrders } from "@app/outbound/orders/useOrders";
@@ -284,6 +286,11 @@ function LiveBin({ bin }: { bin: string }) {
   return <BinPage desk={useBin(bin)} />;
 }
 
+/** An item: what it is, and where each record says it is. */
+function LiveItem({ item }: { item: string }) {
+  return <ItemPage desk={useItem(item)} />;
+}
+
 /** One place, by the id in the path. */
 function LivePlace({ place }: { place: string }) {
   return <PlacePage desk={usePlace(place)} />;
@@ -323,6 +330,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   order: (params) => <LiveOrder order={params["order"] ?? ""} />,
   bin: (params) => <LiveBin bin={params["bin"] ?? ""} />,
   place: (params) => <LivePlace place={params["place"] ?? ""} />,
+  item: (params) => <LiveItem item={params["item"] ?? ""} />,
   layout: () => <LiveLayout />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,

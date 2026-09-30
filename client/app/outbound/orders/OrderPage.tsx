@@ -1,6 +1,6 @@
 import { Package } from "lucide-react";
 
-import { Alert, Button, Card, DataTable, Page, PageHeader, Section, Skeleton, Stack, type Column } from "@ui/index";
+import { Alert, Button, Card, DataTable, Link, Page, PageHeader, Section, Skeleton, Stack, type Column } from "@ui/index";
 import { useNavigate } from "@app/routing/Router";
 import { Progress } from "@app/common/cells";
 import type { OrderLineView } from "@domain/types";
@@ -84,7 +84,14 @@ export function OrderPage({ desk }: { desk: OrderDesk }) {
 }
 
 const LINE_COLUMNS: Column<OrderLineView>[] = [
-  { key: "item", header: "Item", cell: (l) => l.item_code, sort: (l) => l.item_code, mono: true, width: "140px" },
+  {
+    key: "item",
+    header: "Item",
+    cell: (l) => <Link href={`/items/${l.item_id}`}>{l.item_code}</Link>,
+    sort: (l) => l.item_code,
+    mono: true,
+    width: "140px",
+  },
   { key: "description", header: "Description", cell: (l) => l.description, sort: (l) => l.description, grow: true },
   { key: "ordered", header: "Ordered", cell: (l) => l.ordered_quantity, align: "right", width: "80px" },
   {

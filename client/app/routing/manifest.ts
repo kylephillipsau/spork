@@ -100,6 +100,10 @@ export const SCREENS: readonly ScreenSpec[] = [
   // the floor and the answer is read standing in the aisle.
   spec("bin", "/bins/:bin", "Bin", "floor"),
   spec("place", "/places/:place", "Place", "floor"),
+  // What an item is and where it lives: where a scanned product lands (D111).
+  // A floor screen for the bin page's reason: a product is scanned standing
+  // beside it, and the answer is read there.
+  spec("item", "/items/:item", "Item", "floor"),
   spec("findings", "/findings", "Findings", "desk"),
   // The screen D135 was waiting for: a finding is a row in the database, so a
   // link to one restores the queue, the tab and the evidence panel. Same title

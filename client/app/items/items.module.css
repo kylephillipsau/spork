@@ -1,0 +1,61 @@
+.title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+.code {
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+}
+
+/* The photo beside the facts, wrapping under them on a handheld. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ui-space-5);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  margin: 0;
+}
+
+/* Big enough to recognise the thing by, from arm's length. */
+.photo {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-1);
+  width: 160px;
+  height: 160px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-sm);
+  object-fit: contain;
+}
+
+.photo svg {
+  width: var(--ui-icon-lg);
+  height: var(--ui-icon-lg);
+}
+
+.caption {
+  max-width: 160px;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.note {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}

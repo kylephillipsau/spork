@@ -104,6 +104,8 @@ import { FAILED as TOKENS_FAILED, MINTED, NONE as TOKENS_NONE, READY as TOKENS_R
 import { ImportPage } from "@app/admin/ImportPage";
 import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
+import { ItemPage } from "@app/items/ItemPage";
+import { ITEM, ITEM_UNKNOWN, fixtureItem } from "@app/items/fixture";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
 import type { Screen, Surface } from "./Router";
@@ -528,6 +530,12 @@ export const FIXTURES: readonly Screen[] = [
   app("f-place", "/fixtures/place", "Place", "floor", { screen: "place" }, () => <PlacePage desk={fixturePlace(BUILDING)} />),
   app("f-place-shelf", "/fixtures/place/shelf", "Place — shelf", "floor", { screen: "place" }, () => (
     <PlacePage desk={fixturePlace(SHELF)} />
+  )),
+  // An item's page: where NetSuite says it is beside Spork's own record, its
+  // carton from the family's prepack row; and one nobody has recorded at all.
+  app("f-item", "/fixtures/item", "Item", "floor", { screen: "item" }, () => <ItemPage desk={fixtureItem(ITEM)} />),
+  app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureItem(ITEM_UNKNOWN)} />
   )),
   app("f-layout-none", "/fixtures/layout/none", "Layout — none yet", "desk", { screen: "layout" }, () => (
     <LayoutPage desk={fixtureLayout(NO_LAYOUT)} />

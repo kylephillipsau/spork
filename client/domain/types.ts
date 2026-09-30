@@ -1199,6 +1199,84 @@ export interface PlaceView {
   plan: PlanShape[];
 }
 
+/**
+ * What a thing of this kind measures at one packaging level. Canonical units
+ * throughout: millimetres and grams.
+ */
+export interface ItemMeasurements {
+  packaging_level: string;
+  /** `own`, `style` or `mixed`: whether these numbers were taken against this code. */
+  source: string;
+  /** The style they came from, when inherited. */
+  style_code: string | null;
+  item_packing_config_id: Uuid | null;
+  length_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  gross_weight_g: number | null;
+  net_weight_g: number | null;
+  tare_weight_g: number | null;
+  /** How the newest was come by: `transcribed`, `measured`, `keyed`… */
+  method: string | null;
+  observed_at: string | null;
+}
+
+/** The style an item is a variant of (D108). */
+export interface ItemStyleRef {
+  code: string;
+  description: string | null;
+  /** Codes on file that are variants of it, this one included. */
+  variants: number;
+}
+
+/** What a carton holds, as the case pack in force says. Either count may be unknown. */
+export interface ItemPacking {
+  units_per_inner: number | null;
+  inners_per_carton: number | null;
+  effective_from: string;
+}
+
+/** Some of it, as this system's own ledger holds it. */
+export interface ItemHeld {
+  site_code: string | null;
+  location_id: Uuid | null;
+  bin_code: string | null;
+  quantity: number;
+  allocated_quantity: number;
+}
+
+/** Some of it, as NetSuite's inventory balance reported it. Not this system's record. */
+export interface ItemReported {
+  site_code: string;
+  /** Absent when the report named a warehouse and no shelf. */
+  location_id: Uuid | null;
+  bin_code: string | null;
+  /** Text: a quantity can be fractional, and is shown as it was reported. */
+  on_hand: string;
+  available: string | null;
+  status: string | null;
+  /** When the report was taken, which is how old this is. */
+  as_at: string;
+  source: string;
+}
+
+/** `GET /items/{id}`: what an item is, what it measures, and where each record says it is. */
+export interface ItemView {
+  item_id: Uuid;
+  code: string;
+  description: string;
+  active: boolean;
+  style: ItemStyleRef | null;
+  /** The front, own before its style's, saying whose (D141). */
+  picture: Picture | null;
+  measurements: ItemMeasurements[];
+  packing: ItemPacking | null;
+  /** This system's own record, in walking order. */
+  held: ItemHeld[];
+  /** What NetSuite last reported, in walking order. */
+  reported: ItemReported[];
+}
+
 /** `GET /bins/{id}`: a bin, and where it is. */
 export interface BinView {
   location_id: Uuid;

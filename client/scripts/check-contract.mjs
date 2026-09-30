@@ -218,6 +218,13 @@ const PAIRS = [
   ["PlanShape", ["PlanShape"]],
   ["PlaceView", ["PlaceView"]],
   ["BinView", ["BinView"]],
+  // an item's own page
+  ["ItemView", ["ItemView"]],
+  ["ItemStyleRef", ["ItemStyleRef"]],
+  ["ItemPacking", ["ItemPacking"]],
+  ["ItemHeld", ["ItemHeld"]],
+  ["ItemReported", ["ItemReported"]],
+  ["ItemMeasurements", ["ItemMeasurements"]],
   ["LayoutPlace", ["LayoutPlace"]],
   ["LayoutView", ["LayoutView"]],
   ["DraftedPlace", ["DraftedPlace"]],

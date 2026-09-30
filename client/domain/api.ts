@@ -14,6 +14,7 @@ import type {
   ImportReport,
   ItemImportReport,
   BinView,
+  ItemView,
   DraftReport,
   LayoutView,
   PlaceView,
@@ -684,6 +685,9 @@ export const api = {
 
   /** A bin, its cell, and the place around it: where a bin scan lands (D173). */
   bin: (locationId: Uuid) => send<BinView>("GET", `/bins/${encodeURIComponent(locationId)}`),
+
+  /** An item: what it is, what it measures, and where each record says it is. */
+  item: (itemId: Uuid) => send<ItemView>("GET", `/items/${encodeURIComponent(itemId)}`),
 
   /** One place, the way out of it, what is inside it, and its bins by cell. */
   place: (placeId: Uuid) => send<PlaceView>("GET", `/places/${encodeURIComponent(placeId)}`),
