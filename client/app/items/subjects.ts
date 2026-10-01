@@ -1,4 +1,4 @@
-import type { CaptureSubject, ItemView, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, ItemPacking, ItemView, SubjectPhoto } from "@domain/types";
 
 import type { Figures } from "./figures.ts";
 
@@ -105,4 +105,49 @@ export function wanted(s: CaptureSubject): { weight: boolean; size: boolean; pho
 function sentence(word: string): string {
   const w = word.replace(/_/g, " ");
   return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+/**
+ * Whether this is the item's own carton: a box of so many of the item, whose
+ * count is said at the item (D178). A family's carton is said by its family.
+ */
+export function isOwnCarton(s: Pick<CaptureSubject, "item_id" | "packaging_level">): boolean {
+  return s.item_id !== null && s.packaging_level === "carton";
+}
+
+type Counts = Pick<ItemPacking, "units_per_inner" | "inners_per_carton">;
+
+/** How many of the item a carton holds, by the case pack in force; null when nobody has said. */
+export function cartonHolds(p: Counts | null): number | null {
+  if (!p || p.inners_per_carton === null) return null;
+  return p.inners_per_carton * (p.units_per_inner ?? 1);
+}
+
+/** What a carton holds, in words: "16 × each", "6 packs of 50 (300 × each)", or that nobody has said. */
+export function holdsInWords(p: Counts | null): string {
+  if (!p) return "No carton on file yet";
+  const n = p.inners_per_carton;
+  const u = p.units_per_inner;
+  if (n === null) return "Not said yet";
+  if (u === 1) return `${n.toLocaleString()} × each`;
+  if (u === null) return `${n} packs, how many in each not said`;
+  return `${n} packs of ${u} (${(n * u).toLocaleString()} × each)`;
+}
+
+/** How many a carton holds, as typed: a whole number from 1, or nothing said. */
+export function readHolds(typed: string): { holds: number | null } | { problem: string } {
+  const t = typed.trim();
+  if (!t) return { holds: null };
+  if (!/^\d+$/.test(t) || Number(t) < 1) return { problem: "How many it holds is a whole number, 1 or more." };
+  return { holds: Number(t) };
+}
+
+/**
+ * Whether the carton has to be said before it is weighed, measured or
+ * photographed: there is no carton on file (the writer refuses one, D23), or
+ * a count was typed that is not the one on file.
+ */
+export function sayFirst(packing: Counts | null, typed: number | null): boolean {
+  if (!packing) return true;
+  return typed !== null && typed !== cartonHolds(packing);
 }

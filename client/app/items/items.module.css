@@ -64,6 +64,10 @@
 .needs {
   width: 220px;
 }
+.lists {
+  width: 240px;
+  max-width: 100%;
+}
 
 .search {
   display: flex;
@@ -245,6 +249,9 @@
 }
 .unit {
   flex: 0 1 120px;
+}
+.holds {
+  flex: 0 1 180px;
 }
 .grow {
   flex: 1 1 240px;

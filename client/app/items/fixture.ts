@@ -1,4 +1,4 @@
-import type { CaptureSubject, ItemRow, ItemView } from "@domain/types";
+import type { CaptureSubject, ItemListRow, ItemRow, ItemView } from "@domain/types";
 
 import { NO_FIGURES } from "./subjects";
 import type { PropertiesDesk } from "./useItemProperties";
@@ -99,6 +99,7 @@ export const ITEM: ItemView = {
       site_code: "NTH",
       location_id: "01990000-0000-7000-8000-000000000001",
       bin_code: "C-01-1",
+      within_reach: true,
       quantity: 4,
       allocated_quantity: 1,
     },
@@ -108,6 +109,7 @@ export const ITEM: ItemView = {
       site_code: "NTH",
       location_id: "01990000-0000-7000-8000-000000000001",
       bin_code: "C-01-1",
+      within_reach: true,
       on_hand: "4",
       available: "4",
       status: "Good",
@@ -118,6 +120,7 @@ export const ITEM: ItemView = {
       site_code: "NTH",
       location_id: "01990000-0000-7000-8000-000000000007",
       bin_code: "D-03-2",
+      within_reach: true,
       on_hand: "18",
       available: "12",
       status: "Good",
@@ -128,6 +131,7 @@ export const ITEM: ItemView = {
       site_code: "NTH",
       location_id: null,
       bin_code: null,
+      within_reach: null,
       on_hand: "2",
       available: "2",
       status: "Good",
@@ -176,7 +180,11 @@ export const ITEM_UNKNOWN: ItemView = {
   packing: null,
   held: [],
   reported: [],
-  subjects: [subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "each" })],
+  // Its own carton offered before anybody has said it has one (D178).
+  subjects: [
+    subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "carton", wants: [] }),
+    subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "each" }),
+  ],
   photos: [],
 };
 
@@ -195,6 +203,8 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     typeReading: noop,
     setUnit: noop,
     weigh: later,
+    holds: "",
+    typeHolds: noop,
     figures: NO_FIGURES,
     type: noop,
     choosePresentation: noop,
@@ -226,6 +236,16 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
 export const MEASURING = fixtureProperties(ITEM, {
   open: { key: `${BRUSH}:each`, action: "measure" },
   figures: { ...NO_FIGURES, weight: "0.52", length: "45", width: "", height: "" },
+});
+
+/**
+ * An item's own carton measured before anybody said it had one (D178): how
+ * many it holds is typed with its figures, and saying it makes the carton.
+ */
+export const CARTON_MEASURING = fixtureProperties(ITEM_UNKNOWN, {
+  open: { key: `${TAPE_GUN}:carton`, action: "measure" },
+  holds: "12",
+  figures: { ...NO_FIGURES, weight: "6.4", length: "41", width: "31", height: "" },
 });
 
 /** The family's carton put on the scale, and the reading far from the list's figure. */
@@ -296,9 +316,11 @@ const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): It
   size: "none",
   demand: 0,
   bin_code: null,
+  bin_within_reach: null,
   reported_on_hand: null,
   reported_bins: 0,
   held: 0,
+  list_position: null,
   ...over,
 });
 
@@ -324,10 +346,45 @@ export const ITEMS: ItemRow[] = [
   ROW({ code: "SKU-8837", description: "Tape gun, 50 mm" }),
 ];
 
-export function fixtureItems(state: ItemsState, asked: Partial<Asked> = {}, chosen: string | null = null): ItemsDesk {
-  const a = { q: "", stock: "", needs: "", order: "", ...asked } as Asked;
-  return { state, asked: a, typed: a.q, type: noop, search: noop, narrow: noop, more: later, chosen, choose: noop };
+/** Two sheets made into lists (D179). */
+export const LISTS: ItemListRow[] = [
+  { item_list_id: "01990000-0000-7000-8000-0000000a0002", name: "Weights and sizes, 1 Oct", items: 30, recorded_at: "2026-10-02T00:10:00Z", recorded_by_name: "Sam Lee" },
+  { item_list_id: "01990000-0000-7000-8000-0000000a0001", name: "Weights and sizes, 24 Sep", items: 25, recorded_at: "2026-10-02T00:05:00Z", recorded_by_name: "Sam Lee" },
+];
+
+export function fixtureItems(
+  state: ItemsState,
+  asked: Partial<Asked> = {},
+  chosen: string | null = null,
+  over: Partial<ItemsDesk> = {},
+): ItemsDesk {
+  const a = { q: "", stock: "", needs: "", list: "", order: "", ...asked } as Asked;
+  return {
+    state,
+    asked: a,
+    typed: a.q,
+    type: noop,
+    search: noop,
+    narrow: noop,
+    more: later,
+    chosen,
+    choose: noop,
+    lists: LISTS,
+    pick: noop,
+    makeList: async () => false,
+    making: { busy: false, problem: null, dismiss: noop },
+    ...over,
+  };
 }
+
+/** The 1 Oct sheet, in its order: its place on the paper beside each row. */
+export const ITEMS_LISTED: ItemsState = {
+  kind: "ready",
+  items: ITEMS.slice(0, 4).map((r, i) => ({ ...r, list_position: i + 1 })),
+  total: 4,
+  next: null,
+  more: false,
+};
 
 export const ITEMS_PAGE: ItemsState = { kind: "ready", items: ITEMS, total: 9181, next: "SKU-8837", more: false };
 export const ITEMS_NONE: ItemsState = { kind: "ready", items: [], total: 0, next: null, more: false };

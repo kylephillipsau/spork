@@ -1218,6 +1218,8 @@ export interface PlaceView {
   back_labels: string[];
   /** The numbers on the levels' labels, lowest first. */
   level_labels: string[];
+  /** How many of its levels, from the floor up, can be reached without a forklift (D180). */
+  reach_levels: number;
   /** From the outermost place down to this one's parent. */
   trail: PlaceCrumb[];
   children: ChildPlace[];
@@ -1268,6 +1270,8 @@ export interface ItemHeld {
   site_code: string | null;
   location_id: Uuid | null;
   bin_code: string | null;
+  /** Whether that bin can be reached from the floor (D180); null with no bin. */
+  within_reach: boolean | null;
   quantity: number;
   allocated_quantity: number;
 }
@@ -1278,6 +1282,8 @@ export interface ItemReported {
   /** Absent when the report named a warehouse and no shelf. */
   location_id: Uuid | null;
   bin_code: string | null;
+  /** Whether that bin can be reached from the floor (D180); null with no bin. */
+  within_reach: boolean | null;
   /** Text: a quantity can be fractional, and is shown as it was reported. */
   on_hand: string;
   available: string | null;
@@ -1370,14 +1376,41 @@ export interface ItemRow {
   size: "measured" | "listed" | "none";
   /** Order lines naming it. */
   demand: number;
-  /** The bin holding the most of it here, by Spork's ledger then NetSuite's report. */
+  /**
+   * The bin to go to for it here: the one in reach of the floor holding the
+   * most, or the biggest pile when none in reach holds any (D180). Spork's
+   * ledger first, then NetSuite's report.
+   */
   bin_code: string | null;
+  /** Whether that bin can be reached from the floor; null with no bin. */
+  bin_within_reach: boolean | null;
   /** NetSuite's last report of on hand at this site, as text; null when it reported none. */
   reported_on_hand: string | null;
   /** On how many shelves NetSuite reported it. */
   reported_bins: number;
   /** What Spork's own ledger holds at this site. */
   held: number;
+  /** Its place on the list asked for, from 1; null when no list was (D179). */
+  list_position: number | null;
+}
+
+/** `GET /item-lists`, and `POST /item-lists`'s answer: a list of items to work through (D179). */
+export interface ItemListRow {
+  item_list_id: Uuid;
+  name: string;
+  items: number;
+  recorded_at: string;
+  recorded_by_name: string | null;
+}
+
+/** `POST /items/{id}/carton`: the carton in force after saying what it holds (D178). */
+export interface CartonSaid {
+  item_packing_config_id: Uuid;
+  units_per_inner: number | null;
+  inners_per_carton: number | null;
+  effective_from: string;
+  /** Whether anything changed: saying what was on file does not. */
+  changed: boolean;
 }
 
 /** `GET /items`: one page of the list. */
@@ -1412,6 +1445,8 @@ export interface LayoutPlace {
   /** 1, or 2 for a rack with a face on each side. */
   sides: number;
   pattern: string | null;
+  /** How many of its levels, from the floor up, can be reached without a forklift (D180). */
+  reach_levels: number;
   /** Bins in its own cells, not counting places inside it. */
   bins: number;
 }
@@ -1447,6 +1482,8 @@ export interface BinRow {
   /** Its cell in the rack's own label words: "bay 05, level 3". */
   whereabouts: string | null;
   pick_sequence: number | null;
+  /** Whether it can be reached from the floor, without a forklift (D180). */
+  within_reach: boolean;
   /** NetSuite's last report on this shelf, most first, three at most. */
   reported: BinContent[];
   /** How many items NetSuite reported here in all. */

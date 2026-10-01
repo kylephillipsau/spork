@@ -20,7 +20,7 @@ export {
   Inline,
   type Crumb,
 } from "./Display";
-export { Field, TextField, SearchField, Select, Checkbox, Tabs, type Option, type TabItem } from "./Forms";
+export { Field, TextField, TextArea, SearchField, Select, Checkbox, Tabs, type Option, type TabItem } from "./Forms";
 export { ScanField } from "./ScanField";
 export { List, ListItem } from "./List";
 export { DataTable, type Column } from "./DataTable";

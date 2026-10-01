@@ -63,6 +63,25 @@ export function TextField({ label, hint, error, leading, trailing, id, className
   );
 }
 
+export interface TextAreaProps extends ComponentPropsWithRef<"textarea"> {
+  label?: ReactNode | undefined;
+  hint?: ReactNode | undefined;
+  error?: ReactNode | undefined;
+}
+
+/** Several lines of text: a list pasted in, a note. */
+export function TextArea({ label, hint, error, id, className, ...area }: TextAreaProps) {
+  const auto = useId();
+  const fieldId = id ?? auto;
+  return (
+    <Field label={label} hint={hint} error={error} htmlFor={fieldId}>
+      <div className={cx(s.control, s.fieldBox, s.area, error != null && s.invalid, className)}>
+        <textarea id={fieldId} className={s.input} aria-invalid={error != null || undefined} {...area} />
+      </div>
+    </Field>
+  );
+}
+
 /** A text field with a search icon; the usual list filter. */
 export function SearchField(props: Omit<TextFieldProps, "leading" | "type">) {
   return <TextField type="search" leading={<Search />} {...props} />;

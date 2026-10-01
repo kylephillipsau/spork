@@ -52,9 +52,12 @@
 //! ever with nothing to re-measure. There is no interval an absence could be
 //! measured against.
 //!
-//! Carton is offered only where an `item_packing_config` in force says how many
-//! inners are in one, which is the same rule the writer applies when it refuses
-//! a measurement of a carton that *"is not yet a definite thing to measure"*.
+//! The worklist offers a carton where an `item_packing_config` in force says
+//! how many are in one, or where somebody has already recorded against it. The
+//! writer refuses a carton with no case pack at all as *"not yet a definite
+//! thing to measure"*. An item's own page offers its carton whatever is on
+//! file (D178): the person holding the carton is the one who can say what it
+//! holds, and saying so makes it a definite thing.
 //!
 //! # A style is one trip, not four
 //!
@@ -508,11 +511,56 @@ pub async fn subjects_for_item(
          ORDER BY CASE sub.level WHEN 'carton' THEN 0 WHEN 'each' THEN 1 ELSE 2 END,
                   sub.code, sub.part_label"
     );
-    let mut found = classified_subjects(tx, &sql, &[&site_id, &item_id]).await?;
+    let mut found: Vec<CaptureSubject> = classified_subjects(tx, &sql, &[&site_id, &item_id])
+        .await?
+        .into_iter()
+        .map(|(_, s)| s)
+        .collect();
+    // **Its carton, whatever is on file** (D178). An item is modelled as
+    // itself and its carton as a box of so many of it, and the carton is
+    // measured apart from the each. Where neither the item's case pack nor
+    // its family's offers one, it is offered here with nothing known, and
+    // asks for nothing until somebody says what it holds: most things do not
+    // come in a carton of their own, and a card nagging every one of them to
+    // be measured would be a list nobody finishes.
+    if !found.iter().any(|s| s.packaging_level.as_deref() == Some("carton")) {
+        if let Some(each) = found
+            .iter()
+            .find(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("each"))
+        {
+            let carton = CaptureSubject {
+                item_id: Some(item_id),
+                item_style_id: None,
+                item_part_id: None,
+                part_label: None,
+                code: each.code.clone(),
+                description: each.description.clone(),
+                packaging_level: Some("carton".into()),
+                parts: 0,
+                gross_weight_g: None,
+                length_mm: None,
+                width_mm: None,
+                height_mm: None,
+                weight_absent: false,
+                dimensions_absent: false,
+                source: None,
+                style_code: None,
+                method: None,
+                observed_at: None,
+                faces: vec![],
+                wants: vec![],
+                demand: each.demand,
+                because: because(Class::Unrecorded, None).to_string(),
+                location_code: each.location_code.clone(),
+                soh: each.soh,
+            };
+            found.insert(0, carton);
+        }
+    }
     // A scan off a carton is the common case and the level the operator wants
     // is usually the bigger one, so carton leads, then the each, then the parts
     // — which are what to measure when the each turns out to have no box.
-    Ok(found.drain(..).map(|(_, s)| s).collect())
+    Ok(found)
 }
 
 /// Every subject the floor may be asked to capture, with what is known of it.
@@ -569,17 +617,18 @@ subject AS (
              JOIN cfg ON cfg.item_id = i.id
             WHERE i.style_id = s.id AND cfg.inners_per_carton IS NOT NULL)
     UNION ALL
-    -- A variant's own carton, when nothing else speaks for it or when somebody
-    -- has already recorded against it.
+    -- An item's own carton, when its case pack says what is in one and no
+    -- family's carton speaks for it, or when somebody has already recorded
+    -- against it: a carton copied off the prepack list with no count stated
+    -- is still a carton with figures, and they are its own.
     SELECT i.id, NULL, NULL, NULL, 'carton', i.code, i.description, i.style_id, i.id
       FROM item i
       JOIN cfg ON cfg.item_id = i.id
-     WHERE cfg.inners_per_carton IS NOT NULL
-       AND (i.style_id IS NULL
-            OR EXISTS (
+     WHERE (cfg.inners_per_carton IS NOT NULL AND i.style_id IS NULL)
+        OR EXISTS (
                SELECT 1 FROM observable o
                  JOIN observation ob ON ob.observable_id = o.id
-                WHERE o.item_id = i.id AND o.packaging_level = 'carton'))
+                WHERE o.item_id = i.id AND o.packaging_level = 'carton')
     UNION ALL
     -- Every part of every item. D139: a pan and a handle are what carry the
     -- sizes, because the set they make has none. The parent's code so the two
@@ -675,7 +724,10 @@ resolved AS (
            oc.metric_id, oc.value_numeric, oc.absent_reason, oc.method, oc.observed_at
       FROM candidate c
       JOIN observation_current oc ON oc.observable_id = c.observable_id
-     ORDER BY c.item_id, c.item_style_id, c.item_part_id, c.level, oc.metric_id, c.rank
+     -- Own before the family's; between two cartons of one item (a case pack
+     -- said again, D178), the newest figure.
+     ORDER BY c.item_id, c.item_style_id, c.item_part_id, c.level, oc.metric_id, c.rank,
+              oc.observed_at DESC
 ),
 figures AS (
     SELECT coalesce(r.item_id, r.item_style_id, r.item_part_id) AS subject_key, r.level,

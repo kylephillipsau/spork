@@ -67,6 +67,8 @@ pub struct ItemHeld {
     /// The bin, when it is on one. Absent when it is inside a package.
     pub location_id: Option<Uuid>,
     pub bin_code: Option<String>,
+    /// Whether that bin can be reached from the floor (D180); absent with no bin.
+    pub within_reach: Option<bool>,
     pub quantity: i64,
     pub allocated_quantity: i64,
 }
@@ -78,6 +80,8 @@ pub struct ItemReported {
     /// Absent when the report named a warehouse and no shelf.
     pub location_id: Option<Uuid>,
     pub bin_code: Option<String>,
+    /// Whether that bin can be reached from the floor (D180); absent with no bin.
+    pub within_reach: Option<bool>,
     /// Text, because `on_hand` is numeric and a quantity can be fractional.
     pub on_hand: String,
     pub available: Option<String>,
@@ -208,14 +212,18 @@ pub async fn item_page(
 
                 let held = tx
                     .query(
-                        "SELECT si.code, l.id, l.code, sum(st.quantity)::bigint,
-                                sum(st.allocated_quantity)::bigint
-                           FROM stock st
-                           LEFT JOIN location l ON l.id = st.resolved_location_id
-                           LEFT JOIN site si ON si.id = st.site_id
-                          WHERE st.item_id = $1 AND st.quantity <> 0
-                          GROUP BY si.code, l.id, l.code, l.pick_sequence
-                          ORDER BY si.code, l.pick_sequence NULLS LAST, l.code",
+                        &format!(
+                            "SELECT si.code, l.id, l.code, sum(st.quantity)::bigint,
+                                    sum(st.allocated_quantity)::bigint,
+                                    CASE WHEN l.id IS NOT NULL THEN {reach} END
+                               FROM stock st
+                               LEFT JOIN location l ON l.id = st.resolved_location_id
+                               LEFT JOIN site si ON si.id = st.site_id
+                              WHERE st.item_id = $1 AND st.quantity <> 0
+                              GROUP BY si.code, l.id, l.code, l.pick_sequence
+                              ORDER BY si.code, l.pick_sequence NULLS LAST, l.code",
+                            reach = crate::places::within_reach("l")
+                        ),
                         &[&id],
                     )
                     .await?
@@ -224,6 +232,7 @@ pub async fn item_page(
                         site_code: h.get(0),
                         location_id: h.get(1),
                         bin_code: h.get(2),
+                        within_reach: h.get(5),
                         quantity: h.get(3),
                         allocated_quantity: h.get(4),
                     })
@@ -231,13 +240,17 @@ pub async fn item_page(
 
                 let reported = tx
                     .query(
-                        "SELECT si.code, l.id, l.code, rs.on_hand::text, rs.available::text,
-                                rs.status, rs.as_at, rs.source
-                           FROM reported_stock rs
-                           JOIN site si ON si.id = rs.site_id
-                           LEFT JOIN location l ON l.id = rs.location_id
-                          WHERE rs.item_id = $1
-                          ORDER BY si.code, l.pick_sequence NULLS LAST, l.code NULLS LAST",
+                        &format!(
+                            "SELECT si.code, l.id, l.code, rs.on_hand::text, rs.available::text,
+                                    rs.status, rs.as_at, rs.source,
+                                    CASE WHEN l.id IS NOT NULL THEN {reach} END
+                               FROM reported_stock rs
+                               JOIN site si ON si.id = rs.site_id
+                               LEFT JOIN location l ON l.id = rs.location_id
+                              WHERE rs.item_id = $1
+                              ORDER BY si.code, l.pick_sequence NULLS LAST, l.code NULLS LAST",
+                            reach = crate::places::within_reach("l")
+                        ),
                         &[&id],
                     )
                     .await?
@@ -246,6 +259,7 @@ pub async fn item_page(
                         site_code: x.get(0),
                         location_id: x.get(1),
                         bin_code: x.get(2),
+                        within_reach: x.get(8),
                         on_hand: x.get(3),
                         available: x.get(4),
                         status: x.get(5),
@@ -339,8 +353,11 @@ pub struct ItemsQuery {
     /// `measuring`: no size measured here. `photo`: no picture of its front,
     /// its own or its family's.
     pub needs: Option<String>,
-    /// `code` (the default), `demand` (most ordered first) or `walk` (in the
-    /// order the bins are walked, by where most of it is).
+    /// Only the items on this list (D179).
+    pub list: Option<Uuid>,
+    /// `code` (the default), `demand` (most ordered first), `walk` (in the
+    /// order the bins are walked, by where most of it is) or `list` (as on the
+    /// list asked for, which is the order on its paper).
     pub order: Option<String>,
     /// Where the page before ended, as its `next` said: the last code in code
     /// order, or how many came before in the other two.
@@ -353,29 +370,41 @@ const DEMAND: &str = "LEFT JOIN LATERAL (
                           SELECT count(*)::bigint AS lines FROM order_line ol WHERE ol.item_id = n.id
                       ) dem ON true";
 
-/// The biggest pile of it at the caller's site (`$4`), by this system's own
-/// ledger first and NetSuite's report after: the shelf a walk goes to. A join
-/// on `n`.
-const PILE: &str = "LEFT JOIN LATERAL (
-                        SELECT l.code, l.pick_sequence
-                          FROM (SELECT coalesce(s.holder_location_id, s.resolved_location_id)
-                                         AS location_id,
-                                       sum(s.quantity)::numeric AS qty, 0 AS rank
-                                  FROM stock s
-                                 WHERE s.item_id = n.id AND s.quantity > 0
-                                   AND ($4::uuid IS NULL OR s.site_id = $4)
-                                 GROUP BY 1
-                                UNION ALL
-                                SELECT rs.location_id, sum(rs.on_hand), 1
-                                  FROM reported_stock rs
-                                 WHERE rs.item_id = n.id AND rs.on_hand > 0
-                                   AND rs.location_id IS NOT NULL
-                                   AND ($4::uuid IS NULL OR rs.site_id = $4)
-                                 GROUP BY 1) piles
-                          JOIN location l ON l.id = piles.location_id
-                         ORDER BY piles.rank, piles.qty DESC, l.code
-                         LIMIT 1
-                    ) pile ON true";
+/// The bin to go to for it at the caller's site (`$4`): the biggest pile **in
+/// reach of the floor** (D180), and only when no bin in reach holds any, the
+/// biggest pile anywhere. Somebody sent to weigh one or pick one wants the
+/// shelf they can get to without a forklift. This system's own ledger before
+/// NetSuite's report, as everywhere. A join on `n`, answering `pile.code`,
+/// `pile.pick_sequence` and `pile.reach`.
+fn pile() -> String {
+    format!(
+        "LEFT JOIN LATERAL (
+             SELECT l.code, l.pick_sequence, {reach} AS reach
+               FROM (SELECT coalesce(s.holder_location_id, s.resolved_location_id)
+                              AS location_id,
+                            sum(s.quantity)::numeric AS qty, 0 AS rank
+                       FROM stock s
+                      WHERE s.item_id = n.id AND s.quantity > 0
+                        AND ($4::uuid IS NULL OR s.site_id = $4)
+                      GROUP BY 1
+                     UNION ALL
+                     SELECT rs.location_id, sum(rs.on_hand), 1
+                       FROM reported_stock rs
+                      WHERE rs.item_id = n.id AND rs.on_hand > 0
+                        AND rs.location_id IS NOT NULL
+                        AND ($4::uuid IS NULL OR rs.site_id = $4)
+                      GROUP BY 1) piles
+               JOIN location l ON l.id = piles.location_id
+              ORDER BY {reach} DESC, piles.rank, piles.qty DESC, l.code
+              LIMIT 1
+         ) pile ON true",
+        reach = crate::places::within_reach("l")
+    )
+}
+
+/// Where an item is on the list asked for (`$11`): its place on the paper. A
+/// join on `n`.
+const LISTED: &str = "LEFT JOIN item_list_entry le ON le.item_list_id = $11 AND le.item_id = n.id";
 
 /// How the list is ordered, and so how it pages.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -383,6 +412,7 @@ enum Order {
     Code,
     Demand,
     Walk,
+    Listed,
 }
 
 /// One item in the list.
@@ -401,15 +431,20 @@ pub struct ItemRow {
     pub size: String,
     /// Order lines naming it: how much it matters to get right.
     pub demand: i64,
-    /// The bin holding the most of it here, by this system's ledger and then
-    /// by NetSuite's report: where to walk to.
+    /// The bin to go to for it here: the one in reach of the floor holding
+    /// the most of it, or the biggest pile when none in reach holds any
+    /// (D180). This system's ledger first, then NetSuite's report.
     pub bin_code: Option<String>,
+    /// Whether that bin can be reached from the floor; absent with no bin.
+    pub bin_within_reach: Option<bool>,
     /// What NetSuite last reported on hand at this site, as text, when it
     /// reported any; and on how many shelves.
     pub reported_on_hand: Option<String>,
     pub reported_bins: i64,
     /// What this system's own ledger holds at this site.
     pub held: i64,
+    /// Its place on the list asked for, from 1; absent when no list was.
+    pub list_position: Option<i32>,
 }
 
 #[derive(Serialize, Debug)]
@@ -461,12 +496,17 @@ pub async fn item_list(
         }
         None => (false, false, false),
     };
+    let list = query.list;
     let order = match query.order.as_deref() {
         None | Some("code") => Order::Code,
         Some("demand") => Order::Demand,
         Some("walk") => Order::Walk,
+        Some("list") if list.is_some() => Order::Listed,
+        Some("list") => return Err(ApiError::Rejected("order=list needs a list".into())),
         Some(other) => {
-            return Err(ApiError::Rejected(format!("order is code, demand or walk, not {other}")))
+            return Err(ApiError::Rejected(format!(
+                "order is code, demand, walk or list, not {other}"
+            )))
         }
     };
     let after = query.after.clone().filter(|a| !a.is_empty());
@@ -494,10 +534,12 @@ pub async fn item_list(
                 // a lookup for each of nine thousand items to show fifty. So
                 // the page is chosen with only what its order needs, and the
                 // rest is looked up for the rows on it.
+                let pile = pile();
                 let (sort_join, sort_by) = match order {
                     Order::Code => ("", "n.code"),
                     Order::Demand => (DEMAND, "dem.lines DESC, n.code"),
-                    Order::Walk => (PILE, "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
+                    Order::Walk => (pile.as_str(), "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
+                    Order::Listed => (LISTED, "le.position, n.code"),
                 };
                 // Asked as yes or no: whether a measured figure exists.
                 let measured = |metrics: &str| {
@@ -529,6 +571,9 @@ pub async fn item_list(
                                  OR EXISTS (SELECT 1 FROM stock s
                                              WHERE s.item_id = i.id AND s.quantity > 0
                                                AND ($4::uuid IS NULL OR s.site_id = $4)))
+                            AND ($11::uuid IS NULL
+                                 OR EXISTS (SELECT 1 FROM item_list_entry e
+                                             WHERE e.item_list_id = $11 AND e.item_id = i.id))
                      ),
                      needed AS (
                          SELECT c.* FROM candidates c
@@ -546,12 +591,15 @@ pub async fn item_list(
                      )
                      SELECT n.id, n.code, n.description, n.active, st.code, fig.weight, fig.size,
                             pic.digest, pic.source, rep.on_hand, rep.bins, held.q,
-                            (SELECT count(*) FROM needed), dem.lines, pile.code
+                            (SELECT count(*) FROM needed), dem.lines, pile.code,
+                            (SELECT e.position FROM item_list_entry e
+                              WHERE e.item_list_id = $11 AND e.item_id = n.id),
+                            pile.reach
                        FROM page n
                        LEFT JOIN item_style st ON st.id = n.style_id
                        LEFT JOIN picture pic ON pic.item_id = n.id
                        {DEMAND}
-                       {PILE}
+                       {pile}
                        -- Its weight and its size, its own or its family's:
                        -- 2 measured (or said to have none), 1 only copied.
                        LEFT JOIN LATERAL (
@@ -588,7 +636,7 @@ pub async fn item_list(
                         &sql,
                         &[
                             &like, &codes, &here, &site, &weighing, &measuring, &photo,
-                            &after_code, &(limit + 1), &offset,
+                            &after_code, &(limit + 1), &offset, &list,
                         ],
                     )
                     .await?;
@@ -619,6 +667,8 @@ pub async fn item_list(
                         held: r.get(11),
                         demand: r.get(13),
                         bin_code: r.get(14),
+                        list_position: r.get(15),
+                        bin_within_reach: r.get(16),
                     })
                     .collect();
                 let next = match (more, order) {

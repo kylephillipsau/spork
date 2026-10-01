@@ -13842,3 +13842,118 @@ fetched when a camera first opens, so they are ready by the first crop.
 **Next.** On HTTPS, WebGPU would make the encoding a second or less; it needs
 the runtime's GPU build and a half-precision model, fetched only where WebGPU
 exists.
+
+### D178 — An item's carton is a box of so many of it, said at the item
+
+*Adopted 2026-10-02, with migration 101.*
+
+**Decision.** An item is modelled as itself, its `each`, and its carton as a
+box holding so many of it. The two are measured apart, and the relationship
+between them is the case pack (`item_packing_config`), as it always was. What
+changes is who can say it: the person holding the carton, on the item's page.
+- Every item's page offers its carton, whatever is on file. Where no case pack
+  or family speaks for one, the carton is shown with nothing known, and asks
+  for nothing until somebody says what it holds.
+- Weighing, measuring or photographing that carton takes **how many in it**
+  beside the figures. The press says the carton first
+  (`POST /items/{id}/carton`) when none is on file, or when the count typed is
+  not the one on file, then records the figures: one press, two writes.
+- A blank count says there is a carton and nothing of what is in it, which is
+  the prepack loader's own row of nulls.
+
+**Why.** A sheet asking for an item's weight and size wants the selling unit,
+and the selling unit is often a carton: a carton of sixteen rolls, of five
+hundred plates. Recorded as one figure, the carton's weight stands in for the
+item's, and nothing knows the roll. The point of measuring both is
+cartonisation: the item's own size and weight, the carton's, and how many of
+the one make the other, which is what choosing a box needs (D139 left this
+input waiting). Before this only the prepack loader wrote a case pack, so an
+item that list never named had no carton the writer would accept ("not yet a
+definite thing to measure", D23).
+
+**Saying is filling in or a new version, never a rewrite.**
+- No carton on file: one is made from the day it is said.
+- A carton whose count nobody said: the count is filled in. It is the same
+  carton, now described, and what was measured of it stays its own.
+- A different count from the one on file: that is a different carton (D23),
+  so a new version from that day. The old one still explains what was measured
+  against it, and an item's figures show the newest of its cartons.
+
+The row carries its act's `client_event` and its person, so a case pack said on
+the floor is told apart from one a loader wrote, and a retried press finds the
+row it made. Saying what is on file is no act at all.
+
+**The worklist is unchanged** apart from one thing: an item's own carton that
+somebody has recorded against is listed whether or not its count was ever
+said. A carton copied off the prepack list with no count stated has figures,
+and they are its own.
+
+### D179 — A sheet of items is kept as a list to work down
+
+*Adopted 2026-10-02, with migration 102.*
+
+**Decision.** A list of items to work through is kept as it was given: a name,
+its codes, in the order on the paper, at the site it is worked at. It is made
+by pasting the codes in (`POST /item-lists`), and it narrows the item list
+(`GET /items?list=`), in its own order (`order=list`) or any other. Each row
+shows its place on the sheet.
+
+**Why.** Work arrives as a list somebody else drew up: a printed sheet of
+thirty items whose weights and sizes the other system is missing, in bin
+order, with boxes to fill in. The item list could narrow itself to what needs
+measuring here, but that is every item this system has not measured, thousands
+of them. The other system's export carries no weights or sizes, so this one
+cannot work out the sheet's question for itself. The sheet is the question, so
+the sheet is kept.
+
+**A filter, not a screen.** Working a list is the item list's walk (D174):
+what each item still needs, the item open beside the list, Previous and Next.
+A list adds the narrowing and the order, and nothing else.
+
+**Kept, not computed, and never edited.** The sheet does not change when an
+item is measured, and neither does the list; what has been done is read from
+the items. A corrected list is another list.
+
+**Every code has to be an item.** A list with a code quietly dropped is a sheet
+with a row missing, so a code nobody knows refuses the list and is named. A
+code is matched as written, then ignoring case where that names one item. Codes
+paste one a line, or as a spreadsheet's cells; never split on spaces, which
+some codes have in them.
+
+**Next.** The completed sheet: each item on a list with its own figures and its
+carton's, to hand back.
+
+### D180 — A rack says how many of its levels are within reach
+
+*Adopted 2026-10-02, with migration 103.*
+
+**Decision.** A place says how many of its levels, counting up from its floor,
+somebody standing on the floor can reach without a forklift
+(`place.reach_levels`, set with `POST /places/{id}/reach`). The default is the
+bottom level. A bin is **within reach** when it sits on one of those levels; a
+bin not on the layout yet is within reach when the other system calls it a
+"Pick" bin, which there is the bottom level. Where the item list sends
+somebody for an item is the bin within reach holding the most of it, and only
+when none within reach holds any, the biggest pile anywhere, said to need a
+forklift. Its walking order follows the same bin.
+
+**Why.** The bin holding the most of an item is often at the top of the
+racking: overstock, put up by forklift. A person sent to weigh one, photograph
+one or pick one wants the shelf they can get to. Which levels those are
+depends on the rack. Racks of tall levels have their bottom one in reach;
+racks of lower levels may have three, and the other system's bin types say
+nothing about that (they call every second level "Bulk Storage").
+
+**Counted, not measured.** The layout is drawn relative and never measured
+(D173), and reach is the question being asked, so it is the answer kept. A
+height off the floor in millimetres would be a measurement nobody takes,
+turned into reach by a threshold nobody agreed. One answer per rack covers
+all its bins, because every bin on a level of a rack is as high as the others.
+
+**One rule.** `places::within_reach` is the SQL every read uses to say
+whether a bin is in reach: the item list's bin, an item's page beside each bin
+each record names, and the bins list.
+
+**A setting, not an act.** Like the rest of a place, reach is part of the
+drawing: set, not appended. Who changed the layout, and when, is the layout's
+history, which is not built yet for any of it.

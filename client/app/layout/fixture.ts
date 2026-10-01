@@ -65,6 +65,7 @@ const RACK_C_VIEW: PlaceView = {
   positions: [1, 1, 1, 1],
   pattern: "C-{bay:02}-{level}",
   sides: 1,
+  reach_levels: 1,
   bay_labels: C_LABELS,
   back_labels: [],
   level_labels: ["1", "2", "3", "4"],
@@ -109,6 +110,7 @@ const RACK_E_VIEW: PlaceView = {
   positions: [1, 1, 1],
   pattern: "E-{bay:02}-{level}",
   sides: 2,
+  reach_levels: 1,
   bay_labels: E_LABELS,
   back_labels: E_BACK,
   level_labels: ["1", "2", "3"],
@@ -150,6 +152,7 @@ export const SHELF: PlaceView = {
   positions: [3, 1, 1],
   pattern: "D-{bay:02}-{level}-{position}",
   sides: 1,
+  reach_levels: 1,
   bay_labels: ["01", "03", "05", "07"],
   back_labels: [],
   level_labels: ["1", "2", "3"],
@@ -173,6 +176,7 @@ export const BUILDING: PlaceView = {
   positions: [1],
   pattern: null,
   sides: 1,
+  reach_levels: 1,
   bay_labels: ["1"],
   back_labels: [],
   level_labels: ["1"],
@@ -224,12 +228,12 @@ export const DRAFTED: DraftReport = {
 export const LAID_OUT: LayoutView = {
   site_code: "NORTH",
   places: [
-    { place_id: MAIN, parent_id: null, name: "Main", solid: false, bays: 1, levels: 1, rows: 1, sides: 1, pattern: null, bins: 0 },
-    { place_id: RACK_C, parent_id: MAIN, name: "Rack C", solid: true, bays: 5, levels: 4, rows: 1, sides: 1, pattern: "C-{bay:02}-{level}", bins: 18 },
-    { place_id: RACK_D, parent_id: MAIN, name: "Rack D", solid: true, bays: 4, levels: 3, rows: 1, sides: 1, pattern: "D-{bay:02}-{level}-{position}", bins: 20 },
-    { place_id: RETURNS, parent_id: MAIN, name: "Returns (reserved)", solid: false, bays: 1, levels: 1, rows: 1, sides: 1, pattern: null, bins: 0 },
-    { place_id: DOCK, parent_id: MAIN, name: "Dock", solid: false, bays: 6, levels: 1, rows: 1, sides: 1, pattern: "DOCK-{bay}", bins: 6 },
-    { place_id: RACK_E, parent_id: MAIN, name: "Rack E", solid: true, bays: 6, levels: 3, rows: 1, sides: 2, pattern: "E-{bay:02}-{level}", bins: 34 },
+    { place_id: MAIN, parent_id: null, name: "Main", solid: false, bays: 1, levels: 1, rows: 1, sides: 1, reach_levels: 1, pattern: null, bins: 0 },
+    { place_id: RACK_C, parent_id: MAIN, name: "Rack C", solid: true, bays: 5, levels: 4, rows: 1, sides: 1, reach_levels: 1, pattern: "C-{bay:02}-{level}", bins: 18 },
+    { place_id: RACK_D, parent_id: MAIN, name: "Rack D", solid: true, bays: 4, levels: 3, rows: 1, sides: 1, reach_levels: 1, pattern: "D-{bay:02}-{level}-{position}", bins: 20 },
+    { place_id: RETURNS, parent_id: MAIN, name: "Returns (reserved)", solid: false, bays: 1, levels: 1, rows: 1, sides: 1, reach_levels: 1, pattern: null, bins: 0 },
+    { place_id: DOCK, parent_id: MAIN, name: "Dock", solid: false, bays: 6, levels: 1, rows: 1, sides: 1, reach_levels: 1, pattern: "DOCK-{bay}", bins: 6 },
+    { place_id: RACK_E, parent_id: MAIN, name: "Rack E", solid: true, bays: 6, levels: 3, rows: 1, sides: 2, reach_levels: 1, pattern: "E-{bay:02}-{level}", bins: 34 },
   ],
   bins: 81,
   unplaced: 3,
@@ -286,7 +290,7 @@ const DRAFT_PLACES: { place: LayoutPlace; shape: PlanShape }[] = (() => {
     const at = y;
     y += sides + 2;
     return {
-      place: { place_id: id, parent_id: BUILDING_ID, name, solid, bays: columns, levels, rows: 1, sides, pattern, bins: bays * levels - (i % 4) },
+      place: { place_id: id, parent_id: BUILDING_ID, name, solid, bays: columns, levels, rows: 1, sides, reach_levels: 1, pattern, bins: bays * levels - (i % 4) },
       shape: { place_id: id, name, solid, nesting: 1, corners: rect(1, at, columns, sides), z: 0, height: solid ? levels : 1 },
     };
   });
@@ -298,7 +302,7 @@ const DRAFT_DEEP = Math.max(...DRAFT_PLACES.flatMap((p) => p.shape.corners.map((
 export const DRAFTED_SITE: LayoutView = {
   site_code: "NORTH",
   places: [
-    { place_id: BUILDING_ID, parent_id: null, name: "Building", solid: false, bays: 1, levels: 1, rows: 1, sides: 1, pattern: null, bins: 0 },
+    { place_id: BUILDING_ID, parent_id: null, name: "Building", solid: false, bays: 1, levels: 1, rows: 1, sides: 1, reach_levels: 1, pattern: null, bins: 0 },
     ...DRAFT_PLACES.map((p) => p.place),
   ],
   bins: 1640,
@@ -325,6 +329,7 @@ export const DRAFTED_BINS: BinsList = {
       cell: { bay, level, row: 1, position: 1, side: 1 },
       whereabouts: `front, bay ${String(bay).padStart(2, "0")}, level ${level}`,
       pick_sequence: i + 1,
+      within_reach: true,
       reported: i % 3 === 2 ? [] : [{ item_id: ITEM(400 + i), item_code: `SKU-${6200 + i}`, on_hand: String(12 * (1 + (i % 4))) }],
       reported_items: i % 3 === 2 ? 0 : 1,
       held: 0,
@@ -351,6 +356,7 @@ const RACK_C_ROWS: BinRow[] = C_BINS.map((b, i) => {
     cell: b.cell,
     whereabouts: `bay ${C_LABELS[b.cell.bay - 1]}, level ${b.cell.level}`,
     pick_sequence: i + 1,
+    within_reach: true,
     reported,
     reported_items: items,
     held: i === 0 ? 12 : i === 4 ? 3 : 0,
@@ -370,6 +376,7 @@ export const UNPLACED_BINS: BinsList = {
     cell: null,
     whereabouts: null,
     pick_sequence: null,
+    within_reach: false,
     reported: i === 2 ? [{ item_id: ITEM(900), item_code: "SKU-5120B", on_hand: "40" }] : [],
     reported_items: i === 2 ? 1 : 0,
     held: 0,

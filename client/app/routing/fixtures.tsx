@@ -100,8 +100,11 @@ import {
   BRUSH,
   ITEM,
   ITEM_UNKNOWN,
+  ITEMS_LISTED,
   ITEMS_NONE,
   ITEMS_PAGE,
+  LISTS,
+  CARTON_MEASURING,
   CROPPING,
   MEASURING,
   PHOTOGRAPHING,
@@ -111,7 +114,7 @@ import {
   fixtureItems,
   fixtureProperties,
 } from "@app/items/fixture";
-import { ItemsPage } from "@app/items/ItemsPage";
+import { ItemsPage, NewList } from "@app/items/ItemsPage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
 import type { Screen, Surface } from "./Router";
@@ -526,6 +529,22 @@ export const FIXTURES: readonly Screen[] = [
   app("f-items-none", "/fixtures/items/none", "Items — nothing matches", "desk", { screen: "items" }, () => (
     <ItemsPage desk={fixtureItems(ITEMS_NONE, { q: "SKU-0000", stock: "here", needs: "photo" })} />
   )),
+  // D179: a sheet made into a list and worked in its order, on a handheld; and
+  // making one, refused for a code nobody knows.
+  app("f-items-list", "/fixtures/items/list", "Items — a list", "floor", { screen: "items" }, () => (
+    <ItemsPage desk={fixtureItems(ITEMS_LISTED, { list: LISTS[0]!.item_list_id, order: "list" })} />
+  )),
+  app("f-items-new-list", "/fixtures/items/new-list", "Items — making a list", "desk", { screen: "items" }, () => {
+    const desk = fixtureItems(ITEMS_PAGE, {}, null, {
+      making: { busy: false, problem: "no item has the code SKU-0000", dismiss: () => {} },
+    });
+    return (
+      <>
+        <ItemsPage desk={desk} />
+        <NewList desk={desk} onClose={() => {}} />
+      </>
+    );
+  }),
   app("f-item", "/fixtures/item", "Item", "floor", { screen: "item" }, () => <ItemPage desk={fixtureProperties(ITEM)} />),
   // Measuring the each, which says how it was arranged and may say it has no box (D138).
   app("f-item-measuring", "/fixtures/item/measuring", "Item — measuring", "floor", { screen: "item" }, () => (
@@ -552,6 +571,10 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureProperties(ITEM_UNKNOWN)} />
+  )),
+  // D178: its own carton measured, and how many it holds said with it.
+  app("f-item-carton", "/fixtures/item/carton", "Item — measuring its carton", "floor", { screen: "item" }, () => (
+    <ItemPage desk={CARTON_MEASURING} />
   )),
   // The warehouse: none yet, its draft previewed (and adjusted: a lone code's
   // "rack" left out, three racks with two sides), a rack chosen with its

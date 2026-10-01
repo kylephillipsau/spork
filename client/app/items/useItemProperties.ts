@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLive, useWriting } from "@app/acting";
+import { partOf, type Act } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
 import type { BoundBarcode, CaptureSubject, ItemView, Uuid } from "@domain/types";
 
 import type { Pixels, Point } from "./cut";
 import { measurementsOf, type Figures } from "./figures";
-import { NO_FIGURES, presentationNeeded, subjectKey, type Face } from "./subjects";
+import { NO_FIGURES, cartonHolds, isOwnCarton, presentationNeeded, readHolds, sayFirst, subjectKey, type Face } from "./subjects";
 
 /**
  * One item's properties, as logic: what it is and what is known of it, and
@@ -26,6 +27,11 @@ import { NO_FIGURES, presentationNeeded, subjectKey, type Face } from "./subject
  * `POST /items/{id}/barcodes` for a label (D164). A photograph is cut to its
  * face with `POST /images` and then its cut (D176), its corners first placed
  * by a model in the browser (D177).
+ *
+ * **An item's own carton is a box of so many of it** (D178). Weighing,
+ * measuring or photographing it says what it holds first, with
+ * `POST /items/{id}/carton`, when no carton is on file or a different count
+ * was typed: the same press, two writes.
  */
 
 /** The face-finding model: its own chunk, with the ONNX runtime, fetched when first wanted. */
@@ -73,6 +79,10 @@ export interface PropertiesDesk {
   typeReading: (next: string) => void;
   setUnit: (next: string) => void;
   weigh: (subject: CaptureSubject) => Promise<void>;
+
+  /** How many of the item its carton holds, as typed (D178). */
+  holds: string;
+  typeHolds: (next: string) => void;
 
   figures: Figures;
   type: (field: "weight" | "length" | "width" | "height", next: string) => void;
@@ -136,6 +146,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const [reading, setReading] = useState("");
   const [unit, setUnit] = useState("kg");
   const [figures, setFigures] = useState<Figures>(NO_FIGURES);
+  const [holds, setHolds] = useState("");
   const [taken, setTaken] = useState<Face[]>([]);
   const [cropping, setCropping] = useState<Cropping | null>(null);
   const [barcodes, setBarcodes] = useState<BoundBarcode[]>([]);
@@ -210,6 +221,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setReading("");
     setBinding("");
     setCount("");
+    // The count on file, to keep or correct; nothing, for a carton not said.
+    const known = read.kind === "ready" && isOwnCarton(subject) ? cartonHolds(read.item.packing) : null;
+    setHolds(known === null ? "" : String(known));
     // Measuring starts from nothing typed; photographing after measuring keeps
     // the measuring look, and photographing on its own starts a new one.
     if (action === "measure") setFigures(NO_FIGURES);
@@ -224,6 +238,19 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       looks.current += 1;
     }
     if (action !== "photos") look.current = null;
+  };
+
+  /**
+   * Say what the item's own carton holds, when the act needs it said first:
+   * no carton on file, or a count typed that is not the one on file. A part
+   * of the press it is in, so a retry is the same act.
+   */
+  const sayCartonFirst = async (subject: CaptureSubject, act: Act) => {
+    if (!isOwnCarton(subject) || !subject.item_id || read.kind !== "ready") return;
+    const typed = readHolds(holds);
+    if ("problem" in typed) throw new ApiError(typed.problem, 400);
+    if (!sayFirst(read.item.packing, typed.holds)) return;
+    await api.sayCarton(subject.item_id, { holds: typed.holds, act: partOf(act, "carton") });
   };
 
   return {
@@ -247,9 +274,10 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
      */
     weigh: (subject) => {
       const entered = reading.trim();
-      return press(`weigh:${subjectKey(subject)}:${entered}:${unit}`, async (act) => {
+      return press(`weigh:${subjectKey(subject)}:${entered}:${unit}:${holds.trim()}`, async (act) => {
         if (!entered) throw new ApiError("Read the scale first.", 400);
         if (!subject.packaging_level) throw new ApiError("A part is weighed with its size: use Measure.", 400);
+        await sayCartonFirst(subject, act);
         const answer = await api.weigh({
           ...(subject.item_id ? { item: subject.item_id } : {}),
           ...(subject.item_style_id ? { style: subject.item_style_id } : {}),
@@ -281,6 +309,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       });
     },
 
+    holds,
+    typeHolds: setHolds,
+
     figures,
     type: (field, next) => setFigures((f) => ({ ...f, [field]: next })),
     choosePresentation: (code) => setFigures((f) => ({ ...f, presentation: code })),
@@ -294,13 +325,14 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
      */
     measure: (subject) => {
       const measurements = measurementsOf(figures);
-      return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}`, async (act) => {
+      return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}:${holds.trim()}`, async (act) => {
         if (measurements.length === 0) throw new ApiError("Nothing has been measured yet.", 400);
         // Said sooner than the server would say it (D138).
         const lengths = measurements.some((m) => !m.absent_reason && m.metric !== "gross_weight");
         if (presentationNeeded(subject) && lengths && !figures.presentation) {
           throw new ApiError("Choose how it was arranged: folded, flat, as supplied…", 400);
         }
+        await sayCartonFirst(subject, act);
         const response = await api.recordCapture({
           ...named(subject),
           ...(figures.presentation ? { presentation: figures.presentation } : {}),
@@ -332,6 +364,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       press(`photo:${subjectKey(subject)}:${looks.current}:${face}:${image.size}`, async (act) => {
         let event = look.current?.key === subjectKey(subject) ? look.current.event : null;
         if (!event) {
+          await sayCartonFirst(subject, act);
           const response = await api.recordCapture({
             ...named(subject),
             level: subject.packaging_level,

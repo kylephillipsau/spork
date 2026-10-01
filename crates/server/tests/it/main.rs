@@ -14,6 +14,7 @@ mod baseline_read;
 mod binding_over_http;
 mod capture_walk;
 mod capture_worklist;
+mod cartons_and_lists_http;
 mod change_password;
 mod consignments;
 mod evidence_and_pictures;

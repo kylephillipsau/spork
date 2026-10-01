@@ -10,10 +10,11 @@
 //! - **What does this site have?** `GET /layout`: every place, and how many bins
 //!   are not on the layout yet.
 //!
-//! And it writes one thing so far: `POST /layout/draft`, a first layout from
-//! the bin list, which is how a site gets one without anybody drawing. Like
-//! every import, it is a dry run unless told to apply, and the dry run is the
-//! real write rolled back.
+//! And it writes two things so far: `POST /layout/draft`, a first layout from
+//! the bin list, which is how a site gets one without anybody drawing (like
+//! every import, a dry run unless told to apply, and the dry run is the real
+//! write rolled back); and `POST /places/{id}/reach`, how many of a rack's
+//! levels can be reached from the floor (D180).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -30,6 +31,22 @@ use crate::AppState;
 
 /// How many codes a report lists before it only counts.
 const SAMPLE: usize = 20;
+
+/// Whether a bin can be reached from the floor, as SQL over a `location`
+/// aliased `loc` (D180).
+///
+/// **One rule, wherever a bin is chosen to walk to.** A bin on the layout is
+/// in reach when its level is among the rack's levels in reach, counted up
+/// from the floor. A bin not on the layout yet has no level to count, so the
+/// other system's bin type stands in: its "Pick" bins are the bottom level,
+/// and nothing else of it says anything about reach.
+pub fn within_reach(loc: &str) -> String {
+    format!(
+        "(CASE WHEN {loc}.place_id IS NOT NULL
+               THEN {loc}.slot_level <= (SELECT rp.reach_levels FROM place rp WHERE rp.id = {loc}.place_id)
+               ELSE {loc}.kind = 'pick_face' END)"
+    )
+}
 
 /// The location kinds that are racking or shelving: solid, where a picker
 /// reaches in from an aisle. Staging and docks are floor.
@@ -52,11 +69,12 @@ struct Row {
     outline: Option<Vec<f64>>,
     grid: Grid,
     pattern: Option<String>,
+    reach_levels: i32,
 }
 
 const PLACE_COLUMNS: &str = "id, parent_id, name, solid, x, y, z, length, depth, height, turn,
                              outline, bays, levels, rows, positions, first_bay, bay_step,
-                             first_level, bin_pattern, sides";
+                             first_level, bin_pattern, sides, reach_levels";
 
 fn row(r: &tokio_postgres::Row) -> Row {
     Row {
@@ -83,6 +101,7 @@ fn row(r: &tokio_postgres::Row) -> Row {
             sides: r.get::<_, i16>(20) as i32,
         },
         pattern: r.get(19),
+        reach_levels: r.get::<_, i16>(21) as i32,
     }
 }
 
@@ -164,6 +183,9 @@ pub struct PlaceView {
     pub back_labels: Vec<String>,
     /// The numbers on the levels' labels, lowest first.
     pub level_labels: Vec<String>,
+    /// How many of its levels, from the floor up, can be reached without a
+    /// forklift (D180).
+    pub reach_levels: i32,
     /// From the outermost place down to this one's parent.
     pub trail: Vec<PlaceCrumb>,
     pub children: Vec<ChildPlace>,
@@ -324,6 +346,7 @@ async fn place_view(
         bay_labels,
         back_labels,
         level_labels,
+        reach_levels: me.reach_levels,
         trail,
         children,
         bins,
@@ -413,6 +436,9 @@ pub struct LayoutPlace {
     /// 1, or 2 for a rack with a face on each side.
     pub sides: i32,
     pub pattern: Option<String>,
+    /// How many of its levels, from the floor up, can be reached without a
+    /// forklift (D180).
+    pub reach_levels: i32,
     /// Bins in its own cells, not counting places inside it.
     pub bins: i64,
 }
@@ -529,6 +555,7 @@ pub async fn site_layout(
                         rows: p.grid.rows,
                         sides: p.grid.sides,
                         pattern: p.pattern,
+                        reach_levels: p.reach_levels,
                     })
                     .collect();
                 let r = tx
@@ -599,6 +626,8 @@ pub struct BinRow {
     /// Its cell in the words the rack's labels use: "bay 05, level 3".
     pub whereabouts: Option<String>,
     pub pick_sequence: Option<i32>,
+    /// Whether it can be reached from the floor, without a forklift (D180).
+    pub within_reach: bool,
     /// What NetSuite's last inventory balance put on this shelf, most first,
     /// three at most; and how many items in all.
     pub reported: Vec<BinContent>,
@@ -649,15 +678,15 @@ pub async fn bin_list(
                         (p.id, (p.grid, pattern))
                     })
                     .collect();
-                let rows = tx
-                    .query(
+                let sql = format!(
                         "SELECT l.id, l.code, l.kind, l.place_id, p.name,
                                 l.slot_bay, l.slot_level, l.slot_row, l.slot_position,
                                 l.pick_sequence,
                                 coalesce(rep.items, 0), rep.ids, rep.codes, rep.qtys,
                                 coalesce(held.q, 0)::bigint,
                                 count(*) OVER (),
-                                l.slot_side
+                                l.slot_side,
+                                {reach}
                            FROM location l
                            LEFT JOIN place p ON p.id = l.place_id
                            -- The report totalled once for the site: it has no
@@ -685,8 +714,10 @@ pub async fn bin_list(
                             AND ($4::text IS NULL OR l.code ILIKE $4)
                           ORDER BY l.code
                           LIMIT $5",
-                        &[&site, &place, &unplaced, &like, &BINS_AT_ONCE],
-                    )
+                    reach = within_reach("l")
+                );
+                let rows = tx
+                    .query(&sql, &[&site, &place, &unplaced, &like, &BINS_AT_ONCE])
                     .await?;
                 let total: i64 = rows.first().map(|r| r.get(15)).unwrap_or(0);
                 let bins = rows
@@ -716,6 +747,7 @@ pub async fn bin_list(
                             cell,
                             whereabouts,
                             pick_sequence: r.get(9),
+                            within_reach: r.get(17),
                             reported: ids
                                 .into_iter()
                                 .zip(codes)
@@ -728,6 +760,63 @@ pub async fn bin_list(
                     })
                     .collect();
                 Ok(BinsList { bins, total })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
+// ---------------------------------------------------------------------------
+// Reach
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Debug)]
+pub struct ReachRequest {
+    /// How many of its levels, counting up from its floor, can be reached
+    /// without a forklift. Zero: none of it.
+    pub levels: i32,
+}
+
+/// What a place says of reach, after saying it.
+#[derive(Serialize, Debug)]
+pub struct ReachSaid {
+    pub place_id: Uuid,
+    pub reach_levels: i32,
+    pub levels: i32,
+}
+
+/// Say how many of a rack's levels can be reached from the floor (D180).
+///
+/// Part of the drawing, like the rest of a place: set, not appended. Who drew
+/// what is the layout's history, which is not built yet for any of it.
+#[post("/places/{place_id}/reach")]
+pub async fn set_reach(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<ReachRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let id = path.into_inner();
+    let levels = body.levels;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let has: i32 = tx
+                    .query_opt("SELECT levels FROM place WHERE id = $1", &[&id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?
+                    .get(0);
+                if !(0..=has).contains(&levels) {
+                    return Err(ApiError::Rejected(format!(
+                        "it has {has} level{}; from 0 to {has} of them can be in reach, not {levels}",
+                        if has == 1 { "" } else { "s" }
+                    )));
+                }
+                tx.execute("UPDATE place SET reach_levels = $2 WHERE id = $1", &[&id, &(levels as i16)])
+                    .await?;
+                Ok(ReachSaid { place_id: id, reach_levels: levels, levels: has })
             })
         })
         .await?;

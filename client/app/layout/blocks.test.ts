@@ -35,6 +35,7 @@ const place = (place_id: string, bays: number, levels: number, rows = 1): Layout
   levels,
   rows,
   sides: 1,
+  reach_levels: 1,
   pattern: null,
   bins: 0,
 });

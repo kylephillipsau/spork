@@ -14,6 +14,8 @@ import type {
   ItemImportReport,
   BinView,
   BinsList,
+  CartonSaid,
+  ItemListRow,
   ItemView,
   ItemsList,
   OwnerSet,
@@ -738,7 +740,9 @@ export const api = {
     q?: string;
     stock?: "here";
     needs?: "weighing" | "measuring" | "photo";
-    order?: "demand" | "walk";
+    /** Only the items on this list (D179). */
+    list?: Uuid;
+    order?: "demand" | "walk" | "list";
     after?: string;
   }) => {
     const p = new URLSearchParams();
@@ -749,6 +753,30 @@ export const api = {
 
   /** An item: what it is, what it measures, and where each record says it is. */
   item: (itemId: Uuid) => send<ItemView>("GET", `/items/${encodeURIComponent(itemId)}`),
+
+  /**
+   * Say how many of the item a carton of it holds (D178), which makes the
+   * carton a thing to measure. `holds` null: there is a carton, its count
+   * unsaid.
+   */
+  sayCarton: (itemId: Uuid, input: { holds: number | null; act: Act }) =>
+    send<CartonSaid>("POST", `/items/${encodeURIComponent(itemId)}/carton`, {
+      holds: input.holds,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
+
+  /** The lists of items worked at this site, newest first (D179). */
+  itemLists: () => send<ItemListRow[]>("GET", "/item-lists"),
+
+  /** Make a list from item codes, in the order on the paper. Every code has to be an item. */
+  makeItemList: (input: { name: string; codes: string[]; act: Act }) =>
+    send<ItemListRow>("POST", "/item-lists", {
+      name: input.name,
+      codes: input.codes,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
 
   /** One place, the way out of it, what is inside it, and its bins by cell. */
   place: (placeId: Uuid) => send<PlaceView>("GET", `/places/${encodeURIComponent(placeId)}`),

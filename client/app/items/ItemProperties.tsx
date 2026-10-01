@@ -20,7 +20,7 @@ import {
   Toolbar,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import type { CaptureSubject, ItemPacking, ItemView, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, ItemView, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
@@ -30,6 +30,8 @@ import { FaceCrop } from "./FaceCrop";
 import {
   PRESENTATIONS,
   bindable,
+  holdsInWords,
+  isOwnCarton,
   nameOf,
   photosOf,
   presentationNeeded,
@@ -77,7 +79,7 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
           <EmptyState
             icon={<Ruler />}
             title="Nothing to measure for this item yet"
-            description="Its each is measured once it is on file, and its carton once a case pack says how many are in one."
+            description="Its each is measured once it is on file."
           />
         </Card>
       ) : (
@@ -96,7 +98,7 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
   );
 }
 
-/** What it is: its photo, its family, and what a carton of it holds. */
+/** What it is: its photo and its family. What a carton of it holds is on the carton. */
 export function ItemSummary({ item }: { item: ItemView }) {
   return (
     <div className={s.summary}>
@@ -112,7 +114,6 @@ export function ItemSummary({ item }: { item: ItemView }) {
             <Faint>Not part of a family</Faint>
           )}
         </Fact>
-        {item.packing && <Fact label="A carton holds">{holds(item.packing)}</Fact>}
       </Facts>
     </div>
   );
@@ -208,6 +209,8 @@ const ACTIONS: { action: Action; label: string; icon: ReactNode; when: (s: Captu
 function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
   const open = desk.open?.key === subjectKey(subject) ? desk.open.action : null;
   const photos = photosOf(item, subject);
+  // An item's own carton is a box of so many of it (D178).
+  const carton = isOwnCarton(subject);
   const needs = [
     subject.wants.includes("weight") && "weight",
     subject.wants.includes("dimensions") && "size",
@@ -217,7 +220,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
   return (
     <Card
       title={nameOf(subject)}
-      description={provenance(subject)}
+      description={carton && !item.packing ? "Say how many it holds when you weigh or measure it" : provenance(subject)}
       actions={needs.length > 0 && <Badge tone="warning">Needs {needs.join(", ")}</Badge>}
       padded={false}
     >
@@ -229,6 +232,11 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           <Fact label="Size (L × W × H)" always>
             {sizeOf(subject)}
           </Fact>
+          {carton && (
+            <Fact label="Holds" always>
+              {item.packing?.inners_per_carton != null ? holdsInWords(item.packing) : <Faint>{holdsInWords(item.packing)}</Faint>}
+            </Fact>
+          )}
         </Facts>
         {/* With the camera open its photos are shown there, once. */}
         {open !== "photos" && <Photos subject={subject} photos={photos} desk={null} />}
@@ -304,6 +312,7 @@ function WeighForm({ subject, desk }: { subject: CaptureSubject; desk: Propertie
             ]}
           />
         </div>
+        {isOwnCarton(subject) && <HoldsField desk={desk} />}
       </div>
       <div className={s.formActions}>
         <Button onClick={desk.close}>Cancel</Button>
@@ -343,6 +352,7 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
             onChange={(e) => desk.type("weight", e.target.value)}
           />
         </div>
+        {isOwnCarton(subject) && <HoldsField desk={desk} />}
       </div>
       {!f.noDimensions && (
         <div className={s.dimensions}>
@@ -386,6 +396,25 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * How many of the item one carton holds (D178): the carton and the item in it,
+ * said together. Blank says nothing of the count.
+ */
+function HoldsField({ desk }: { desk: PropertiesDesk }) {
+  return (
+    <div className={s.holds}>
+      <TextField
+        label="How many in it"
+        inputMode="numeric"
+        autoComplete="off"
+        trailing="× each"
+        value={desk.holds}
+        onChange={(e) => desk.typeHolds(e.target.value)}
+      />
+    </div>
   );
 }
 
@@ -587,14 +616,4 @@ function sizeOf(s: CaptureSubject): ReactNode {
   const d = [s.length_mm, s.width_mm, s.height_mm];
   if (d.some((v) => v !== null)) return `${d.map((v) => (v === null ? "?" : centimetres(v))).join(" × ")} cm`;
   return <Faint>{s.dimensions_absent ? "No box shape" : "Not measured"}</Faint>;
-}
-
-/** What a carton holds, in words: "12", "10 boxes of 100 (1,000)", or that nobody said. */
-function holds(p: ItemPacking): string {
-  const n = p.inners_per_carton;
-  const u = p.units_per_inner;
-  if (n === null) return "Not recorded";
-  if (u === 1) return n === 1 ? "1 unit" : `${n} units`;
-  if (u === null) return `${n} inner packs, how many in each not recorded`;
-  return `${n} inner packs of ${u} (${(n * u).toLocaleString()} units)`;
 }

@@ -78,6 +78,16 @@
 .fieldBox .input {
   padding: 0 var(--ui-space-3);
 }
+/* Several lines: the box grows with its rows, and the text keeps the
+   field's padding on every side. */
+.area {
+  height: auto;
+  align-items: stretch;
+}
+.fieldBox.area .input {
+  padding: var(--ui-space-2) var(--ui-space-3);
+  resize: vertical;
+}
 .fieldBox .leading {
   padding-left: var(--ui-space-3);
 }

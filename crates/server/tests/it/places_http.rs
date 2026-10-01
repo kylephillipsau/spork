@@ -270,6 +270,59 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     let searched = searched["bins"].as_array().unwrap();
     assert!(!searched.is_empty() && searched.iter().all(|b| b["code"].as_str().unwrap().contains("LT-01")));
 
+    // ── reach: the floor bin before the bigger pile up high (D180) ──────
+    // LT-ITEM-2: 30 on level 2, and 5 more on level 1.
+    db.batch_execute(&format!(
+        "INSERT INTO reported_stock (tenant_id, site_id, item_id, location_id, on_hand, as_at, source)
+         SELECT '{TENANT}', '{SITE}', i.id, l.id, 5, now(), 'test'
+           FROM item i JOIN location l ON l.site_id = '{SITE}' AND l.code = 'LT-03-1'
+          WHERE i.tenant_id = '{TENANT}' AND i.code = 'LT-ITEM-2';"
+    ))
+    .await
+    .expect("a few on the floor level");
+    let pick_from = |app| {
+        let auth = auth.clone();
+        async move {
+            let (status, page) = call(app, test::TestRequest::get().uri("/items?q=LT-ITEM-2").insert_header(auth)).await;
+            assert_eq!(status, 200, "{page}");
+            let row = page["items"][0].clone();
+            (row["bin_code"].as_str().unwrap_or_default().to_string(), row["bin_within_reach"].clone())
+        }
+    };
+    assert_eq!(b["within_reach"], false, "level 2 is above the default reach: {b}");
+    assert_eq!(bins.iter().find(|b| b["code"] == "LT-03-1").unwrap()["within_reach"], true);
+    assert!(
+        tray.iter().find(|b| b["code"] == "LT-FLOOR").unwrap()["within_reach"] == true,
+        "a bin off the layout is in reach when the other system calls it a pick bin"
+    );
+    assert_eq!(pick_from(&app).await, ("LT-03-1".into(), Value::Bool(true)), "the floor bin, though it holds less");
+
+    let reach = |levels: i64| {
+        let auth = auth.clone();
+        let app = &app;
+        async move {
+            call(
+                app,
+                test::TestRequest::post()
+                    .uri(&format!("/places/{rack_id}/reach"))
+                    .insert_header(auth)
+                    .set_json(serde_json::json!({ "levels": levels })),
+            )
+            .await
+        }
+    };
+    let (status, said) = reach(2).await;
+    assert_eq!(status, 200, "{said}");
+    assert_eq!((said["reach_levels"].as_i64(), said["levels"].as_i64()), (Some(2), Some(2)));
+    let (_, page) = call(&app, test::TestRequest::get().uri(&format!("/places/{rack_id}")).insert_header(auth.clone())).await;
+    assert_eq!(page["reach_levels"], 2, "{page}");
+    assert_eq!(pick_from(&app).await, ("LT-03-2".into(), Value::Bool(true)), "both in reach: the bigger pile");
+    let (status, refused) = reach(3).await;
+    assert_eq!(status, 400, "a rack of two levels has no third in reach: {refused}");
+    let (status, _) = reach(0).await;
+    assert_eq!(status, 200, "none of it in reach");
+    assert_eq!(pick_from(&app).await, ("LT-03-2".into(), Value::Bool(false)), "none in reach: the biggest pile, said so");
+
     // ── what is not there says so ────────────────────────────────────────
     let (status, _) = call(
         &app,

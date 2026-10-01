@@ -1,18 +1,22 @@
-import { Boxes, Camera, Ruler, Scale } from "lucide-react";
-import type { ReactNode } from "react";
+import { Boxes, Camera, ListPlus, Ruler, Scale } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import {
   Alert,
   Button,
   Card,
   DataTable,
+  Dialog,
   EmptyState,
   Page,
   PageHeader,
   SearchField,
   Select,
   Spacer,
+  Stack,
   Tabs,
+  TextArea,
+  TextField,
   Toolbar,
   cx,
   type Column,
@@ -35,11 +39,15 @@ import s from "./items.module.css";
  * ordered or by the walk, it is the worklist the Weigh and Capture screens
  * were. A row opens the item beside the list, with Previous and Next to work
  * down it. `panel` is for fixtures, which draw the drawer with no network.
+ *
+ * **A sheet somebody handed over is a list here** (D179): its codes pasted in
+ * once at a desk, then picked on a phone and worked in the sheet's own order.
  */
 export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: PropertiesDesk | undefined }) {
   const st = desk.state;
   const ready = st.kind === "ready" ? st : null;
-  const narrowed = desk.asked.q.trim() || desk.asked.stock || desk.asked.needs;
+  const narrowed = desk.asked.q.trim() || desk.asked.stock || desk.asked.needs || desk.asked.list;
+  const [making, setMaking] = useState(false);
   const rows = ready?.items ?? [];
   const at = rows.findIndex((r) => r.item_id === desk.chosen);
   const step = (by: number) => {
@@ -53,6 +61,21 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
 
       <Card padded={false}>
         <Toolbar>
+          <div className={s.lists}>
+            <Select
+              aria-label="List"
+              size="sm"
+              value={desk.asked.list || "none"}
+              onValueChange={(v) => desk.pick(v === "none" ? "" : v)}
+              options={[
+                { value: "none", label: "Every item" },
+                ...(desk.lists ?? []).map((l) => ({ value: l.item_list_id, label: `${l.name} · ${l.items}` })),
+              ]}
+            />
+          </div>
+          <Button size="sm" icon={<ListPlus />} onClick={() => setMaking(true)}>
+            New list
+          </Button>
           <Tabs
             aria-label="Where"
             value={desk.asked.stock || "all"}
@@ -83,6 +106,7 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
               value={desk.asked.order || "code"}
               onValueChange={(v) => desk.narrow({ order: (v === "code" ? "" : v) as Order })}
               options={[
+                ...(desk.asked.list ? [{ value: "list", label: "As on the list" }] : []),
                 { value: "code", label: "By code" },
                 { value: "demand", label: "Most ordered first" },
                 { value: "walk", label: "In walking order" },
@@ -114,7 +138,7 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
         ) : (
           <DataTable
             aria-label="Items"
-            columns={COLUMNS}
+            columns={desk.asked.list ? LISTED : COLUMNS}
             rows={rows}
             rowKey={(i) => i.item_id}
             selectedKey={desk.chosen ?? undefined}
@@ -147,7 +171,60 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
       </Card>
 
       <ItemDrawer itemId={desk.chosen} onClose={() => desk.choose(null)} previous={step(-1)} next={step(1)} desk={panel} />
+      {making && <NewList desk={desk} onClose={() => setMaking(false)} />}
     </Page>
+  );
+}
+
+/**
+ * A list made from a sheet: its name and its codes, pasted one a line (a
+ * spreadsheet's column pastes that way), in the sheet's order. A code nobody
+ * knows refuses the list and is named, so no row goes missing quietly.
+ */
+export function NewList({ desk, onClose }: { desk: ItemsDesk; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [pasted, setPasted] = useState("");
+  const close = () => {
+    desk.making.dismiss();
+    onClose();
+  };
+  const make = async () => {
+    if (await desk.makeList(name, pasted)) onClose();
+  };
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && close()}
+      width={480}
+      title="New list"
+      description="A sheet of items to work through, in its order."
+      footer={
+        <>
+          <Button onClick={close}>Cancel</Button>
+          <Button variant="primary" loading={desk.making.busy} onClick={() => void make()}>
+            Make the list
+          </Button>
+        </>
+      }
+    >
+      <Stack gap={3}>
+        {desk.making.problem && (
+          <Alert tone="danger" onDismiss={desk.making.dismiss}>
+            {desk.making.problem}
+          </Alert>
+        )}
+        <TextField label="Name" autoComplete="off" autoFocus placeholder="Weights and sizes, 1 Oct" value={name} onChange={(e) => setName(e.target.value)} />
+        <TextArea
+          label="Item codes"
+          hint="One a line, in the order on the sheet."
+          rows={10}
+          spellCheck={false}
+          autoCapitalize="characters"
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+        />
+      </Stack>
+    </Dialog>
   );
 }
 
@@ -214,4 +291,10 @@ const COLUMNS: Column<ItemRow>[] = [
     ),
     width: "140px",
   },
+];
+
+/** Narrowed to a list: its place on the sheet first, to find the row on the paper. */
+const LISTED: Column<ItemRow>[] = [
+  { key: "place", header: "#", cell: (i) => i.list_position ?? <Faint>—</Faint>, align: "right", mono: true, width: "48px" },
+  ...COLUMNS,
 ];

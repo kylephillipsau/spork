@@ -229,6 +229,8 @@ const PAIRS = [
   ["ItemView", ["ItemView"]],
   ["ItemRow", ["ItemRow"]],
   ["ItemsList", ["ItemsList"]],
+  ["ItemListRow", ["ItemListRow"]],
+  ["CartonSaid", ["CartonSaid"]],
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
   ["ItemHeld", ["ItemHeld"]],

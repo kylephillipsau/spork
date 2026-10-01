@@ -343,7 +343,7 @@ async fn an_arrangement_is_required_an_absence_is_an_answer_and_a_part_is_a_subj
 
     let set = rows
         .iter()
-        .find(|s| s["item_id"].as_str() == Some(&item.to_string()))
+        .find(|s| s["item_id"].as_str() == Some(&item.to_string()) && s["packaging_level"] == "each")
         .expect("the set's each is a subject");
     assert_eq!(
         set["dimensions_absent"], true,

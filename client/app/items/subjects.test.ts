@@ -1,6 +1,20 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { bindable, nameOf, photosOf, shown, presentationNeeded, presentationOffered, subjectKey, weighable } from "./subjects.ts";
+import {
+  bindable,
+  cartonHolds,
+  holdsInWords,
+  isOwnCarton,
+  nameOf,
+  photosOf,
+  readHolds,
+  sayFirst,
+  shown,
+  presentationNeeded,
+  presentationOffered,
+  subjectKey,
+  weighable,
+} from "./subjects.ts";
 import type { CaptureSubject, SubjectPhoto } from "@domain/types";
 
 /**
@@ -90,4 +104,39 @@ test("a subject's photographs are its own, never another level's or its family's
 test("a photograph shows its face cut out once somebody has, and itself until then", () => {
   assert.equal(shown(photo({})), "d".repeat(64));
   assert.equal(shown(photo({ cut: { digest: "c".repeat(64), corners: [0, 0, 1, 0, 1, 1, 0, 1] } })), "c".repeat(64));
+});
+
+test("an item's own carton is said at the item; a family's is not", () => {
+  assert.equal(isOwnCarton(subject({ packaging_level: "carton" })), true);
+  assert.equal(isOwnCarton(subject({ packaging_level: "each" })), false);
+  assert.equal(isOwnCarton(subject({ item_id: null, item_style_id: "sty-1", packaging_level: "carton" })), false);
+});
+
+test("a carton holds its packs times what is in each, or nobody has said", () => {
+  assert.equal(cartonHolds({ units_per_inner: 1, inners_per_carton: 16 }), 16);
+  assert.equal(cartonHolds({ units_per_inner: 50, inners_per_carton: 6 }), 300);
+  assert.equal(cartonHolds({ units_per_inner: null, inners_per_carton: null }), null);
+  assert.equal(cartonHolds(null), null);
+  assert.equal(holdsInWords({ units_per_inner: 1, inners_per_carton: 16 }), "16 × each");
+  assert.equal(holdsInWords({ units_per_inner: 50, inners_per_carton: 6 }), "6 packs of 50 (300 × each)");
+  assert.equal(holdsInWords({ units_per_inner: null, inners_per_carton: null }), "Not said yet");
+  assert.equal(holdsInWords(null), "No carton on file yet");
+});
+
+test("a count typed is a whole number from one, or nothing said", () => {
+  assert.deepEqual(readHolds(" 16 "), { holds: 16 });
+  assert.deepEqual(readHolds(""), { holds: null });
+  assert.ok("problem" in readHolds("0"));
+  assert.ok("problem" in readHolds("1.5"));
+  assert.ok("problem" in readHolds("a dozen"));
+});
+
+test("the carton is said first when none is on file, or a different count is typed", () => {
+  const sixteen = { units_per_inner: 1, inners_per_carton: 16 };
+  assert.equal(sayFirst(null, null), true, "the writer refuses a carton with no case pack");
+  assert.equal(sayFirst(null, 16), true);
+  assert.equal(sayFirst(sixteen, null), false, "nothing typed changes nothing");
+  assert.equal(sayFirst(sixteen, 16), false, "the same count is no act");
+  assert.equal(sayFirst(sixteen, 12), true);
+  assert.equal(sayFirst({ units_per_inner: null, inners_per_carton: null }, 6), true, "an unsaid count, said");
 });
