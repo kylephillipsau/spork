@@ -1530,6 +1530,7 @@ async fn a_photograph_hangs_off_the_look_that_produced_it() {
 
     // One look at one carton: the figures first, then the pictures on the same
     // event. That join is the whole reason images do not carry their own event.
+    let look = Uuid::now_v7();
     let observation: Value = common::ok_json(
         &app,
         test::TestRequest::post()
@@ -1545,7 +1546,7 @@ async fn a_photograph_hangs_off_the_look_that_produced_it() {
                 ],
                 "method": "instrument",
                 "ingestion_channel": "keyed",
-                "client_event_id": Uuid::now_v7(),
+                "client_event_id": look,
                 "occurred_at": Utc::now()
             }))
             .to_request(),
@@ -1673,6 +1674,37 @@ async fn a_photograph_hangs_off_the_look_that_produced_it() {
     )
     .await;
     assert_eq!(anon.status(), 401, "a content address is not a secret");
+
+    // **What this walk recorded goes, as the carton walk above removes its own.**
+    // Left behind, the carton's figures were found by `baseline_read` whenever
+    // this file ran first: its own subject for the carton collided with this
+    // one, and a carton weighed once read as weighed twice. By the act's event,
+    // then the subject only if nothing else hangs off it, then the act.
+    let (c, conn) = tokio_postgres::connect(&u, tokio_postgres::NoTls)
+        .await
+        .expect("connect");
+    tokio::spawn(async move {
+        let _ = conn.await;
+    });
+    c.batch_execute(&format!(
+        "DELETE FROM observation_image WHERE observation_event_id = '{event}';
+         DELETE FROM observation_current WHERE observation_id IN
+             (SELECT id FROM observation WHERE observation_event_id = '{event}');
+         DELETE FROM observation WHERE observation_event_id = '{event}';
+         DELETE FROM observation_event WHERE id = '{event}';
+         DELETE FROM observation_current WHERE observable_id IN
+             (SELECT o.id FROM observable o
+               WHERE o.item_id = '{GUMBOOT}'
+                 AND NOT EXISTS (SELECT 1 FROM observation_event e
+                                  WHERE e.observable_id = o.id));
+         DELETE FROM observable o
+           WHERE o.item_id = '{GUMBOOT}'
+             AND NOT EXISTS (SELECT 1 FROM observation_event e
+                              WHERE e.observable_id = o.id);
+         DELETE FROM client_event WHERE client_event_id = '{look}';"
+    ))
+    .await
+    .expect("the test removes what it recorded");
 
     let _ = std::fs::remove_dir_all(&store);
 }
