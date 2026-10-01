@@ -13574,7 +13574,24 @@ even are numbered by twos. A bin is only ever put in a cell whose name the
 pattern spells back exactly; the rest wait to be placed by hand. Bins that a
 place already drawn names drop into it first. It is a person's act on a
 session, previewed first: the preview is the write rolled back, as for every
-import. **Nothing already in a cell moves.**
+import. A place in the preview can be **left out** by name (`leave_out`), for
+a family of codes that is no rack at all. Its bins stay in the tray, and a name
+the draft no longer proposes is refused rather than ignored. A rack can be made
+**with two sides** (`two_sided`): see below. **Nothing already in a cell
+moves.**
+
+**A rack with two sides** (migration 99) is one place whose grid has
+`sides = 2`, and a cell carries its side. A cell's bay is its column along the
+place, counted from the front's left as the front is faced, the same on both
+sides, so the bin behind another is the same column on the other side: exact,
+like every relationship in the layout. The back's labels are numbered round,
+on from the front's last the other way along (`Grid::label_number`), so a
+rack's last bay is behind its first, as racking is commonly labelled. It was
+first built as two places back to back and replaced before release: the back
+carried copies of the front's numbering and position that nothing kept true,
+and nobody calls the half of a rack a place. The rack face opens on the bin's
+side, read as you would stand facing it, and the plan marks the aisle to stand
+in.
 
 **Where it is seen.** A scanned bin code goes to its **rack face**
 (`/bins/{id}`): the way into the place as chips, the face drawn bays across and
@@ -13584,9 +13601,13 @@ which level is a question about relative position, which a flat drawing answers
 better than a 3D one. At a desk, the **warehouse** screen (`/warehouse`) lists
 the site's places beside a plan of the whole site, drawn from `GET /layout`'s
 `plan`. Choosing a place lists its bins (`GET /bins`), each with its cell in the
-rack's own words and NetSuite's report beside Spork's ledger, never merged. The
-research behind the interface is in
-[layout-interface-analysis.md](./layout-interface-analysis.md), summarised as **one place model, three depths, no modes**: floor staff find and
+rack's own words and NetSuite's report beside Spork's ledger, never merged.
+Beside the plan, a **3D view** draws the same `plan`: solid places as blocks
+with their bays and levels on their faces, walk-through places as floor. It
+shares the plan's choice, turns, moves and zooms, and edits nothing, because 3D
+confirms what an area looks like and 2D answers where. The research behind the
+interface is in [layout-interface-analysis.md](./layout-interface-analysis.md),
+summarised as **one place model, three depths, no modes**: floor staff find and
 check, trusted staff correct by scanning, and geometry is edited only at a desk.
 
 **Rejects.** Millimetres, and the six columns on `location` that promised them,
@@ -13595,6 +13616,6 @@ kinds of space. A slot table (a cell is a function of its place's grid). Phone
 scanning of the building: Apple's RoomPlan is designed for rooms up to 15 m
 square and 3.6 m high. A global "advanced mode".
 
-**Not yet.** The plan editor and the 3D view; correcting a bin's cell by
+**Not yet.** The plan editor; correcting a bin's cell by
 scanning it at the shelf; a history of who changed the layout; roles for who
 may edit it. Until roles exist, any signed-in person may draft.

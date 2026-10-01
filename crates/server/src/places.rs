@@ -56,7 +56,7 @@ struct Row {
 
 const PLACE_COLUMNS: &str = "id, parent_id, name, solid, x, y, z, length, depth, height, turn,
                              outline, bays, levels, rows, positions, first_bay, bay_step,
-                             first_level, bin_pattern";
+                             first_level, bin_pattern, sides";
 
 fn row(r: &tokio_postgres::Row) -> Row {
     Row {
@@ -80,6 +80,7 @@ fn row(r: &tokio_postgres::Row) -> Row {
             first_bay: r.get(16),
             bay_step: r.get(17),
             first_level: r.get(18),
+            sides: r.get::<_, i16>(20) as i32,
         },
         pattern: r.get(19),
     }
@@ -154,8 +155,13 @@ pub struct PlaceView {
     /// How many bins share a bay at each level, lowest first.
     pub positions: Vec<i32>,
     pub pattern: Option<String>,
+    /// 1, or 2 for a rack with a face on each side, numbered round it.
+    pub sides: i32,
     /// The numbers on the bays' labels, left to right as you face it.
     pub bay_labels: Vec<String>,
+    /// The back's, left to right as you face the back: the columns from the
+    /// far end round to the first. Empty with one side.
+    pub back_labels: Vec<String>,
     /// The numbers on the levels' labels, lowest first.
     pub level_labels: Vec<String>,
     /// From the outermost place down to this one's parent.
@@ -259,9 +265,9 @@ async fn place_view(
 
     let bins = tx
         .query(
-            "SELECT id, code, kind, slot_bay, slot_level, slot_row, slot_position
+            "SELECT id, code, kind, slot_bay, slot_level, slot_row, slot_position, slot_side
                FROM location WHERE place_id = $1
-              ORDER BY slot_level, slot_bay, slot_row, slot_position",
+              ORDER BY slot_side, slot_level, slot_bay, slot_row, slot_position",
             &[&place_id],
         )
         .await?
@@ -270,7 +276,13 @@ async fn place_view(
             location_id: r.get(0),
             code: r.get(1),
             kind: r.get(2),
-            cell: GridCell { bay: r.get(3), level: r.get(4), row: r.get(5), position: r.get(6) },
+            cell: GridCell {
+                bay: r.get(3),
+                level: r.get(4),
+                row: r.get(5),
+                position: r.get(6),
+                side: r.get::<_, i16>(7) as i32,
+            },
         })
         .collect();
 
@@ -298,6 +310,7 @@ async fn place_view(
 
     let pattern = me.pattern.as_deref().and_then(|s| Pattern::parse(s).ok());
     let (bay_labels, level_labels) = layout::labels(&me.grid, pattern.as_ref());
+    let back_labels = layout::back_labels(&me.grid, pattern.as_ref());
     Ok(Some(PlaceView {
         place_id,
         name: me.name.clone(),
@@ -305,9 +318,11 @@ async fn place_view(
         bays: me.grid.bays,
         levels: me.grid.levels,
         rows: me.grid.rows,
+        sides: me.grid.sides,
         positions: (1..=me.grid.levels).map(|l| me.grid.positions_at(l)).collect(),
         pattern: me.pattern.clone(),
         bay_labels,
+        back_labels,
         level_labels,
         trail,
         children,
@@ -336,7 +351,7 @@ pub async fn bin_page(
                 let Some(r) = tx
                     .query_opt(
                         "SELECT code, kind, active, place_id, slot_bay, slot_level, slot_row,
-                                slot_position
+                                slot_position, slot_side
                            FROM location WHERE id = $1",
                         &[&id],
                     )
@@ -350,6 +365,7 @@ pub async fn bin_page(
                     level: r.get(5),
                     row: r.get(6),
                     position: r.get(7),
+                    side: r.get::<_, i16>(8) as i32,
                 });
                 let place = match place_id {
                     Some(p) => place_view(tx, p).await?,
@@ -394,6 +410,8 @@ pub struct LayoutPlace {
     pub bays: i32,
     pub levels: i32,
     pub rows: i32,
+    /// 1, or 2 for a rack with a face on each side.
+    pub sides: i32,
     pub pattern: Option<String>,
     /// Bins in its own cells, not counting places inside it.
     pub bins: i64,
@@ -509,6 +527,7 @@ pub async fn site_layout(
                         bays: p.grid.bays,
                         levels: p.grid.levels,
                         rows: p.grid.rows,
+                        sides: p.grid.sides,
                         pattern: p.pattern,
                     })
                     .collect();
@@ -620,15 +639,14 @@ pub async fn bin_list(
     let out = scope
         .run(move |tx| {
             Box::pin(async move {
-                // The labels a place's pattern gives its bays and levels, so a
-                // cell reads as the rack does.
-                let labels: HashMap<Uuid, (Vec<String>, Vec<String>, bool, bool)> = site_places(tx, site)
+                // Each place's grid and pattern, so a cell reads as the rack's
+                // labels do.
+                let grids: HashMap<Uuid, (Grid, Option<Pattern>)> = site_places(tx, site)
                     .await?
-                    .iter()
+                    .into_iter()
                     .map(|p| {
                         let pattern = p.pattern.as_deref().and_then(|s| Pattern::parse(s).ok());
-                        let (bays, levels) = layout::labels(&p.grid, pattern.as_ref());
-                        (p.id, (bays, levels, p.grid.levels > 1, p.grid.rows > 1))
+                        (p.id, (p.grid, pattern))
                     })
                     .collect();
                 let rows = tx
@@ -638,7 +656,8 @@ pub async fn bin_list(
                                 l.pick_sequence,
                                 coalesce(rep.items, 0), rep.ids, rep.codes, rep.qtys,
                                 coalesce(held.q, 0)::bigint,
-                                count(*) OVER ()
+                                count(*) OVER (),
+                                l.slot_side
                            FROM location l
                            LEFT JOIN place p ON p.id = l.place_id
                            -- The report totalled once for the site: it has no
@@ -679,27 +698,10 @@ pub async fn bin_list(
                             level: r.get(6),
                             row: r.get(7),
                             position: r.get(8),
+                            side: r.get::<_, Option<i16>>(16).unwrap_or(1) as i32,
                         });
-                        let whereabouts = match (place_id.and_then(|p| labels.get(&p)), &cell) {
-                            (Some((bays, levels, stacked, rowed)), Some(c)) => {
-                                let mut parts = vec![format!(
-                                    "bay {}",
-                                    bays.get((c.bay - 1) as usize).cloned().unwrap_or_else(|| c.bay.to_string())
-                                )];
-                                if *stacked {
-                                    parts.push(format!(
-                                        "level {}",
-                                        levels
-                                            .get((c.level - 1) as usize)
-                                            .cloned()
-                                            .unwrap_or_else(|| c.level.to_string())
-                                    ));
-                                }
-                                if *rowed {
-                                    parts.push(if c.row == 1 { "front row".into() } else { format!("row {}", c.row) });
-                                }
-                                Some(parts.join(", "))
-                            }
+                        let whereabouts = match (place_id.and_then(|p| grids.get(&p)), cell) {
+                            (Some((grid, pattern)), Some(c)) => Some(layout::whereabouts(grid, pattern.as_ref(), c)),
                             _ => None,
                         };
                         let ids: Vec<Uuid> = r.get::<_, Option<Vec<Uuid>>>(11).unwrap_or_default();
@@ -745,6 +747,11 @@ pub struct DraftedPlace {
     pub bays: i32,
     pub levels: i32,
     pub bins: usize,
+    /// 2 when it was made as a rack with a face on each side.
+    pub sides: i32,
+    /// How its bays would share out between two sides, as its labels read
+    /// (`["01–18", "19–36"]`); none for a place that cannot have two.
+    pub split: Option<[String; 2]>,
 }
 
 /// What drafting did, or would have done.
@@ -762,6 +769,9 @@ pub struct DraftReport {
     /// Active bins still with no cell: they wait to be placed by hand.
     pub unplaced: usize,
     pub unplaced_sample: Vec<String>,
+    /// The places a person said not to make, by name. Their bins are counted
+    /// in `unplaced`.
+    pub left_out: Vec<String>,
     pub applied: bool,
 }
 
@@ -772,6 +782,52 @@ pub struct DraftQuery {
     pub apply: bool,
 }
 
+/// What a person changed about the draft before applying it. Optional: no
+/// body is the draft as proposed.
+#[derive(Deserialize, Debug, Default)]
+pub struct DraftRequest {
+    /// Places not to make, by the names the preview gave them: families of
+    /// codes that are no rack at all. Their bins wait in the tray.
+    #[serde(default)]
+    pub leave_out: Vec<String>,
+    /// Racks with a face on each side, numbered round them
+    /// (`layout::two_sides`), by the names the preview gave them.
+    #[serde(default)]
+    pub two_sided: Vec<String>,
+}
+
+/// How a proposed place's bays would share out between two sides, as its
+/// labels read: the front's first to last, and the back's on to the family's
+/// last bay.
+fn split_of(d: &layout::Drafted) -> Option<[String; 2]> {
+    if !d.solid {
+        return None;
+    }
+    let two = layout::two_sides(&d.grid)?;
+    let pattern = Pattern::parse(&d.pattern).ok();
+    let (whole, _) = layout::labels(&d.grid, pattern.as_ref());
+    let span = |from: usize, to: usize| match (whole.get(from), whole.get(to)) {
+        (Some(a), Some(b)) if from != to => Some(format!("{a}–{b}")),
+        (Some(a), _) => Some(a.clone()),
+        _ => None,
+    };
+    let front = two.bays as usize;
+    Some([span(0, front - 1)?, span(front, whole.len() - 1)?])
+}
+
+/// `base`, or `base (2)`, `base (3)`… whichever nothing in `used` is called,
+/// and now taken.
+fn unused_name(used: &mut HashSet<String>, base: &str) -> String {
+    let mut name = base.to_string();
+    let mut n = 1;
+    while used.contains(&name) {
+        n += 1;
+        name = format!("{base} ({n})");
+    }
+    used.insert(name.clone());
+    name
+}
+
 /// Put the bins that are not on the layout into it.
 ///
 /// First into the places already there, where a place's pattern names a bin
@@ -780,11 +836,20 @@ pub struct DraftQuery {
 /// walk-through place (made, if there is none). **Nothing already in a cell
 /// moves**: which bin is where is the exact half of the layout, and a person
 /// may have put it there.
+///
+/// A place named in `leave_out` is not made and takes no row; its bins stay
+/// in the tray. A rack named in `two_sided` is made as its two sides, back to
+/// back. The names are worked out the same way whatever is asked, so the
+/// names a preview showed are the names an apply matches. A name the draft
+/// does not propose is refused rather than ignored, because a bin list that
+/// changed since the preview could otherwise make what was left out under
+/// another name.
 pub async fn draft(
     tx: &Transaction<'_>,
     tenant: Uuid,
     site: Uuid,
     apply: bool,
+    asked: &DraftRequest,
 ) -> Result<DraftReport, ApiError> {
     tx.batch_execute("SAVEPOINT spork_draft").await?;
     let mut out = DraftReport { applied: apply, ..Default::default() };
@@ -804,13 +869,22 @@ pub async fn draft(
     // Into the places already drawn.
     let mut taken: HashSet<(Uuid, GridCell)> = tx
         .query(
-            "SELECT place_id, slot_bay, slot_level, slot_row, slot_position FROM location
+            "SELECT place_id, slot_bay, slot_level, slot_row, slot_position, slot_side FROM location
               WHERE site_id = $1 AND place_id IS NOT NULL",
             &[&site],
         )
         .await?
         .iter()
-        .map(|r| (r.get(0), GridCell { bay: r.get(1), level: r.get(2), row: r.get(3), position: r.get(4) }))
+        .map(|r| {
+            let cell = GridCell {
+                bay: r.get(1),
+                level: r.get(2),
+                row: r.get(3),
+                position: r.get(4),
+                side: r.get::<_, i16>(5) as i32,
+            };
+            (r.get(0), cell)
+        })
         .collect();
     let mut names: HashMap<String, (Uuid, GridCell)> = HashMap::new();
     for p in &places {
@@ -841,28 +915,91 @@ pub async fn draft(
             .map(|(_, code, kind)| (code.clone(), SOLID_KINDS.contains(&kind.as_str())))
             .collect::<Vec<_>>(),
     );
-    if !proposal.places.is_empty() {
-        // Inside the first walk-through place standing on the site, or a new one.
-        let container = places.iter().find(|p| p.parent_id.is_none() && !p.solid);
-        let existing_children: Vec<&Row> = match container {
-            Some(c) => places.iter().filter(|p| p.parent_id == Some(c.id)).collect(),
-            None => vec![],
-        };
-        let mut used: HashSet<String> = existing_children.iter().map(|p| p.name.clone()).collect();
-        // A row of aisles: each place along x, one aisle of two cells between.
-        let mut y = existing_children
-            .iter()
-            .map(|p| p.y + p.depth)
-            .fold(0.0_f64, f64::max)
-            + if existing_children.is_empty() { 1.0 } else { 2.0 };
-        let mut arranged = vec![];
-        for d in &proposal.places {
-            let depth = d.grid.rows as f64;
-            arranged.push((d, 1.0, y, d.grid.bays as f64, depth, if d.solid { d.grid.levels as f64 } else { 1.0 }));
-            y += depth + 2.0;
+    // Inside the first walk-through place standing on the site, or a new one.
+    let container = places.iter().find(|p| p.parent_id.is_none() && !p.solid);
+    let existing_children: Vec<&Row> = match container {
+        Some(c) => places.iter().filter(|p| p.parent_id == Some(c.id)).collect(),
+        None => vec![],
+    };
+
+    // Names first, the same whatever is asked: `Rack C`, then `Rack C (2)`
+    // beside a place already called that.
+    let mut used: HashSet<String> = existing_children.iter().map(|p| p.name.clone()).collect();
+    let mut named = vec![];
+    for d in &proposal.places {
+        let name = unused_name(&mut used, &d.name);
+        named.push((d, name));
+    }
+    for wanted in asked.leave_out.iter().chain(&asked.two_sided) {
+        if !named.iter().any(|(_, name)| name == wanted) {
+            return Err(ApiError::Rejected(format!(
+                "the draft no longer proposes {wanted}; preview it again"
+            )));
         }
-        let wide = arranged.iter().map(|a| a.3 + 2.0).fold(10.0_f64, f64::max);
-        let tall = arranged.iter().map(|a| a.5 + 2.0).fold(4.0_f64, f64::max);
+    }
+    let mut unmatched = proposal.unmatched.clone();
+    named.retain(|(d, name)| {
+        if !asked.leave_out.contains(name) {
+            return true;
+        }
+        out.left_out.push(name.clone());
+        unmatched.extend(d.bins.iter().map(|(code, _)| code.clone()));
+        false
+    });
+    unmatched.sort();
+
+    // What will be made: each family's place, with two sides where asked. A
+    // rack with two is the same codes read on a grid half as long, so its bins
+    // are found again by name, each in the cell its pattern spells it in.
+    let mut making: Vec<(&layout::Drafted, String, Grid, Vec<(&str, GridCell)>)> = vec![];
+    for (d, name) in named {
+        if !asked.two_sided.contains(&name) {
+            let bins = d.bins.iter().map(|(code, cell)| (code.as_str(), *cell)).collect();
+            making.push((d, name, d.grid.clone(), bins));
+            continue;
+        }
+        let Some(grid) = layout::two_sides(&d.grid).filter(|_| d.solid) else {
+            return Err(ApiError::Rejected(format!("{name} has no bays to put on two sides")));
+        };
+        let by_name: HashMap<String, GridCell> = Pattern::parse(&d.pattern)
+            .and_then(|p| p.names(&grid))
+            .map_err(|e| ApiError::Rejected(format!("{name} cannot be read on two sides: {e}")))?
+            .into_iter()
+            .map(|(cell, code)| (code, cell))
+            .collect();
+        let bins: Vec<(&str, GridCell)> = d
+            .bins
+            .iter()
+            .filter_map(|(code, _)| by_name.get(code).map(|cell| (code.as_str(), *cell)))
+            .collect();
+        if bins.len() != d.bins.len() {
+            return Err(ApiError::Rejected(format!("{name} has codes its two sides do not name")));
+        }
+        making.push((d, name, grid, bins));
+    }
+
+    // A row of aisles: each place along x, one aisle of two cells between.
+    let mut y = existing_children
+        .iter()
+        .map(|p| p.y + p.depth)
+        .fold(0.0_f64, f64::max)
+        + if existing_children.is_empty() { 1.0 } else { 2.0 };
+
+    if !making.is_empty() {
+        // Each place's box: a bay a cell along, a level a cell up, a row a cell
+        // in from each face.
+        let boxed: Vec<_> = making
+            .into_iter()
+            .map(|(d, name, grid, bins)| {
+                let at = y;
+                let depth = (grid.rows * grid.sides) as f64;
+                y += depth + 2.0;
+                let height = if d.solid { grid.levels as f64 } else { 1.0 };
+                (d, name, grid, bins, at, depth, height)
+            })
+            .collect();
+        let wide = boxed.iter().map(|b| b.2.bays as f64 + 2.0).fold(10.0_f64, f64::max);
+        let tall = boxed.iter().map(|b| b.6 + 2.0).fold(4.0_f64, f64::max);
         let deep = y - 1.0;
 
         let container_id = match container {
@@ -893,49 +1030,46 @@ pub async fn draft(
         };
 
         let by_code: HashMap<&str, Uuid> = waiting.iter().map(|(id, c, _)| (c.as_str(), *id)).collect();
-        for (d, x, y, length, depth, height) in arranged {
-            let mut name = d.name.clone();
-            let mut n = 1;
-            while used.contains(&name) {
-                n += 1;
-                name = format!("{} ({n})", d.name);
-            }
-            used.insert(name.clone());
+        for (d, name, grid, bins, at, depth, height) in boxed {
             let positions: Option<Vec<i32>> =
-                if d.grid.positions.is_empty() { None } else { Some(d.grid.positions.clone()) };
+                if grid.positions.is_empty() { None } else { Some(grid.positions.clone()) };
+            let length = grid.bays as f64;
+            let sides = grid.sides as i16;
             let id: Uuid = tx
                 .query_one(
                     "INSERT INTO place (tenant_id, site_id, parent_id, name, solid, x, y, length,
                                         depth, height, bays, levels, rows, positions, bin_pattern,
-                                        first_bay, bay_step, first_level)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                             $16, $17, $18)
+                                        first_bay, bay_step, first_level, sides)
+                     VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                             $15, $16, $17, $18)
                      RETURNING id",
                     &[
-                        &tenant, &site, &container_id, &name, &d.solid, &x, &y, &length, &depth,
-                        &height, &d.grid.bays, &d.grid.levels, &d.grid.rows, &positions,
-                        &d.pattern, &d.grid.first_bay, &d.grid.bay_step, &d.grid.first_level,
+                        &tenant, &site, &container_id, &name, &d.solid, &at, &length, &depth,
+                        &height, &grid.bays, &grid.levels, &grid.rows, &positions, &d.pattern,
+                        &grid.first_bay, &grid.bay_step, &grid.first_level, &sides,
                     ],
                 )
                 .await?
                 .get(0);
             let cells: Vec<(Uuid, Uuid, GridCell)> =
-                d.bins.iter().map(|(code, cell)| (by_code[code.as_str()], id, *cell)).collect();
+                bins.iter().map(|(code, cell)| (by_code[*code], id, *cell)).collect();
             put(tx, &cells).await?;
             out.bins_placed += cells.len();
             out.places.push(DraftedPlace {
                 name,
                 solid: d.solid,
                 pattern: d.pattern.clone(),
-                bays: d.grid.bays,
-                levels: d.grid.levels,
-                bins: d.bins.len(),
+                bays: grid.bays,
+                levels: grid.levels,
+                bins: bins.len(),
+                sides: grid.sides,
+                split: if grid.sides == 1 { split_of(d) } else { None },
             });
         }
     }
 
-    out.unplaced = proposal.unmatched.len();
-    out.unplaced_sample = proposal.unmatched.iter().take(SAMPLE).cloned().collect();
+    out.unplaced = unmatched.len();
+    out.unplaced_sample = unmatched.into_iter().take(SAMPLE).collect();
 
     let end = if apply { "RELEASE SAVEPOINT spork_draft" } else { "ROLLBACK TO SAVEPOINT spork_draft" };
     tx.batch_execute(end).await?;
@@ -966,14 +1100,16 @@ async fn put(tx: &Transaction<'_>, cells: &[(Uuid, Uuid, GridCell)]) -> Result<(
     let levels: Vec<i32> = cells.iter().map(|c| c.2.level).collect();
     let rows: Vec<i32> = cells.iter().map(|c| c.2.row).collect();
     let positions: Vec<i32> = cells.iter().map(|c| c.2.position).collect();
+    let sides: Vec<i16> = cells.iter().map(|c| c.2.side as i16).collect();
     tx.execute(
         "UPDATE location l
             SET place_id = t.place, slot_bay = t.bay, slot_level = t.level,
-                slot_row = t.row, slot_position = t.position
-           FROM unnest($1::uuid[], $2::uuid[], $3::int4[], $4::int4[], $5::int4[], $6::int4[])
-                AS t(id, place, bay, level, row, position)
+                slot_row = t.row, slot_position = t.position, slot_side = t.side
+           FROM unnest($1::uuid[], $2::uuid[], $3::int4[], $4::int4[], $5::int4[], $6::int4[],
+                       $7::int2[])
+                AS t(id, place, bay, level, row, position, side)
           WHERE l.id = t.id AND l.place_id IS NULL",
-        &[&ids, &places, &bays, &levels, &rows, &positions],
+        &[&ids, &places, &bays, &levels, &rows, &positions, &sides],
     )
     .await?;
     Ok(())
@@ -982,20 +1118,30 @@ async fn put(tx: &Transaction<'_>, cells: &[(Uuid, Uuid, GridCell)]) -> Result<(
 /// Draft the caller's site from its bin list. A dry run unless `?apply=true`.
 ///
 /// **A person's act, on a session**, unlike the file imports: nothing arrives,
-/// somebody at the desk asks for a first layout.
+/// somebody at the desk asks for a first layout. The body, when there is one,
+/// is a [`DraftRequest`]: the places they said not to make.
 #[post("/layout/draft")]
 pub async fn draft_layout(
     req: HttpRequest,
     state: web::Data<AppState>,
     query: web::Query<DraftQuery>,
+    body: web::Bytes,
 ) -> Result<HttpResponse, ApiError> {
     let who = caller(&state, &req).await?;
     let site = working_site(who.site_id)?;
+    // No body is the draft as proposed. A body that does not read is refused,
+    // never taken as none, or what was left out would be made.
+    let asked: DraftRequest = if body.is_empty() {
+        DraftRequest::default()
+    } else {
+        serde_json::from_slice(&body)
+            .map_err(|e| ApiError::Rejected(format!("the draft request did not read: {e}")))?
+    };
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     let tenant = scope.tenant();
     let apply = query.apply;
     let report = scope
-        .run(move |tx| Box::pin(async move { draft(tx, tenant, site, apply).await }))
+        .run(move |tx| Box::pin(async move { draft(tx, tenant, site, apply, &asked).await }))
         .await?;
     Ok(HttpResponse::Ok().json(report))
 }

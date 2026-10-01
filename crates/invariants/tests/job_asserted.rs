@@ -882,10 +882,10 @@ fn j76_finds_a_bin_past_the_edge_of_its_grid() {
              VALUES ('7ac00000-0000-0000-0000-000000000076', '{J7X_TENANT}', '{J7X_SITE}',
                      'J76 rack', true, 2, 1, 1, 2);
              INSERT INTO location (id, tenant_id, site_id, code, kind, active, place_id,
-                                   slot_bay, slot_level, slot_row, slot_position)
+                                   slot_bay, slot_level, slot_row, slot_position, slot_side)
              VALUES ('10c00000-0000-0000-0000-0000000076a1', '{J7X_TENANT}', '{J7X_SITE}',
                      'J76-3', 'pick_face', true, '7ac00000-0000-0000-0000-000000000076',
-                     3, 1, 1, 1);"
+                     3, 1, 1, 1, 1);"
         ))
         .expect("a bin past the edge");
 

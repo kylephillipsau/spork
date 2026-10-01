@@ -1,9 +1,11 @@
-import { Boxes, Inbox, SquareDashed, Wand2 } from "lucide-react";
+import { Component, Suspense, lazy, useState, type ReactNode } from "react";
+import { Boxes, Inbox, Rotate3d, SquareDashed, Wand2 } from "lucide-react";
 
 import {
   Alert,
   Button,
   Card,
+  Checkbox,
   DataTable,
   EmptyState,
   Inline,
@@ -19,10 +21,13 @@ import {
 } from "@ui/index";
 import { useNavigate } from "@app/routing/Router";
 import { Faint } from "@app/common/cells";
-import type { BinRow, DraftReport, DraftedPlace, LayoutView, PlanShape } from "@domain/types";
+import type { BinRow, DraftReport, DraftedPlace, LayoutPlace, LayoutView, PlanShape } from "@domain/types";
 
 import type { Chosen, WarehouseDesk } from "./useWarehouse";
 import s from "./layout.module.css";
+
+// three.js is its own chunk, fetched the first time the 3D view is shown.
+const Site3D = lazy(() => import("./Site3D"));
 
 /**
  * The warehouse: every place on the site, where it stands, and the bins in
@@ -111,7 +116,7 @@ export function WarehousePage({ desk }: { desk: WarehouseDesk }) {
               <PlaceList rows={rowsOf(v)} chosen={desk.asked.trim() ? null : desk.chosen} choose={desk.choose} />
             </Card>
             <div className={s.chosen}>
-              <SitePlan shapes={v.plan} chosen={desk.asked.trim() ? null : desk.chosen} choose={desk.choose} />
+              <SitePlan shapes={v.plan} places={v.places} chosen={desk.asked.trim() ? null : desk.chosen} choose={desk.choose} />
               <Bins v={v} desk={desk} />
             </div>
           </div>
@@ -206,8 +211,22 @@ function Bins({ v, desk }: { v: LayoutView; desk: WarehouseDesk }) {
  * The whole site from above, the same way up every time. Choosing a place on
  * it is choosing it on the list; the outermost place, which everything else is
  * inside, is the background rather than a target.
+ *
+ * The 3D view sits beside it when shown, drawing the same places and sharing
+ * the same choice. 2D answers where; 3D confirms what it looks like.
  */
-function SitePlan({ shapes, chosen, choose }: { shapes: PlanShape[]; chosen: Chosen; choose: (c: Chosen) => void }) {
+function SitePlan({
+  shapes,
+  places,
+  chosen,
+  choose,
+}: {
+  shapes: PlanShape[];
+  places: LayoutPlace[];
+  chosen: Chosen;
+  choose: (c: Chosen) => void;
+}) {
+  const [shown, toggle] = useShown3D();
   if (shapes.length < 2) return null;
   const xs = shapes.flatMap((sh) => sh.corners.map((c) => c[0]));
   const ys = shapes.flatMap((sh) => sh.corners.map((c) => c[1]));
@@ -221,57 +240,178 @@ function SitePlan({ shapes, chosen, choose }: { shapes: PlanShape[]; chosen: Cho
   const named = shapes.find((sh) => sh.place_id === chosen);
 
   return (
-    <Card>
-      <svg
-        className={cx(s.plan, s.sitePlan)}
-        viewBox={box}
-        role="img"
-        aria-label={named ? `Plan of the site, with ${named.name} marked` : "Plan of the site"}
-      >
-        {drawn.map((sh) => (
-          <polygon
-            key={sh.place_id}
-            points={sh.corners.map(([x, y]) => `${x},${-y}`).join(" ")}
-            vectorEffect="non-scaling-stroke"
-            className={cx(
-              s.shape,
-              sh.nesting === 0 ? s.outer : sh.solid ? s.solid : s.floor,
-              sh.nesting > 0 && s.target,
-              sh.place_id === chosen && s.focus,
-            )}
-            onClick={sh.nesting > 0 ? () => choose(sh.place_id) : undefined}
-          >
-            <title>{sh.name}</title>
-          </polygon>
-        ))}
-      </svg>
+    <Card
+      title="Site plan"
+      actions={
+        <Button size="sm" icon={<Rotate3d />} onClick={toggle}>
+          {shown ? "Hide 3D" : "Show 3D"}
+        </Button>
+      }
+    >
+      <div className={cx(s.views, shown && s.split)}>
+        <svg
+          className={cx(s.plan, s.sitePlan)}
+          viewBox={box}
+          role="img"
+          aria-label={named ? `Plan of the site, with ${named.name} marked` : "Plan of the site"}
+        >
+          {drawn.map((sh) => (
+            <polygon
+              key={sh.place_id}
+              points={sh.corners.map(([x, y]) => `${x},${-y}`).join(" ")}
+              vectorEffect="non-scaling-stroke"
+              className={cx(
+                s.shape,
+                sh.nesting === 0 ? s.outer : sh.solid ? s.solid : s.floor,
+                sh.nesting > 0 && s.target,
+                sh.place_id === chosen && s.focus,
+              )}
+              onClick={sh.nesting > 0 ? () => choose(sh.place_id) : undefined}
+            >
+              <title>{sh.name}</title>
+            </polygon>
+          ))}
+        </svg>
+        {shown && (
+          <Unless3D>
+            <Suspense fallback={<div className={s.scene} />}>
+              <Site3D plan={shapes} places={places} chosen={chosen === "unplaced" ? null : chosen} choose={choose} />
+            </Suspense>
+          </Unless3D>
+        )}
+      </div>
     </Card>
   );
 }
 
+const SHOWN_3D = "spork.warehouse.3d";
+
+/**
+ * Whether the 3D view is shown: as this browser last left it, and at first
+ * only where there is room for it beside the plan. Remembered per browser, as
+ * the sidebar is.
+ */
+function useShown3D(): [boolean, () => void] {
+  const [shown, setShown] = useState(() => {
+    try {
+      const v = localStorage.getItem(SHOWN_3D);
+      if (v === "1" || v === "0") return v === "1";
+    } catch {
+      // not remembered: fall through to the default
+    }
+    return typeof matchMedia === "function" && matchMedia("(min-width: 1100px)").matches;
+  });
+  const toggle = () =>
+    setShown((was) => {
+      try {
+        localStorage.setItem(SHOWN_3D, was ? "0" : "1");
+      } catch {
+        // not remembered, still toggled
+      }
+      return !was;
+    });
+  return [shown, toggle];
+}
+
+/** If the 3D view cannot load, it says so in its own pane and the plan stays. */
+class Unless3D extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override render() {
+    return this.state.failed ? (
+      <div className={s.scene}>
+        <p className={s.sceneNote}>The 3D view could not be loaded. The plan beside it is complete.</p>
+      </div>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
+/**
+ * What the draft would make, before anything is made. Each place can be left
+ * out, for a family of codes that is no rack at all: its bins stay in the tray
+ * with the codes no pattern fitted. A rack can be made with a face on each
+ * side, numbered round it (its last bay behind its first). The counts follow
+ * the ticks.
+ */
 function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk }) {
   const busy = desk.draft.kind === "working";
+  const making = report.places.filter((p) => !desk.leftOut.has(p.name));
+  const splits = (p: DraftedPlace) => p.split !== null && desk.twoSided.has(p.name);
+  const leftBins = report.places.filter((p) => desk.leftOut.has(p.name)).reduce((n, p) => n + p.bins, 0);
+  const placed = report.bins_filled + making.reduce((n, p) => n + p.bins, 0);
+  const over = report.unplaced + leftBins;
+  const places = making.length;
+  const racks = making.filter((p) => p.split !== null).map((p) => p.name);
+  const everyTwo = racks.length > 0 && racks.every((n) => desk.twoSided.has(n));
+  const columns: Column<DraftedPlace>[] = [
+    {
+      key: "name",
+      header: "Make",
+      cell: (p) => <Checkbox label={p.name} checked={!desk.leftOut.has(p.name)} onCheckedChange={(on) => desk.leaveOut(p.name, !on)} />,
+      grow: true,
+    },
+    {
+      key: "sides",
+      header: "Two sides",
+      cell: (p) =>
+        p.split ? (
+          <Checkbox
+            label={`${p.split[0]} front, ${p.split[1]} back`}
+            checked={splits(p)}
+            disabled={desk.leftOut.has(p.name)}
+            onCheckedChange={(on) => desk.setTwoSided([p.name], on)}
+          />
+        ) : (
+          <Faint>One side</Faint>
+        ),
+      width: "240px",
+    },
+    ...DRAFT_COLUMNS,
+  ];
   return (
-    <Card title="Draft: nothing made yet" padded={false}>
+    <Card
+      title="Draft: nothing made yet"
+      padded={false}
+      actions={
+        racks.length > 1 ? (
+          <Button size="sm" disabled={busy} onClick={() => desk.setTwoSided(racks, !everyTwo)}>
+            {everyTwo ? "One side for every rack" : "Two sides for every rack"}
+          </Button>
+        ) : undefined
+      }
+    >
       <StatGrid>
-        <Stat label="New places" value={report.places.length.toLocaleString()} />
-        <Stat label="Bins placed" value={(report.bins_placed + report.bins_filled).toLocaleString()} />
-        <Stat label="Left over" value={report.unplaced.toLocaleString()} tone={report.unplaced ? undefined : "muted"} />
+        <Stat label="New places" value={places.toLocaleString()} />
+        <Stat label="Bins placed" value={placed.toLocaleString()} />
+        <Stat label="Left over" value={over.toLocaleString()} tone={over ? undefined : "muted"} />
       </StatGrid>
       {report.places.length > 0 && (
-        <DataTable aria-label="Places the draft would make" columns={DRAFT_COLUMNS} rows={report.places} rowKey={(p) => p.name} />
+        <DataTable aria-label="Places the draft would make" columns={columns} rows={report.places} rowKey={(p) => p.name} />
       )}
       <div className={s.previewFoot}>
         <p className={s.note}>
-          {report.inside
+          {places > 0 && report.inside
             ? `${report.inside_created ? "A new place called" : "Inside"} ${report.inside}${report.inside_created ? " holds them" : ""}, in rows you can arrange afterwards.`
             : "Nothing new to draw."}
+          {report.places.length > 0 &&
+            " Untick a place that is no rack, and its bins stay off the layout. Tick Two sides for a rack with bins on both faces."}
           {report.bins_filled > 0 && ` ${report.bins_filled} bins drop into places already there.`}
           {report.unplaced > 0 && ` Left over: ${sample(report.unplaced_sample, report.unplaced)}.`}
         </p>
         <Inline gap={2}>
-          <Button variant="primary" loading={busy} disabled={busy} onClick={() => void desk.apply()}>
-            Make these places
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={busy || placed === 0}
+            onClick={() => void desk.apply()}
+          >
+            {places === 0 ? "Place these bins" : places === 1 ? "Make 1 place" : `Make ${places} places`}
           </Button>
           <Button variant="secondary" disabled={busy} onClick={desk.dismiss}>
             Cancel
@@ -285,7 +425,11 @@ function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk })
 function applied(r: DraftReport): string {
   const made = r.places.length === 1 ? "1 place" : `${r.places.length} places`;
   const placed = r.bins_placed + r.bins_filled;
-  return `Made ${made} and put ${placed.toLocaleString()} ${placed === 1 ? "bin" : "bins"} on the layout.`;
+  const left =
+    r.left_out.length > 0
+      ? ` Left out ${r.left_out.join(", ")}; ${r.left_out.length === 1 ? "its" : "their"} bins are under Not on the layout.`
+      : "";
+  return `Made ${made} and put ${placed.toLocaleString()} ${placed === 1 ? "bin" : "bins"} on the layout.${left}`;
 }
 
 /** A few codes and how many more, so a long list reads as a number. */
@@ -414,8 +558,8 @@ const BIN_COLUMNS_ANYWHERE: Column<BinRow>[] = [
 /** The tray has no cells, so nothing to say where. */
 const BIN_COLUMNS_NOWHERE: Column<BinRow>[] = [BIN, REPORTED, HELD];
 
+/** After the place's own column, which ticks it in or out. */
 const DRAFT_COLUMNS: Column<DraftedPlace>[] = [
-  { key: "name", header: "Place", cell: (p) => p.name, grow: true },
   { key: "grid", header: "Bays × levels", cell: (p) => `${p.bays} × ${p.levels}`, width: "130px" },
   { key: "pattern", header: "Bin names", cell: (p) => p.pattern, mono: true, width: "220px" },
   { key: "bins", header: "Bins", cell: (p) => p.bins.toLocaleString(), align: "right", width: "90px" },

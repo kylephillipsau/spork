@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Boxes, ChevronRight, MapPin, SquareDashed } from "lucide-react";
 
 import { Alert, Card, EmptyState, Link, Page, PageHeader, Section, Skeleton, Stack, Tabs, cx } from "@ui/index";
@@ -10,11 +10,15 @@ import s from "./layout.module.css";
 /**
  * Where a bin is, drawn as the face of the rack that holds it (D173).
  *
- * **A scan lands here.** The worker sees the way into the place, the front of
+ * **A scan lands here.** The worker sees the way into the place, the face of
  * the rack with the bin's spot lit, labelled the way the rack's own labels
- * read, and a small plan to find the rack on. 2D, because finding which bay and
- * which level is a question about relative position, which a flat drawing
- * answers better than a 3D one; nothing here can be edited.
+ * read, and a small plan to find the rack on, marked on the side to stand. 2D,
+ * because finding which bay and which level is a question about relative
+ * position, which a flat drawing answers better than a 3D one; nothing here
+ * can be edited.
+ *
+ * A rack with a face on each side opens on the side the bin is on, drawn as
+ * you would see it standing there, with the other side a tap away.
  */
 export function BinPage({ desk }: { desk: BinDesk }) {
   const read = desk.read;
@@ -41,10 +45,7 @@ export function BinPage({ desk }: { desk: BinDesk }) {
     <Page>
       <Trail place={place} />
       <PageHeader title={<span className={s.code}>{bin.code}</span>} description={sayWhere(place, bin.cell)} />
-      <Stack gap={5}>
-        <Face place={place} target={{ cell: bin.cell, code: bin.code }} />
-        <Plan place={place} />
-      </Stack>
+      <Located place={place} target={{ cell: bin.cell, code: bin.code }} holds />
     </Page>
   );
 }
@@ -60,8 +61,7 @@ export function PlacePage({ desk }: { desk: PlaceDesk }) {
     <Page>
       <Trail place={place} />
       <PageHeader title={place.name} description={describe(place)} />
-      <Stack gap={5}>
-        {holds && <Face place={place} target={null} />}
+      <Located place={place} target={null} holds={holds}>
         {place.children.length > 0 && (
           <Section title="Inside" count={place.children.length}>
             <Card padded={false}>
@@ -80,9 +80,33 @@ export function PlacePage({ desk }: { desk: PlaceDesk }) {
             </Card>
           </Section>
         )}
-        <Plan place={place} />
-      </Stack>
+      </Located>
     </Page>
+  );
+}
+
+/**
+ * A place's face and where it stands, sharing which side is shown: turning to
+ * the back of a rack moves the plan's mark to the aisle behind it.
+ */
+function Located({
+  place,
+  target,
+  holds,
+  children,
+}: {
+  place: PlaceView;
+  target: { cell: GridCell; code: string } | null;
+  holds: boolean;
+  children?: ReactNode;
+}) {
+  const [side, setSide] = useState(target?.cell.side ?? 1);
+  return (
+    <Stack gap={5}>
+      {holds && <Face place={place} target={target} side={side} setSide={setSide} />}
+      {children}
+      <Plan place={place} side={side} />
+    </Stack>
   );
 }
 
@@ -104,19 +128,30 @@ function Waiting({ title, read }: { title: string; read: Exclude<Read<unknown>, 
   );
 }
 
-/** "Rack C · bay 05, level 3": plain words, never left or right (D173). */
+/**
+ * "Rack C · bay 05, level 3": plain words, never left or right (D173). On a
+ * rack with two sides, which: "Rack E · back, bay 36, level 01".
+ */
 export function sayWhere(place: PlaceView, cell: GridCell): string {
-  const parts = [`bay ${place.bay_labels[cell.bay - 1] ?? cell.bay}`];
+  const parts = place.sides > 1 ? [cell.side === 2 ? "back" : "front"] : [];
+  parts.push(`bay ${bayLabel(place, cell.side, cell.bay)}`);
   if (place.levels > 1) parts.push(`level ${place.level_labels[cell.level - 1] ?? cell.level}`);
   if ((place.positions[cell.level - 1] ?? 1) > 1) parts.push(`position ${cell.position}`);
   if (place.rows > 1) parts.push(cell.row === 1 ? "front row" : `row ${cell.row}`);
   return `${place.name} · ${parts.join(", ")}`;
 }
 
+/** A column's label on a side: the back's read from the far end, as you face it. */
+function bayLabel(place: PlaceView, side: number, bay: number): string {
+  const label = side === 2 ? place.back_labels[place.bays - bay] : place.bay_labels[bay - 1];
+  return label ?? String(bay);
+}
+
 function describe(place: PlaceView): string {
   const bins = place.bins.length === 1 ? "1 bin" : `${place.bins.length} bins`;
-  if (place.bays * place.levels * place.rows > 1) {
-    const grid = [`${place.bays} ${place.bays === 1 ? "bay" : "bays"}`];
+  if (place.bays * place.levels * place.rows * place.sides > 1) {
+    const bays = `${place.bays} ${place.bays === 1 ? "bay" : "bays"}`;
+    const grid = [place.sides > 1 ? `two sides of ${bays}` : bays];
     if (place.levels > 1) grid.push(`${place.levels} levels`);
     if (place.rows > 1) grid.push(`${place.rows} rows`);
     return `${grid.join(", ")} · ${bins}`;
@@ -148,27 +183,60 @@ function Trail({ place }: { place: PlaceView }) {
 }
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
-const key = (c: GridCell) => `${c.bay}.${c.level}.${c.row}.${c.position}`;
+const key = (c: GridCell) => `${c.side}.${c.bay}.${c.level}.${c.row}.${c.position}`;
+
+/** "01–18", from a side's labels as you face it. */
+const span = (labels: string[]) => (labels.length > 1 ? `${labels[0]}–${labels[labels.length - 1]}` : (labels[0] ?? ""));
 
 /**
- * The front of a place: bays across, levels up, the top level at the top, with
+ * A face of a place: bays across, levels up, the top level at the top, with
  * the labels written as the rack prints them. The target's spot is filled
  * with the accent and scrolled into view; an empty cell is hatched.
+ *
+ * The back of a rack is drawn as you would stand facing it: its columns run
+ * from the far end, so its labels read left to right in order.
  */
-function Face({ place, target }: { place: PlaceView; target: { cell: GridCell; code: string } | null }) {
+function Face({
+  place,
+  target,
+  side,
+  setSide,
+}: {
+  place: PlaceView;
+  target: { cell: GridCell; code: string } | null;
+  side: number;
+  setSide: (side: number) => void;
+}) {
   const [row, setRow] = useState(target?.cell.row ?? 1);
   const lit = useRef<HTMLDivElement>(null);
   const byCell = useMemo(() => new Map(place.bins.map((b) => [key(b.cell), b])), [place.bins]);
 
   useEffect(() => {
     lit.current?.scrollIntoView?.({ block: "nearest", inline: "center" });
-  }, []);
+  }, [side]);
 
   const levels = range(place.levels).reverse();
+  const back = side === 2;
+  const columns = back ? range(place.bays).reverse() : range(place.bays);
+  const labels = back ? place.back_labels : place.bay_labels;
   const style = { "--bays": place.bays } as CSSProperties;
+  const elsewhere = target !== null && target.cell.side !== side;
 
   return (
     <Card padded={false}>
+      {place.sides > 1 && (
+        <div className={s.rows}>
+          <Tabs
+            aria-label="Side"
+            value={String(side)}
+            onValueChange={(v) => setSide(Number(v))}
+            items={[
+              { value: "1", label: `Front · ${span(place.bay_labels)}` },
+              { value: "2", label: `Back · ${span(place.back_labels)}` },
+            ]}
+          />
+        </div>
+      )}
       {place.rows > 1 && (
         <div className={s.rows}>
           <Tabs
@@ -180,14 +248,14 @@ function Face({ place, target }: { place: PlaceView; target: { cell: GridCell; c
         </div>
       )}
       <div className={s.faceScroll}>
-        <div className={s.face} style={style} role="group" aria-label={`Front of ${place.name}`}>
+        <div className={s.face} style={style} role="group" aria-label={`${back ? "Back" : "Front"} of ${place.name}`}>
           {levels.map((level) => (
             <Fragment key={level}>
               <div className={s.levelLabel}>{place.level_labels[level - 1]}</div>
-              {range(place.bays).map((bay) => (
+              {columns.map((bay) => (
                 <div key={bay} className={s.bay}>
                   {range(place.positions[level - 1] ?? 1).map((position, _, all) => {
-                    const cell = { bay, level, row, position };
+                    const cell = { bay, level, row, position, side };
                     const bin = byCell.get(key(cell));
                     const on = target !== null && key(target.cell) === key(cell);
                     return (
@@ -213,14 +281,20 @@ function Face({ place, target }: { place: PlaceView; target: { cell: GridCell; c
             </Fragment>
           ))}
           <div className={s.axis}>Bay</div>
-          {place.bay_labels.map((label, i) => (
+          {labels.map((label, i) => (
             <div key={i} className={s.bayLabel}>
               {label}
             </div>
           ))}
         </div>
       </div>
-      {target && <p className={s.tip}>The lit square is where the bin is. Levels go up the side, bays along the bottom.</p>}
+      {target && (
+        <p className={s.tip}>
+          {elsewhere
+            ? `${target.code} is on the ${target.cell.side === 2 ? "back" : "front"} of this rack.`
+            : "The lit square is where the bin is. Levels go up the side, bays along the bottom."}
+        </p>
+      )}
     </Card>
   );
 }
@@ -228,9 +302,9 @@ function Face({ place, target }: { place: PlaceView; target: { cell: GridCell; c
 /**
  * Where the place is in the building: the outermost place it is inside and
  * everything in that, top-down, the same way up every time so a worker learns
- * one map.
+ * one map. A rack is marked in the aisle on the side shown: where to stand.
  */
-function Plan({ place }: { place: PlaceView }) {
+function Plan({ place, side }: { place: PlaceView; side: number }) {
   const shapes = place.plan;
   const outer = shapes.find((sh) => sh.nesting === 0);
   if (!outer || shapes.length < 2) return null;
@@ -245,11 +319,14 @@ function Plan({ place }: { place: PlaceView }) {
   // last unless it is the one everything else is inside.
   const last = (sh: (typeof shapes)[number]) => (sh.place_id === place.place_id && sh.nesting > 0 ? 1 : 0);
   const drawn = [...shapes].sort((a, b) => last(a) - last(b) || a.nesting - b.nesting);
+  const me = shapes.find((sh) => sh.place_id === place.place_id && sh.nesting > 0);
+  const stand = me && place.solid ? standing(me.corners, side) : null;
+  const facing = stand ? `, from its ${side === 2 ? "back" : "front"}` : "";
 
   return (
     <Section title="On the plan">
       <Card>
-        <svg className={s.plan} viewBox={box} role="img" aria-label={`Plan of ${outer.name}, with ${place.name} marked`}>
+        <svg className={s.plan} viewBox={box} role="img" aria-label={`Plan of ${outer.name}, with ${place.name} marked${facing}`}>
           {drawn.map((sh) => (
             <polygon
               key={sh.place_id}
@@ -262,8 +339,37 @@ function Plan({ place }: { place: PlaceView }) {
               )}
             />
           ))}
+          {stand && (
+            <line
+              x1={stand[0][0]}
+              y1={-stand[0][1]}
+              x2={stand[1][0]}
+              y2={-stand[1][1]}
+              vectorEffect="non-scaling-stroke"
+              className={s.stand}
+            />
+          )}
         </svg>
       </Card>
     </Section>
   );
+}
+
+/**
+ * Where to stand to face a side of a rectangle: a line along that face, half
+ * a cell out into the aisle. The front is the edge from its first corner to
+ * its second, the back the edge across from it.
+ */
+function standing(corners: [number, number][], side: number): [[number, number], [number, number]] | null {
+  if (corners.length !== 4) return null;
+  const [a, b, c, d] = corners as [[number, number], [number, number], [number, number], [number, number]];
+  const [p, q, inner] = side === 2 ? [c, d, a] : [a, b, d];
+  // Out from the face, away from the side across from it.
+  const [ox, oy] = side === 2 ? [d[0] - inner[0], d[1] - inner[1]] : [a[0] - inner[0], a[1] - inner[1]];
+  const length = Math.hypot(ox, oy) || 1;
+  const [dx, dy] = [(ox / length) * 0.5, (oy / length) * 0.5];
+  return [
+    [p[0] + dx, p[1] + dy],
+    [q[0] + dx, q[1] + dy],
+  ];
 }

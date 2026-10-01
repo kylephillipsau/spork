@@ -19,11 +19,11 @@ const TENANT: &str = "11111111-1111-1111-1111-111111111111";
 async fn clear(c: &tokio_postgres::Client) {
     c.batch_execute(&format!(
         "UPDATE location SET place_id = NULL, slot_bay = NULL, slot_level = NULL,
-                             slot_row = NULL, slot_position = NULL
+                             slot_row = NULL, slot_position = NULL, slot_side = NULL
           WHERE site_id = '{SITE}';
          DELETE FROM reported_stock WHERE item_id IN (SELECT id FROM item WHERE code LIKE 'LT-ITEM-%');
          DELETE FROM item WHERE code LIKE 'LT-ITEM-%';
-         DELETE FROM location WHERE code LIKE 'LT-%';
+         DELETE FROM location WHERE code LIKE 'LT-%' OR code LIKE 'LX-%' OR code LIKE 'LW-%';
          DELETE FROM place WHERE site_id = '{SITE}';"
     ))
     .await
@@ -57,11 +57,15 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     clear(&db).await;
 
     // A rack's worth of bins on odd bays, as one side of an aisle is numbered,
-    // and one bin whose code follows no pattern.
+    // one bin whose code follows no pattern, a lone code that reads as a rack
+    // of its own and is no rack at all, and a rack with a face on each side,
+    // numbered round it: LW-01 and LW-02 along the front, LW-03 and LW-04
+    // back along the other side.
     db.batch_execute(&format!(
         "INSERT INTO location (tenant_id, site_id, code, kind, active)
          SELECT '{TENANT}', '{SITE}', c, 'pick_face', true
-           FROM unnest(ARRAY['LT-01-1', 'LT-01-2', 'LT-03-1', 'LT-03-2', 'LT-FLOOR']) c;"
+           FROM unnest(ARRAY['LT-01-1', 'LT-01-2', 'LT-03-1', 'LT-03-2', 'LT-FLOOR', 'LX-9-01',
+                             'LW-01-1', 'LW-02-1', 'LW-03-1', 'LW-04-1']) c;"
     ))
     .await
     .expect("the bins");
@@ -114,57 +118,115 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
         .unwrap()
         .get(0);
     assert_eq!(kept, 0, "a dry run drew something");
+    assert!(
+        dry["places"].as_array().unwrap().iter().any(|p| p["name"] == "Rack LX" && p["bins"] == 1),
+        "the lone code is proposed as a rack: {dry}"
+    );
+    let lw = dry["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack LW").expect("Rack LW");
+    assert_eq!(lw["split"], serde_json::json!(["01–02", "03–04"]), "what two sides would hold: {lw}");
+    assert!(
+        dry["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack LX").unwrap()["split"].is_null(),
+        "one bay has one side"
+    );
+
+    // ── a place the person knows is no rack is left out, and a rack with
+    //    two sides is made as two ─────────────────────────────────────────
+    let leave = serde_json::json!({ "leave_out": ["Rack LX"], "two_sided": ["Rack LW"] });
+    let (status, stale) = call(
+        &app,
+        test::TestRequest::post()
+            .uri("/layout/draft?apply=true")
+            .insert_header(auth.clone())
+            .set_json(serde_json::json!({ "leave_out": ["Rack Nowhere"] })),
+    )
+    .await;
+    assert_eq!(status, 400, "a name the draft does not propose is refused: {stale}");
+    assert!(stale.to_string().contains("preview it again"), "{stale}");
+    let kept: i64 = db
+        .query_one(&format!("SELECT count(*) FROM place WHERE site_id = '{SITE}'"), &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(kept, 0, "a refused draft drew something");
+
+    let (_, dry) = call(
+        &app,
+        test::TestRequest::post().uri("/layout/draft").insert_header(auth.clone()).set_json(leave.clone()),
+    )
+    .await;
+    assert_eq!(dry["left_out"], serde_json::json!(["Rack LX"]), "{dry}");
+    assert!(!dry["places"].as_array().unwrap().iter().any(|p| p["name"] == "Rack LX"), "{dry}");
+    assert!(
+        dry["unplaced_sample"].as_array().unwrap().iter().any(|c| c == "LX-9-01"),
+        "its bin waits in the tray: {dry}"
+    );
 
     // ── applied ──────────────────────────────────────────────────────────
     let (status, applied) = call(
         &app,
-        test::TestRequest::post().uri("/layout/draft?apply=true").insert_header(auth.clone()),
+        test::TestRequest::post()
+            .uri("/layout/draft?apply=true")
+            .insert_header(auth.clone())
+            .set_json(leave.clone()),
     )
     .await;
     assert_eq!(status, 200, "{applied}");
     assert_eq!(applied["bins_placed"], dry["bins_placed"], "the dry run is the apply, undone");
-
-    // ── a scanned bin lands on the face of its rack ─────────────────────
-    let bin: String = db
-        .query_one("SELECT id::text FROM location WHERE code = 'LT-03-2'", &[])
+    assert_eq!(applied["unplaced"], dry["unplaced"]);
+    let lx: i64 = db
+        .query_one(&format!("SELECT count(*) FROM place WHERE site_id = '{SITE}' AND name = 'Rack LX'"), &[])
         .await
         .unwrap()
         .get(0);
-    let (status, view) =
-        call(&app, test::TestRequest::get().uri(&format!("/bins/{bin}")).insert_header(auth.clone())).await;
-    assert_eq!(status, 200, "{view}");
-    assert_eq!(view["code"], "LT-03-2");
-    assert_eq!(view["cell"]["bay"], 2, "bay 03 is the second bay of a rack numbered by twos");
-    assert_eq!(view["cell"]["level"], 2);
-    let place = &view["place"];
-    assert_eq!(place["name"], "Rack LT");
-    assert_eq!(place["bay_labels"], serde_json::json!(["01", "03"]), "as the rack prints them");
-    assert_eq!(place["level_labels"], serde_json::json!(["1", "2"]));
-    assert_eq!(place["trail"][0]["name"], "Building", "the way out");
-    assert_eq!(place["bins"].as_array().unwrap().len(), 4);
-    let plan = place["plan"].as_array().unwrap();
-    assert!(plan.iter().any(|s| s["name"] == "Building" && s["nesting"] == 0), "{place}");
-    let me = plan.iter().find(|s| s["name"] == "Rack LT").expect("itself on the plan");
-    assert_eq!(me["corners"].as_array().unwrap().len(), 4);
+    assert_eq!(lx, 0, "a place left out was made");
 
-    // The building knows what is in it.
-    let building = place["trail"][0]["place_id"].as_str().unwrap().to_string();
-    let (_, inside) =
-        call(&app, test::TestRequest::get().uri(&format!("/places/{building}")).insert_header(auth.clone())).await;
-    let child = inside["children"].as_array().unwrap().iter().find(|c| c["name"] == "Rack LT").unwrap();
-    assert_eq!(child["bins"], 4);
+    // Rack LW is one rack two columns long with a face on each side: LW-04 on
+    // the back of the first column, behind LW-01, and the back reading 03, 04
+    // as you face it.
+    let made = applied["places"].as_array().unwrap();
+    let lw = made.iter().find(|p| p["name"] == "Rack LW").expect("Rack LW, once");
+    assert_eq!((lw["bays"].as_i64(), lw["sides"].as_i64(), lw["bins"].as_i64()), (Some(2), Some(2), Some(4)), "{lw}");
+    let back: String = db
+        .query_one("SELECT id::text FROM location WHERE code = 'LW-04-1'", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let (_, lw4) =
+        call(&app, test::TestRequest::get().uri(&format!("/bins/{back}")).insert_header(auth.clone())).await;
+    assert_eq!(lw4["place"]["name"], "Rack LW", "{lw4}");
+    assert_eq!(lw4["place"]["sides"], 2, "{lw4}");
+    assert_eq!((lw4["cell"]["bay"].as_i64(), lw4["cell"]["side"].as_i64()), (Some(1), Some(2)), "behind LW-01: {lw4}");
+    assert_eq!(lw4["place"]["bay_labels"], serde_json::json!(["01", "02"]), "{lw4}");
+    assert_eq!(lw4["place"]["back_labels"], serde_json::json!(["03", "04"]), "{lw4}");
+    let front: String = db
+        .query_one("SELECT id::text FROM location WHERE code = 'LW-01-1'", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let (_, lw1) =
+        call(&app, test::TestRequest::get().uri(&format!("/bins/{front}")).insert_header(auth.clone())).await;
+    assert_eq!((lw1["cell"]["bay"].as_i64(), lw1["cell"]["side"].as_i64()), (Some(1), Some(1)), "{lw1}");
+    let rack_lw = lw4["place"]["place_id"].as_str().unwrap().to_string();
+    let (_, listed) =
+        call(&app, test::TestRequest::get().uri(&format!("/bins?place={rack_lw}")).insert_header(auth.clone())).await;
+    let four = listed["bins"].as_array().unwrap().iter().find(|b| b["code"] == "LW-04-1").unwrap();
+    assert_eq!(four["whereabouts"], "back, bay 04", "in the words the rack's labels use: {four}");
 
     // ── a bin that comes off its cell drops back in by its name ─────────
     db.batch_execute(
         "UPDATE location SET place_id = NULL, slot_bay = NULL, slot_level = NULL, slot_row = NULL,
-                             slot_position = NULL
+                             slot_position = NULL, slot_side = NULL
           WHERE code = 'LT-03-1';",
     )
     .await
     .unwrap();
+    // Rack LW is made, so the next draft proposes only what is still waiting.
     let (_, again) = call(
         &app,
-        test::TestRequest::post().uri("/layout/draft?apply=true").insert_header(auth.clone()),
+        test::TestRequest::post()
+            .uri("/layout/draft?apply=true")
+            .insert_header(auth.clone())
+            .set_json(serde_json::json!({ "leave_out": ["Rack LX"] })),
     )
     .await;
     assert_eq!(again["bins_filled"], 1, "{again}");
@@ -202,6 +264,7 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     let (_, tray) = call(&app, test::TestRequest::get().uri("/bins?unplaced=true").insert_header(auth.clone())).await;
     let tray = tray["bins"].as_array().unwrap();
     assert!(tray.iter().any(|b| b["code"] == "LT-FLOOR"), "the bins the draft left");
+    assert!(tray.iter().any(|b| b["code"] == "LX-9-01"), "and the bin whose place was left out");
     assert!(tray.iter().all(|b| b["place_id"].is_null() && b["whereabouts"].is_null()));
     let (_, searched) = call(&app, test::TestRequest::get().uri("/bins?q=LT-01").insert_header(auth.clone())).await;
     let searched = searched["bins"].as_array().unwrap();

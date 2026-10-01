@@ -1173,12 +1173,18 @@ export interface ItemImportReport {
 // parent and never measured. A place can hold a grid, and every bin sits in one
 // cell of one place.
 
-/** A cell of a place's grid, each coordinate counted from 1. */
+/**
+ * A cell of a place's grid, each coordinate counted from 1. `bay` is the
+ * column along the place from the front's left, the same on both sides of a
+ * rack with two; `side` is 1 for the front and 2 for the back. The cell behind
+ * another is the same column on the other side.
+ */
 export interface GridCell {
   bay: number;
   level: number;
   row: number;
   position: number;
+  side: number;
 }
 
 /** A step on the way up out of a place. */
@@ -1229,8 +1235,12 @@ export interface PlaceView {
   /** How many bins share a bay at each level, lowest first. */
   positions: number[];
   pattern: string | null;
+  /** 1, or 2 for a rack with a face on each side, numbered round it. */
+  sides: number;
   /** The numbers on the bays' labels, left to right as you face it. */
   bay_labels: string[];
+  /** The back's, left to right as you face the back; empty with one side. */
+  back_labels: string[];
   /** The numbers on the levels' labels, lowest first. */
   level_labels: string[];
   /** From the outermost place down to this one's parent. */
@@ -1366,6 +1376,8 @@ export interface LayoutPlace {
   bays: number;
   levels: number;
   rows: number;
+  /** 1, or 2 for a rack with a face on each side. */
+  sides: number;
   pattern: string | null;
   /** Bins in its own cells, not counting places inside it. */
   bins: number;
@@ -1425,6 +1437,13 @@ export interface DraftedPlace {
   bays: number;
   levels: number;
   bins: number;
+  /** 2 when it was made as a rack with a face on each side. */
+  sides: number;
+  /**
+   * How its bays would share out between two sides, as its labels read
+   * (`["01–18", "19–36"]`); null for a place that cannot have two.
+   */
+  split: [string, string] | null;
 }
 
 /** `POST /layout/draft`: what drafting did, or would have done. */
@@ -1440,5 +1459,15 @@ export interface DraftReport {
   /** Active bins still with no cell. */
   unplaced: number;
   unplaced_sample: string[];
+  /** The places a person said not to make; their bins are in `unplaced`. */
+  left_out: string[];
   applied: boolean;
+}
+
+/** `POST /layout/draft`'s body: what a person changed before applying it. */
+export interface DraftRequest {
+  /** Places not to make, by the names the preview gave them. */
+  leave_out: string[];
+  /** Racks with a face on each side, numbered round them. */
+  two_sided: string[];
 }

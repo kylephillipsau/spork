@@ -12,7 +12,9 @@ import type { Read } from "./usePlace";
  * list, and the bins of whichever place is chosen (D173).
  *
  * The draft is always previewed first: the preview is the apply rolled back,
- * so what it shows is what applying does.
+ * so what it shows is what applying does. A place in the preview can be left
+ * out, for a family of codes that is no rack at all; its bins stay in the tray.
+ * A rack can be made with two sides, numbered round it, each a place.
  *
  * **What is chosen lives in the address**, as the item list's question does:
  * `?place=` names a place or `unplaced`, and `?q=` a search for a bin across
@@ -35,6 +37,12 @@ export interface WarehouseDesk {
   preview: () => Promise<void>;
   apply: () => Promise<void>;
   dismiss: () => void;
+  /** Places in the preview not to make, by name. */
+  leftOut: ReadonlySet<string>;
+  leaveOut: (name: string, out: boolean) => void;
+  /** Racks in the preview to make as two sides, by name. */
+  twoSided: ReadonlySet<string>;
+  setTwoSided: (names: string[], on: boolean) => void;
   chosen: Chosen;
   choose: (next: Chosen) => void;
   /** The bins of what is chosen, or of the search when there is one. */
@@ -54,6 +62,8 @@ export function useWarehouse(initial: { chosen: Chosen; q: string } = { chosen: 
   const live = useLive();
   const [read, setRead] = useState<Read<LayoutView>>({ kind: "loading" });
   const [draft, setDraft] = useState<DraftState>({ kind: "idle" });
+  const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
+  const [twoSided, setTwoSidedNames] = useState<ReadonlySet<string>>(new Set());
   const [chosen, setChosen] = useState<Chosen>(initial.chosen);
   const [asked, setAsked] = useState(initial.q);
   const [typed, setTyped] = useState(initial.q);
@@ -107,12 +117,15 @@ export function useWarehouse(initial: { chosen: Chosen; q: string } = { chosen: 
   }, [chosen, asked, live]);
 
   const run = useCallback(
-    async (apply: boolean) => {
+    async (apply: boolean, leaveOut: string[], twoSided: string[]) => {
       setDraft({ kind: "working", what: apply ? "apply" : "preview" });
       try {
-        const report = await api.draftLayout({ apply });
+        const report = await api.draftLayout({ apply, leaveOut, twoSided });
         if (!live.current) return;
         setDraft(apply ? { kind: "applied", report } : { kind: "previewed", report });
+        // A new preview proposes everything again; an apply has used the lists.
+        setLeftOut(new Set());
+        setTwoSidedNames(new Set());
         if (apply) await refresh();
       } catch (error) {
         if (live.current) setDraft({ kind: "failed", message: reason(error, "The draft did not run.") });
@@ -121,9 +134,35 @@ export function useWarehouse(initial: { chosen: Chosen; q: string } = { chosen: 
     [live, refresh],
   );
 
-  const preview = useCallback(() => run(false), [run]);
-  const apply = useCallback(() => run(true), [run]);
-  const dismiss = useCallback(() => setDraft({ kind: "idle" }), []);
+  const preview = useCallback(() => run(false, [], []), [run]);
+  const apply = useCallback(
+    // A rack left out is not made at all, on one side or two.
+    () => run(true, [...leftOut], [...twoSided].filter((n) => !leftOut.has(n))),
+    [run, leftOut, twoSided],
+  );
+  const dismiss = useCallback(() => {
+    setDraft({ kind: "idle" });
+    setLeftOut(new Set());
+    setTwoSidedNames(new Set());
+  }, []);
+  const setTwoSided = useCallback((names: string[], on: boolean) => {
+    setTwoSidedNames((was) => {
+      const next = new Set(was);
+      for (const n of names) {
+        if (on) next.add(n);
+        else next.delete(n);
+      }
+      return next;
+    });
+  }, []);
+  const leaveOut = useCallback((name: string, out: boolean) => {
+    setLeftOut((was) => {
+      const next = new Set(was);
+      if (out) next.add(name);
+      else next.delete(name);
+      return next;
+    });
+  }, []);
 
   return {
     read,
@@ -131,6 +170,10 @@ export function useWarehouse(initial: { chosen: Chosen; q: string } = { chosen: 
     preview,
     apply,
     dismiss,
+    leftOut,
+    leaveOut,
+    twoSided,
+    setTwoSided,
     chosen,
     // Choosing a place clears a search, which would otherwise hide it.
     choose: (next) => {

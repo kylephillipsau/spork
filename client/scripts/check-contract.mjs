@@ -234,6 +234,7 @@ const PAIRS = [
   ["LayoutView", ["LayoutView"]],
   ["DraftedPlace", ["DraftedPlace"]],
   ["DraftReport", ["DraftReport"]],
+  ["DraftRequest", ["DraftRequest"]],
   ["WarehouseRows", ["WarehouseRows"]],
   ["StockSurvey", ["StockSurvey"]],
   ["StockLoaded", ["StockLoaded"]],

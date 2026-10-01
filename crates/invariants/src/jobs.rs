@@ -3347,6 +3347,7 @@ pub mod checks {
                    JOIN site s ON s.id = l.site_id
                   WHERE l.slot_bay > p.bays OR l.slot_level > p.levels OR l.slot_row > p.rows
                      OR l.slot_position > coalesce(p.positions[l.slot_level], 1)
+                     OR l.slot_side > p.sides
                   ORDER BY s.code, l.code",
                 &[],
             )?

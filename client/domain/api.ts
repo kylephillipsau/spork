@@ -20,6 +20,7 @@ import type {
   OwnerSet,
   PackLocationSet,
   DraftReport,
+  DraftRequest,
   LayoutView,
   PlaceView,
   ChooseSiteRequest,
@@ -736,8 +737,14 @@ export const api = {
    * Draft the layout from the bin list. **A dry run unless `apply`**, like the
    * imports: the report is what applying does, because it is the apply undone.
    */
-  draftLayout: (q: { apply?: boolean }) =>
-    send<DraftReport>("POST", `/layout/draft${q.apply ? "?apply=true" : ""}`),
+  draftLayout: (q: { apply?: boolean; leaveOut?: string[]; twoSided?: string[] }) =>
+    send<DraftReport>(
+      "POST",
+      `/layout/draft${q.apply ? "?apply=true" : ""}`,
+      q.leaveOut?.length || q.twoSided?.length
+        ? ({ leave_out: q.leaveOut ?? [], two_sided: q.twoSided ?? [] } satisfies DraftRequest)
+        : undefined,
+    ),
 
   /** The organisation and its warehouses. */
   workspace: () => send<Workspace>("GET", "/workspace"),

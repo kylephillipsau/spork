@@ -1,6 +1,6 @@
 # Handoff: the bridge, orders, items, packing, and the warehouse
 
-Written 2026-09-28, updated 2026-09-30. Read this before continuing on the
+Written 2026-09-28, updated 2026-10-01. Read this before continuing on the
 client's UI work, packing, items, or anything spatial.
 
 The short version:
@@ -12,12 +12,12 @@ The short version:
   ships a product in its own carton.
 - The warehouse has a layout: **places**, drawn relative to each other and
   never measured (D173). Inventory › Warehouse drafts it from the bin list and
-  lists each place's bins beside a plan of the site. A scanned bin lands on the
-  face of the rack that holds it.
+  lists each place's bins beside a plan of the site, with the same site in 3D
+  beside the plan. A scanned bin lands on the face of the rack that holds it.
 - The local instance runs on the business's own data, read from NetSuite
   exports.
 
-**The 3D view is next, then the plan editor.**
+**Applying the real layout is next, then the plan editor.**
 
 Everything below is committed and pushed. The working tree was clean when this
 was written.
@@ -44,6 +44,9 @@ PowerShell explicitly:
 **Do not run `cargo fmt` over the crate.** The tree is not rustfmt-clean, and a
 crate-wide format once reformatted about ninety unrelated files. Format only
 what you touch, if at all.
+
+**Migration 99** adds a rack's sides. The working `spork` database is at 98
+until `scripts/local.ps1 migrate` (or `setup`) runs.
 
 **Tests on a fresh database.** The suite is not re-runnable against a database
 it has written to:
@@ -78,6 +81,10 @@ Two things made it that fast (50ea84c): rust-lld links on Windows
 dependencies. `migrate.sh` and `verify-migrations.sh` no longer launch psql per
 row or per file.
 
+**npm behind the proxy.** The network re-signs TLS, so in Git Bash npm needs
+the Windows certificate store: `NODE_OPTIONS=--use-system-ca npm install …`.
+`scripts/local.ps1` sets it for PowerShell. Never turn off `strict-ssl`.
+
 **Client gates.** `npm run verify` runs typecheck, tests, contract and laws.
 Run `npm run build:review` before `npm run render`. The render reads
 `dist-review/`, so without the build it renders a stale one. Screenshots land
@@ -98,6 +105,119 @@ once it reads right. Real codes stay out of the repository, as everywhere else.
 ---
 
 ## What landed
+
+### Leaving a place out of the draft
+
+The draft's preview has a tick box for each place it would make. The user found
+that four families on the real bin list became "racks" that do not exist: lone
+codes, and one pair of codes. Unticking a place leaves it out:
+- its bins stay in the tray ("Not on the layout");
+- it takes no row in the layout;
+- the counts and the button ("Make 15 places") follow the ticks.
+
+`POST /layout/draft` takes an optional body, `{ "leave_out": [names] }`
+(`DraftRequest`), and the report lists `left_out`.
+- A name the draft no longer proposes is refused ("preview it again"), so a bin
+  list that changed since the preview cannot make what was left out under
+  another name.
+- Names are worked out the same way whatever is left out, so the preview's
+  names are the apply's.
+
+A left-out family is proposed again by the next draft, because its bins are
+still in the tray. Remembering "this is no place" belongs with the editor, or
+with marking the bins in NetSuite.
+
+### Racks with two sides (migration 99)
+
+The user's racks have bins on both faces, numbered round the rack: `E-01` to
+`E-18` along the front and `E-19` to `E-36` back along the other side, `E-36`
+behind `E-01`.
+
+**The model.** A rack is **one place with two sides**:
+- `place.sides` is 1 or 2, and `location.slot_side` says which side a cell is
+  on; the unique cell index includes it.
+- A cell's bay is its **column** from the front's left, the same on both sides,
+  so the bin behind another is the same column on the other side.
+- The back's labels are numbered round (`Grid::label_number`): column 1's back
+  is the last bay.
+- J76 also catches a bin on a side its place does not have.
+
+It was first built as two places back to back (*Rack E front*, *Rack E back*).
+The user asked whether that was right, and it was not: the back carried copies
+of the front's numbering and position that nothing kept true, and nobody calls
+half a rack a place. It was replaced before release.
+
+**The screens.**
+- The draft's preview has a **Two sides** tick box on each rack, labelled with
+  its split ("01–18 front, 19–36 back"), and **Two sides for every rack**.
+  `DraftRequest.two_sided` names them, and `DraftedPlace.split` gives the
+  labels. The rack is the same codes read on a grid half as long, so its bins
+  are found again by name.
+- The rack face opens on the side the bin is on, drawn as you would stand
+  facing it: the back reads 19 to 36, left to right. **Front · 01–18** and
+  **Back · 19–36** tabs switch sides. The plan marks the aisle to stand in, and
+  the mark moves when you switch.
+- The bins list says "back, bay 36, level 01".
+- In 3D a two-sided rack is one block two cells deep, with a spine along its
+  top.
+- A fixture shows a bin on the back of a rack (`/fixtures/bin/back`).
+
+On a copy of the real data, leaving out the four and making every rack
+two-sided gave one place per rack, with every other bin placed. A rack's last
+bay opened on its back, lit at the end behind its first.
+
+### The 3D view
+
+On the Warehouse screen, the site plan card has **Show 3D**. It puts the same
+site in 3D beside the 2D plan, and they stack when the card is narrow.
+- **What it draws.** It draws `GET /layout`'s `plan`, the same shapes the 2D
+  plan draws.
+  - Solid places are blocks, walk-through places are flat floor, and the
+    outermost place is the ground with a solid edge.
+  - A place with a grid shows it: a rack's bays and levels on its faces, a
+    dock's doors across its floor.
+  - The grid comes from `LayoutView.places`, joined by id, so the server did not
+    change.
+- **One choice.** Clicking a place in 3D chooses it on the plan, on the list and
+  in the address. The chosen place is drawn in the accent colour, as on the
+  plan. Hovering names a place in a small label, and otherwise the label names
+  the chosen one.
+- **Controls.** Drag to turn. Drag with the middle or right button, or with
+  Ctrl or ⌘ held, to move across the floor; the view slides over the ground rather than up the
+  screen, and cannot leave the site. Scroll over it, pinch, or press + and − to
+  zoom. "Show the whole site" goes back to the starting view. Nothing is
+  edited in 3D.
+  - The user asked for these on 2026-10-01: moving, including with the middle
+    button (the research said orbit and zoom only), and zooming on a plain
+    scroll. The first version needed Ctrl
+    to zoom, so the page would scroll past the pane.
+- **Shown or hidden** is remembered per browser (`spork.warehouse.3d`). With no
+  preference it starts shown at 1100 px wide and above, and hidden below.
+- **Colours are the theme's tokens**, read from the page, and re-read when the
+  theme changes. Faces are shaded by which way they face rather than lit, so a
+  top is exactly its token's colour.
+- It draws only when something changes (`frameloop` on demand). It honours
+  reduced motion. Without WebGL 2 it says so in its own pane, and the plan
+  beside it still works.
+
+How it is built:
+- three.js 0.186, **without React Three Fiber**. R3F 9 supports React only below
+  19.4, so it would hold back React upgrades. The plan already had a
+  hand-written class owning the meshes, and R3F would only have hosted the
+  canvas.
+- It is lazy-loaded as its own chunk: 586 kB, 150 kB gzipped, fetched the first
+  time the pane is shown. The main chunk is unchanged.
+- The code:
+  - `client/app/layout/blocks.ts` is the pure part: plan to blocks, grid lines
+    and bounds, with tests in `blocks.test.ts`;
+  - `scene3d.ts` is the three.js class (`SiteScene`);
+  - `Site3D.tsx` hosts it.
+- A new fixture, `/fixtures/warehouse/drafted`, is a 19-place site as the draft
+  lays one out.
+
+Checked on the business's own bins: on a copy of the database with the draft
+applied, 16 long racks in rows read at a glance. Clicking, hovering, zooming,
+turning and the remembered toggle all worked, with no console errors.
 
 ### The warehouse screen (52c09e3)
 
@@ -288,17 +408,29 @@ it installed.**
 ## Next
 
 1. **Apply the layout on real data.** Open Inventory › Warehouse, preview the
-   draft, and read it. Families the draft gets wrong are the first thing to
-   fix. Bins no pattern fits wait in the tray to be placed by hand.
-2. **The 3D view** beside the plan on the Warehouse screen (below).
-3. **Record photos, measurements and weights**, working from the item list
+   draft, and read it. On 2026-10-01 the draft was applied to a copy of the
+   database, never the working one, and found this:
+   - all but a handful of the bins placed;
+   - the long racks came out whole;
+   - three families of one bin each became racks of their own;
+   - one family spans twelve bays for its two bins;
+   - one code differs from its family only by an unpadded level, and waits in
+     the tray;
+   - the other leftovers are named spots (walls, the dock, packing, an office),
+     to be placed by hand.
+
+   The user said the four odd families are no racks. **Untick them in the
+   preview**, and press **Two sides for every rack**, before making the places
+   (above). Until the editor exists,
+   nothing moves a bin once the draft has put it in a cell.
+2. **Record photos, measurements and weights**, working from the item list
    narrowed to "in stock here" and "needs measuring" or "needs a photo".
-4. **Test the rack face on the floor** against the bare bin code, as above.
-5. **"Something's wrong here"** on the rack face: a worker scans the bin where
+3. **Test the rack face on the floor** against the bare bin code, as above.
+4. **"Something's wrong here"** on the rack face: a worker scans the bin where
    it really is and taps its cell. Trusted roles apply it, and others raise a
    flag for the office.
-6. **The plan editor** (below).
-7. A history of layout changes (who moved what, and when), and roles for who
+5. **The plan editor** (below).
+6. A history of layout changes (who moved what, and when), and roles for who
    may edit. Until roles exist, anyone signed in can draft.
 
 Deferred and not forgotten:
@@ -312,33 +444,9 @@ Deferred and not forgotten:
 
 ---
 
-## The 3D view and the editor: the plan
+## The editor: the plan
 
-**Stack.** three.js with React Three Fiber and a small subset of drei, on WebGL,
-**lazy-loaded as its own route chunk** so the rest of the app pays nothing. The
-main chunk is already about 570 kB in the review build, and Vite warns. An imperative scene
-class owns the meshes and R3F only hosts it, which keeps a hand-written
-renderer possible later. Scene data sits in typed arrays outside React, redrawn
-on demand (`frameloop="demand"`).
-
-Why not the alternatives:
-- Babylon is heavier, and its React binding has one maintainer.
-- PlayCanvas's binding is still at 0.x.
-- deck.gl is built for maps.
-- Needle is commercially licensed.
-
-**What it draws.** `GET /layout`'s `plan` is already the input: every place's
-footprint on the site, how far up it starts and how tall it is. That is the
-same data the Warehouse screen's 2D plan draws. Solid places are blocks and
-walk-through places are floor.
-- **Selection.** The pane shares the screen's selection (`WarehouseDesk.chosen`),
-  so choosing a rack in the list, on the plan or in 3D is one choice.
-- **Controls.** Orbit and zoom only. Nothing is edited in 3D.
-- **Picking.** A ray against the places' boxes, which are few enough to test
-  directly.
-- **Cells are not in the plan.** Drawing a rack's bays and levels needs its
-  grid. `GET /places/{id}` has it per place; a site-wide view would need it
-  added to `plan`.
+The 3D view is built (above), and the editor comes next.
 
 **The editor** is the 2D plan with the 3D pane beside it, following the
 research above.
