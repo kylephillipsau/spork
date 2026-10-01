@@ -457,7 +457,7 @@ not overshoot either. **Nothing animates that blocks work.**
 
 > **Superseded by D171.** These were the material system's laws. The kit's
 > laws, and the ones from this table that survived (tokens nothing reads,
-> overlays that catch the pointer), are the twelve checks in
+> overlays that catch the pointer), are the thirteen checks in
 > `client/scripts/check-laws.mjs`; D171 lists them.
 
 The design system's actual deliverable. Eight of them were enforced by
@@ -1856,13 +1856,14 @@ and checks rather than conventions:
   top or bottom), `Section`, `Alert`, `StatGrid`/`Stat`, `Facts`/`Fact`,
   `Card` with a count, `DataTable` with a growing column: a screen composes
   these rather than restyling its own copy.
-- *Laws* (`client/scripts/check-laws.mjs`, twelve checks): no raw colours
+- *Laws* (`client/scripts/check-laws.mjs`, thirteen checks): no raw colours
   outside the tokens; type sizes from the type scale; spacing from the
   spacing scale (a 1px hairline excepted); a token nothing reads and a class
   nothing applies are drift; every dark-theme value overrides a declared
   light one; the frame declares desktop density; nothing laid over content
   catches the pointer; no fixture and no Tauri import on the live path;
-  anchors come from `Link`; the API mints no identity and reads no clock.
+  anchors come from `Link`; the API mints no identity and reads no clock;
+  nothing needs HTTPS (added after D175, see `docs/local.md`).
 
 **How it landed.** In phases, with the app working throughout: the kit
 (B), the shell (C), the desktop screens (D), the handheld screens and setup in

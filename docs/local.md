@@ -63,6 +63,13 @@ Two limits apply until the site has a certificate:
 - **Traffic is not encrypted.** Passwords cross the WiFi in plain text. That's
   why LAN mode is opt-in.
 
+A page on plain HTTP at an address is not what browsers call a secure context,
+so they leave out what they offer only over HTTPS. **Nothing in the client may
+depend on one**: `crypto.randomUUID` once made every press on a phone fail
+with "Request failed." before anything was sent. An id comes from `uuid()` in
+`client/domain/acts.ts`, and `npm run laws` refuses `crypto.randomUUID` and
+`crypto.subtle` anywhere in the client.
+
 ## Loading NetSuite exports
 
 The local database can hold the business's own data, read from NetSuite exports

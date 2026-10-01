@@ -247,8 +247,26 @@ for (const { rel, ext, text } of source) {
   }
 }
 
+// ── 13. nothing needs HTTPS ───────────────────────────────────────────
+// A phone reaching a PC by its address over the WiFi (`local.ps1 start -Lan`)
+// is on plain HTTP, which is not a secure context, and a browser leaves out
+// what it offers only over HTTPS. An act's id came from `crypto.randomUUID`,
+// so every press on the phone failed before anything was sent. Passkeys are
+// the one exception, and offer a password instead.
+for (const { rel, ext, text } of [...source, ...read("domain")]) {
+  if ((ext !== ".ts" && ext !== ".tsx") || rel.endsWith(".test.ts")) continue;
+  for (const [pattern, what] of [
+    [/crypto\.randomUUID/, "crypto.randomUUID"],
+    [/crypto\.subtle/, "crypto.subtle"],
+  ]) {
+    if (pattern.test(code(text))) {
+      fail("Nothing needs HTTPS", "docs/local.md", rel, `${what} is missing over plain HTTP; an id comes from uuid() in domain/acts.ts`);
+    }
+  }
+}
+
 // ── report ────────────────────────────────────────────────────────────
-const CHECKS = 12;
+const CHECKS = 13;
 
 if (failures.length === 0) {
   console.log(`laws ok — ${CHECKS} checks over ${css.length} stylesheets and ${source.length} source files`);

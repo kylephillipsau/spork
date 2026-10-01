@@ -93,7 +93,21 @@ export interface Pressing {
   open: () => number;
 }
 
-const uuid = (): Uuid => crypto.randomUUID();
+/**
+ * A random (version 4) UUID.
+ *
+ * **Not `crypto.randomUUID`, which a browser offers only over HTTPS or at
+ * localhost.** A phone reaching a PC across the WiFi by its address
+ * (`local.ps1 start -Lan`) has neither, and every act would fail on the phone
+ * before anything was sent. `getRandomValues` is offered everywhere.
+ */
+export function uuid(): Uuid {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6]! & 0x0f) | 0x40; // version 4
+  b[8] = (b[8]! & 0x3f) | 0x80; // the RFC 9562 variant
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 const now = (): string => new Date().toISOString();
 
 /**

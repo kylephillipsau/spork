@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { anAct, partOf, pressing } from "./acts.ts";
+import { anAct, partOf, pressing, uuid } from "./acts.ts";
 
 /** A counter and a clock, so the assertions are about the rule. */
 function fake() {
@@ -103,4 +103,19 @@ test("what has not landed is what is still held", () => {
   assert.equal(press.open(), 2, "one entry per key, not per attempt");
   press.landed("a");
   assert.equal(press.open(), 1);
+});
+
+test("an act's id is a version 4 UUID made without randomUUID, which plain HTTP lacks", () => {
+  const ids = new Set(Array.from({ length: 1000 }, () => uuid()));
+  assert.equal(ids.size, 1000, "no two alike");
+  for (const id of ids) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+
+  // A phone on the WiFi by address is not a secure context: no randomUUID.
+  const randomUUID = crypto.randomUUID;
+  Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+  try {
+    assert.match(anAct().id("event"), /^[0-9a-f-]{36}$/);
+  } finally {
+    Object.defineProperty(crypto, "randomUUID", { value: randomUUID, configurable: true });
+  }
 });
