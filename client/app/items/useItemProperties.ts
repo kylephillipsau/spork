@@ -4,6 +4,7 @@ import { useLive, useWriting } from "@app/acting";
 import { ApiError, api, reason } from "@domain/api";
 import type { BoundBarcode, CaptureSubject, ItemView, Uuid } from "@domain/types";
 
+import type { Pixels, Point } from "./cut";
 import { measurementsOf, type Figures } from "./figures";
 import { NO_FIGURES, presentationNeeded, subjectKey, type Face } from "./subjects";
 
@@ -23,8 +24,12 @@ import { NO_FIGURES, presentationNeeded, subjectKey, type Face } from "./subject
  * `POST /weighings` for a scale reading, `POST /observations` for figures (one
  * act, D133), its images for photographs (one look, D132), and
  * `POST /items/{id}/barcodes` for a label (D164). A photograph is cut to its
- * face with `POST /images` and then its cut (D176).
+ * face with `POST /images` and then its cut (D176), its corners first placed
+ * by a model in the browser (D177).
  */
+
+/** The face-finding model: its own chunk, with the ONNX runtime, fetched when first wanted. */
+const model = () => import("./faceModel");
 
 export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } | { kind: "failed"; message: string };
 
@@ -89,6 +94,13 @@ export interface PropertiesDesk {
    * picture to keep, inside the press, so the screen is busy while it works.
    */
   cut: (corners: number[], make: () => Promise<Blob>) => Promise<void>;
+  /**
+   * Where the face is in a photograph (D177): eight corner fractions, or
+   * nothing. `key` names the photograph, so asking again at another point
+   * reuses its encoding; `pixels` is it at the model's size; `at` is a point
+   * on the face as fractions, the middle when not given.
+   */
+  findFace: (key: string, pixels: Pixels, at?: Point) => Promise<number[] | null>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -202,6 +214,11 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     // the measuring look, and photographing on its own starts a new one.
     if (action === "measure") setFigures(NO_FIGURES);
     if (action === "photos") {
+      // The face-finder's model is fetched while the camera is in use, so it
+      // is ready, or nearly, by the first photo's crop.
+      void model()
+        .then((m) => m.warm())
+        .catch(() => undefined);
       setTaken([]);
       if (look.current?.key !== subjectKey(subject)) look.current = null;
       looks.current += 1;
@@ -342,6 +359,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       dismiss();
       setCropping(null);
     },
+    findFace: (key, pixels, at) => model().then((m) => m.findFace(key, pixels, at)),
     cut: (corners, make) =>
       press(`cut:${cropping?.image_id ?? "none"}:${corners.join(",")}`, async (act) => {
         if (!cropping) return;

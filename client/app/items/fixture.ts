@@ -206,6 +206,8 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     crop: noop,
     uncrop: noop,
     cut: later,
+    // The face where a model would put it, without the model.
+    findFace: async () => [0.18, 0.2, 0.84, 0.17, 0.88, 0.83, 0.14, 0.86],
     barcodes: [],
     binding: "",
     typeBinding: noop,

@@ -7,6 +7,7 @@ import { LONGEST_PX, encodeWebp, fit } from "@domain/webp";
 import { Faint } from "@app/common/cells";
 
 import { START, aspectOf, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
+import { SAM_SIZE } from "./faceFind";
 import type { PropertiesDesk, Cropping } from "./useItemProperties";
 import s from "./items.module.css";
 
@@ -19,16 +20,36 @@ import s from "./items.module.css";
  * **Dragged by how far the pointer moves**, not to where it is, so a finger
  * on a corner moves it without jumping it under the fingertip, and arrow keys
  * move one a little at a time.
+ *
+ * **The corners are found first** (D177): a model looks for the face in the
+ * middle of a photograph not cut before, and a tap on the photograph asks it
+ * again at that point. Its answer never moves a corner somebody has moved
+ * since they asked.
  */
+
+/** What the face-finder is doing, as the screen says it. */
+type Finding = "looking" | "found" | "missed" | "broken" | null;
+const FINDING: Record<Exclude<Finding, null>, string> = {
+  looking: "Finding the face…",
+  found: "Found it. Drag a corner to correct it, or tap the face to look again.",
+  missed: "No face found there. Tap the face, or drag the corners.",
+  broken: "The face-finder could not run here. Drag the corners.",
+};
 
 const CORNERS = ["Top-left", "Top-right", "Bottom-right", "Bottom-left"] as const;
 /** How far an arrow key moves a corner, and with Shift. */
 const NUDGE = 0.004;
 const SHOVE = 0.02;
 
-/** The photograph's pixels, scaled so its longest side is at most `longest`. */
-function pixelsOf(image: HTMLImageElement, longest: number): Pixels {
-  const [width, height] = fit(image.naturalWidth, image.naturalHeight, longest);
+/**
+ * The photograph's pixels, scaled so its longest side is at most `longest`,
+ * or exactly that when `exactly`: the model takes its own size, up or down.
+ */
+function pixelsOf(image: HTMLImageElement, longest: number, exactly = false): Pixels {
+  const scale = longest / Math.max(image.naturalWidth, image.naturalHeight);
+  const [width, height] = exactly
+    ? [Math.round(image.naturalWidth * scale), Math.round(image.naturalHeight * scale)]
+    : fit(image.naturalWidth, image.naturalHeight, longest);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -65,10 +86,35 @@ export function FaceCrop({
 }) {
   const [quad, setQuad] = useState<Quad>(() => (cropping.corners ? fromCorners(cropping.corners) : START));
   const [photo, setPhoto] = useState<{ image: HTMLImageElement; small: Pixels } | "failed" | null>(null);
+  const [finding, setFinding] = useState<Finding>(null);
   const stage = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ corner: number; x: number; y: number; from: Point } | null>(null);
+  const tap = useRef<{ x: number; y: number } | null>(null);
+  // Bumped by every ask and every hand on a corner: an answer applies only
+  // to the ask it answers, and only while nobody has moved a corner since.
+  const asked = useRef(0);
   const face = name.toLowerCase();
+
+  const find = (image: HTMLImageElement, at?: Point) => {
+    const ask = ++asked.current;
+    setFinding("looking");
+    desk.findFace(cropping.image_id, pixelsOf(image, SAM_SIZE, true), at).then(
+      (corners) => {
+        if (ask !== asked.current) return;
+        const found = corners && fromCorners(corners);
+        if (found && isFace(found)) {
+          setQuad(found);
+          setFinding("found");
+        } else setFinding("missed");
+      },
+      (error: unknown) => {
+        // Said on the screen in words; the reason is for whoever opens the console.
+        console.warn("face-finder:", error);
+        if (ask === asked.current) setFinding("broken");
+      },
+    );
+  };
 
   // The photograph, and a small copy of its pixels for the preview.
   useEffect(() => {
@@ -76,13 +122,18 @@ export function FaceCrop({
     const image = new Image();
     image.src = imageUrl(cropping.digest);
     image.decode().then(
-      () => live && setPhoto({ image, small: pixelsOf(image, 720) }),
+      () => {
+        if (!live) return;
+        setPhoto({ image, small: pixelsOf(image, 720) });
+        // A photograph cut before keeps its corners; a new one is looked at.
+        if (!cropping.corners) find(image);
+      },
       () => live && setPhoto("failed"),
     );
     return () => {
       live = false;
     };
-  }, [cropping.digest]);
+  }, [cropping.digest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loaded = photo && photo !== "failed" ? photo : null;
   const ratio = loaded ? (aspect ?? aspectOf(quad, loaded.image.naturalWidth, loaded.image.naturalHeight)) : 1;
@@ -98,8 +149,28 @@ export function FaceCrop({
     return () => cancelAnimationFrame(frame);
   }, [loaded, quad, ratio, whole]);
 
-  const place = (corner: number, [x, y]: Point) =>
+  const place = (corner: number, [x, y]: Point) => {
+    // A hand on a corner outranks an answer still on its way.
+    asked.current++;
+    if (finding === "looking") setFinding(null);
     setQuad((q) => q.map((p, i) => (i === corner ? [clamp(x), clamp(y)] : p)) as Quad);
+  };
+
+  // A tap on the photograph, not a drag: ask where the face is there.
+  const stageEvents = {
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      if (e.target === e.currentTarget || e.target instanceof SVGElement || e.target instanceof HTMLImageElement) {
+        tap.current = { x: e.clientX, y: e.clientY };
+      }
+    },
+    onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
+      const down = tap.current;
+      tap.current = null;
+      const box = stage.current?.getBoundingClientRect();
+      if (!down || !box || !loaded || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
+      find(loaded.image, [clamp((e.clientX - box.left) / box.width), clamp((e.clientY - box.top) / box.height)]);
+    },
+  };
 
   const handle = (corner: number) => ({
     onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
@@ -147,7 +218,7 @@ export function FaceCrop({
       onOpenChange={(open) => !open && !desk.busy && desk.uncrop()}
       width={960}
       title={`Crop the ${face}`}
-      description="Drag the corners onto the face's corners. The thick edge is its top."
+      description="Tap the face, or drag the corners onto its corners. The thick edge is its top."
       footer={
         <>
           <Button onClick={desk.uncrop} disabled={desk.busy}>
@@ -172,6 +243,7 @@ export function FaceCrop({
             ref={stage}
             className={s.cropStage}
             style={{ "--photo": loaded ? loaded.image.naturalWidth / loaded.image.naturalHeight : 0.75 } as CSSProperties}
+            {...stageEvents}
           >
             {loaded && <img className={s.cropPhoto} src={imageUrl(cropping.digest)} alt="" draggable={false} />}
             <svg className={s.cropMarks} viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
@@ -193,9 +265,22 @@ export function FaceCrop({
           <div className={s.cropSide}>
             <canvas ref={preview} className={s.cropPreview} role="img" aria-label={`The ${face}, straightened`} />
             {!whole && <Faint>Those corners cross or fold in.</Faint>}
-            <Button size="sm" icon={<RotateCw />} onClick={() => setQuad(turn)} disabled={desk.busy}>
+            <Button
+              size="sm"
+              icon={<RotateCw />}
+              onClick={() => {
+                asked.current++;
+                setQuad(turn);
+              }}
+              disabled={desk.busy}
+            >
               Turn
             </Button>
+            {finding && (
+              <p className={s.cropStatus} role="status">
+                {FINDING[finding]}
+              </p>
+            )}
           </div>
         </div>
       )}

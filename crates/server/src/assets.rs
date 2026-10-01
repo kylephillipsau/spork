@@ -92,6 +92,21 @@ pub fn present(dir: &Path) -> bool {
 ///
 /// `no-cache` is not `no-store`. The browser keeps the copy and asks whether
 /// it is still good, which is a 304 and a few bytes on an unchanged deploy.
+/// **Isolated across origins, so the face-finder may use several threads**
+/// (D177). A browser lends a page more than one thread for WebAssembly only
+/// when the page is cross-origin isolated, which these two headers ask for.
+/// Everything the application loads is its own, so `require-corp` costs it
+/// nothing; the bridge userscript talks to `/api` from NetSuite's own page,
+/// which these do not touch.
+///
+/// Browsers honour them only on HTTPS or at localhost. A phone on the WiFi
+/// by address gets one thread whatever is sent, and nothing breaks.
+fn isolated() -> DefaultHeaders {
+    DefaultHeaders::new()
+        .add(("cross-origin-opener-policy", "same-origin"))
+        .add(("cross-origin-embedder-policy", "require-corp"))
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig, dir: &Path) {
     let index = dir.join("index.html");
 
@@ -102,6 +117,7 @@ pub fn configure(cfg: &mut web::ServiceConfig, dir: &Path) {
     // application. That is not theoretical either — it happened twice.
     cfg.service(
         web::scope("/assets")
+            .wrap(isolated())
             .wrap(DefaultHeaders::new().add((
                 header::CACHE_CONTROL,
                 "public, max-age=31536000, immutable",
@@ -112,26 +128,60 @@ pub fn configure(cfg: &mut web::ServiceConfig, dir: &Path) {
     // Everything else. `main.rs` registers this last, so `/api`, `/app` and
     // `/print` have already had their say.
     cfg.service(
-        Files::new(MOUNT, dir)
-            .index_file("index.html")
-            .prefer_utf8(true)
-            // Client-side routing: a deep link is a path this server has never
-            // heard of, and the answer is the document that knows how to read
-            // it. A path the *client* does not have either is a 404 the client
-            // draws — the server cannot know the route table, and teaching it
-            // one would be a second copy to keep in agreement.
-            .default_handler(fn_service(move |req: ServiceRequest| {
-                let index = index.clone();
-                async move {
-                    let (http_req, _) = req.into_parts();
-                    let file = NamedFile::open_async(&index).await?;
-                    let mut response = file.into_response(&http_req);
-                    response.headers_mut().insert(
-                        header::CACHE_CONTROL,
-                        header::HeaderValue::from_static("no-cache"),
-                    );
-                    Ok(ServiceResponse::new(http_req, response))
-                }
-            })),
+        web::scope("").wrap(isolated()).service(
+            Files::new(MOUNT, dir)
+                .index_file("index.html")
+                .prefer_utf8(true)
+                // Client-side routing: a deep link is a path this server has never
+                // heard of, and the answer is the document that knows how to read
+                // it. A path the *client* does not have either is a 404 the client
+                // draws — the server cannot know the route table, and teaching it
+                // one would be a second copy to keep in agreement.
+                .default_handler(fn_service(move |req: ServiceRequest| {
+                    let index = index.clone();
+                    async move {
+                        let (http_req, _) = req.into_parts();
+                        let file = NamedFile::open_async(&index).await?;
+                        let mut response = file.into_response(&http_req);
+                        response.headers_mut().insert(
+                            header::CACHE_CONTROL,
+                            header::HeaderValue::from_static("no-cache"),
+                        );
+                        Ok(ServiceResponse::new(http_req, response))
+                    }
+                })),
+        ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use actix_web::{test, App};
+
+    use super::*;
+
+    #[actix_web::test]
+    async fn every_file_of_the_application_is_isolated_and_keeps_its_cache_rule() {
+        let dir = std::env::temp_dir().join(format!("spork-assets-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("assets")).unwrap();
+        std::fs::write(dir.join("index.html"), "<!doctype html>").unwrap();
+        std::fs::write(dir.join("assets/app-1a2b.js"), "export {}").unwrap();
+        let app = test::init_service(App::new().configure(|cfg| configure(cfg, &dir))).await;
+
+        for (path, cache) in [
+            ("/", None),
+            ("/items/some-deep-link", Some("no-cache")),
+            ("/assets/app-1a2b.js", Some("public, max-age=31536000, immutable")),
+        ] {
+            let r = test::call_service(&app, test::TestRequest::get().uri(path).to_request()).await;
+            assert!(r.status().is_success(), "{path}: {}", r.status());
+            let h = r.headers();
+            assert_eq!(h.get("cross-origin-opener-policy").unwrap(), "same-origin", "{path}");
+            assert_eq!(h.get("cross-origin-embedder-policy").unwrap(), "require-corp", "{path}");
+            if let Some(cache) = cache {
+                assert_eq!(h.get(header::CACHE_CONTROL).unwrap(), cache, "{path}");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

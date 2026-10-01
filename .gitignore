@@ -6,3 +6,4 @@ dist-review/
 .render/
 .DS_Store
 .local/
+client/public/assets/models/
