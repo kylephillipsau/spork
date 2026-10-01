@@ -7,7 +7,7 @@ import { LONGEST_PX, encodeWebp, fit } from "@domain/webp";
 import { Faint } from "@app/common/cells";
 
 import { START, aspectOf, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
-import { SAM_SIZE } from "./faceFind";
+import { SAM_SIZE, UNFIT } from "./faceFind";
 import type { PropertiesDesk, Cropping } from "./useItemProperties";
 import s from "./items.module.css";
 
@@ -28,12 +28,13 @@ import s from "./items.module.css";
  */
 
 /** What the face-finder is doing, as the screen says it. */
-type Finding = "looking" | "found" | "missed" | "broken" | null;
+type Finding = "looking" | "found" | "missed" | "broken" | "unfit" | null;
 const FINDING: Record<Exclude<Finding, null>, string> = {
   looking: "Finding the face…",
   found: "Found it. Drag a corner to correct it, or tap the face to look again.",
   missed: "No face found there. Tap the face, or drag the corners.",
   broken: "The face-finder could not run here. Drag the corners.",
+  unfit: "The face-finder needed more memory than this phone gives a page, so it is off here. Drag the corners; at a computer it finds them.",
 };
 
 const CORNERS = ["Top-left", "Top-right", "Bottom-right", "Bottom-left"] as const;
@@ -96,10 +97,10 @@ export function FaceCrop({
   const asked = useRef(0);
   const face = name.toLowerCase();
 
-  const find = (image: HTMLImageElement, at?: Point) => {
+  const find = (image: HTMLImageElement, at?: Point, anyway = false) => {
     const ask = ++asked.current;
     setFinding("looking");
-    desk.findFace(cropping.image_id, pixelsOf(image, SAM_SIZE, true), at).then(
+    desk.findFace(cropping.image_id, pixelsOf(image, SAM_SIZE, true), at, anyway).then(
       (corners) => {
         if (ask !== asked.current) return;
         const found = corners && fromCorners(corners);
@@ -109,9 +110,11 @@ export function FaceCrop({
         } else setFinding("missed");
       },
       (error: unknown) => {
+        if (ask !== asked.current) return;
+        if (String(error).includes(UNFIT)) return setFinding("unfit");
         // Said on the screen in words; the reason is for whoever opens the console.
         console.warn("face-finder:", error);
-        if (ask === asked.current) setFinding("broken");
+        setFinding("broken");
       },
     );
   };
@@ -167,7 +170,7 @@ export function FaceCrop({
       const down = tap.current;
       tap.current = null;
       const box = stage.current?.getBoundingClientRect();
-      if (!down || !box || !loaded || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
+      if (!down || !box || !loaded || finding === "unfit" || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
       find(loaded.image, [clamp((e.clientX - box.left) / box.width), clamp((e.clientY - box.top) / box.height)]);
     },
   };
@@ -280,6 +283,11 @@ export function FaceCrop({
               <p className={s.cropStatus} role="status">
                 {FINDING[finding]}
               </p>
+            )}
+            {finding === "unfit" && loaded && (
+              <Button size="sm" onClick={() => find(loaded.image, undefined, true)} disabled={desk.busy}>
+                Try the face-finder anyway
+              </Button>
             )}
           </div>
         </div>

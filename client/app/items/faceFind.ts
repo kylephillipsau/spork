@@ -12,6 +12,13 @@ import { type Pixels, type Point, type Quad } from "./cut.ts";
 
 /** The model looks at the photograph scaled so its longest side is this, padded square. */
 export const SAM_SIZE = 1024;
+
+/**
+ * What the face-finder answers on a device where it was seen to take the page
+ * down: a phone that reloaded the page while it was finding a face. It is not
+ * asked again there until somebody says to try it anyway.
+ */
+export const UNFIT = "the face-finder needs more memory than this device gives a page";
 /** Its outlines are a quarter of that across. */
 const MASK = 256;
 const MEAN = [0.485, 0.456, 0.406];

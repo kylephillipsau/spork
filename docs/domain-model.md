@@ -13843,6 +13843,25 @@ fetched when a camera first opens, so they are ready by the first crop.
 the runtime's GPU build and a half-precision model, fetched only where WebGPU
 exists.
 
+**On a phone, 2026-10-02.** It does not fit. Finding a face takes about 1.5 GB
+above the page (measured in Chromium: 0.6 GB for the app, 2.5 GB at the
+answer, and kept until the worker ends), and an iPhone's browser reloads a
+page that grows past what it allows, silently. Every photo taken on the floor
+came back as a look of its own with no crop screen: the page had reloaded
+under it. The runtime's arena and memory-pattern options made no difference;
+the memory is the encoder's. So, on a phone (a coarse pointer):
+- the model is not fetched while the camera is up, and is let go when a crop
+  is saved or cancelled;
+- the photograph waiting to be cut is kept in the browser's storage, and a
+  page reloaded out of its crop opens the crop screen again;
+- a find is marked as under way while it runs, and a page that loads to find
+  the mark still there was taken down by it: the face-finder is off on that
+  device, the screen says so, and the corners are dragged by hand, with a
+  button to try it anyway. At a desk it runs as before.
+
+Finding faces on the phone wants a model built for one, or the finding done
+somewhere with the memory.
+
 ### D178 — An item's carton is a box of so many of it, said at the item
 
 *Adopted 2026-10-02, with migration 101.*
