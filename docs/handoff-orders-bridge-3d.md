@@ -141,6 +141,29 @@ labels are seen and changed at the item:
   nothing new is stored. The code is `box.ts` (pure, tested), `box3d.ts`
   (`BoxScene`) and `BoxView.tsx`, which is lazy-loaded.
 
+### Photos go up as WebP (D175)
+
+Every photograph is converted on the phone before it is sent:
+- turned the right way up;
+- at most 4096 px on its longest side;
+- WebP at quality 85;
+- no camera metadata, so no location.
+
+One place does it, `client/domain/webp.ts`, called from `api.photograph`.
+- iPhones can't make WebP from a canvas (they hand back a PNG). They get
+  libwebp in WebAssembly, fetched on first use, at effort 2: about half a
+  second for a 12-megapixel photo.
+- The server reads a WebP's size from its first chunk.
+- On the box, a side shows its name until its photo arrives, and keeps it
+  if the photo fails to load, rather than going black.
+
+Next on photos, as the user chose:
+- cut each side to its face with a small AI model run in the browser
+  (SlimSAM through transformers.js, tap the face, about 14 MB);
+- straighten it to the measured proportions, with corner handles to correct
+  it;
+- keep both the original and the cut-out.
+
 ### The app fills the window
 
 The content area was capped at 1,440 px. It now fills the window; only forms

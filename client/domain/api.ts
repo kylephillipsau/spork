@@ -50,6 +50,7 @@ import type {
   WeighingRecorded,
   Uuid,
 } from "./types";
+import { asWebp } from "./webp";
 
 /**
  * The JSON API, as the client sees it.
@@ -1079,8 +1080,11 @@ export const api = {
    * server reads the type from the bytes rather than believing this one — a
    * file stored as one thing and served as another is how an image endpoint
    * becomes an XSS, so the content type here is a hint and not a claim.
+   *
+   * Every photograph is sent through here, so every one goes as WebP (D175).
    */
   async photograph(event: Uuid, face: string, image: Blob): Promise<void> {
+    const body = await asWebp(image);
     const response = await transport.fetch(
       `${transport.base}/observations/${event}/images/${face}`,
       {
@@ -1088,9 +1092,9 @@ export const api = {
         credentials: transport.credentials,
         headers: {
           ...transport.headers(),
-          "content-type": image.type || "application/octet-stream",
+          "content-type": body.type || "application/octet-stream",
         },
-        body: image,
+        body,
       },
     );
     if (!response.ok) {

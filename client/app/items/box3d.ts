@@ -46,6 +46,7 @@ export class BoxScene {
   private readonly materials = MATERIAL_ORDER.map(() => new MeshBasicMaterial());
   private readonly edgeMaterial = new LineBasicMaterial();
   private textures: Texture[] = [];
+  private painting = 0;
   private faces: Partial<Record<BoxFace, string>> = {};
   private size: [number, number, number] = [1, 1, 1];
 
@@ -99,34 +100,40 @@ export class BoxScene {
     this.stage.dispose();
   }
 
-  /** Each face's picture, or its name on a plain face; colours from the theme. */
+  /**
+   * Each face's picture, or its name on a plain face; colours from the theme.
+   * A face shows its name until its photo arrives, and keeps it if the photo
+   * never does, rather than going black.
+   */
   private paint(): void {
     for (const t of this.textures) t.dispose();
     this.textures = [];
+    const painting = ++this.painting;
     this.edgeMaterial.color.copy(this.stage.token("--ui-border-strong"));
     MATERIAL_ORDER.forEach((face, i) => {
       const material = this.materials[i]!;
+      this.dress(material, this.blank(face));
       const digest = this.faces[face];
-      const texture = digest ? this.photo(face, digest) : this.blank(face);
-      this.textures.push(texture);
-      material.map = texture;
-      material.needsUpdate = true;
+      if (!digest) return;
+      this.loader.load(this.imageUrl(digest), (image) => {
+        // Painted again since (other photos, or the theme): this one is stale.
+        if (painting !== this.painting) return;
+        const texture = new Texture(shrink(image, TEXTURE_PX));
+        texture.colorSpace = SRGBColorSpace;
+        const fit = cover(faceAspect(face, this.size), image.width / image.height);
+        texture.repeat.set(...fit.repeat);
+        texture.offset.set(...fit.offset);
+        texture.needsUpdate = true;
+        this.dress(material, texture);
+      });
     });
-    this.stage.invalidate();
   }
 
-  private photo(face: BoxFace, digest: string): Texture {
-    const texture = new Texture();
-    texture.colorSpace = SRGBColorSpace;
-    this.loader.load(this.imageUrl(digest), (image) => {
-      const fit = cover(faceAspect(face, this.size), image.width / image.height);
-      texture.image = shrink(image, TEXTURE_PX);
-      texture.repeat.set(...fit.repeat);
-      texture.offset.set(...fit.offset);
-      texture.needsUpdate = true;
-      this.stage.invalidate();
-    });
-    return texture;
+  private dress(material: MeshBasicMaterial, texture: Texture): void {
+    this.textures.push(texture);
+    material.map = texture;
+    material.needsUpdate = true;
+    this.stage.invalidate();
   }
 
   private blank(face: BoxFace): Texture {

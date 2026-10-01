@@ -170,17 +170,17 @@ pub fn sniff(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
-/// Pixel dimensions, where the header says so plainly.
-///
-/// Only the two formats whose size sits at a fixed offset. WebP has several
-/// container variants and parsing them properly is a decoder — a photograph
-/// whose dimensions we did not read is still a photograph, so the columns are
-/// nullable and this returns `None` rather than guessing.
 /// A size, or nothing, so that a failed parse never reads as a real dimension.
 fn positive(w: i32, h: i32) -> Option<(i32, i32)> {
     (w > 0 && h > 0).then_some((w, h))
 }
 
+/// Pixel dimensions, where the header says so plainly.
+///
+/// Read from the header, never by decoding: a PNG's at a fixed offset, a
+/// JPEG's in its first frame header, a WebP's in its first chunk. A photograph
+/// whose dimensions we did not read is still a photograph, so the columns are
+/// nullable and this returns `None` rather than guessing.
 pub fn dimensions(bytes: &[u8]) -> Option<(i32, i32)> {
     // PNG: IHDR width and height are big-endian u32 at 16 and 20.
     if bytes.len() > 24 && bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
@@ -222,6 +222,35 @@ pub fn dimensions(bytes: &[u8]) -> Option<(i32, i32)> {
         }
     }
 
+    // WebP: the first chunk after the RIFF header says, in one of three
+    // layouts. Lossy (`VP8 `): after a three-byte frame tag and a start code,
+    // fourteen bits apiece. Lossless (`VP8L`): after a signature byte, fourteen
+    // bits apiece less one, packed together. Extended (`VP8X`, a picture with
+    // metadata or transparency): twenty-four bits apiece less one, after four
+    // bytes of flags.
+    if bytes.len() >= 30 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        let data = &bytes[20..];
+        return match &bytes[12..16] {
+            b"VP8 " if data[3..6] == [0x9D, 0x01, 0x2A] => {
+                let w = u16::from_le_bytes([data[6], data[7]]) & 0x3FFF;
+                let h = u16::from_le_bytes([data[8], data[9]]) & 0x3FFF;
+                positive(i32::from(w), i32::from(h))
+            }
+            b"VP8L" if data[0] == 0x2F => {
+                let bits = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
+                let w = (bits & 0x3FFF) + 1;
+                let h = ((bits >> 14) & 0x3FFF) + 1;
+                positive(i32::try_from(w).ok()?, i32::try_from(h).ok()?)
+            }
+            b"VP8X" => {
+                let w = u32::from_le_bytes([data[4], data[5], data[6], 0]) + 1;
+                let h = u32::from_le_bytes([data[7], data[8], data[9], 0]) + 1;
+                positive(i32::try_from(w).ok()?, i32::try_from(h).ok()?)
+            }
+            _ => None,
+        };
+    }
+
     None
 }
 
@@ -245,7 +274,45 @@ mod tests {
             sniff(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]),
             Some("image/png")
         );
+        assert_eq!(sniff(b"RIFF\0\0\0\0WEBPVP8 "), Some("image/webp"));
         assert_eq!(sniff(b"<svg>this is not a photograph</svg>"), None);
+    }
+
+    /// A WebP's header: RIFF, its size, WEBP, then the first chunk's name,
+    /// size and the bytes given.
+    fn webp(chunk: &[u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut bytes = b"RIFF\0\0\0\0WEBP".to_vec();
+        bytes.extend_from_slice(chunk);
+        bytes.extend_from_slice(&[0, 0, 0, 0]);
+        bytes.extend_from_slice(data);
+        bytes.resize(bytes.len().max(30), 0);
+        bytes
+    }
+
+    #[test]
+    fn a_webp_states_its_size_in_its_first_chunk_in_each_of_three_layouts() {
+        // Lossy, which is what a phone sends (D175): frame tag, start code, sizes.
+        let mut lossy = vec![0x30, 0x01, 0x00, 0x9D, 0x01, 0x2A];
+        lossy.extend_from_slice(&4032u16.to_le_bytes());
+        lossy.extend_from_slice(&3024u16.to_le_bytes());
+        assert_eq!(dimensions(&webp(b"VP8 ", &lossy)), Some((4032, 3024)));
+
+        // Lossless: a signature byte, then both sizes less one in 28 bits.
+        let bits: u32 = (1280 - 1) | ((960 - 1) << 14);
+        let mut lossless = vec![0x2F];
+        lossless.extend_from_slice(&bits.to_le_bytes());
+        assert_eq!(dimensions(&webp(b"VP8L", &lossless)), Some((1280, 960)));
+
+        // Extended: four bytes of flags, then 24 bits apiece less one.
+        let mut extended = vec![0x08, 0, 0, 0];
+        extended.extend_from_slice(&(5712u32 - 1).to_le_bytes()[..3]);
+        extended.extend_from_slice(&(4284u32 - 1).to_le_bytes()[..3]);
+        assert_eq!(dimensions(&webp(b"VP8X", &extended)), Some((5712, 4284)));
+
+        // A lossy chunk without its start code is not believed.
+        assert_eq!(dimensions(&webp(b"VP8 ", &[0x30, 0x01, 0x00, 0, 0, 0])), None);
+        // Nor is a header cut short.
+        assert_eq!(dimensions(b"RIFF\0\0\0\0WEBPVP8 "), None);
     }
 
     #[test]

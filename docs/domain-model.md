@@ -13673,3 +13673,46 @@ the capture already had (D132); nothing new is stored. At rest one photo is
 shown as a photo, and the box appears from the second side. The box is a
 three.js view on the same `Stage` as the warehouse's 3D pane, in its own chunk.
 
+### D175 — A photograph is sent as WebP, the right way up, without its metadata
+
+*Adopted 2026-10-01.*
+
+**Decision.** The client converts every photograph before sending it:
+- drawn the right way up;
+- at most 4096 px on its longest side, so a 12-megapixel photo goes whole;
+- encoded as WebP at quality 85;
+- carrying none of the camera's metadata.
+
+It is done in one place, `api.photograph`, so item photographs and evidence
+(D140) are treated alike.
+
+**Why.** A phone's JPEG is several megabytes, and it is the upload a
+warehouse's WiFi feels; as WebP the same picture is a fraction of that (a
+1.5 MB test photo went as 0.27 MB). The camera's metadata includes where the
+phone was, which a photo of a carton has no business carrying. Turning it the
+right way up once means every reader shows it the same way, including the
+cut-outs to come.
+
+**WebKit cannot make WebP.** Safari, and every browser on an iPhone, answers a
+canvas asked for WebP with a PNG and no error. So:
+- whether the canvas can is asked once, of a single pixel, rather than of the
+  photo (WebKit would spend a second on a full-size PNG to be thrown away);
+- where it cannot, libwebp compiled to WebAssembly (`@jsquash/webp`, about
+  130 kB compressed) is fetched on first use;
+- that encoder runs at effort 2 of 6. For a 12-megapixel photo that is
+  0.6 s rather than 1.4 s on a desktop, for a file within a few percent of
+  the size.
+
+**What did not change.**
+- The server reads the type from the bytes, and takes JPEG, PNG and WebP.
+- A photo the browser cannot read is sent as taken.
+- The server now reads a WebP's size from its first chunk, as it already did
+  for a JPEG or a PNG.
+
+**What is kept.** The stored bytes are the phone's picture re-encoded, not
+the file the camera wrote. What the photo shows is kept; the camera's file is
+not. A photograph here is evidence of what a thing looks like, and that
+survives the re-encoding.
+
+**Next.** Each side will be cut to its face and straightened to its measured
+proportions, with this photo kept beside the cut-out.
