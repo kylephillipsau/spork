@@ -1,7 +1,7 @@
-# Handoff: the bridge, orders, items, packing, and the warehouse
+# Handoff: the bridge, orders, items and their photos, packing, and the warehouse
 
 Written 2026-09-28, updated 2026-10-01. Read this before continuing on the
-client's UI work, packing, items, or anything spatial.
+client's UI work, packing, items and their photos, or anything spatial.
 
 The short version:
 - Picks made on the WMS handheld reach Spork (D172). A userscript feeds them
@@ -14,10 +14,15 @@ The short version:
   never measured (D173). Inventory › Warehouse drafts it from the bin list and
   lists each place's bins beside a plan of the site, with the same site in 3D
   beside the plan. A scanned bin lands on the face of the rack that holds it.
+- An item's weight, size and photos are recorded at the item (D174), on a
+  phone or at a desk. A photo goes up as WebP (D175), is cut to its face where
+  a model in the browser finds it and a person checks it (D176, D177), and is
+  drawn on a 3D box of the item.
 - The local instance runs on the business's own data, read from NetSuite
-  exports.
+  exports, and a phone on the WiFi can use it.
 
-**Applying the real layout is next, then the plan editor.**
+**Applying the real layout is next, then the plan editor.** The photo work is
+in use; what is open on it is under Next.
 
 Everything below is committed and pushed. The working tree was clean when this
 was written.
@@ -45,8 +50,9 @@ PowerShell explicitly:
 crate-wide format once reformatted about ninety unrelated files. Format only
 what you touch, if at all.
 
-**Migration 99** adds a rack's sides. The working `spork` database is at 98
-until `scripts/local.ps1 migrate` (or `setup`) runs.
+**Migration 100** (a photo's cuts, D176) is the newest, and the working `spork`
+database is at 100. `scripts/local.ps1 start` applies anything pending before
+it starts the server.
 
 **Tests on a fresh database.** The suite is not re-runnable against a database
 it has written to:
@@ -59,9 +65,14 @@ cargo test --workspace --no-fail-fast
 ```
 
 Use `--no-fail-fast`, because without it cargo stops at the first failing
-binary and hides the rest. **The full suite passes.**
+binary and hides the rest. **The full suite passes**: 132 integration tests on
+a fresh database on 2026-10-01. A database it has already written to fails
+three of them, which is the warning above, not a fault.
 - Four tests used to fail in a full run, because they depended on which suites
   ran first. On 2026-09-30 they were changed to assert against their own data.
+- A fifth, `baseline_read`, failed whenever `pack_walk_http` ran first: its
+  photograph test left a carton measurement behind. It removes its rows now
+  (a8580a0).
 - The walks that took the first open line in the queue now take one with stock
   behind it. A fulfilment picked in NetSuite has none, by design.
 
@@ -88,7 +99,14 @@ the Windows certificate store: `NODE_OPTIONS=--use-system-ca npm install …`.
 **Client gates.** `npm run verify` runs typecheck, tests, contract and laws.
 Run `npm run build:review` before `npm run render`. The render reads
 `dist-review/`, so without the build it renders a stale one. Screenshots land
-in `client/.render/`.
+in `client/.render/`. `npm run build` also fetches the face-finder's model the
+first time (14 MB, from a pinned commit, checked); the review build and the
+render gate do not need it.
+
+**Playwright has WebKit as well as Chromium.** WebKit 26.5 (`webkit-2336`, with
+its `winldd-1007` helper) was downloaded by hand into `%LOCALAPPDATA%\ms-playwright`
+the same way Chromium was, so the iPhone's engine can be tested from here:
+`require("playwright").webkit`.
 
 **The local instance.** `scripts/local.ps1 setup` then `start` serves
 `http://localhost:18080`. Since 2026-09-30 the working `spork` database holds
@@ -101,6 +119,20 @@ the business's own data, read from NetSuite exports and never written back:
 [local.md](./local.md) has the importers and their flags. A draft of the real
 layout has been previewed, not applied: apply it from Inventory › Warehouse
 once it reads right. Real codes stay out of the repository, as everywhere else.
+
+**A phone on the WiFi.** The user runs `local.ps1 start -Lan`, which also serves
+the PC's address on the WiFi (it prints it), and photographs boxes with an
+iPhone. The WiFi is set to Private and the firewall rule is in (2026-10-01).
+- Phones sign in with a password: passkeys need HTTPS or localhost.
+- That page is plain HTTP, which is not a secure context. Nothing in the client
+  may need one (`npm run laws` refuses `crypto.randomUUID` and `crypto.subtle`),
+  WebGPU is unavailable, and the face-finder gets one thread.
+- **The server serves `client/dist` from disk, so `npm run build` changes the
+  live app at once.** When the client needs a new endpoint or migration,
+  rebuild and restart the server first, or the phone gets a client its server
+  cannot answer. That happened once on 2026-10-01.
+- To swap the release binaries while it runs, rename the running `.exe`s in
+  `target/release`, build, then restart: a few seconds down.
 
 ---
 
@@ -157,12 +189,17 @@ One place does it, `client/domain/webp.ts`, called from `api.photograph`.
 - On the box, a side shows its name until its photo arrives, and keeps it
   if the photo fails to load, rather than going black.
 
-Next on photos, as the user chose:
-- cut each side to its face with a small AI model run in the browser
-  (SlimSAM through transformers.js, tap the face, about 14 MB);
-- straighten it to the measured proportions, with corner handles to correct
-  it;
-- keep both the original and the cut-out.
+What followed, as the user chose: each photo is cut to its face, straightened
+to the measured proportions, and kept beside the original (D176), with a model
+finding the face first (D177).
+
+### A phone on the WiFi can save (31d10a7)
+
+Every act's id came from `crypto.randomUUID`, which browsers offer only on
+HTTPS or at localhost, so every press on a phone over the WiFi failed with
+"Request failed." before anything was sent. Ids are now made from
+`crypto.getRandomValues` (`uuid()` in `client/domain/acts.ts`), and a
+thirteenth law refuses `crypto.randomUUID` and `crypto.subtle` in the client.
 
 ### A photo cut to its face (D176, migration 100)
 
@@ -184,7 +221,39 @@ its own act, with its own person, so a desk can cut a phone's photos.
 - `client/app/items/cut.ts` is the maths (tested), `FaceCrop.tsx` the screen.
 - The kit's `Dialog` takes a `width`.
 
-Next: SlimSAM places the corners first.
+### The face-finder (D177, a4d666f)
+
+The crop screen places the corners itself, and the person checks them:
+- a photo not cut before is looked at in its middle when the screen opens;
+  a tap on the photo asks again at that point;
+- an answer never moves a corner somebody has moved since asking, and a
+  line under the preview says what the finder is doing.
+
+How it works:
+- SlimSAM-77, quantized, through onnxruntime-web (not transformers.js, whose
+  version 4 brings `sharp` and `onnxruntime-node` along for nothing).
+- `faceFind.ts` is pure and tested: the model's input, its outlines, and
+  from outline to corners (the largest outline four corners describe well;
+  the largest quadrilateral on its hull).
+- `faceWorker.ts` is a module worker of its own. It encodes a photo once,
+  so a tap is under a second, and runs one job at a time. `faceModel.ts` is
+  the page's side. `desk.findFace` is how the screen asks, so fixtures stub
+  it.
+- `vite.config.ts` resolves `onnxruntime-web` with the
+  `onnxruntime-web-use-extern-wasm` condition. Do not switch to the
+  runtime's `proxy` option: in a Vite build its worker loads the app.
+- `scripts/fetch-model.mjs` runs in `npm run build`: a pinned Hugging Face
+  commit, SHA-256 checked, into `client/public/assets/models/` (gitignored).
+- `assets.rs` sends COOP/COEP on the client's files, so localhost and HTTPS
+  get several threads.
+
+Measured on a box's real photos: Chrome at localhost, 6 s to the first answer
+and 0.9 s for a tap. WebKit 26.5 over plain HTTP, one thread: 16.5 s on this
+2019 laptop, 1 s for a tap. The real iPhone is untimed.
+
+The server on this PC was restarted with the isolation headers the same day,
+so the desktop at localhost gets threads. Test in WebKit as well as Chromium
+(see Before you start).
 
 ### The app fills the window
 
@@ -518,13 +587,25 @@ it installed.**
    nothing moves a bin once the draft has put it in a cell.
 2. **Record photos, measurements and weights**, working from the item list
    narrowed to "in stock here" and "needs weighing", "needs measuring" or
-   "needs a photo", with the drawer's Next (D174).
-3. **Test the rack face on the floor** against the bare bin code, as above.
-4. **"Something's wrong here"** on the rack face: a worker scans the bin where
+   "needs a photo", with the drawer's Next (D174). Each photo opens the crop
+   screen with the face already found (D177).
+3. **The photo work, still open:**
+   - **Time the face-finder on the real iPhone.** It is untimed there. If the
+     first answer over the WiFi is too slow, the two ways on are HTTPS
+     (threads, and WebGPU with a half-precision model) and starting the
+     encoding while the photo uploads.
+   - **Who adds a photograph is not checked.** A photo hangs off a look, and
+     the look says who took it; the server does not refuse a photo added to
+     someone else's look. The app never does that, but a direct call could.
+     The user was offered the fix and has not taken it up yet.
+   - A photo's `captured_at` is its look's time, not each shot's. The upload
+     time, `recorded_at`, is the photo's own.
+4. **Test the rack face on the floor** against the bare bin code, as above.
+5. **"Something's wrong here"** on the rack face: a worker scans the bin where
    it really is and taps its cell. Trusted roles apply it, and others raise a
    flag for the office.
-5. **The plan editor** (below).
-6. A history of layout changes (who moved what, and when), and roles for who
+6. **The plan editor** (below).
+7. A history of layout changes (who moved what, and when), and roles for who
    may edit. Until roles exist, anyone signed in can draft.
 
 Deferred and not forgotten:

@@ -33,7 +33,12 @@ cargo run -p spork-server                  # API on :8080
 cargo run -p spork-scheduler               # drains dirty projections
 
 cd client && npm ci && npm run dev         # client on :5173
+node scripts/fetch-model.mjs               # once, in client/: the face-finder's model (D177)
 ```
+
+`npm run build` fetches the model itself; `npm run dev` does not, and without
+it the crop screen says its face-finder could not run and the corners are
+placed by hand.
 
 `DATABASE_URL` defaults to
 `postgres://postgres:spork@localhost:55432/spork`.

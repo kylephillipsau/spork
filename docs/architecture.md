@@ -286,7 +286,7 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-One hundred and seventy-six recorded decisions, a hundred and thirty-four rules the design must always
+One hundred and seventy-seven recorded decisions, a hundred and thirty-four rules the design must always
 satisfy, and a database that a hundred migrations build and reverse cleanly, both
 from empty and with data in them.
 
@@ -310,12 +310,15 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of eighty-five endpoints and a projection
-scheduler. Above that is a React client of twenty-six screens:
+policy resolver. Above it sits an API of eighty-seven endpoints and a projection
+scheduler. Above that is a React client of twenty-four screens, and two retired
+addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, picking, receiving, put away and despatch;
-- capture and weighing;
 - orders, items and the warehouse, each with a page per order, item, place and
   bin;
+- an item's weight, size and photographs, recorded at the item. A photograph
+  is sent as WebP (D175), cut to its face where a model in the browser finds
+  it and a person checks it (D176, D177), and drawn on a 3D box;
 - the findings queue;
 - the administrative screens behind them.
 
@@ -324,7 +327,7 @@ the width it has.
 
 The gap worth naming is still on the writing half of that API, though it is much
 smaller. In August, fourteen of thirty-seven writing endpoints had never been
-exercised over HTTP. Now five of forty-three are never called by an HTTP test:
+exercised over HTTP. Now five of forty-five are never called by an HTTP test:
 - accepting a discrepancy;
 - investigating a discrepancy;
 - the item import;
@@ -337,7 +340,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D176
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D177
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being

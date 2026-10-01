@@ -48,6 +48,14 @@ ignores.
 After changing client or server code, run `setup` again to rebuild. It is
 incremental.
 
+## The face-finder's model
+
+`npm run build` (and so `local.ps1 setup`) downloads the model that finds a
+box's face, about 14 MB, from Hugging Face. It comes from a pinned commit and
+is checked against its SHA-256 before it is kept, in
+`client/public/assets/models/`, which git ignores. A later build finds it
+there and downloads nothing.
+
 ## Other devices on the network
 
 `start -Lan` listens on every interface and prints the addresses other devices
@@ -62,6 +70,10 @@ Two limits apply until the site has a certificate:
   `localhost`, because browsers require HTTPS for them anywhere else.
 - **Traffic is not encrypted.** Passwords cross the WiFi in plain text. That's
   why LAN mode is opt-in.
+- **The face-finder runs on one thread.** It finds a box's face in the crop
+  screen (D177). Browsers give a page several threads only on HTTPS or at
+  localhost, so a phone reaching this PC by address waits several seconds
+  for its first answer. A tap to look again is under a second either way.
 
 A page on plain HTTP at an address is not what browsers call a secure context,
 so they leave out what they offer only over HTTPS. **Nothing in the client may

@@ -13769,3 +13769,76 @@ WebP as photographs are (D175).
 
 **Next.** A small model (SlimSAM, in the browser) places the corners first, so
 marking them is checking them.
+
+### D177 — A model finds a box's face, in the browser, and a person checks it
+
+*Adopted 2026-10-01.*
+
+**Decision.** The crop screen (D176) places the four corners itself:
+- a photograph not cut before is looked at in its middle when the screen
+  opens;
+- a tap on the photograph asks again at that point;
+- the person checks the corners, drags any that are wrong, and saves.
+
+The model is SlimSAM-77 (Segment Anything, pruned to a twentieth of its size,
+quantized; Apache-2.0), run in the browser. An answer never moves a corner
+somebody has moved since asking, and the screen says what the finder is
+doing. Nothing it does is saved until the person saves.
+
+**Why a model.** A box's face is often brown on brown: a carton on a shelf
+of cartons, its lid taped, its side printed. Edge-finding of the kind
+document scanners use finds the strongest lines, which there are tape and
+print as often as they are the face's edges. The model is asked a better
+question, what is the thing at this point, and answers with its outline.
+
+**From outlines to corners.** The model answers a point with three outlines,
+from a part to the whole, each with a confidence:
+- of those four corners describe well (where the outline and its
+  quadrilateral overlap by 0.9 or more of the two together), the largest is
+  the face. The smaller ones are a part of it (a lid flap, a label), and the
+  larger one may run on past it (the face and the board it stands on);
+- the corners are the largest quadrilateral with its corners on the
+  outline's convex hull, which finds a face's corners however the
+  photograph was held;
+- they are named clockwise from the one nearest the photograph's top-left.
+  Which edge is the face's top is still the person's to say (Turn).
+
+On a box's six real photographs, each face came out whole, its top
+included, where taking the most confident outline had found only the lid.
+
+**Why in the browser.** The photograph is already there, and so is the
+person who will check the answer. The server stays a small Rust program with
+no native machine-learning runtime, and the hosted deployment's CPU does no
+inference. The cost is time on the phone:
+- encoding the photograph is the slow half. On a phone reaching a PC over
+  plain HTTP, a browser lends WebAssembly one thread and no GPU. On this
+  project's 2019 laptop that took 11 seconds in Chrome and 16.5 in WebKit
+  26.5; a recent iPhone is faster than that laptop;
+- it is done once per photograph, and a tap reuses it: under a second;
+- on HTTPS or at localhost the client's files are sent with cross-origin
+  isolation headers (`Cross-Origin-Opener-Policy: same-origin`,
+  `Cross-Origin-Embedder-Policy: require-corp`), which let the runtime use
+  several threads: 6 seconds from the screen opening, model load included.
+  Everything the application loads is its own, so the headers cost nothing,
+  and the NetSuite bridge talks to `/api` from NetSuite's page, which they
+  do not touch.
+
+**Off the page's thread.** The model runs in a module worker Vite bundles on
+its own (`faceWorker.ts`), so corners can be dragged while it thinks. The
+ONNX runtime's own proxy worker could not be used: it starts from the script
+the runtime was bundled into, which in a Vite build is the application.
+Likewise its threads start from its WebAssembly glue, so Vite is told to
+resolve `onnxruntime-web` to the build that loads the glue as a file of its
+own.
+
+**The model is built in, not fetched at run time.** `scripts/fetch-model.mjs`
+downloads it at build time from a pinned commit, checks each file's SHA-256,
+and writes the licence notice beside it. The files are served from
+`/assets/`, cached for a year like the rest of the bundle. A phone never asks
+a third party for anything, and the model is the one that was tested. The
+runtime's WebAssembly (14 MB, 3.7 MB compressed) and the model (14 MB) are
+fetched when a camera first opens, so they are ready by the first crop.
+
+**Next.** On HTTPS, WebGPU would make the encoding a second or less; it needs
+the runtime's GPU build and a half-precision model, fetched only where WebGPU
+exists.
