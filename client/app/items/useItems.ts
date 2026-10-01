@@ -10,21 +10,24 @@ import type { ItemRow } from "@domain/types";
  *
  * **Searched on submit, narrowed at once.** A code or a barcode arrives whole,
  * typed or scanned, and a query per keystroke would race its own answers back;
- * the two narrowings are one click each and mean nothing to wait for.
+ * the narrowings are one click each and mean nothing to wait for.
  *
- * **The question lives in the address**, so a link to "in stock here, needs a
- * photo" opens on that list, and Back returns to it. It is rewritten in place
- * rather than navigated, so changing a filter neither scrolls to the top nor
- * piles up history.
+ * **The question lives in the address**, and so does the item open beside it,
+ * so a link to "in stock here, needs weighing, most ordered first" opens on
+ * that list, and Back returns to it. It is rewritten in place rather than
+ * navigated, so changing a filter neither scrolls to the top nor piles up
+ * history. The Weigh and Capture screens were these lists (D174).
  */
 
 export type Stock = "" | "here";
-export type Needs = "" | "measuring" | "photo";
+export type Needs = "" | "weighing" | "measuring" | "photo";
+export type Order = "" | "demand" | "walk";
 
 export interface Asked {
   q: string;
   stock: Stock;
   needs: Needs;
+  order: Order;
 }
 
 export type ItemsState =
@@ -41,44 +44,62 @@ export interface ItemsDesk {
   search: () => void;
   narrow: (next: Partial<Omit<Asked, "q">>) => void;
   more: () => Promise<void>;
+  /** The item open beside the list, by id. */
+  chosen: string | null;
+  choose: (itemId: string | null) => void;
 }
+
+const NEEDS: readonly Needs[] = ["weighing", "measuring", "photo"];
+const ORDERS: readonly Order[] = ["demand", "walk"];
 
 /** The question in a URL's query string, and back. */
-export function askedFrom(search: string): Asked {
+export function askedFrom(search: string): Asked & { item: string | null } {
   const p = new URLSearchParams(search);
-  const stock = p.get("stock") === "here" ? "here" : "";
-  const needs = p.get("needs");
-  return { q: p.get("q") ?? "", stock, needs: needs === "measuring" || needs === "photo" ? needs : "" };
+  const needs = p.get("needs") as Needs;
+  const order = p.get("order") as Order;
+  return {
+    q: p.get("q") ?? "",
+    stock: p.get("stock") === "here" ? "here" : "",
+    needs: NEEDS.includes(needs) ? needs : "",
+    order: ORDERS.includes(order) ? order : "",
+    item: p.get("item"),
+  };
 }
 
-function queryOf(a: Asked): string {
-  const p = new URLSearchParams();
-  if (a.q.trim()) p.set("q", a.q.trim());
-  if (a.stock) p.set("stock", a.stock);
-  if (a.needs) p.set("needs", a.needs);
+function queryOf(a: Asked): { q?: string; stock?: "here"; needs?: Exclude<Needs, "">; order?: Exclude<Order, ""> } {
+  return {
+    ...(a.q.trim() ? { q: a.q.trim() } : {}),
+    ...(a.stock ? { stock: a.stock } : {}),
+    ...(a.needs ? { needs: a.needs } : {}),
+    ...(a.order ? { order: a.order } : {}),
+  };
+}
+
+function addressOf(a: Asked, item: string | null): string {
+  const p = new URLSearchParams(queryOf(a));
+  if (item) p.set("item", item);
   const s = p.toString();
-  return s ? `?${s}` : "";
+  return `/items${s ? `?${s}` : ""}`;
 }
 
-export function useItems(initial: Asked): ItemsDesk {
+export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
   const live = useLive();
-  const [asked, setAsked] = useState<Asked>(initial);
+  const [asked, setAsked] = useState<Asked>({ q: initial.q, stock: initial.stock, needs: initial.needs, order: initial.order });
   const [typed, setTyped] = useState(initial.q);
+  const [chosen, setChosen] = useState<string | null>(initial.item ?? null);
   const [state, setState] = useState<ItemsState>({ kind: "loading" });
   // The newest question wins: an answer to one asked before it is dropped.
   const asking = useRef(0);
 
   useEffect(() => {
+    window.history.replaceState(null, "", href(addressOf(asked, chosen)));
+  }, [asked, chosen]);
+
+  useEffect(() => {
     const n = ++asking.current;
     setState({ kind: "loading" });
-    window.history.replaceState(null, "", href(`/items${queryOf(asked)}`));
-    const query = {
-      ...(asked.q.trim() ? { q: asked.q.trim() } : {}),
-      ...(asked.stock ? { stock: asked.stock } : {}),
-      ...(asked.needs ? { needs: asked.needs } : {}),
-    };
     api
-      .items(query)
+      .items(queryOf(asked))
       .then((page) => {
         if (live.current && n === asking.current)
           setState({ kind: "ready", items: page.items, total: page.total, next: page.next, more: false });
@@ -93,12 +114,7 @@ export function useItems(initial: Asked): ItemsDesk {
     const n = asking.current;
     setState({ ...state, more: true });
     try {
-      const page = await api.items({
-        ...(asked.q.trim() ? { q: asked.q.trim() } : {}),
-        ...(asked.stock ? { stock: asked.stock } : {}),
-        ...(asked.needs ? { needs: asked.needs } : {}),
-        after: state.next,
-      });
+      const page = await api.items({ ...queryOf(asked), after: state.next });
       if (live.current && n === asking.current)
         setState({ kind: "ready", items: [...state.items, ...page.items], total: page.total, next: page.next, more: false });
     } catch (error) {
@@ -114,5 +130,7 @@ export function useItems(initial: Asked): ItemsDesk {
     search: () => setAsked((a) => ({ ...a, q: typed })),
     narrow: (next) => setAsked((a) => ({ ...a, ...next })),
     more,
+    chosen,
+    choose: setChosen,
   };
 }

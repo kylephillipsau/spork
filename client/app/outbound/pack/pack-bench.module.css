@@ -12,7 +12,7 @@
    cartons, which read down. At 7:5 the lines' act column was cut off at 1440. */
 @media (min-width: 1200px) {
   .split {
-    grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 33%, 32rem);
   }
 }
 .cartons {
@@ -23,12 +23,6 @@
 }
 
 /* ---- lines ---- */
-.code {
-  display: block;
-  font-family: var(--ui-font-mono);
-  font-size: var(--ui-text-sm);
-  font-weight: 600;
-}
 .desc {
   display: block;
   overflow: hidden;

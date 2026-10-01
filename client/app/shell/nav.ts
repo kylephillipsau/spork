@@ -11,7 +11,6 @@ import {
   ArrowDownToLine,
   Boxes,
   Building2,
-  Camera,
   ClipboardList,
   KeyRound,
   LayoutDashboard,
@@ -19,7 +18,6 @@ import {
   Package,
   PackageOpen,
   ScanLine,
-  Scale,
   TriangleAlert,
   Truck,
   Upload,
@@ -72,8 +70,6 @@ export const NAV: readonly NavGroup[] = [
       { id: "items", label: "Items", path: "/items", icon: Boxes },
       { id: "warehouse", label: "Warehouse", path: "/warehouse", icon: MapIcon },
       { id: "findings", label: "Findings", path: "/findings", icon: TriangleAlert, badge: "findings" },
-      { id: "weigh", label: "Weigh", path: "/weigh", icon: Scale },
-      { id: "capture", label: "Capture", path: "/capture", icon: Camera },
     ],
   },
 ];
@@ -93,9 +89,22 @@ export const USER_MENU_SCREENS = ["account", "keys"] as const;
 
 /**
  * Reached another way, so deliberately in no menu: a job opened from its
- * queue, a finding opened from the list, and the screens before sign-in.
+ * queue, a finding opened from the list, the screens before sign-in, and the
+ * two old addresses that now open the item list (D174).
  */
-export const REACHED_ANOTHER_WAY = ["pack-one", "order", "bin", "place", "item", "finding", "sign-in", "setup", "where"] as const;
+export const REACHED_ANOTHER_WAY = [
+  "pack-one",
+  "order",
+  "bin",
+  "place",
+  "item",
+  "finding",
+  "sign-in",
+  "setup",
+  "where",
+  "weigh",
+  "capture",
+] as const;
 
 export function allItems(): NavItem[] {
   return [...NAV, SETTINGS].flatMap((g) => g.items);

@@ -24,6 +24,7 @@ export interface Cell {
 
 export interface BenchLine {
   line_id: Uuid;
+  item_id: Uuid;
   item_code: string;
   description: string | null;
   /** Still to do at the bench: committed less what is picked here or boxed. */
@@ -77,6 +78,7 @@ export interface StatedSize {
 }
 
 export interface PackedRow {
+  item_id: Uuid;
   item_code: string;
   description: string | null;
   lot_code: string | null;
@@ -356,15 +358,6 @@ export interface BindBarcodeRequest {
   quantity: number | null;
 }
 
-/** `GET /capture` */
-export interface CaptureScreen {
-  site: string;
-  /** **One list, in the order somebody would walk it.** This was three —
-   *  unrecorded, partial, unconfirmed — which is right for triage at a desk and
-   *  wrong for a lap of the warehouse: three lists in bin order walk past each
-   *  shelf three times. `wants` and `because` carry what the list used to say. */
-  walk: CaptureSubject[];
-}
 
 /** What `POST /observations` answers with.
  *
@@ -475,24 +468,6 @@ export interface FindingActionResponse extends DiscrepancyRow {
 // something: until a weight has been measured once, its age is the age of the
 // import that carried it, and no schedule can be built on that.
 
-/** One thing to put on the scale. */
-export interface ToWeigh {
-  item_id: Uuid | null;
-  item_style_id: Uuid | null;
-  code: string;
-  description: string | null;
-  packaging_level: string;
-  /** What is held now, in grams, and how it was come by. */
-  held_g: number | null;
-  held_method: string | null;
-  held_at: string | null;
-  /** Open order lines naming it. The reason to walk there first. */
-  demand: number;
-  /** `never` — nobody has measured it. `overdue` — somebody did, long ago.
-   *  Two lists rather than one, because an imported figure carries the date of
-   *  the import and its age is unknown rather than small. */
-  because: string;
-}
 
 /** What `POST /weighings` answers with. */
 export interface WeighingRecorded {
@@ -1327,6 +1302,25 @@ export interface ItemView {
   held: ItemHeld[];
   /** What NetSuite last reported, in walking order. */
   reported: ItemReported[];
+  /**
+   * What gets measured for it, each with what is known, in the order to offer
+   * them: its carton, its each, its family's carton, its parts. The capture
+   * worklist's own enumeration, so the item and the to-do list agree.
+   */
+  subjects: CaptureSubject[];
+  /** The newest photograph of each face of each subject; its own only (D132). */
+  photos: SubjectPhoto[];
+}
+
+/** One face of one subject, as last photographed. */
+export interface SubjectPhoto {
+  item_id: Uuid | null;
+  item_style_id: Uuid | null;
+  item_part_id: Uuid | null;
+  packaging_level: string | null;
+  face: string;
+  digest: string;
+  captured_at: string;
 }
 
 /** One item in `GET /items`. */
@@ -1337,8 +1331,14 @@ export interface ItemRow {
   active: boolean;
   style_code: string | null;
   picture: Picture | null;
-  /** `measured`, `listed` (figures copied from a list, none measured here) or `none`. */
-  figures: "measured" | "listed" | "none";
+  /** Its weight: `measured` (or declared to have none), `listed` (copied from a list) or `none`. */
+  weight: "measured" | "listed" | "none";
+  /** Its size, in the same words. */
+  size: "measured" | "listed" | "none";
+  /** Order lines naming it. */
+  demand: number;
+  /** The bin holding the most of it here, by Spork's ledger then NetSuite's report. */
+  bin_code: string | null;
   /** NetSuite's last report of on hand at this site, as text; null when it reported none. */
   reported_on_hand: string | null;
   /** On how many shelves NetSuite reported it. */
@@ -1352,7 +1352,7 @@ export interface ItemsList {
   items: ItemRow[];
   /** How many match, across every page. */
   total: number;
-  /** Pass as `after` for the next page; null on the last. */
+  /** Pass as `after` for the next page, whatever the order; null on the last. */
   next: string | null;
 }
 

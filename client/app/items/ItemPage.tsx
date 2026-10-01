@@ -1,15 +1,11 @@
-import { useState } from "react";
-import { Camera, ImageOff, MapPin, Ruler } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 import {
   Alert,
   Badge,
-  Button,
   Card,
   DataTable,
   EmptyState,
-  Fact,
-  Facts,
   Link,
   Page,
   PageHeader,
@@ -18,25 +14,24 @@ import {
   Stack,
   type Column,
 } from "@ui/index";
-import { imageUrl } from "@domain/api";
-import type { ItemHeld, ItemMeasurements, ItemPacking, ItemReported, ItemView } from "@domain/types";
-import { useNavigate } from "@app/routing/Router";
-import { Faint, ago, dateTime, sentence } from "@app/common/cells";
-import { centimetres, kg } from "@app/common/format";
+import type { ItemHeld, ItemReported, ItemView } from "@domain/types";
+import { Faint, ago, dateTime } from "@app/common/cells";
 
-import type { ItemDesk } from "./useItem";
+import { ItemProperties, ItemSummary } from "./ItemProperties";
+import type { PropertiesDesk } from "./useItemProperties";
 import s from "./items.module.css";
 
 /**
- * An item's own page: what it is, what it looks like, what a carton of it
- * holds and measures, and where it is.
+ * An item's own page: what it is, what it looks like, what gets measured for
+ * it and what is known of each, and where it is. Where a scanned item lands
+ * (D111), so on a handheld this is where an item is weighed, measured and
+ * photographed (D174).
  *
  * **Two answers to "where", never merged.** Spork's own record is its ledger;
  * NetSuite's is a report somebody exported, with an age. Drawn as one list,
  * the report would read as something Spork counted (migration 86).
  */
-export function ItemPage({ desk }: { desk: ItemDesk }) {
-  const navigate = useNavigate();
+export function ItemPage({ desk }: { desk: PropertiesDesk }) {
   const read = desk.read;
 
   if (read.kind !== "ready") {
@@ -59,11 +54,6 @@ export function ItemPage({ desk }: { desk: ItemDesk }) {
   }
 
   const item = read.item;
-  const capture = (
-    <Button icon={<Camera />} onClick={() => navigate("/capture")}>
-      Measure and photograph
-    </Button>
-  );
 
   return (
     <Page>
@@ -75,78 +65,22 @@ export function ItemPage({ desk }: { desk: ItemDesk }) {
           </span>
         }
         description={item.description}
-        actions={capture}
       />
 
       <Stack gap={5}>
         <Card>
-          <div className={s.summary}>
-            <Photo key={item.item_id} item={item} />
-            <Facts columns={1}>
-              <Fact label="Family" always>
-                {item.style ? (
-                  <>
-                    <span className={s.code}>{item.style.code}</span>
-                    <Faint> · {item.style.variants === 1 ? "1 code" : `${item.style.variants} codes`}</Faint>
-                  </>
-                ) : (
-                  <Faint>Not part of a family</Faint>
-                )}
-              </Fact>
-              {item.packing && <Fact label="A carton holds">{holds(item.packing)}</Fact>}
-            </Facts>
-          </div>
+          <ItemSummary item={item} />
         </Card>
+
+        <Section title="Size, weight and photos">
+          <ItemProperties item={item} desk={desk} />
+        </Section>
 
         <Section title="Where it is">
           <Where item={item} />
         </Section>
-
-        <Section title="Measurements" count={item.measurements.length}>
-          {item.measurements.length > 0 ? (
-            <Card padded={false}>
-              <DataTable
-                aria-label="Measurements"
-                columns={MEASUREMENT_COLUMNS}
-                rows={item.measurements}
-                rowKey={(m) => m.packaging_level}
-              />
-            </Card>
-          ) : (
-            <Card>
-              <EmptyState
-                icon={<Ruler />}
-                title="Not measured yet"
-                description="Weigh, measure and photograph it on the capture screen."
-                action={capture}
-              />
-            </Card>
-          )}
-        </Section>
       </Stack>
     </Page>
-  );
-}
-
-/** The front, or a tile saying there is none. A family's photo says so (D141). */
-function Photo({ item }: { item: ItemView }) {
-  const [missing, setMissing] = useState(false);
-  const picture = item.picture;
-  if (!picture || missing) {
-    return (
-      <div className={s.photo} role="img" aria-label="No photo yet">
-        <ImageOff aria-hidden />
-        <span>No photo yet</span>
-      </div>
-    );
-  }
-  return (
-    <figure className={s.figure}>
-      <img className={s.photo} src={imageUrl(picture.digest)} alt={`${item.code}, front`} onError={() => setMissing(true)} />
-      {picture.source !== "own" && (
-        <figcaption className={s.caption}>{item.style ? `Photo of the ${item.style.code} family` : "Photo of its family"}</figcaption>
-      )}
-    </figure>
   );
 }
 
@@ -250,44 +184,3 @@ function heldColumns(many: boolean): Column<ItemHeld>[] {
   if (many) cols.unshift({ key: "site", header: "Warehouse", cell: (h) => h.site_code ?? "—", width: "110px" });
   return cols;
 }
-
-/** What a carton holds, in words: "12", "10 boxes of 100 (1,000)", or that nobody said. */
-function holds(p: ItemPacking): string {
-  const n = p.inners_per_carton;
-  const u = p.units_per_inner;
-  if (n === null) return "Not recorded";
-  if (u === 1) return n === 1 ? "1 unit" : `${n} units`;
-  if (u === null) return `${n} inner packs, how many in each not recorded`;
-  return `${n} inner packs of ${u} (${(n * u).toLocaleString()} units)`;
-}
-
-const METHOD: Record<string, string> = {
-  instrument: "Measured",
-  scan: "Scanned",
-  keyed: "Typed in",
-  derived: "Worked out",
-  estimated: "Estimated",
-  transcribed: "Copied from a list",
-  asserted: "Stated",
-  photographed: "From a photo",
-};
-
-function size(m: ItemMeasurements): string {
-  const d = [m.length_mm, m.width_mm, m.height_mm];
-  if (d.every((v) => v === null)) return "—";
-  return `${d.map((v) => (v === null ? "?" : centimetres(v))).join(" × ")} cm`;
-}
-
-function whose(m: ItemMeasurements): string {
-  if (m.source === "own") return "This code";
-  const family = m.style_code ? `the ${m.style_code} family` : "its family";
-  return m.source === "style" ? sentence(family) : `Partly ${family}`;
-}
-
-const MEASUREMENT_COLUMNS: Column<ItemMeasurements>[] = [
-  { key: "level", header: "What", cell: (m) => sentence(m.packaging_level), width: "90px" },
-  { key: "size", header: "Size (L × W × H)", cell: size, mono: true, width: "190px" },
-  { key: "weight", header: "Weight", cell: (m) => kg(m.gross_weight_g), align: "right", mono: true, width: "110px" },
-  { key: "how", header: "How", cell: (m) => (m.method ? METHOD[m.method] ?? sentence(m.method) : "—"), width: "150px" },
-  { key: "whose", header: "Recorded against", cell: whose, grow: true },
-];

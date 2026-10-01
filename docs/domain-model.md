@@ -13619,3 +13619,57 @@ square and 3.6 m high. A global "advanced mode".
 **Not yet.** The plan editor; correcting a bin's cell by
 scanning it at the shelf; a history of who changed the layout; roles for who
 may edit it. Until roles exist, any signed-in person may draft.
+
+### D174 — An item's properties are seen and changed at the item
+
+*Adopted 2026-10-01. It retires the Weigh and Capture screens as screens of
+their own.*
+
+**Decision.** An item's weight, size, photographs and labels are shown and
+recorded in one place, **the item**, reached however the item was found: from
+the item list, a scan, an order line, or the packing bench. The list opens it in
+a drawer beside the list, with Previous and Next to work down it; a scan on a
+handheld lands on the item's page, which draws the same thing full size. Each
+**subject** of the item (its carton, its each, its family's carton, its parts)
+is a card with what is known of it and four actions: weigh, measure,
+photograph, and bind a label.
+
+**Why.** Weigh and Capture were two worklists, each with its own way in, and
+neither was where somebody looking at an item could change it. Finding the
+item in the list and changing what is known of it should be one step, and
+"what needs doing" is a filter on the list rather than a screen: *needs
+weighing*, *needs measuring* and *needs a photo*, ordered by how often it is
+ordered or in walking order. `/weigh` and `/capture` open those lists.
+
+**What did not change.** The writes are the ones the two screens made: a scale
+reading is `POST /weighings` (always `instrument`), figures are one act under
+D133, photographs hang off the look that took them (D132), a label binds at a
+level (D164). The subjects are the capture worklist's own enumeration
+(`capture::subjects_for_item`), so the item and the to-do list cannot disagree.
+
+**A look for its photographs.** An item weighed and measured that still wants
+a picture is photographed without measuring it again: `POST /observations`
+with `photographs: true` takes a look with no figures, and the photographs hang
+off it as any look's do. An empty look nobody asked for is still refused.
+
+**One implementation.** `useItemProperties` and `ItemProperties` are the only
+code that shows or changes an item's properties; `ItemDrawer` opens them
+beside any screen with one line, and the item's page renders them in place.
+
+**Figures settle, photographs do not.** Figures are read from
+`observation_current`, which the scheduler rebuilds a few seconds after a write
+(D107), so the screen says the act at once and reads the item again over the
+next few seconds. Photographs are read from the looks themselves and show at
+once.
+
+**A box is photographed as a box.** Anything not recorded as having no box
+shape (D138) is asked for its six sides (front, back, left, right, top,
+bottom) and its label, and is drawn as a box made of its own photographs: sized
+by its measured length, width and height, or a cube until those are known,
+turned by dragging, with a side nobody has photographed shown by name where it
+is missing. While photographing, the box turns to the side just taken. A thing
+with no box shape is asked for one photo and its label. These are the faces
+the capture already had (D132); nothing new is stored. At rest one photo is
+shown as a photo, and the box appears from the second side. The box is a
+three.js view on the same `Stage` as the warehouse's 3D pane, in its own chunk.
+

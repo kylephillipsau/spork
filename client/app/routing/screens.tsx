@@ -10,7 +10,7 @@
  * mounts, and it gives the render gate somewhere to check density against
  * instead of a second list kept by hand.
  */
-import { useCallback, type ReactElement } from "react";
+import { useCallback, useEffect, type ReactElement } from "react";
 
 import { Dock } from "@app/shell/dock";
 
@@ -21,8 +21,6 @@ import { usePackBench } from "@app/outbound/pack/usePackBench";
 import { DespatchPage } from "@app/outbound/despatch/DespatchPage";
 
 import { useDespatch } from "@app/outbound/despatch/useDespatch";
-import { CapturePage, CaptureDockPage } from "@app/measurement/capture/CapturePage";
-import { useCapture } from "@app/measurement/capture/useCapture";
 import { PickingPage, PickingDock } from "@app/outbound/picking/PickingPage";
 import { usePicking } from "@app/outbound/picking/usePicking";
 import { PutawayPage, PutawayDockPage } from "@app/inbound/putaway/PutawayPage";
@@ -31,8 +29,6 @@ import { ReceivingPage, ReceivingDockPage } from "@app/inbound/receiving/Receivi
 import { useReceiving } from "@app/inbound/receiving/useReceiving";
 import { FindingsPage } from "@app/integrity/findings/FindingsPage";
 import { useFindings } from "@app/integrity/findings/useFindings";
-import { WeighPage } from "@app/measurement/weigh/WeighPage";
-import { useWeigh } from "@app/measurement/weigh/useWeigh";
 import { SetupPage } from "@app/setup/SetupPage";
 import { useSetup } from "@app/setup/useSetup";
 import { WherePage } from "@app/session/WherePage";
@@ -65,7 +61,7 @@ import { WarehousePage } from "@app/layout/WarehousePage";
 import { useBin, usePlace } from "@app/layout/usePlace";
 import { chosenFrom, useWarehouse } from "@app/layout/useWarehouse";
 import { ItemPage } from "@app/items/ItemPage";
-import { useItem } from "@app/items/useItem";
+import { useItemProperties } from "@app/items/useItemProperties";
 import { ItemsPage } from "@app/items/ItemsPage";
 import { askedFrom, useItems } from "@app/items/useItems";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
@@ -121,29 +117,6 @@ function LiveWhere() {
 }
 
 /**
- * The Floor surface, and the first screen on it.
- *
- * **Capture was named as the screen that would force a real router, and it is
- * the screen that argues against one.** The subject being captured is held in
- * `useCapture` rather than in the URL, because D133 makes the session one act:
- * nothing typed is durable until Record, so a link that reopened
- * `/capture/17e1…` would restore the subject and silently drop the figures
- * beside it. A URL that promises a resumability the model refuses is worse
- * than no URL. The router arrives with a screen whose state is on the server.
- */
-function LiveCapture() {
-  const bench = useCapture();
-  return (
-    <>
-      <CapturePage bench={bench} />
-      <Dock>
-        <CaptureDockPage bench={bench} />
-      </Dock>
-    </>
-  );
-}
-
-/**
  * The Desk surface, and the screen the design document calls the premise.
  *
  * The evidence panel goes in the shell's own column rather than inside the work,
@@ -169,11 +142,6 @@ function LiveFindings({ at }: { at: string | null }) {
     [navigate],
   );
   return <FindingsPage desk={useFindings(at, place)} />;
-}
-
-/** Weigh is a Bench surface: standing at a scale, several hundred a day. */
-function LiveWeigh() {
-  return <WeighPage bench={useWeigh()} />;
 }
 
 function LiveReceiving() {
@@ -293,9 +261,20 @@ function LiveItems() {
   return <ItemsPage desk={useItems(askedFrom(window.location.search))} />;
 }
 
-/** An item: what it is, and where each record says it is. */
+/** An item: what it is, what is known of it and recorded about it, and where it is. */
 function LiveItem({ item }: { item: string }) {
-  return <ItemPage desk={useItem(item)} />;
+  return <ItemPage desk={useItemProperties(item)} />;
+}
+
+/**
+ * Weigh and Capture were lists of items to weigh and to measure; they are the
+ * item list now, narrowed and ordered the way they were (D174). An old link or
+ * a habit lands on that list rather than on nothing.
+ */
+function Moved({ to }: { to: string }) {
+  const navigate = useNavigate();
+  useEffect(() => navigate(to, { replace: true }), [navigate, to]);
+  return null;
 }
 
 /** One place, by the id in the path. */
@@ -328,8 +307,8 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   pack: () => <LiveQueue />,
   "pack-one": (params) => <LivePack fulfilment={params["fulfilment"] ?? ""} />,
   despatch: () => <LiveDespatch />,
-  weigh: () => <LiveWeigh />,
-  capture: () => <LiveCapture />,
+  weigh: () => <Moved to="/items?stock=here&needs=weighing&order=demand" />,
+  capture: () => <Moved to="/items?stock=here&needs=measuring&order=walk" />,
   picking: () => <LivePicking />,
   receiving: () => <LiveReceiving />,
   putaway: () => <LivePutaway />,

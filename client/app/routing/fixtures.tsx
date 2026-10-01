@@ -19,7 +19,7 @@ import { Dock, DockHost } from "@app/shell/dock";
 import { SessionProvider } from "@app/session/SessionContext";
 import type { Badge } from "@app/shell/nav";
 import { pattern } from "@domain/routing";
-import type { BenchScreen, Resolution, SiteRow } from "@domain/types";
+import type { BenchScreen, SiteRow } from "@domain/types";
 import { SCREENS } from "./manifest";
 import type { Landing } from "@app/scan/destination";
 import { AMBIGUOUS, NO_SCREEN, UNKNOWN, UNRECOGNISED, fixtureScan } from "@app/scan/fixture";
@@ -37,19 +37,6 @@ import { CLEAR, QUEUE, fixtureQueue } from "@app/outbound/pack/queue-fixture";
 import { DespatchPage } from "@app/outbound/despatch/DespatchPage";
 import { BOOKED, DESPATCH_FIXTURE } from "@app/outbound/despatch/fixture";
 
-import { CapturePage, CaptureDockPage } from "@app/measurement/capture/CapturePage";
-import {
-  BOUND_BARCODES,
-  CAPTURE_CLEAR,
-  CAPTURE_SUBJECT,
-  CAPTURE_SUBJECT_EACH,
-  SCAN_AMBIGUOUS,
-  SCAN_RESOLVED,
-  SCAN_UNKNOWN,
-  fixtureBench,
-} from "@app/measurement/capture/fixture";
-import type { CaptureBench } from "@app/measurement/capture/useCapture";
-
 import { PickingPage, PickingDock } from "@app/outbound/picking/PickingPage";
 import { AT_THE_STATION, ON_A_PALLET, PICKING_CLEAR, PICKING_FIXTURE, fixturePicking } from "@app/outbound/picking/fixture";
 import type { PickBench } from "@app/outbound/picking/usePicking";
@@ -64,9 +51,6 @@ import type { PutawayBench } from "@app/inbound/putaway/usePutaway";
 
 import { FindingsPage } from "@app/integrity/findings/FindingsPage";
 import { FINDINGS_CLEAR, FINDINGS_FIXTURE, SHORT_PICK, fixtureDesk } from "@app/integrity/findings/fixture";
-
-import { WeighPage } from "@app/measurement/weigh/WeighPage";
-import { DISAGREED, WEIGH_CLEAR, fixtureBench as weighFixture } from "@app/measurement/weigh/fixture";
 
 import { OrdersPage } from "@app/outbound/orders/OrdersPage";
 import { OrderPage } from "@app/outbound/orders/OrderPage";
@@ -112,7 +96,19 @@ import { ImportPage } from "@app/admin/ImportPage";
 import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { ItemPage } from "@app/items/ItemPage";
-import { ITEM, ITEM_UNKNOWN, ITEMS_NONE, ITEMS_PAGE, fixtureItem, fixtureItems } from "@app/items/fixture";
+import {
+  BRUSH,
+  ITEM,
+  ITEM_UNKNOWN,
+  ITEMS_NONE,
+  ITEMS_PAGE,
+  MEASURING,
+  PHOTOGRAPHING,
+  PHOTOGRAPHING_NO_BOX,
+  WEIGHED_APART,
+  fixtureItems,
+  fixtureProperties,
+} from "@app/items/fixture";
 import { ItemsPage } from "@app/items/ItemsPage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
@@ -209,7 +205,6 @@ function Floor<B>({
   );
 }
 
-const capture = (bench: CaptureBench) => <Floor page={CapturePage} dock={CaptureDockPage} bench={bench} />;
 const picking = (bench: PickBench) => <Floor page={PickingPage} dock={PickingDock} bench={bench} />;
 const receiving = (bench: ReceivingBench) => <Floor page={ReceivingPage} dock={ReceivingDockPage} bench={bench} />;
 const putaway = (bench: PutawayBench) => <Floor page={PutawayPage} dock={PutawayDockPage} bench={bench} />;
@@ -289,11 +284,6 @@ function despatch() {
     />
   );
 }
-
-/** What the capture scan can answer, one route each. `identifier_unrecognised`
- *  draws the unknown shape with a different sentence and has no route. */
-const scanned = (found: Resolution) =>
-  capture(fixtureBench({ kind: "worklist" }, { scan: { typed: "", found, refocus: 0 } }));
 
 /**
  * A carton scanned: the line chosen, the lot and date filled from the label,
@@ -496,40 +486,6 @@ export const FIXTURES: readonly Screen[] = [
     putaway(fixturePutaway(PUTAWAY_CLEAR)),
   ),
 
-  // The three capture stages, each reachable with no network. A stage no
-  // fixture reaches is a stage the render gate cannot check.
-  app("f-capture", "/fixtures/capture", "Capture", "floor", { screen: "capture" }, () => capture(fixtureBench({ kind: "worklist" }))),
-  app("f-capture-clear", "/fixtures/capture/clear", "Capture — clear", "floor", { screen: "capture" }, () =>
-    capture(fixtureBench({ kind: "worklist" }, {}, CAPTURE_CLEAR)),
-  ),
-  app("f-capture-scanned", "/fixtures/capture/scanned", "Capture — scanned", "floor", { screen: "capture" }, () => scanned(SCAN_RESOLVED)),
-  app("f-capture-ambiguous", "/fixtures/capture/ambiguous", "Capture — ambiguous", "floor", { screen: "capture" }, () =>
-    scanned(SCAN_AMBIGUOUS),
-  ),
-  app("f-capture-unknown", "/fixtures/capture/unknown", "Capture — unknown", "floor", { screen: "capture" }, () => scanned(SCAN_UNKNOWN)),
-  app("f-capture-figures", "/fixtures/capture/figures", "Capture — figures", "floor", { screen: "capture" }, () =>
-    capture(fixtureBench({ kind: "figures", subject: CAPTURE_SUBJECT })),
-  ),
-  // A single loose thing, which is where D138 and D139 land: a carton reaches
-  // neither the arrangement tabs nor "no dimensions", so without this route
-  // they would render on no screen the gate visits (D131).
-  app("f-capture-each", "/fixtures/capture/each", "Capture — each", "floor", { screen: "capture" }, () =>
-    capture(fixtureBench({ kind: "figures", subject: CAPTURE_SUBJECT_EACH })),
-  ),
-  app("f-capture-faces", "/fixtures/capture/faces", "Capture — faces", "floor", { screen: "capture" }, () =>
-    capture(
-      fixtureBench(
-        { kind: "photographs", subject: CAPTURE_SUBJECT, event: "e0e00000-0000-0000-0000-000000000001" },
-        { taken: ["front", "label"], recorded: { measurements: 4, warnings: [] } },
-      ),
-    ),
-  ),
-  // What a box already answers to (D164): one binding at the level being
-  // captured, one at another, and one from a feed with nobody's name on it.
-  app("f-capture-barcodes", "/fixtures/capture/barcodes", "Capture — barcodes", "floor", { screen: "capture" }, () =>
-    capture(fixtureBench({ kind: "figures", subject: CAPTURE_SUBJECT }, { barcodes: BOUND_BARCODES, binding: "", count: "" })),
-  ),
-
   app("f-orders-latest", "/fixtures/orders/latest", "Orders", "desk", { screen: "orders" }, () => <OrdersPage desk={fixtureOrders(LATEST)} />),
   app("f-orders", "/fixtures/orders", "Orders — found", "desk", { screen: "orders" }, () => <OrdersPage desk={fixtureOrders(FOUND)} />),
   app("f-orders-superseded", "/fixtures/orders/superseded", "Orders — replaced", "desk", { screen: "orders" }, () => (
@@ -558,12 +514,34 @@ export const FIXTURES: readonly Screen[] = [
   // carton from the family's prepack row; and one nobody has recorded at all.
   // The item list: a page of a long list, and a search that found nothing.
   app("f-items", "/fixtures/items", "Items", "desk", { screen: "items" }, () => <ItemsPage desk={fixtureItems(ITEMS_PAGE)} />),
+  // A row open beside the list: its properties, with Previous and Next (D174).
+  app("f-items-open", "/fixtures/items/open", "Items — an item open", "desk", { screen: "items" }, () => (
+    <ItemsPage
+      desk={fixtureItems(ITEMS_PAGE, { stock: "here", needs: "measuring", order: "walk" }, BRUSH)}
+      panel={fixtureProperties(ITEM)}
+    />
+  )),
   app("f-items-none", "/fixtures/items/none", "Items — nothing matches", "desk", { screen: "items" }, () => (
     <ItemsPage desk={fixtureItems(ITEMS_NONE, { q: "SKU-0000", stock: "here", needs: "photo" })} />
   )),
-  app("f-item", "/fixtures/item", "Item", "floor", { screen: "item" }, () => <ItemPage desk={fixtureItem(ITEM)} />),
+  app("f-item", "/fixtures/item", "Item", "floor", { screen: "item" }, () => <ItemPage desk={fixtureProperties(ITEM)} />),
+  // Measuring the each, which says how it was arranged and may say it has no box (D138).
+  app("f-item-measuring", "/fixtures/item/measuring", "Item — measuring", "floor", { screen: "item" }, () => (
+    <ItemPage desk={MEASURING} />
+  )),
+  // A reading far from the figure on record raises a finding, and says so.
+  app("f-item-weighed", "/fixtures/item/weighed", "Item — weighed apart", "floor", { screen: "item" }, () => (
+    <ItemPage desk={WEIGHED_APART} />
+  )),
+  app("f-item-photographing", "/fixtures/item/photographing", "Item — photographing", "floor", { screen: "item" }, () => (
+    <ItemPage desk={PHOTOGRAPHING} />
+  )),
+  // A thing with no box shape is asked for a photo and its label, not six sides.
+  app("f-item-no-box", "/fixtures/item/no-box", "Item — no box shape", "floor", { screen: "item" }, () => (
+    <ItemPage desk={PHOTOGRAPHING_NO_BOX} />
+  )),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
-    <ItemPage desk={fixtureItem(ITEM_UNKNOWN)} />
+    <ItemPage desk={fixtureProperties(ITEM_UNKNOWN)} />
   )),
   // The warehouse: none yet, its draft previewed (and adjusted: a lone code's
   // "rack" left out, three racks with two sides), a rack chosen with its
@@ -617,15 +595,6 @@ export const FIXTURES: readonly Screen[] = [
   // Nothing to chase, which is the system working rather than an error.
   app("f-findings-clear", "/fixtures/findings/clear", "Findings — clear", "desk", { screen: "findings" }, () => (
     <FindingsPage desk={fixtureDesk({ status: { kind: "ready", findings: FINDINGS_CLEAR } })} />
-  )),
-
-  app("f-weigh", "/fixtures/weigh", "Weigh", "bench", { screen: "weigh" }, () => <WeighPage bench={weighFixture()} />),
-  // The reading that disagrees, which is the state this screen exists for.
-  app("f-weigh-disagreed", "/fixtures/weigh/disagreed", "Weigh — disagreed", "bench", { screen: "weigh" }, () => (
-    <WeighPage bench={weighFixture({ at: 1, recorded: DISAGREED })} />
-  )),
-  app("f-weigh-clear", "/fixtures/weigh/clear", "Weigh — clear", "bench", { screen: "weigh" }, () => (
-    <WeighPage bench={weighFixture({ status: { kind: "ready", queue: WEIGH_CLEAR } })} />
   )),
 
   auth("f-sign-in", "/fixtures/sign-in", "Sign in", () => <SignInPage bench={fixtureSignIn(ASKING)} />),

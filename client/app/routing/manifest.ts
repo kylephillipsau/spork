@@ -81,8 +81,9 @@ export const SCREENS: readonly ScreenSpec[] = [
   spec("pack", "/pack", "Packing", "bench"),
   spec("pack-one", "/pack/:fulfilment", "Pack order", "bench"),
   spec("despatch", "/despatch", "Despatch", "bench"),
-  spec("weigh", "/weigh", "Weigh", "bench"),
-  spec("capture", "/capture", "Capture", "floor", { claimsScan: true }),
+  // Moved to the item list, narrowed (D174): these only send an old link there.
+  spec("weigh", "/weigh", "Weigh", "desk"),
+  spec("capture", "/capture", "Capture", "desk"),
   // **Claims the scanner now** (D117). The walk grew a scan bar of its own with
   // D166 — one field asking where the goods are going, then whether this is the
   // thing on the row — and a chrome locator beside it is two places to aim a

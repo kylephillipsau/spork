@@ -127,7 +127,7 @@ pub struct CaptureScreen {
 /// exactly what `POST /observations` takes as a subject. There is deliberately
 /// no `observable_id`: the writer is get-or-create over that table, so a screen
 /// that carried one would be carrying an id it must not send.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct CaptureSubject {
     pub item_id: Option<Uuid>,
     pub item_style_id: Option<Uuid>,

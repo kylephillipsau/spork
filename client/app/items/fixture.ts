@@ -1,43 +1,95 @@
-import type { ItemRow, ItemView } from "@domain/types";
+import type { CaptureSubject, ItemRow, ItemView } from "@domain/types";
 
-import type { ItemDesk } from "./useItem";
+import { NO_FIGURES } from "./subjects";
+import type { PropertiesDesk } from "./useItemProperties";
 import type { Asked, ItemsDesk, ItemsState } from "./useItems";
 
 /**
  * Items with no network.
  *
- * **SKU-5120B**, the blue one of a brush family in four colours. Its carton
- * was copied from a prepack list against the family, it is on two shelves by
- * NetSuite's last report plus a quantity at the warehouse with no shelf, and
- * Spork has one of those shelves in its own ledger. **SKU-8837**, which nobody
- * has measured, photographed or reported anywhere.
+ * **SKU-5120B**, the blue one of a brush family in four colours. Its family's
+ * carton was copied from a prepack list, its own each has been weighed and
+ * photographed from the front, it is on two shelves by NetSuite's last report
+ * plus a quantity at the warehouse with no shelf, and Spork has one of those
+ * shelves in its own ledger. **SKU-8837**, which nobody has measured,
+ * photographed or reported anywhere.
  */
 
 const AS_AT = "2026-09-29T23:10:00Z";
+const BRUSH = "01990000-0000-7000-8000-0000000b5120";
+const BRUSH_FAMILY = "01990000-0000-7000-8000-0000000a5120";
+const TAPE_GUN = "01990000-0000-7000-8000-0000000b8837";
+
+const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "packaging_level">): CaptureSubject => ({
+  item_id: null,
+  item_style_id: null,
+  item_part_id: null,
+  part_label: null,
+  description: null,
+  parts: 0,
+  gross_weight_g: null,
+  length_mm: null,
+  width_mm: null,
+  height_mm: null,
+  weight_absent: false,
+  dimensions_absent: false,
+  source: null,
+  style_code: null,
+  method: null,
+  observed_at: null,
+  faces: [],
+  wants: ["weight", "dimensions", "photographs"],
+  demand: 0,
+  because: "nothing",
+  location_code: null,
+  soh: 0,
+  ...over,
+});
+
+/** The family's carton, copied from a prepack list; nobody has measured it here. */
+const FAMILY_CARTON = subject({
+  item_style_id: BRUSH_FAMILY,
+  code: "SKU-5120",
+  description: "Floor brush, 450 mm",
+  packaging_level: "carton",
+  gross_weight_g: 4600,
+  length_mm: 520,
+  width_mm: 310,
+  height_mm: 240,
+  source: "own",
+  method: "transcribed",
+  observed_at: "2026-09-30T00:20:00Z",
+  wants: ["weight", "dimensions", "photographs"],
+  because: "never-measured",
+  demand: 14,
+});
+
+/** Its own each: weighed on a scale, not yet measured, photographed from the front. */
+const BRUSH_EACH = subject({
+  item_id: BRUSH,
+  code: "SKU-5120B",
+  description: "Floor brush, 450 mm, blue",
+  packaging_level: "each",
+  gross_weight_g: 520,
+  source: "own",
+  method: "instrument",
+  observed_at: "2026-09-30T04:12:00Z",
+  faces: ["front"],
+  wants: ["dimensions", "photographs"],
+  because: "incomplete",
+  demand: 6,
+});
+
+const PHOTO = "a3f1e0c2b4d6a8f0e2c4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8";
 
 export const ITEM: ItemView = {
-  item_id: "01990000-0000-7000-8000-0000000b5120",
+  item_id: BRUSH,
   code: "SKU-5120B",
   description: "Floor brush, 450 mm, blue",
   active: true,
   style: { code: "SKU-5120", description: "Floor brush, 450 mm", variants: 4 },
-  picture: null,
-  measurements: [
-    {
-      packaging_level: "carton",
-      source: "style",
-      style_code: "SKU-5120",
-      item_packing_config_id: "01990000-0000-7000-8000-0000000c5120",
-      length_mm: 520,
-      width_mm: 310,
-      height_mm: 240,
-      gross_weight_g: 4600,
-      net_weight_g: null,
-      tare_weight_g: null,
-      method: "transcribed",
-      observed_at: "2026-09-30T00:20:00Z",
-    },
-  ],
+  picture: { digest: PHOTO, source: "own" },
+  measurements: [],
   packing: { units_per_inner: 1, inners_per_carton: 8, effective_from: "2026-09-30" },
   held: [
     {
@@ -80,10 +132,33 @@ export const ITEM: ItemView = {
       source: "netsuite-inventory-balance",
     },
   ],
+  subjects: [FAMILY_CARTON, BRUSH_EACH],
+  photos: [
+    {
+      item_id: BRUSH,
+      item_style_id: null,
+      item_part_id: null,
+      packaging_level: "each",
+      face: "front",
+      digest: PHOTO,
+      captured_at: "2026-09-30T04:13:00Z",
+    },
+    // The family's carton photographed on four of its sides and its label:
+    // drawn as a box, the two sides nobody took show their names.
+    ...(["front", "right", "top", "back", "label"] as const).map((face) => ({
+      item_id: null,
+      item_style_id: BRUSH_FAMILY,
+      item_part_id: null,
+      packaging_level: "carton",
+      face,
+      digest: PHOTO,
+      captured_at: "2026-09-30T04:20:00Z",
+    })),
+  ],
 };
 
 export const ITEM_UNKNOWN: ItemView = {
-  item_id: "01990000-0000-7000-8000-0000000b8837",
+  item_id: TAPE_GUN,
   code: "SKU-8837",
   description: "Tape gun, 50 mm",
   active: true,
@@ -93,9 +168,90 @@ export const ITEM_UNKNOWN: ItemView = {
   packing: null,
   held: [],
   reported: [],
+  subjects: [subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "each" })],
+  photos: [],
 };
 
-export const fixtureItem = (item: ItemView): ItemDesk => ({ read: { kind: "ready", item } });
+const noop = () => {};
+const later = async () => {};
+
+/** An item's properties with nothing behind them: the screen as it would be. */
+export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> = {}): PropertiesDesk {
+  return {
+    read: { kind: "ready", item },
+    open: null,
+    show: noop,
+    close: noop,
+    reading: "",
+    unit: "kg",
+    typeReading: noop,
+    setUnit: noop,
+    weigh: later,
+    figures: NO_FIGURES,
+    type: noop,
+    choosePresentation: noop,
+    toggleNoDimensions: noop,
+    measure: later,
+    taken: [],
+    attach: later,
+    barcodes: [],
+    binding: "",
+    typeBinding: noop,
+    count: "",
+    typeCount: noop,
+    bind: later,
+    busy: false,
+    problem: null,
+    said: null,
+    dismiss: noop,
+    ...over,
+  };
+}
+
+/** The each being measured: an each says how it was arranged, and may say it has no box. */
+export const MEASURING = fixtureProperties(ITEM, {
+  open: { key: `${BRUSH}:each`, action: "measure" },
+  figures: { ...NO_FIGURES, weight: "0.52", length: "45", width: "", height: "" },
+});
+
+/** The family's carton put on the scale, and the reading far from the list's figure. */
+export const WEIGHED_APART = fixtureProperties(ITEM, {
+  said: {
+    tone: "warning",
+    text: "Weighed 6.1 kg. That is a long way from the 4.6 kg on record, so a finding was raised to look into it.",
+    finding: "01990000-0000-7000-8000-0000000f0001",
+  },
+});
+
+/** A thing with no box shape: one photo and its label, not six sides. */
+export const NO_BOX: ItemView = {
+  ...ITEM_UNKNOWN,
+  code: "SKU-4410",
+  description: "Mop head, cotton, 400 g",
+  subjects: [
+    subject({
+      item_id: TAPE_GUN,
+      code: "SKU-4410",
+      packaging_level: "each",
+      gross_weight_g: 400,
+      dimensions_absent: true,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-09-30T05:00:00Z",
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
+  ],
+};
+export const PHOTOGRAPHING_NO_BOX = fixtureProperties(NO_BOX, {
+  open: { key: `${TAPE_GUN}:each`, action: "photos" },
+});
+
+/** The camera open on the each, its front and then its top taken in this look. */
+export const PHOTOGRAPHING = fixtureProperties(
+  { ...ITEM, photos: [...ITEM.photos, { ...ITEM.photos[0]!, face: "top", captured_at: "2026-09-30T04:14:00Z" }] },
+  { open: { key: `${BRUSH}:each`, action: "photos" }, taken: ["front", "top"] },
+);
 
 let row = 0;
 const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): ItemRow => ({
@@ -103,7 +259,10 @@ const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): It
   active: true,
   style_code: null,
   picture: null,
-  figures: "none",
+  weight: "none",
+  size: "none",
+  demand: 0,
+  bin_code: null,
   reported_on_hand: null,
   reported_bins: 0,
   held: 0,
@@ -112,19 +271,31 @@ const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): It
 
 /** A page of the list: in stock and not, measured and not, a family's and its own. */
 export const ITEMS: ItemRow[] = [
-  ROW({ code: "SKU-3928", description: "Label roll, 100 × 150 mm", reported_on_hand: "140", reported_bins: 3 }),
-  ROW({ code: "SKU-5120B", description: "Floor brush, 450 mm, blue", style_code: "SKU-5120", figures: "listed", reported_on_hand: "24", reported_bins: 2, held: 4 }),
-  ROW({ code: "SKU-5120G", description: "Floor brush, 450 mm, green", style_code: "SKU-5120", figures: "listed", reported_on_hand: "12", reported_bins: 1 }),
-  ROW({ code: "SKU-7461", description: "Wet floor sign, folding", figures: "measured", reported_on_hand: "7.5", reported_bins: 1 }),
+  ROW({ code: "SKU-3928", description: "Label roll, 100 × 150 mm", reported_on_hand: "140", reported_bins: 3, bin_code: "A-02-1", demand: 22 }),
+  ROW({
+    item_id: BRUSH,
+    code: "SKU-5120B",
+    description: "Floor brush, 450 mm, blue",
+    style_code: "SKU-5120",
+    picture: { digest: PHOTO, source: "own" },
+    weight: "measured",
+    size: "listed",
+    reported_on_hand: "24",
+    reported_bins: 2,
+    held: 4,
+    bin_code: "C-01-1",
+    demand: 6,
+  }),
+  ROW({ code: "SKU-5120G", description: "Floor brush, 450 mm, green", style_code: "SKU-5120", size: "listed", weight: "listed", reported_on_hand: "12", reported_bins: 1, bin_code: "C-01-2" }),
+  ROW({ code: "SKU-7461", description: "Wet floor sign, folding", weight: "measured", size: "measured", reported_on_hand: "7.5", reported_bins: 1, bin_code: "D-01-3", demand: 3 }),
   ROW({ code: "SKU-8837", description: "Tape gun, 50 mm" }),
 ];
 
-const noop = () => {};
-
-export function fixtureItems(state: ItemsState, asked: Partial<Asked> = {}): ItemsDesk {
-  const a = { q: "", stock: "", needs: "", ...asked } as Asked;
-  return { state, asked: a, typed: a.q, type: noop, search: noop, narrow: noop, more: async () => {} };
+export function fixtureItems(state: ItemsState, asked: Partial<Asked> = {}, chosen: string | null = null): ItemsDesk {
+  const a = { q: "", stock: "", needs: "", order: "", ...asked } as Asked;
+  return { state, asked: a, typed: a.q, type: noop, search: noop, narrow: noop, more: later, chosen, choose: noop };
 }
 
 export const ITEMS_PAGE: ItemsState = { kind: "ready", items: ITEMS, total: 9181, next: "SKU-8837", more: false };
 export const ITEMS_NONE: ItemsState = { kind: "ready", items: [], total: 0, next: null, more: false };
+export { BRUSH };

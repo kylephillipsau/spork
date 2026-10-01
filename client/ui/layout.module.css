@@ -146,11 +146,13 @@
 .cols1 {
   grid-template-columns: minmax(0, 1fr);
 }
+/* Each column as wide as a fact needs, so a wide card does not set a label
+   half a screen from the next. */
 .cols2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 22rem));
 }
 .cols3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 22rem));
 }
 .cols4 {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

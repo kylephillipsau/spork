@@ -5,7 +5,6 @@ import type {
   CeremonyBegun,
   BenchScreen,
   BoundBarcode,
-  CaptureScreen,
   ChangePasswordRequest,
   MintTokenRequest,
   MintedApiToken,
@@ -48,7 +47,6 @@ import type {
   SetupDone,
   SetupRequest,
   SetupStatus,
-  ToWeigh,
   WeighingRecorded,
   Uuid,
 } from "./types";
@@ -536,8 +534,6 @@ export const api = {
   /** What this item answers to, newest first. */
   itemBarcodes: (item: Uuid) => send<BoundBarcode[]>("GET", `/items/${item}/barcodes`),
 
-  /** What to put on the scale, in the order worth doing it. */
-  toWeigh: (limit = 50) => send<ToWeigh[]>("GET", `/revalidation?limit=${limit}`),
 
   /**
    * Put a thing on the scale and record what it said.
@@ -717,7 +713,13 @@ export const api = {
   bin: (locationId: Uuid) => send<BinView>("GET", `/bins/${encodeURIComponent(locationId)}`),
 
   /** Items, searched and narrowed, a page at a time in code order. */
-  items: (query: { q?: string; stock?: "here"; needs?: "measuring" | "photo"; after?: string }) => {
+  items: (query: {
+    q?: string;
+    stock?: "here";
+    needs?: "weighing" | "measuring" | "photo";
+    order?: "demand" | "walk";
+    after?: string;
+  }) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) if (v) p.set(k, v);
     const qs = p.toString();
@@ -813,7 +815,6 @@ export const api = {
     return session;
   },
 
-  capture: () => send<CaptureScreen>("GET", "/capture"),
 
   /**
    * What the thing in your hand is (D111, D34).
@@ -1051,6 +1052,9 @@ export const api = {
       unit?: string;
       absent_reason?: string;
     }[];
+    /** A look taken for its photographs, with nothing measured: the event
+     *  the pictures then hang off (D132). */
+    photographs?: boolean;
     act: Act;
   }) =>
     send<RecordObservationResponse>("POST", "/observations", {
@@ -1060,7 +1064,8 @@ export const api = {
       ...(input.presentation ? { presentation: input.presentation } : {}),
       packaging_level: input.level,
       measurements: input.measurements,
-      method: "instrument",
+      ...(input.photographs ? { photographs: true } : {}),
+      method: input.photographs ? "photographed" : "instrument",
       ingestion_channel: "keyed",
       client_event_id: input.act.id("event"),
       occurred_at: input.act.at,

@@ -7845,6 +7845,13 @@ pub struct RecordObservationRequest {
     /// described. D23 and D58.
     pub packaging_level: Option<String>,
     pub measurements: Vec<Measurement>,
+    /// **A look taken for its photographs**, with nothing measured: an item
+    /// already weighed and measured that still has no picture of its front.
+    /// The photographs hang off the event as any look's do (D132); this only
+    /// lets that event carry no figures. Without it an empty look is refused,
+    /// because a look nobody meant to be empty is a mistake.
+    #[serde(default)]
+    pub photographs: bool,
     /// **What state the subject was in.** `presentation.code`: as_supplied,
     /// assembled, knocked_down, folded, rolled, flat, compressed.
     ///
@@ -7927,7 +7934,7 @@ pub async fn record_observation(
                             .into(),
                     ));
                 }
-                if body.measurements.is_empty() {
+                if body.measurements.is_empty() && !body.photographs {
                     return Err(ApiError::Rejected(
                         "the observation is empty".into(),
                     ));
@@ -7947,8 +7954,12 @@ pub async fn record_observation(
 
                 if act.is_replay() {
                     let (observation_event_id, observation_ids) =
-                        client_events::require_observation_facts(tx, body.client_event_id)
-                            .await?;
+                        client_events::require_observation_facts(
+                            tx,
+                            body.client_event_id,
+                            body.photographs,
+                        )
+                        .await?;
                     let observable_id: Uuid = tx
                         .query_one(
                             "SELECT observable_id FROM observation_event WHERE id = $1",

@@ -210,9 +210,8 @@ Screens marked ○ have no endpoint yet.
 
 | Screen | Surface | Does | Behind it |
 |---|---|---|---|
-| Worklist | Bench | Never-measured first, then stale, ranked by demand | `/revalidation` |
-| **Weigh** | Bench | One thing on a scale at a time | `/weighings` |
-| **Capture** | Floor | Scan, weigh, measure, photograph seven faces | `/capture`, `/observations`, `/observations/{id}/images/{face}` |
+| **Items** | Desk | Find an item; filtered to what needs weighing, measuring or a photo, by demand or walking order. A row opens its properties in a drawer (D174) | `/items` |
+| **Item** | Floor | Weigh, measure, photograph and label each of its subjects | `/items/{id}`, `/weighings`, `/observations`, `/observations/{id}/images/{face}` |
 | Measurements | Desk | The history, and what disagreed | `/items/{id}/measurements` |
 
 ### Reference and account
@@ -221,7 +220,7 @@ Items, presets (`/package-types`), locations and zones, policies (the D22 scope
 lattice, which needs a real interface and does not have one), carriers, devices,
 people and keys (`/passkeys`), sites and tenant switching, sign in and out.
 
-**Roughly thirty screens.** Four are load-bearing — Pack, Findings, Weigh, Pick —
+**Roughly thirty screens.** Four are load-bearing — Pack, Findings, Items, Pick —
 and that is where the design effort goes.
 
 ---
@@ -620,7 +619,7 @@ describe.
 | `typecheck` | Does it compile, under `strict` and `noUncheckedIndexedAccess` |
 | `contract` | Does `domain/types.ts` still agree with the server about which fields exist |
 | `laws` | Twelve static checks: values from the tokens, no unread tokens or unused classes, the frame at desktop density, no fixture on the live path, anchors from `Link`, and the rest D171 lists |
-| `render` | Runs the review build in a browser, visits every fixture in both themes (handheld ones at handheld size, desk ones again at 390px) and measures what came out |
+| `render` | Runs the review build in a browser, visits every fixture in both themes (handheld ones at handheld size, desk ones again at 390px and on a 2560px monitor) and measures what came out |
 | `frame` | Runs the production build against canned JSON: the dock, the frame surviving navigation, one session read, finding deep links, the phone drawer, the passkey ceremony |
 
 **The last two exist because the first three read source.** A component that

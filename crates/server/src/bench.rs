@@ -69,6 +69,8 @@ pub struct Bench {
 #[derive(Serialize)]
 pub struct BenchLine {
     pub line_id: Uuid,
+    /// So a screen can open the item's properties from the line.
+    pub item_id: Uuid,
     pub item_code: String,
     pub description: Option<String>,
     /// Still to do at the bench: committed less the larger of what this system
@@ -208,6 +210,7 @@ pub struct ExpectedWeight {
 
 #[derive(Serialize)]
 pub struct PackedRow {
+    pub item_id: Uuid,
     pub item_code: String,
     pub description: Option<String>,
     pub lot_code: Option<String>,
@@ -375,6 +378,7 @@ pub async fn bench_view(
                         elsewhere,
                         own_carton,
                         line_id: l.get(0),
+                        item_id,
                         item_code: l.get(1),
                         description: l.get(2),
                         remaining: l.get(4),
@@ -649,6 +653,7 @@ pub async fn cartons_on(
                                 let ids: Vec<Uuid> = c.get(5);
                                 let left: Vec<i64> = c.get(6);
                                 PackedRow {
+                                    item_id: c.get(4),
                                     item_code: c.get(0),
                                     description: c.get(1),
                                     lot_code: c.get(2),

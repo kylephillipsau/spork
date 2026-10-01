@@ -233,11 +233,11 @@
   gap: var(--ui-space-5);
   align-items: start;
 }
-/* A third for the places, which read down; the rest for the plan and the
-   bins, whose rows carry the most. */
+/* A third for the places, which read down, and never more than a list of
+   names needs; the rest for the plan and the bins, whose rows carry the most. */
 @media (min-width: 1100px) {
   .desk {
-    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
+    grid-template-columns: clamp(280px, 33%, 24rem) minmax(0, 1fr);
   }
 }
 .chosen {
@@ -246,8 +246,9 @@
   gap: var(--ui-space-5);
   min-width: 0;
 }
+/* Taller on a taller window, so a big screen shows the site big. */
 .sitePlan {
-  max-height: 20rem;
+  max-height: clamp(20rem, 36vh, 34rem);
 }
 .target {
   cursor: pointer;
@@ -309,14 +310,14 @@
   grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
 }
 .split .sitePlan {
-  height: 20rem;
+  height: clamp(20rem, 36vh, 34rem);
 }
 .scene {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: 20rem;
+  height: clamp(20rem, 36vh, 34rem);
   overflow: hidden;
 }
 /* Framed, because turned or zoomed in the site runs off its edges. */

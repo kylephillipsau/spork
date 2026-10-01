@@ -13,8 +13,9 @@
  * Per render:
  *
  *  - nothing threw, nothing logged an error, and nothing tried the network;
- *  - the page does not scroll sideways (at the bench, and at 390px for every
- *    desk-shaped screen), and the widest element is named when it does;
+ *  - the page does not scroll sideways (at the bench, at 390px for every
+ *    desk-shaped screen, and on a 2560px monitor for every one in the app
+ *    frame), and the widest element is named when it does;
  *  - density: a handheld screen's content is at touch density and every
  *    control on it is a touch target, while the frame (sidebar, header) stays
  *    at desktop density on every screen;
@@ -95,10 +96,15 @@ await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const base = `http://127.0.0.1:${server.address().port}/`;
 await mkdir(SHOTS, { recursive: true });
 
-/** The bench monitor, the handheld, and a desk screen on a phone. */
+/**
+ * The bench monitor, the handheld, a desk screen on a phone, and a big office
+ * monitor. The content fills the window, so a layout that only ever met the
+ * bench's width is seen at a wide one too.
+ */
 const BENCH = { width: 1440, height: 1000 };
 const HANDHELD = { width: 430, height: 932 };
 const POCKET = { width: 390, height: 844 };
+const WIDE = { width: 2560, height: 1440 };
 
 /** Every fixture, read from the table that declares it. */
 const src = await readFile(join(ROOT, "app/routing/fixtures.tsx"), "utf8");
@@ -118,8 +124,9 @@ const ROUTES = [
 
 const VISITS = ROUTES.flatMap((route) =>
   ["light", "dark"]
-    .map((scheme) => ({ route, scheme, viewport: route.floor ? HANDHELD : BENCH, narrow: false }))
-    .concat(route.floor ? [] : [{ route, scheme: "light", viewport: POCKET, narrow: true }]),
+    .map((scheme) => ({ route, scheme, viewport: route.floor ? HANDHELD : BENCH, as: scheme }))
+    .concat(route.floor ? [] : [{ route, scheme: "light", viewport: POCKET, as: "pocket" }])
+    .concat(route.floor || route.frame !== "app" ? [] : [{ route, scheme: "light", viewport: WIDE, as: "wide" }]),
 );
 
 const failures = [];
@@ -127,8 +134,8 @@ const note = (where, what) => failures.push(`${where}: ${what}`);
 
 const browser = await chromium.launch();
 
-for (const { route, scheme, viewport, narrow } of VISITS) {
-  const where = `${route.path}/${narrow ? "pocket" : scheme}`;
+for (const { route, scheme, viewport, as } of VISITS) {
+  const where = `${route.path}/${as}`;
   const context = await browser.newContext({ viewport, colorScheme: scheme });
   // The theme preference is per browser; ask for the one being measured.
   await context.addInitScript((s) => {
@@ -228,7 +235,7 @@ for (const { route, scheme, viewport, narrow } of VISITS) {
     note(where, `the dock ends ${Math.round(seen.dockBottom - seen.innerHeight)}px below the screen (D134)`);
   }
 
-  const shot = `${route.path.replace(/\//g, "-")}-${narrow ? "pocket" : scheme}.png`;
+  const shot = `${route.path.replace(/\//g, "-")}-${as}.png`;
   await page.screenshot({ path: join(SHOTS, shot), fullPage: true });
   await context.close();
   console.log(`  ${where.padEnd(40)} ${seen.title}`);

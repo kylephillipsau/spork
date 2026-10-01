@@ -106,6 +106,50 @@ once it reads right. Real codes stay out of the repository, as everywhere else.
 
 ## What landed
 
+### An item's properties, at the item (D174)
+
+Weigh and Capture are gone as screens. An item's weight, size, photographs and
+labels are seen and changed at the item:
+- **The item list** filters to *needs weighing*, *needs measuring* or *needs a
+  photo*, orders by code, *most ordered first* or *in walking order* (by the
+  bin holding most of it), and marks what is recorded per row. A row opens the
+  item in a drawer with Previous and Next. `/weigh` and `/capture` redirect to
+  those lists.
+- **The item's page** (where a scan lands) and the drawer draw the same thing:
+  a card per subject (carton, each, family carton, parts) with Weigh, Measure,
+  Photograph and Barcodes.
+- **The packing bench**: an item code in *To pack* or in a carton opens the
+  same drawer.
+- `POST /observations` takes `photographs: true` for a look with no figures,
+  so a measured item can be photographed on its own.
+- `GET /items/{id}` carries `subjects` and `photos`; `GET /items` takes
+  `needs=weighing` and `order=demand|walk`, and answers `weight`, `size`,
+  `demand` and `bin_code` per row. It picks the page before looking anything
+  up for it: 0.2 s on the real item list, from 1.5 s.
+- One implementation (DRY): `useItemProperties`, `ItemProperties`,
+  `ItemSummary` and `ItemDrawer` in `client/app/items/`. Opening an item's
+  properties anywhere is `<ItemDrawer itemId={…} onClose={…} />`.
+- Figures are read from `observation_current`, which the scheduler rebuilds a
+  few seconds after a write, so the drawer re-reads the item over the next few
+  seconds. **Run the scheduler** (`local.ps1 start` does) or recorded figures
+  never appear.
+- **A box is photographed as a box.** A subject not recorded as having no box
+  shape is asked for its six sides and its label, and drawn as a 3D box of its
+  own photos: its measured size (a cube until measured), turned by dragging,
+  blank sides named. It turns to each side as it is taken. A thing with no box
+  shape is asked for one photo and its label. Same faces as before (D132), so
+  nothing new is stored. The code is `box.ts` (pure, tested), `box3d.ts`
+  (`BoxScene`) and `BoxView.tsx`, which is lazy-loaded.
+
+### The app fills the window
+
+The content area was capped at 1,440 px. It now fills the window; only forms
+(`Page narrow`) and running text keep a line length. Side panels (the
+dashboard's findings, the pack bench's cartons, the warehouse's places) clamp
+to a panel's width on a big screen, the site plan and 3D pane grow with the
+window's height, and fact grids no longer split a wide card in half. The render
+gate also visits every desk screen at 2560 × 1440.
+
 ### Leaving a place out of the draft
 
 The draft's preview has a tick box for each place it would make. The user found
@@ -211,7 +255,11 @@ How it is built:
   - `client/app/layout/blocks.ts` is the pure part: plan to blocks, grid lines
     and bounds, with tests in `blocks.test.ts`;
   - `scene3d.ts` is the three.js class (`SiteScene`);
-  - `Site3D.tsx` hosts it.
+  - `Site3D.tsx` hosts it;
+  - `client/app/common/stage3d.ts` is what every 3D view shares (`Stage`):
+    the renderer, the turnable camera, drawing on demand, resizing, theme
+    colours, camera moves and disposal. `SiteScene` and the item's `BoxScene`
+    each build on one.
 - A new fixture, `/fixtures/warehouse/drafted`, is a 19-place site as the draft
   lays one out.
 
@@ -424,7 +472,8 @@ it installed.**
    (above). Until the editor exists,
    nothing moves a bin once the draft has put it in a cell.
 2. **Record photos, measurements and weights**, working from the item list
-   narrowed to "in stock here" and "needs measuring" or "needs a photo".
+   narrowed to "in stock here" and "needs weighing", "needs measuring" or
+   "needs a photo", with the drawer's Next (D174).
 3. **Test the rack face on the floor** against the bare bin code, as above.
 4. **"Something's wrong here"** on the rack face: a worker scans the bin where
    it really is and taps its cell. Trusted roles apply it, and others raise a

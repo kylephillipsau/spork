@@ -234,9 +234,10 @@
   gap: var(--ui-space-2);
 }
 
+/* The work fills the window, as a desktop tool should. Only line length is
+   capped, where it matters: forms (`Page narrow`) and running text. */
 .content {
   width: 100%;
-  max-width: var(--ui-content-max);
   padding: var(--ui-space-6) var(--ui-space-8) var(--ui-space-10);
 }
 

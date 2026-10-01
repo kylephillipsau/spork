@@ -169,7 +169,7 @@ const PAIRS = [
   ["DespatchScreen", ["DespatchScreen"]],
   // capture
   ["CaptureSubject", ["CaptureSubject"]],
-  ["CaptureScreen", ["CaptureScreen"]],
+  ["SubjectPhoto", ["SubjectPhoto"]],
   ["RecordObservationResponse", ["RecordObservationResponse"]],
   // binding a barcode (D164)
   ["BoundBarcode", ["BoundBarcode"]],
@@ -251,7 +251,6 @@ const PAIRS = [
   ["Passkey", ["PasskeyRow"]],
   ["CeremonyBegun", ["Ceremony"]],
   // weighing
-  ["ToWeigh", ["ToWeigh"]],
   ["WeighingRecorded", ["WeighingRecorded"]],
   // picking
   ["Picture", ["Picture"]],

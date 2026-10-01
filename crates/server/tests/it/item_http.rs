@@ -70,6 +70,8 @@ async fn an_item_says_what_it_is_and_where_netsuite_reported_it() {
     assert_eq!(page["description"], "Nitrile glove, medium");
     assert!(page["held"].is_array(), "this system's own record is its own list: {page}");
     assert!(page["measurements"].is_array());
+    assert!(page["subjects"].is_array(), "what gets measured for it: {page}");
+    assert!(page["photos"].is_array(), "and its photographs: {page}");
 
     let ours: Vec<&Value> = page["reported"]
         .as_array()
@@ -137,7 +139,9 @@ async fn the_item_list_finds_narrows_and_pages() {
     assert!(codes(&found).contains(&"GLOVE-M".to_string()), "{found}");
     let glove = found["items"].as_array().unwrap().iter().find(|i| i["code"] == "GLOVE-M").unwrap();
     assert!(glove["item_id"].is_string());
-    assert!(["measured", "listed", "none"].contains(&glove["figures"].as_str().unwrap()));
+    assert!(["measured", "listed", "none"].contains(&glove["weight"].as_str().unwrap()), "{glove}");
+    assert!(["measured", "listed", "none"].contains(&glove["size"].as_str().unwrap()), "{glove}");
+    assert!(glove["demand"].is_i64(), "{glove}");
     let (_, described) = list("?q=nitrile").await;
     assert!(codes(&described).contains(&"GLOVE-M".to_string()), "a description matches too: {described}");
 
@@ -145,6 +149,7 @@ async fn the_item_list_finds_narrows_and_pages() {
     let (_, here) = list("?q=GLOVE-M&stock=here").await;
     let g = here["items"].as_array().unwrap().iter().find(|i| i["code"] == "GLOVE-M").expect("gloves are here");
     assert!(g["held"].as_i64().unwrap() > 0, "this system's own count, as its own column: {g}");
+    assert!(g["bin_code"].is_string(), "and the bin holding the most of it, to walk to: {g}");
 
     // ── paging: one at a time, in code order, until there are no more ───
     let (_, first) = list("?limit=1").await;
@@ -162,9 +167,34 @@ async fn the_item_list_finds_narrows_and_pages() {
     let (status, unmeasured) = list("?needs=measuring").await;
     assert_eq!(status, 200);
     assert!(
-        unmeasured["items"].as_array().unwrap().iter().all(|i| i["figures"] != "measured"),
-        "needs measuring lists nothing already measured: {unmeasured}"
+        unmeasured["items"].as_array().unwrap().iter().all(|i| i["size"] != "measured"),
+        "needs measuring lists nothing whose size is measured: {unmeasured}"
+    );
+    let (status, unweighed) = list("?needs=weighing").await;
+    assert_eq!(status, 200);
+    assert!(
+        unweighed["items"].as_array().unwrap().iter().all(|i| i["weight"] != "measured"),
+        "needs weighing lists nothing already weighed: {unweighed}"
     );
     let (status, _) = list("?needs=photo").await;
     assert_eq!(status, 200);
+
+    // ── ordered by how much it is ordered, or the way the bins are walked ─
+    let (status, _) = list("?order=size").await;
+    assert_eq!(status, 400, "an order that is not one is refused");
+    let (status, busiest) = list("?order=demand&limit=1").await;
+    assert_eq!(status, 200, "{busiest}");
+    let demand: Vec<i64> =
+        busiest["items"].as_array().unwrap().iter().map(|i| i["demand"].as_i64().unwrap()).collect();
+    assert!(demand.windows(2).all(|w| w[0] >= w[1]), "most ordered first: {demand:?}");
+    let after = busiest["next"].as_str().unwrap_or_else(|| panic!("a next page: {busiest}"));
+    let (_, next) = list(&format!("?order=demand&limit=1&after={after}")).await;
+    assert!(
+        next["items"].as_array().unwrap().iter().all(|i| i["demand"].as_i64().unwrap() <= *demand.last().unwrap()),
+        "and the next page carries on down: {next}"
+    );
+    let (status, walked) = list("?order=walk&stock=here").await;
+    assert_eq!(status, 200, "{walked}");
+    let (status, _) = list("?order=walk&after=nowhere").await;
+    assert_eq!(status, 400, "a page in walking order starts from a position");
 }

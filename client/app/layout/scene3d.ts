@@ -1,7 +1,6 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   EdgesGeometry,
   ExtrudeGeometry,
   Float32BufferAttribute,
@@ -16,15 +15,15 @@ import {
   MeshBasicMaterial,
   OrthographicCamera,
   Raycaster,
-  Scene,
   Shape,
   ShapeGeometry,
   Vector2,
   Vector3,
-  WebGLRenderer,
+  type Color,
   type Object3D,
 } from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+import { Stage, type Pose } from "@app/common/stage3d";
 
 import type { Block, Point3, Scene3D } from "./blocks";
 
@@ -33,9 +32,8 @@ import type { Block, Point3, Scene3D } from "./blocks";
  * is edited.
  *
  * An imperative class, not React: the meshes live here, React only hosts the
- * element and says what is chosen. It draws **on demand**: a frame is drawn
- * when the view moves, the choice changes or the theme does, and never
- * otherwise, so an idle pane costs nothing.
+ * element and says what is chosen. The canvas, the camera's controls and the
+ * frame drawn on demand are the shared [`Stage`]'s.
  *
  * The site's axes become three.js's as x → x, y → −z, z → y: the site's y runs
  * away from the viewer, as it runs up the 2D plan, so the two read the same
@@ -102,14 +100,9 @@ const TOKENS: Record<keyof Palette, string> = {
   hover: "--ui-accent",
 };
 
-function readPalette(probe: HTMLElement): Palette {
+function readPalette(stage: Stage<OrthographicCamera>): Palette {
   const out = {} as Palette;
-  for (const [key, token] of Object.entries(TOKENS) as [keyof Palette, string][]) {
-    probe.style.color = `var(${token})`;
-    // The computed colour is rgb() whatever the token was written as.
-    const [r = 0, g = 0, b = 0] = (getComputedStyle(probe).color.match(/[\d.]+/g) ?? []).map(Number);
-    out[key] = new Color().setRGB(r / 255, g / 255, b / 255, "srgb");
-  }
+  for (const [key, token] of Object.entries(TOKENS) as [keyof Palette, string][]) out[key] = stage.token(token);
   return out;
 }
 
@@ -122,25 +115,11 @@ interface Drawn {
 }
 
 export class SiteScene {
-  /** Whether this browser can draw it at all: three.js needs WebGL 2. */
-  static supported(): boolean {
-    try {
-      return !!document.createElement("canvas").getContext("webgl2");
-    } catch {
-      return false;
-    }
-  }
+  static supported = Stage.supported;
 
-  private readonly renderer: WebGLRenderer;
-  private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
-  private readonly controls: OrbitControls;
-  private readonly scene = new Scene();
+  private readonly stage: Stage<OrthographicCamera>;
   private readonly world = new Group();
-  private readonly probe = document.createElement("span");
   private readonly raycaster = new Raycaster();
-  private readonly resize: ResizeObserver;
-  private readonly themed: MutationObserver;
-  private readonly still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   private palette: Palette;
   private drawn: Drawn[] = [];
@@ -149,8 +128,6 @@ export class SiteScene {
   private fitted = 1;
   private chosen: string | null = null;
   private hovered: string | null = null;
-  private pending = 0;
-  private tween: { from: Pose; to: Pose; start: number; ms: number } | null = null;
   private press: { x: number; y: number; at: number } | null = null;
 
   private readonly materials = {
@@ -172,53 +149,47 @@ export class SiteScene {
     private readonly host: HTMLElement,
     private readonly events: SceneEvents,
   ) {
-    this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setClearColor(0x000000, 0);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    const canvas = this.renderer.domElement;
-    canvas.setAttribute("aria-hidden", "true");
-    host.append(canvas, this.probe);
-    this.probe.hidden = true;
-    this.palette = readPalette(this.probe);
+    this.stage = new Stage(host, new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000), {
+      frame: () => {
+        // Dashes stay the plan's four pixels and three, however far in.
+        const cam = this.stage.camera;
+        const perUnit = (this.host.clientHeight * cam.zoom) / (cam.top - cam.bottom);
+        this.materials.floorLine.dashSize = DASH_PX / perUnit;
+        this.materials.floorLine.gapSize = GAP_PX / perUnit;
+        return false;
+      },
+      drawn: () => this.events.drawn(),
+      resized: () => this.fit(false),
+      themed: () => {
+        this.palette = readPalette(this.stage);
+        this.paint();
+      },
+    });
+    this.palette = readPalette(this.stage);
     this.paint();
+    this.stage.scene.add(this.world);
 
-    this.scene.add(this.world);
-    this.controls = new OrbitControls(this.camera, canvas);
+    const controls = this.stage.controls;
     // A drag with the middle or right button, or with Ctrl or ⌘ held, moves
     // the view, as in most CAD and 3D tools. It slides over the floor rather
     // than up the screen, so turning afterwards still turns about a point on
     // the floor.
-    this.controls.enablePan = true;
-    this.controls.screenSpacePanning = false;
-    this.controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN };
-    this.controls.enableDamping = !this.still;
-    this.controls.dampingFactor = 0.12;
-    this.controls.rotateSpeed = 0.7;
-    this.controls.zoomToCursor = true;
-    this.controls.minZoom = 0.6;
-    this.controls.maxZoom = 24;
+    controls.enablePan = true;
+    controls.screenSpacePanning = false;
+    controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN };
+    controls.zoomToCursor = true;
+    controls.minZoom = 0.6;
+    controls.maxZoom = 24;
     // Never under the floor, and never quite flat on it.
-    this.controls.minPolarAngle = 0.05;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.08;
-    this.controls.addEventListener("change", this.invalidate);
+    controls.minPolarAngle = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.08;
 
+    const canvas = this.stage.canvas;
     canvas.addEventListener("pointerdown", this.onDown);
     canvas.addEventListener("mousedown", this.onMiddle);
     canvas.addEventListener("pointerup", this.onUp);
     canvas.addEventListener("pointermove", this.onMove);
     canvas.addEventListener("pointerleave", this.onLeave);
-    // A driver reset takes the context away; three.js rebuilds what it needs
-    // when it comes back, and the frame has to be asked for again.
-    canvas.addEventListener("webglcontextrestored", this.invalidate);
-
-    this.resize = new ResizeObserver(() => this.fit(false));
-    this.resize.observe(host);
-    this.themed = new MutationObserver(() => {
-      this.palette = readPalette(this.probe);
-      this.paint();
-      this.invalidate();
-    });
-    this.themed.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   }
 
   /** Draw this site, replacing whatever was drawn, and fit it to the pane. */
@@ -241,7 +212,7 @@ export class SiteScene {
     if (placeId === this.chosen) return;
     this.chosen = placeId;
     this.style();
-    this.invalidate();
+    this.stage.invalidate();
   }
 
   /** Back to the whole site from the front left. */
@@ -259,29 +230,21 @@ export class SiteScene {
 
   /** Where a point on the site is in the pane, in CSS pixels. */
   project([x, y, z]: Point3): { x: number; y: number } {
-    const v = new Vector3(x, z, -y).project(this.camera);
-    const { clientWidth: w, clientHeight: h } = this.renderer.domElement;
+    const v = new Vector3(x, z, -y).project(this.stage.camera);
+    const { clientWidth: w, clientHeight: h } = this.stage.canvas;
     return { x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h };
   }
 
   dispose(): void {
-    cancelAnimationFrame(this.pending);
-    this.resize.disconnect();
-    this.themed.disconnect();
-    this.controls.removeEventListener("change", this.invalidate);
-    this.controls.dispose();
-    const canvas = this.renderer.domElement;
+    const canvas = this.stage.canvas;
     canvas.removeEventListener("pointerdown", this.onDown);
     canvas.removeEventListener("mousedown", this.onMiddle);
     canvas.removeEventListener("pointerup", this.onUp);
     canvas.removeEventListener("pointermove", this.onMove);
     canvas.removeEventListener("pointerleave", this.onLeave);
-    canvas.removeEventListener("webglcontextrestored", this.invalidate);
     this.clear();
     for (const m of Object.values(this.materials)) m.dispose();
-    this.renderer.dispose();
-    canvas.remove();
-    this.probe.remove();
+    this.stage.dispose();
   }
 
   // ── drawing ────────────────────────────────────────────────────────────
@@ -380,13 +343,9 @@ export class SiteScene {
    * to and only follow the pane's shape.
    */
   private fit(home: boolean, animate = false): void {
-    const canvas = this.renderer.domElement;
     const w = this.host.clientWidth;
     const h = this.host.clientHeight;
     if (w === 0 || h === 0) return;
-    if (canvas.width !== Math.round(w * this.renderer.getPixelRatio()) || canvas.height !== Math.round(h * this.renderer.getPixelRatio())) {
-      this.renderer.setSize(w, h, true);
-    }
     const aspect = w / h;
     const { min, max } = this.site;
     const centre = new Vector3((min[0] + max[0]) / 2, (min[2] + max[2]) / 2, -(min[1] + max[1]) / 2);
@@ -409,7 +368,7 @@ export class SiteScene {
         }
     this.fitted = Math.max(halfH, halfW / aspect) * MARGIN;
 
-    const cam = this.camera;
+    const cam = this.stage.camera;
     cam.top = this.fitted;
     cam.bottom = -this.fitted;
     cam.left = -this.fitted * aspect;
@@ -417,86 +376,30 @@ export class SiteScene {
     cam.near = 0.1;
     cam.far = reach * 6;
     // However far it is moved, the middle of the view stays over the site.
-    this.controls.cursor.copy(centre);
-    this.controls.maxTargetRadius = Math.max(1, Math.hypot(max[0] - min[0], max[1] - min[1]) / 2);
+    const controls = this.stage.controls;
+    controls.cursor.copy(centre);
+    controls.maxTargetRadius = Math.max(1, Math.hypot(max[0] - min[0], max[1] - min[1]) / 2);
+    cam.updateProjectionMatrix();
     if (home) {
       const to: Pose = { position: centre.clone().addScaledVector(dir, reach * 2), target: centre, zoom: 1 };
-      if (animate && !this.still && this.site.blocks.length > 0 && cam.position.lengthSq() > 0) {
-        this.animate(to);
-      } else {
-        this.pose(to);
-      }
+      if (animate && this.site.blocks.length > 0 && cam.position.lengthSq() > 0) this.stage.animate(to);
+      else this.stage.pose(to);
     }
-    cam.updateProjectionMatrix();
-    this.invalidate();
+    this.stage.invalidate();
   }
 
   private zoomBy(factor: number): void {
-    const c = this.controls;
-    const zoom = Math.min(c.maxZoom, Math.max(c.minZoom, this.camera.zoom * factor));
-    this.animate({ position: this.camera.position.clone(), target: c.target.clone(), zoom });
+    const { camera, controls } = this.stage;
+    const zoom = Math.min(controls.maxZoom, Math.max(controls.minZoom, camera.zoom * factor));
+    this.stage.animate({ position: camera.position.clone(), target: controls.target.clone(), zoom });
   }
-
-  private pose(p: Pose): void {
-    this.tween = null;
-    this.camera.position.copy(p.position);
-    this.controls.target.copy(p.target);
-    this.camera.zoom = p.zoom;
-    this.camera.updateProjectionMatrix();
-    this.controls.update();
-  }
-
-  private animate(to: Pose): void {
-    if (this.still) {
-      this.pose(to);
-      this.invalidate();
-      return;
-    }
-    const from: Pose = { position: this.camera.position.clone(), target: this.controls.target.clone(), zoom: this.camera.zoom };
-    this.tween = { from, to, start: performance.now(), ms: 360 };
-    this.invalidate();
-  }
-
-  // ── frames ─────────────────────────────────────────────────────────────
-
-  private readonly invalidate = (): void => {
-    if (this.pending) return;
-    this.pending = requestAnimationFrame(this.frame);
-  };
-
-  private readonly frame = (now: number): void => {
-    this.pending = 0;
-    let moving = false;
-    if (this.tween) {
-      const { from, to, start, ms } = this.tween;
-      const t = Math.min(1, (now - start) / ms);
-      const e = 1 - (1 - t) ** 3;
-      this.camera.position.lerpVectors(from.position, to.position, e);
-      this.controls.target.lerpVectors(from.target, to.target, e);
-      this.camera.zoom = from.zoom + (to.zoom - from.zoom) * e;
-      this.camera.updateProjectionMatrix();
-      if (t >= 1) this.tween = null;
-      moving = true;
-    }
-    // Damping carries a turn on after the pointer lets go.
-    moving = this.controls.update() || moving;
-
-    // Dashes stay the plan's four pixels and three, however far in.
-    const perUnit = (this.host.clientHeight * this.camera.zoom) / (this.camera.top - this.camera.bottom);
-    this.materials.floorLine.dashSize = DASH_PX / perUnit;
-    this.materials.floorLine.gapSize = GAP_PX / perUnit;
-
-    this.renderer.render(this.scene, this.camera);
-    this.events.drawn();
-    if (moving || this.tween) this.invalidate();
-  };
 
   // ── the pointer ────────────────────────────────────────────────────────
 
   private placeAt(e: PointerEvent): string | null {
-    const rect = this.renderer.domElement.getBoundingClientRect();
+    const rect = this.stage.canvas.getBoundingClientRect();
     const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
+    this.raycaster.setFromCamera(ndc, this.stage.camera);
     const targets: Object3D[] = this.drawn.filter((d) => d.block.target).map((d) => d.body);
     const [hit] = this.raycaster.intersectObjects(targets, false);
     return (hit?.object.userData.placeId as string | undefined) ?? null;
@@ -504,7 +407,7 @@ export class SiteScene {
 
   private readonly onDown = (e: PointerEvent): void => {
     this.press = { x: e.clientX, y: e.clientY, at: performance.now() };
-    this.tween = null;
+    this.stage.hold();
   };
 
   /** A middle press is a move here, not the browser's autoscroll. */
@@ -527,11 +430,11 @@ export class SiteScene {
     const id = this.placeAt(e);
     this.hover(id);
     // Holding the key that moves the view says so before the drag starts.
-    this.renderer.domElement.style.cursor = e.ctrlKey || e.metaKey || e.shiftKey ? "move" : id ? "pointer" : "";
+    this.stage.canvas.style.cursor = e.ctrlKey || e.metaKey || e.shiftKey ? "move" : id ? "pointer" : "";
   };
 
   private readonly onLeave = (): void => {
-    this.renderer.domElement.style.cursor = "";
+    this.stage.canvas.style.cursor = "";
     this.hover(null);
   };
 
@@ -539,16 +442,10 @@ export class SiteScene {
     if (id === this.hovered) return;
     this.hovered = id;
     this.style();
-    this.invalidate();
+    this.stage.invalidate();
     this.events.hover(id);
   }
 
-}
-
-interface Pose {
-  position: Vector3;
-  target: Vector3;
-  zoom: number;
 }
 
 /** A shade per vertex from its face's normal, which the solid material multiplies by the colour. */

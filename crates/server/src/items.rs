@@ -15,13 +15,24 @@
 //! recorded receiving. So they are two lists, the second carries its age, and
 //! a screen says which is which.
 //!
-//! Nothing here writes.
+//! # Where an item's properties are seen and changed
+//!
+//! The page carries every subject that gets measured for the item (its carton,
+//! its each, its family's carton, its parts) with what is known of each and
+//! the newest photograph of each face, so a screen can show them and offer to
+//! weigh, measure or photograph each one. It is the capture worklist's own
+//! enumeration ([`crate::capture::subjects_for_item`]), so the item and the
+//! to-do list cannot disagree about what there is to do.
+//!
+//! Nothing here writes: weighing, measuring and photographing are
+//! `POST /weighings`, `POST /observations` and its images, as they were.
 
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::capture::{self, CaptureSubject};
 use crate::error::ApiError;
 use crate::pictures::{self, Picture};
 use crate::routes::{caller, measurements_of, ItemMeasurements};
@@ -93,6 +104,29 @@ pub struct ItemView {
     pub held: Vec<ItemHeld>,
     /// What NetSuite last reported, in walking order.
     pub reported: Vec<ItemReported>,
+    /// What gets measured for it, each with what is known, in the order to
+    /// offer them: its carton, its each, its family's carton, its parts.
+    pub subjects: Vec<CaptureSubject>,
+    /// The newest photograph of each face of each of those subjects. Their own
+    /// only: a photograph is what one look at one box saw, and does not
+    /// inherit (D132, D141).
+    pub photos: Vec<SubjectPhoto>,
+}
+
+/// One face of one subject, as last photographed.
+///
+/// Named by the subject's own identity, the pair `POST /observations` takes,
+/// so a screen can put it beside the subject it shows.
+#[derive(Serialize, Debug)]
+pub struct SubjectPhoto {
+    pub item_id: Option<Uuid>,
+    pub item_style_id: Option<Uuid>,
+    pub item_part_id: Option<Uuid>,
+    pub packaging_level: Option<String>,
+    pub face: String,
+    /// `GET /images/{digest}` serves it.
+    pub digest: String,
+    pub captured_at: DateTime<Utc>,
 }
 
 #[get("/items/{item_id}")]
@@ -103,6 +137,7 @@ pub async fn item_page(
 ) -> Result<HttpResponse, ApiError> {
     let who = caller(&state, &req).await?;
     let id = path.into_inner();
+    let site = who.site_id;
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     let view = scope
         .run(|tx| {
@@ -205,6 +240,35 @@ pub async fn item_page(
                     })
                     .collect();
 
+                let subjects = capture::subjects_for_item(tx, site, id).await?;
+
+                let photos = tx
+                    .query(
+                        "SELECT DISTINCT ON (o.id, oi.face)
+                                o.item_id, o.item_style_id, o.item_part_id,
+                                o.packaging_level::text, oi.face, oi.digest, oi.captured_at
+                           FROM observable o
+                           JOIN observation_event e ON e.observable_id = o.id
+                           JOIN observation_image oi ON oi.observation_event_id = e.id
+                          WHERE o.item_id = $1
+                             OR o.item_style_id = (SELECT style_id FROM item WHERE id = $1)
+                             OR o.item_part_id IN (SELECT id FROM item_part WHERE item_id = $1)
+                          ORDER BY o.id, oi.face, oi.captured_at DESC, oi.id DESC",
+                        &[&id],
+                    )
+                    .await?
+                    .iter()
+                    .map(|x| SubjectPhoto {
+                        item_id: x.get(0),
+                        item_style_id: x.get(1),
+                        item_part_id: x.get(2),
+                        packaging_level: x.get(3),
+                        face: x.get(4),
+                        digest: x.get(5),
+                        captured_at: x.get(6),
+                    })
+                    .collect();
+
                 Ok(ItemView {
                     item_id: id,
                     code: r.get(0),
@@ -216,6 +280,8 @@ pub async fn item_page(
                     packing,
                     held,
                     reported,
+                    subjects,
+                    photos,
                 })
             })
         })
@@ -242,12 +308,54 @@ pub struct ItemsQuery {
     pub q: Option<String>,
     /// `here`: on hand at the caller's site, by either record.
     pub stock: Option<String>,
-    /// `measuring`: nothing measured here, whatever a list says. `photo`: no
-    /// picture of its front, its own or its family's.
+    /// `weighing`: no weight measured here, whatever a list says.
+    /// `measuring`: no size measured here. `photo`: no picture of its front,
+    /// its own or its family's.
     pub needs: Option<String>,
-    /// The last code of the page before. Codes are unique, so they page.
+    /// `code` (the default), `demand` (most ordered first) or `walk` (in the
+    /// order the bins are walked, by where most of it is).
+    pub order: Option<String>,
+    /// Where the page before ended, as its `next` said: the last code in code
+    /// order, or how many came before in the other two.
     pub after: Option<String>,
     pub limit: Option<i64>,
+}
+
+/// How often it is ordered: the lines naming it. A join on `n`.
+const DEMAND: &str = "LEFT JOIN LATERAL (
+                          SELECT count(*)::bigint AS lines FROM order_line ol WHERE ol.item_id = n.id
+                      ) dem ON true";
+
+/// The biggest pile of it at the caller's site (`$4`), by this system's own
+/// ledger first and NetSuite's report after: the shelf a walk goes to. A join
+/// on `n`.
+const PILE: &str = "LEFT JOIN LATERAL (
+                        SELECT l.code, l.pick_sequence
+                          FROM (SELECT coalesce(s.holder_location_id, s.resolved_location_id)
+                                         AS location_id,
+                                       sum(s.quantity)::numeric AS qty, 0 AS rank
+                                  FROM stock s
+                                 WHERE s.item_id = n.id AND s.quantity > 0
+                                   AND ($4::uuid IS NULL OR s.site_id = $4)
+                                 GROUP BY 1
+                                UNION ALL
+                                SELECT rs.location_id, sum(rs.on_hand), 1
+                                  FROM reported_stock rs
+                                 WHERE rs.item_id = n.id AND rs.on_hand > 0
+                                   AND rs.location_id IS NOT NULL
+                                   AND ($4::uuid IS NULL OR rs.site_id = $4)
+                                 GROUP BY 1) piles
+                          JOIN location l ON l.id = piles.location_id
+                         ORDER BY piles.rank, piles.qty DESC, l.code
+                         LIMIT 1
+                    ) pile ON true";
+
+/// How the list is ordered, and so how it pages.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Order {
+    Code,
+    Demand,
+    Walk,
 }
 
 /// One item in the list.
@@ -259,9 +367,16 @@ pub struct ItemRow {
     pub active: bool,
     pub style_code: Option<String>,
     pub picture: Option<Picture>,
-    /// `measured`, `listed` (figures copied from a list, and none measured) or
-    /// `none`.
-    pub figures: String,
+    /// Its weight: `measured` (or declared to have none), `listed` (copied
+    /// from a list, never measured here) or `none`. Its own or its family's.
+    pub weight: String,
+    /// Its size, in the same words.
+    pub size: String,
+    /// Order lines naming it: how much it matters to get right.
+    pub demand: i64,
+    /// The bin holding the most of it here, by this system's ledger and then
+    /// by NetSuite's report: where to walk to.
+    pub bin_code: Option<String>,
     /// What NetSuite last reported on hand at this site, as text, when it
     /// reported any; and on how many shelves.
     pub reported_on_hand: Option<String>,
@@ -279,7 +394,8 @@ pub struct ItemsList {
     pub next: Option<String>,
 }
 
-/// Items, searched and filtered, fifty at a time in code order.
+/// Items, searched and filtered, fifty at a time: in code order, most ordered
+/// first, or in walking order.
 ///
 /// **The stock columns are this site's**, the site the session works at, and
 /// every site's when it names none. NetSuite's report and this system's ledger
@@ -307,34 +423,74 @@ pub async fn item_list(
         .flatten()
         .collect();
     let here = query.stock.as_deref() == Some("here");
-    let (measuring, photo) = match query.needs.as_deref() {
-        Some("measuring") => (true, false),
-        Some("photo") => (false, true),
+    let (weighing, measuring, photo) = match query.needs.as_deref() {
+        Some("weighing") => (true, false, false),
+        Some("measuring") => (false, true, false),
+        Some("photo") => (false, false, true),
         Some(other) => {
             return Err(ApiError::Rejected(format!(
-                "needs is measuring or photo, not {other}"
+                "needs is weighing, measuring or photo, not {other}"
             )))
         }
-        None => (false, false),
+        None => (false, false, false),
+    };
+    let order = match query.order.as_deref() {
+        None | Some("code") => Order::Code,
+        Some("demand") => Order::Demand,
+        Some("walk") => Order::Walk,
+        Some(other) => {
+            return Err(ApiError::Rejected(format!("order is code, demand or walk, not {other}")))
+        }
     };
     let after = query.after.clone().filter(|a| !a.is_empty());
+    // Code order pages by the last code, which stays right while rows are
+    // added; the other two by position, because a count of order lines or a
+    // bin's place in the walk is no key to start from.
+    let (after_code, offset): (Option<String>, i64) = match order {
+        Order::Code => (after, 0),
+        _ => match after.as_deref().map(str::parse::<i64>) {
+            None => (None, 0),
+            Some(Ok(n)) if n >= 0 => (None, n),
+            Some(_) => return Err(ApiError::Rejected("after is where the last page ended".into())),
+        },
+    };
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
 
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     let out = scope
         .run(move |tx| {
             Box::pin(async move {
+                // How it is ordered is one of three fixed clauses, chosen here
+                // rather than passed in.
+                // **The page first, then what is shown on it.** Every join
+                // below is a lookup per row, and run before the sort they cost
+                // a lookup for each of nine thousand items to show fifty. So
+                // the page is chosen with only what its order needs, and the
+                // rest is looked up for the rows on it.
+                let (sort_join, sort_by) = match order {
+                    Order::Code => ("", "n.code"),
+                    Order::Demand => (DEMAND, "dem.lines DESC, n.code"),
+                    Order::Walk => (PILE, "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
+                };
+                // Asked as yes or no: whether a measured figure exists.
+                let measured = |metrics: &str| {
+                    format!(
+                        "EXISTS (SELECT 1 FROM observable o
+                                   JOIN observation_current oc ON oc.observable_id = o.id
+                                   JOIN metric m ON m.id = oc.metric_id
+                                  WHERE (o.item_id = c.id
+                                         OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
+                                    AND m.code IN ({metrics})
+                                    AND (oc.absent_reason IS NOT NULL
+                                         OR oc.method::text IN {MEASURED_METHODS}))"
+                    )
+                };
+                let weighed = measured("'gross_weight'");
+                let sized = measured("'length', 'width', 'height'");
                 let sql = format!(
                     "WITH {picture},
                      candidates AS (
-                         SELECT i.id, i.code, i.description, i.active, i.style_id,
-                                (SELECT max(CASE WHEN oc.method::text IN {MEASURED_METHODS}
-                                                 THEN 2 ELSE 1 END)
-                                   FROM observable o
-                                   JOIN observation_current oc ON oc.observable_id = o.id
-                                  WHERE o.item_id = i.id
-                                     OR (i.style_id IS NOT NULL AND o.item_style_id = i.style_id))
-                                  AS figures
+                         SELECT i.id, i.code, i.description, i.active, i.style_id
                            FROM item i
                           WHERE ($1::text IS NULL OR i.code ILIKE $1 OR i.description ILIKE $1
                                  OR EXISTS (SELECT 1 FROM item_barcode b
@@ -349,16 +505,42 @@ pub async fn item_list(
                      ),
                      needed AS (
                          SELECT c.* FROM candidates c
-                          WHERE (NOT $5::bool OR coalesce(c.figures, 0) < 2)
-                            AND (NOT $6::bool
+                          WHERE (NOT $5::bool OR NOT {weighed})
+                            AND (NOT $6::bool OR NOT {sized})
+                            AND (NOT $7::bool
                                  OR NOT EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
+                     ),
+                     page AS (
+                         SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
+                           FROM needed n {sort_join}
+                          WHERE ($8::text IS NULL OR n.code > $8)
+                          ORDER BY {sort_by}
+                          LIMIT $9 OFFSET $10
                      )
-                     SELECT n.id, n.code, n.description, n.active, st.code, n.figures,
+                     SELECT n.id, n.code, n.description, n.active, st.code, fig.weight, fig.size,
                             pic.digest, pic.source, rep.on_hand, rep.bins, held.q,
-                            (SELECT count(*) FROM needed)
-                       FROM needed n
+                            (SELECT count(*) FROM needed), dem.lines, pile.code
+                       FROM page n
                        LEFT JOIN item_style st ON st.id = n.style_id
                        LEFT JOIN picture pic ON pic.item_id = n.id
+                       {DEMAND}
+                       {PILE}
+                       -- Its weight and its size, its own or its family's:
+                       -- 2 measured (or said to have none), 1 only copied.
+                       LEFT JOIN LATERAL (
+                           SELECT max(CASE WHEN m.code = 'gross_weight' THEN grade END) AS weight,
+                                  max(CASE WHEN m.code IN ('length', 'width', 'height') THEN grade END)
+                                    AS size
+                             FROM (SELECT oc.metric_id,
+                                          CASE WHEN oc.absent_reason IS NOT NULL
+                                                 OR oc.method::text IN {MEASURED_METHODS}
+                                               THEN 2 ELSE 1 END AS grade
+                                     FROM observable o
+                                     JOIN observation_current oc ON oc.observable_id = o.id
+                                    WHERE o.item_id = n.id
+                                       OR (n.style_id IS NOT NULL AND o.item_style_id = n.style_id)) g
+                             JOIN metric m ON m.id = g.metric_id
+                       ) fig ON true
                        LEFT JOIN LATERAL (
                            SELECT sum(rs.on_hand)::text AS on_hand,
                                   count(DISTINCT rs.location_id) AS bins
@@ -371,19 +553,28 @@ pub async fn item_list(
                             WHERE s.item_id = n.id AND s.quantity > 0
                               AND ($4::uuid IS NULL OR s.site_id = $4)
                        ) held ON true
-                      WHERE ($7::text IS NULL OR n.code > $7)
-                      ORDER BY n.code
-                      LIMIT $8",
+                      ORDER BY n.ordinal",
                     picture = pictures::PICTURE_CTE
                 );
                 let rows = tx
                     .query(
                         &sql,
-                        &[&like, &codes, &here, &site, &measuring, &photo, &after, &(limit + 1)],
+                        &[
+                            &like, &codes, &here, &site, &weighing, &measuring, &photo,
+                            &after_code, &(limit + 1), &offset,
+                        ],
                     )
                     .await?;
-                let total: i64 = rows.first().map(|r| r.get(11)).unwrap_or(0);
+                let total: i64 = rows.first().map(|r| r.get(12)).unwrap_or(0);
                 let more = rows.len() as i64 > limit;
+                let said = |n: Option<i32>| {
+                    match n {
+                        Some(2) => "measured",
+                        Some(_) => "listed",
+                        None => "none",
+                    }
+                    .to_string()
+                };
                 let items: Vec<ItemRow> = rows
                     .iter()
                     .take(limit as usize)
@@ -393,19 +584,21 @@ pub async fn item_list(
                         description: r.get(2),
                         active: r.get(3),
                         style_code: r.get(4),
-                        figures: match r.get::<_, Option<i32>>(5) {
-                            Some(2) => "measured",
-                            Some(_) => "listed",
-                            None => "none",
-                        }
-                        .to_string(),
-                        picture: pictures::from_row(r.get(6), r.get(7)),
-                        reported_on_hand: r.get(8),
-                        reported_bins: r.get(9),
-                        held: r.get(10),
+                        weight: said(r.get(5)),
+                        size: said(r.get(6)),
+                        picture: pictures::from_row(r.get(7), r.get(8)),
+                        reported_on_hand: r.get(9),
+                        reported_bins: r.get(10),
+                        held: r.get(11),
+                        demand: r.get(13),
+                        bin_code: r.get(14),
                     })
                     .collect();
-                let next = if more { items.last().map(|i| i.code.clone()) } else { None };
+                let next = match (more, order) {
+                    (false, _) => None,
+                    (true, Order::Code) => items.last().map(|i| i.code.clone()),
+                    (true, _) => Some((offset + limit).to_string()),
+                };
                 Ok(ItemsList { items, total, next })
             })
         })

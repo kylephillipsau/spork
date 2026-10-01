@@ -73,7 +73,7 @@
 }
 @media (min-width: 1200px) {
   .split {
-    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 33%, 28rem);
   }
 }
 

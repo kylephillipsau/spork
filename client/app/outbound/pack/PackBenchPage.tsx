@@ -25,6 +25,7 @@ import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { Faint } from "@app/common/cells";
 import { kg } from "@app/common/format";
+import { ItemCode, ItemDrawer } from "@app/items/ItemProperties";
 
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
@@ -43,6 +44,8 @@ interface Draft {
  */
 export function PackBenchPage({ bench }: { bench: PackBench }) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  // The item whose size, weight and photos are open beside the bench (D174).
+  const [looking, setLooking] = useState<string | null>(null);
   const st = bench.status;
 
   if (st.kind !== "ready") {
@@ -105,7 +108,7 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       header: "Item",
       cell: (l) => (
         <span className={l.remaining === 0 ? s.done : undefined}>
-          <span className={s.code}>{l.item_code}</span>
+          <ItemCode code={l.item_code} onOpen={() => setLooking(l.item_id)} />
           {/* An item made from a code alone has the code as its description;
               saying it twice is noise. */}
           {l.description && l.description !== l.item_code && <span className={s.desc}>{l.description}</span>}
@@ -257,10 +260,11 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
         <div className={s.cartons}>
           <NewCarton screen={screen} bench={bench} />
           {screen.cartons.map((c) => (
-            <Carton key={c.id} carton={c} bench={bench} />
+            <Carton key={c.id} carton={c} bench={bench} look={setLooking} />
           ))}
         </div>
       </div>
+      <ItemDrawer itemId={looking} onClose={() => setLooking(null)} />
     </Page>
   );
 }
@@ -298,7 +302,7 @@ function NewCarton({ screen, bench }: { screen: BenchScreen; bench: PackBench })
   );
 }
 
-function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) {
+function Carton({ carton, bench, look }: { carton: CartonSummary; bench: PackBench; look: (itemId: string) => void }) {
   const stated = carton.stated_size?.height_mm ?? null;
   const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : (carton.gross_weight_g / 1000).toFixed(3));
   const [height, setHeight] = useState(String(carton.height_mm ?? stated ?? ""));
@@ -307,7 +311,7 @@ function Carton({ carton, bench }: { carton: CartonSummary; bench: PackBench }) 
   const footprint = carton.stated_size ? `${carton.stated_size.length_mm} × ${carton.stated_size.width_mm} mm` : null;
 
   const contentColumns: Column<PackedRow>[] = [
-    { key: "item", header: "Item", cell: (r) => r.item_code, mono: true, grow: true },
+    { key: "item", header: "Item", cell: (r) => <ItemCode code={r.item_code} onOpen={() => look(r.item_id)} />, grow: true },
     { key: "lot", header: "Lot", cell: (r) => r.lot_code ?? <Faint>—</Faint>, mono: true, width: "110px" },
     { key: "units", header: "Units", cell: (r) => r.quantity, align: "right", width: "70px" },
   ];

@@ -28,9 +28,9 @@ test("the screens that own the scanner are the ones built around one (D117)", ()
   // Picking joined with D166 and put-away with the read behind it. All three
   // are floor screens whose whole shape is one scan field asking whichever
   // question is open, and a chrome locator beside one would be the second place
-  // to aim a reader.
+  // to aim a reader. Capture was the first, and went to the item list (D174).
   const owners = SCREENS.filter((s) => s.claimsScan);
-  assert.deepEqual(owners.map((s) => s.id).sort(), ["capture", "picking", "putaway", "receiving"]);
+  assert.deepEqual(owners.map((s) => s.id).sort(), ["picking", "putaway", "receiving"]);
 });
 
 test("the chrome's locator is on every screen except those that must not have it", () => {
@@ -38,7 +38,7 @@ test("the chrome's locator is on every screen except those that must not have it
   // and the two screens that run without a session are exempt because
   // resolving an identifier is a read behind one — a scan bar that can only
   // answer 401 is worse than no scan bar.
-  const exempt = ["capture", "picking", "putaway", "receiving", "setup", "sign-in"];
+  const exempt = ["picking", "putaway", "receiving", "setup", "sign-in"];
   const without = SCREENS.filter((s) => !wantsChromeLocator(s)).map((s) => s.id);
   assert.deepEqual(without.sort(), [...exempt].sort());
   for (const s of SCREENS) {

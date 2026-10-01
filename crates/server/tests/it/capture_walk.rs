@@ -302,16 +302,97 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
         .get(0);
     assert_eq!(grams, 400, "0.4 kg is exactly 400 g");
 
+    // ── a look taken for its photographs, with nothing measured ─────────
+    //
+    // An item already weighed and measured that still wants a picture is
+    // photographed on its own: one look, no figures, the photographs on it.
+    // An empty look nobody asked for is still refused.
+    let look = |client_event: Uuid, photographs: bool| {
+        let bearer = bearer.clone();
+        let app = &app;
+        async move {
+            let r = test::call_service(
+                app,
+                test::TestRequest::post()
+                    .uri("/observations")
+                    .insert_header(("authorization", bearer))
+                    .set_json(json!({
+                        "item_id": GLOVE,
+                        "packaging_level": "each",
+                        "measurements": [],
+                        "photographs": photographs,
+                        "client_event_id": client_event,
+                        "occurred_at": chrono::Utc::now(),
+                    }))
+                    .to_request(),
+            )
+            .await;
+            let status = r.status().as_u16();
+            let body: Value = serde_json::from_slice(&test::read_body(r).await).unwrap_or(Value::Null);
+            (status, body)
+        }
+    };
+    let (status, refused) = look(Uuid::new_v4(), false).await;
+    assert_eq!(status, 400, "an empty look nobody meant is refused: {refused}");
+    let photo_event = Uuid::new_v4();
+    let (status, looked) = look(photo_event, true).await;
+    assert_eq!(status, 200, "{looked}");
+    assert_eq!(looked["observation_ids"], json!([]), "nothing measured: {looked}");
+    let look_id = looked["observation_event_id"]
+        .as_str()
+        .expect("an event to hang the photographs off")
+        .to_string();
+    let (status, again) = look(photo_event, true).await;
+    assert_eq!(status, 200, "a repeated press is the same act: {again}");
+    assert_eq!(again["observation_event_id"].as_str(), Some(look_id.as_str()), "and the same look");
+    let r = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observations/{look_id}/images/front"))
+            .insert_header(("authorization", bearer.clone()))
+            .insert_header(("content-type", "image/png"))
+            .set_payload(png("a look for its photographs"))
+            .to_request(),
+    )
+    .await;
+    assert!(r.status().is_success(), "a photograph on a look with no figures");
+
+    // The item's page shows it against its subject, with what gets measured.
+    let page: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/items/{GLOVE}"))
+                .insert_header(("authorization", bearer.clone()))
+                .to_request(),
+        )
+        .await;
+        assert!(r.status().is_success());
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    let subjects = page["subjects"].as_array().expect("what gets measured for it");
+    assert!(
+        subjects.iter().any(|s| s["item_id"] == GLOVE && s["packaging_level"] == "each"),
+        "the glove's each is one: {page}"
+    );
+    let front = page["photos"]
+        .as_array()
+        .expect("its photographs")
+        .iter()
+        .find(|p| p["item_id"] == GLOVE && p["packaging_level"] == "each" && p["face"] == "front")
+        .expect("the newest front of its each");
+    assert_eq!(front["digest"].as_str().map(str::len), Some(64), "{front}");
+
     // ── clean up after itself ───────────────────────────────────────────
     //
     // In dependency order, because the foreign keys are real. The client_event
     // goes last: every fact points at it.
     client
         .batch_execute(&format!(
-            "DELETE FROM observation_image WHERE observation_event_id = '{event}';
+            "DELETE FROM observation_image WHERE observation_event_id IN ('{event}', '{look_id}');
              DELETE FROM observation WHERE observation_event_id = '{event}';
-             DELETE FROM observation_event WHERE id = '{event}';
-             DELETE FROM client_event WHERE client_event_id = '{client_event}';"
+             DELETE FROM observation_event WHERE id IN ('{event}', '{look_id}');
+             DELETE FROM client_event WHERE client_event_id IN ('{client_event}', '{photo_event}');"
         ))
         .await
         .expect("the walk removes its own rows");

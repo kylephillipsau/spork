@@ -22,6 +22,7 @@ export const PACK_FIXTURE: BenchScreen = {
   lines: [
     {
       line_id: "f11e0000-0000-0000-0000-000000000001",
+      item_id: "01990000-0000-7000-8000-00000000a001",
       item_code: "GLV-NIT-BLU-M",
       description: "Nitrile glove, blue, medium",
       remaining: 0,
@@ -38,6 +39,7 @@ export const PACK_FIXTURE: BenchScreen = {
     },
     {
       line_id: "f11e0000-0000-0000-0000-000000000002",
+      item_id: "01990000-0000-7000-8000-00000000a002",
       item_code: "HRN-DSP-WHT",
       description: "Hair net, disposable, white",
       remaining: 0,
@@ -54,6 +56,7 @@ export const PACK_FIXTURE: BenchScreen = {
     },
     {
       line_id: "f11e0000-0000-0000-0000-000000000003",
+      item_id: "01990000-0000-7000-8000-00000000a003",
       item_code: "APR-PE-CLR-L",
       description: "Apron, polythene, clear, large",
       remaining: 1,
@@ -76,6 +79,7 @@ export const PACK_FIXTURE: BenchScreen = {
     },
     {
       line_id: "f11e0000-0000-0000-0000-000000000004",
+      item_id: "01990000-0000-7000-8000-00000000a004",
       item_code: "SLV-PE-BLU",
       description: "Oversleeve, polythene, blue",
       remaining: 20,
@@ -125,6 +129,7 @@ export const PACK_FIXTURE: BenchScreen = {
       },
       contents: [
         {
+          item_id: "01990000-0000-7000-8000-00000000a001",
           item_code: "GLV-NIT-BLU-M",
           description: "Nitrile glove, blue, medium",
           lot_code: null,
@@ -159,6 +164,7 @@ export const PACK_FIXTURE: BenchScreen = {
       },
       contents: [
         {
+          item_id: "01990000-0000-7000-8000-00000000a002",
           item_code: "HRN-DSP-WHT",
           description: "Hair net, disposable, white",
           lot_code: "L-24118",
@@ -206,6 +212,7 @@ export const PACK_FIXTURE: BenchScreen = {
       expected: null,
       contents: [
         {
+          item_id: "01990000-0000-7000-8000-00000000a004",
           item_code: "SLV-PE-BLU",
           description: "Oversleeve, polythene, blue",
           lot_code: null,

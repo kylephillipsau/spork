@@ -98,3 +98,223 @@
   padding: var(--ui-space-3) var(--ui-space-4);
   box-shadow: inset 0 1px 0 var(--ui-border);
 }
+
+.order {
+  width: 200px;
+}
+
+/* What is recorded about a row: weight, size and a photo, one mark each. */
+.recorded {
+  display: inline-flex;
+  gap: var(--ui-space-1);
+}
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-control-sm);
+  height: var(--ui-control-sm);
+  border-radius: var(--ui-radius);
+  color: var(--ui-text-faint);
+}
+.mark svg {
+  width: var(--ui-icon-sm);
+  height: var(--ui-icon-sm);
+}
+.markDone {
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+}
+.markListed {
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-muted);
+}
+.markMissing {
+  border: 1px dashed var(--ui-border-strong);
+}
+
+/* ---- an item's properties ---- */
+
+/* An item code that opens the item beside the work. */
+.itemCode {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ui-accent);
+  font: inherit;
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.itemCode:hover {
+  text-decoration: underline;
+}
+
+.known {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-4);
+}
+
+/* The seven faces, wrapping on a narrow screen. */
+.faces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--ui-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.faceTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+.faceName {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  text-transform: capitalize;
+}
+
+/* The camera: a label dressed as a small button around a hidden file input. */
+.shutter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-1);
+  height: var(--ui-control-sm);
+  padding: 0 var(--ui-space-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.shutter:hover {
+  background: var(--ui-surface-hover);
+}
+.shutter:focus-within {
+  outline: 2px solid var(--ui-ring);
+  outline-offset: 1px;
+}
+.shutter[aria-disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.shutter svg {
+  width: var(--ui-icon-sm);
+  height: var(--ui-icon-sm);
+}
+.shutter input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* An open action: its fields, then Cancel and the act. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-4);
+  border-top: 1px solid var(--ui-border);
+}
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ui-space-3);
+}
+.reading {
+  flex: 0 1 220px;
+}
+.unit {
+  flex: 0 1 120px;
+}
+.grow {
+  flex: 1 1 240px;
+}
+.dimensions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 10rem));
+  gap: var(--ui-space-3);
+}
+.arrangement {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  overflow-x: auto;
+}
+.fieldLabel {
+  color: var(--ui-text);
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+}
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ui-space-2);
+}
+.barcodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Its photographs: the box, then the tiles. */
+.photos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ui-space-4);
+}
+.photos .faces {
+  flex: 1 1 16rem;
+}
+/* Square, and small enough to sit beside the tiles on a desk. */
+.boxFigure {
+  display: flex;
+  flex: 0 1 15rem;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-space-1);
+  min-width: 0;
+  margin: 0;
+}
+.box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  cursor: grab;
+}
+.box:active {
+  cursor: grabbing;
+}
+/* Out of the flow, so the canvas never sizes the box that sizes it. */
+.box canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.boxCaption {
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-xs);
+}

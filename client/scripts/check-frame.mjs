@@ -71,7 +71,22 @@ const CANNED = {
     site_code: "MEL",
   },
   "/api/work": { pack: 3, pick: 1, despatch: 0, findings: 2, no_site: false },
-  "/api/capture": { site: "MEL", walk: [] },
+  // An item on its own page, which is a floor screen with nothing in its dock.
+  "/api/items/01a0-i": {
+    item_id: "01a0-i",
+    code: "SKU-8837",
+    description: "Tape gun, 50 mm",
+    active: true,
+    style: null,
+    picture: null,
+    measurements: [],
+    packing: null,
+    held: [],
+    reported: [],
+    subjects: [],
+    photos: [],
+  },
+  "/api/items": { items: [], total: 0, next: null },
   [`/api/sites/${SITE}/picking`]: { site: "MEL", lines: [] },
   // One finding, so the evidence panel has something to open with. Every
   // optional field is null on purpose: what is under test is the panel arriving
@@ -277,9 +292,9 @@ const dock = await page.locator(DOCK).boundingBox();
 say(dock !== null && dock.y + dock.height > 932 - 80, "and the dock is in the reachable third (D134)");
 
 // ── and takes nothing while it holds nothing ───────────────────────────────
-await page.goto(`${base}/capture`);
+await page.goto(`${base}/items/01a0-i`);
 await settle();
-say((await page.locator(DOCK).count()) === 1, "capture's dock container is there with nothing in it");
+say((await page.locator(DOCK).count()) === 1, "an item's dock container is there with nothing in it");
 say(!(await page.locator(DOCK).isVisible()), "and out of the layout, so an empty dock costs nothing");
 
 // ── the frame is the same frame afterwards ─────────────────────────────────
@@ -312,8 +327,8 @@ let sessions = 0;
 page.on("request", (request) => {
   if (new URL(request.url()).pathname === "/api/sessions/current") sessions += 1;
 });
-await page.click(`${SIDEBAR} a[href="/weigh"]`);
-await titled("Weigh");
+await page.click(`${SIDEBAR} a[href="/items"]`);
+await titled("Items");
 await page.click(`${SIDEBAR} a[href="/findings"]`);
 await titled("Findings");
 await findings();

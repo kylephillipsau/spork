@@ -403,9 +403,13 @@ pub async fn ensure_goods_receipt(
 /// second subject and this endpoint does not do that. The observations beneath
 /// it are one per metric, which is what makes weighing a pallet one act rather
 /// than four.
+/// `photographs` says the act was a look taken for its photographs, which
+/// rightly has no observations; any other event without them is a half-written
+/// act.
 pub async fn require_observation_facts(
     tx: &Transaction<'_>,
     client_event_id: Uuid,
+    photographs: bool,
 ) -> Result<(Uuid, Vec<Uuid>), ApiError> {
     let ev = tx
         .query(
@@ -434,7 +438,7 @@ pub async fn require_observation_facts(
             &[&event_id],
         )
         .await?;
-    if rows.is_empty() {
+    if rows.is_empty() && !photographs {
         return Err(ApiError::Rejected(
             "observation_event exists with no observations; incomplete act".into(),
         ));
