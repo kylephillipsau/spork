@@ -43,6 +43,9 @@ import type {
   RecordPickResponse,
   RecordEvidenceResponse,
   RecordObservationResponse,
+  RecordCutResponse,
+  RecordImageResponse,
+  StoredImage,
   Resolution,
   SetupDone,
   SetupRequest,
@@ -220,6 +223,23 @@ async function sendRaw<T>(
   const response = await transport.fetch(`${transport.base}${path}`, {
     method,
     headers: { "content-type": "text/csv", authorization: `Bearer ${token}` },
+    body,
+  });
+  return unwrap<T>(response);
+}
+
+/**
+ * Raw bytes up, JSON back: a photograph, or a face cut from one (D176).
+ *
+ * **Not wrapped in JSON.** Base64 would add a third to every upload over a
+ * warehouse's WiFi, and the server reads the type from the bytes rather than
+ * believing this one, so the content type here is a hint and not a claim.
+ */
+async function upload<T>(path: string, body: Blob): Promise<T> {
+  const response = await transport.fetch(`${transport.base}${path}`, {
+    method: "POST",
+    credentials: transport.credentials,
+    headers: { ...transport.headers(), "content-type": body.type || "application/octet-stream" },
     body,
   });
   return unwrap<T>(response);
@@ -1073,41 +1093,32 @@ export const api = {
     }),
 
   /**
-   * A photograph of one face, against the event the figures produced.
-   *
-   * **Raw bytes, not a JSON envelope.** Base64 inflates every upload by a
-   * third over a warehouse's wifi to save the client a `fetch` option, and the
-   * server reads the type from the bytes rather than believing this one — a
-   * file stored as one thing and served as another is how an image endpoint
-   * becomes an XSS, so the content type here is a hint and not a claim.
-   *
-   * Every photograph is sent through here, so every one goes as WebP (D175).
+   * A photograph of one face, against the event the figures produced, as raw
+   * bytes (see `upload`). Every photograph is sent through here, so every one
+   * goes as WebP (D175).
    */
-  async photograph(event: Uuid, face: string, image: Blob): Promise<void> {
-    const body = await asWebp(image);
-    const response = await transport.fetch(
-      `${transport.base}/observations/${event}/images/${face}`,
-      {
-        method: "POST",
-        credentials: transport.credentials,
-        headers: {
-          ...transport.headers(),
-          "content-type": body.type || "application/octet-stream",
-        },
-        body,
-      },
-    );
-    if (!response.ok) {
-      let detail = `Photo upload failed (${response.status}).`;
-      try {
-        const parsed = (await response.json()) as { detail?: string; error?: string };
-        detail = parsed.detail ?? parsed.error ?? detail;
-      } catch {
-        /* an empty body is its own answer */
-      }
-      throw new ApiError(detail, response.status);
-    }
+  async photograph(event: Uuid, face: string, image: Blob): Promise<RecordImageResponse> {
+    return upload<RecordImageResponse>(`/observations/${event}/images/${face}`, await asWebp(image));
   },
+
+  /**
+   * Keep an image's bytes and learn their address. Nothing names them until
+   * an act does: a face cut from a photograph is kept here first, then cut
+   * (D176).
+   */
+  storeImage: (image: Blob) => upload<StoredImage>("/images", image),
+
+  /**
+   * Cut a photograph to its face (D176): the corners somebody marked, and the
+   * straightened face already kept at `digest`. Cutting again is another act.
+   */
+  recordCut: (image: Uuid, input: { digest: string; corners: number[]; act: Act }) =>
+    send<RecordCutResponse>("POST", `/observation-images/${image}/cuts`, {
+      digest: input.digest,
+      corners: input.corners,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
 
   seal: (carton: Uuid, act: Act) =>
     send<unknown>("POST", `/packages/${carton}/seal`, {

@@ -13716,3 +13716,56 @@ survives the re-encoding.
 
 **Next.** Each side will be cut to its face and straightened to its measured
 proportions, with this photo kept beside the cut-out.
+
+### D176 — A photograph is cut to the face it is of, and kept
+
+*Adopted 2026-10-01. Migration 100.*
+
+**Decision.** A photograph of a side of a box can be cut to that side:
+- somebody drags four corners onto the side's corners;
+- the client straightens what is inside them into a rectangle, at the side's
+  measured proportions when its size is known, or from the corners when not;
+- the result is kept as a picture of its own, beside the photograph, which is
+  never changed.
+
+The cut is shown wherever the photograph was: on the 3D box, on its tile, and
+as the picture a picker looks for (D141's `front`). Cutting again is another
+cut; the newest is shown.
+
+**Why.** A photograph of a carton's front is the front and everything round it:
+the shelf, the next carton, the floor, and the front leaning away because the
+phone was above it. On a box, that is a box dressed in its surroundings.
+
+**The corners are the cut's own record.** `observation_image_cut` keeps eight
+numbers per cut: top-left, top-right, bottom-right, bottom-left of the face, x
+then y, as fractions of the photograph shown the right way up. Their order is
+which way up the face is: the first is its top-left wherever it falls in the
+photograph, so a top photographed sideways is put right by naming its corners
+from another one (the screen's Turn), not by a second setting. A cut that
+looks wrong is cut again from the photograph, with these corners as the start.
+
+**A cut is an act of its own.** It has its own `client_event` (D5) and its
+own person (D11): where the corners go is the judgement of whoever marks them,
+often later and at a desk, and not the photographer's. The photograph's look
+still says who took it.
+
+**Two requests.** The straightened face's bytes go to `POST /images`, which
+checks and keeps them like a photograph's and answers with their address; then
+`POST /observation-images/{id}/cuts` names the photograph, the corners and
+that address. Bytes kept and never named by an act cannot be read back: the
+image route serves only what a row names.
+
+**What the server checks.** The corners are four points in order round a
+face, clockwise as shown, convex, and round at least a hundredth of the
+photograph; the bytes are kept and are an image; the photograph is the
+tenant's own. The same rule is in the client (`isFace`), so the screen does not
+offer a Save the server would refuse.
+
+**Where it is done.** In the browser, the screen opens straight after a
+photo is taken and from any photo's Crop. The straightening is a projection
+from the unit square onto the four corners (Heckbert's), sampled bilinearly
+from the photograph at full size, at most 2048 px on a side, then encoded as
+WebP as photographs are (D175).
+
+**Next.** A small model (SlimSAM, in the browser) places the corners first, so
+marking them is checking them.

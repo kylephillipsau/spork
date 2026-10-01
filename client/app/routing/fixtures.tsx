@@ -102,9 +102,11 @@ import {
   ITEM_UNKNOWN,
   ITEMS_NONE,
   ITEMS_PAGE,
+  CROPPING,
   MEASURING,
   PHOTOGRAPHING,
   PHOTOGRAPHING_NO_BOX,
+  RECROPPING,
   WEIGHED_APART,
   fixtureItems,
   fixtureProperties,
@@ -535,6 +537,14 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-item-photographing", "/fixtures/item/photographing", "Item — photographing", "floor", { screen: "item" }, () => (
     <ItemPage desk={PHOTOGRAPHING} />
+  )),
+  // D176: a photo cut to its face. Straight after taking it on a handheld, and
+  // again at a desk, where it was cut before.
+  app("f-item-cropping", "/fixtures/item/cropping", "Item — cropping a photo", "floor", { screen: "item" }, () => (
+    <ItemPage desk={CROPPING} />
+  )),
+  app("f-item-recropping", "/fixtures/item/recropping", "Item — cropping again", "desk", { screen: "item" }, () => (
+    <ItemPage desk={RECROPPING} />
   )),
   // A thing with no box shape is asked for a photo and its label, not six sides.
   app("f-item-no-box", "/fixtures/item/no-box", "Item — no box shape", "floor", { screen: "item" }, () => (

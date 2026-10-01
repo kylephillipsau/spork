@@ -382,6 +382,127 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
         .find(|p| p["item_id"] == GLOVE && p["packaging_level"] == "each" && p["face"] == "front")
         .expect("the newest front of its each");
     assert_eq!(front["digest"].as_str().map(str::len), Some(64), "{front}");
+    assert_eq!(front["cut"], Value::Null, "nobody has cut it to its face yet: {front}");
+    let photo_id = front["image_id"].as_str().expect("the photograph a cut points at").to_string();
+
+    // ── cut to its face (D176) ──────────────────────────────────────────
+    //
+    // Two requests: the straightened face's bytes, then the act naming the
+    // photograph, the corners and where the bytes went.
+    let stored: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/images")
+                .insert_header(("authorization", bearer.clone()))
+                .insert_header(("content-type", "image/png"))
+                .set_payload(png_sized(600, 400, 64))
+                .to_request(),
+        )
+        .await;
+        assert!(r.status().is_success(), "the cut's bytes are kept");
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    let cut_digest = stored["digest"].as_str().expect("their address").to_string();
+    assert_eq!((stored["width_px"].as_i64(), stored["height_px"].as_i64()), (Some(600), Some(400)), "{stored}");
+
+    // Kept is not readable: nothing names the bytes until the act does.
+    let unnamed = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/images/{cut_digest}"))
+            .insert_header(("authorization", bearer.clone()))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(unnamed.status().as_u16(), 404, "bytes no row names are not served");
+
+    let cut_event = Uuid::new_v4();
+    let corners = json!([0.2, 0.15, 0.8, 0.15, 0.9, 0.85, 0.1, 0.85]);
+    let cut = |image: String, body: Value| {
+        let bearer = bearer.clone();
+        let app = &app;
+        async move {
+            let r = test::call_service(
+                app,
+                test::TestRequest::post()
+                    .uri(&format!("/observation-images/{image}/cuts"))
+                    .insert_header(("authorization", bearer))
+                    .set_json(body)
+                    .to_request(),
+            )
+            .await;
+            let status = r.status().as_u16();
+            let body: Value = serde_json::from_slice(&test::read_body(r).await).unwrap_or(Value::Null);
+            (status, body)
+        }
+    };
+    let act = |id: Uuid, digest: &str, corners: &Value| {
+        json!({ "digest": digest, "corners": corners, "client_event_id": id, "occurred_at": chrono::Utc::now() })
+    };
+
+    let (status, made) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
+    assert_eq!(status, 200, "{made}");
+    let (status, again) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
+    assert_eq!(status, 200, "a repeated press is the same act: {again}");
+    assert_eq!(again["cut_id"], made["cut_id"], "and the same cut");
+
+    // Refused, each in words: corners that are not a face, bytes never kept,
+    // a photograph that is not there, and one act reused for another cut.
+    let crossed = json!([0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0]);
+    let (status, _) = cut(photo_id.clone(), act(Uuid::new_v4(), &cut_digest, &crossed)).await;
+    assert_eq!(status, 400, "crossed corners");
+    let (status, _) = cut(photo_id.clone(), act(Uuid::new_v4(), &"0".repeat(64), &corners)).await;
+    assert_eq!(status, 400, "nothing kept at that address");
+    let (status, _) = cut(Uuid::new_v4().to_string(), act(Uuid::new_v4(), &cut_digest, &corners)).await;
+    assert_eq!(status, 404, "no such photograph here");
+    let other = json!([0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0]);
+    let (status, _) = cut(photo_id.clone(), act(cut_event, &digests[0], &other)).await;
+    assert_eq!(status, 400, "one act, one cut");
+
+    // The item shows the photograph with its cut, and serves the cut's bytes.
+    let page: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/items/{GLOVE}"))
+                .insert_header(("authorization", bearer.clone()))
+                .to_request(),
+        )
+        .await;
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    let front = page["photos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["image_id"] == photo_id.as_str())
+        .expect("the photograph, still");
+    assert_eq!(front["cut"]["digest"], cut_digest.as_str(), "{front}");
+    assert_eq!(front["cut"]["corners"], corners, "the corners as marked");
+    let served = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/images/{cut_digest}"))
+            .insert_header(("authorization", bearer.clone()))
+            .to_request(),
+    )
+    .await;
+    assert!(served.status().is_success(), "a cut's row authorises its bytes");
+
+    // And it is the person signed in who cut it, not the photographer by default.
+    let cutter: bool = client
+        .query_one(
+            "SELECT c.recorded_by_id = ce.recorded_by_id
+               FROM observation_image_cut c
+               JOIN client_event ce ON ce.tenant_id = c.tenant_id AND ce.client_event_id = c.client_event_id
+              WHERE c.client_event_id = $1",
+            &[&cut_event],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(cutter, "the cut names the session's person, as its act does");
 
     // ── clean up after itself ───────────────────────────────────────────
     //
@@ -389,10 +510,11 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
     // goes last: every fact points at it.
     client
         .batch_execute(&format!(
-            "DELETE FROM observation_image WHERE observation_event_id IN ('{event}', '{look_id}');
+            "DELETE FROM observation_image_cut WHERE client_event_id = '{cut_event}';
+             DELETE FROM observation_image WHERE observation_event_id IN ('{event}', '{look_id}');
              DELETE FROM observation WHERE observation_event_id = '{event}';
              DELETE FROM observation_event WHERE id IN ('{event}', '{look_id}');
-             DELETE FROM client_event WHERE client_event_id IN ('{client_event}', '{photo_event}');"
+             DELETE FROM client_event WHERE client_event_id IN ('{client_event}', '{photo_event}', '{cut_event}');"
         ))
         .await
         .expect("the walk removes its own rows");

@@ -19,6 +19,7 @@ pub mod allocating;
 pub mod capture;
 pub mod client_events;
 pub mod correction;
+pub mod cuts;
 pub mod counting;
 pub mod credentials;
 pub mod despatch;

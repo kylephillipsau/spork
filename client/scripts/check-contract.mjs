@@ -170,6 +170,10 @@ const PAIRS = [
   // capture
   ["CaptureSubject", ["CaptureSubject"]],
   ["SubjectPhoto", ["SubjectPhoto"]],
+  ["PhotoCut", ["PhotoCut"]],
+  ["StoredImage", ["StoredImage"]],
+  ["RecordImageResponse", ["RecordImageResponse", "StoredImage"]],
+  ["RecordCutResponse", ["RecordCutResponse"]],
   ["RecordObservationResponse", ["RecordObservationResponse"]],
   // binding a barcode (D164)
   ["BoundBarcode", ["BoundBarcode"]],

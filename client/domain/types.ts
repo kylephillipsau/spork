@@ -1319,8 +1319,41 @@ export interface SubjectPhoto {
   item_part_id: Uuid | null;
   packaging_level: string | null;
   face: string;
+  /** The photograph, which a cut points at (D176). */
+  image_id: Uuid;
   digest: string;
   captured_at: string;
+  /** Its newest cut to the face, when somebody has marked one. */
+  cut: PhotoCut | null;
+}
+
+/** A photograph cut to its face and straightened (D176). */
+export interface PhotoCut {
+  /** The straightened face. */
+  digest: string;
+  /** Top-left, top-right, bottom-right, bottom-left of the face, x then y, as
+   *  fractions of the photograph shown the right way up. */
+  corners: number[];
+}
+
+/** `POST /images`: bytes kept behind their address, and what they turned out to be. */
+export interface StoredImage {
+  digest: string;
+  mime: string;
+  byte_count: number;
+  width_px: number | null;
+  height_px: number | null;
+}
+
+/** `POST /observations/{id}/images/{face}`: the photograph as kept. */
+export interface RecordImageResponse extends StoredImage {
+  image_id: Uuid;
+}
+
+/** `POST /observation-images/{id}/cuts`. */
+export interface RecordCutResponse {
+  cut_id: Uuid;
+  digest: string;
 }
 
 /** One item in `GET /items`. */

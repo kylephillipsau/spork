@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { bindable, nameOf, photosOf, presentationNeeded, presentationOffered, subjectKey, weighable } from "./subjects.ts";
+import { bindable, nameOf, photosOf, shown, presentationNeeded, presentationOffered, subjectKey, weighable } from "./subjects.ts";
 import type { CaptureSubject, SubjectPhoto } from "@domain/types";
 
 /**
@@ -42,6 +42,8 @@ const photo = (over: Partial<SubjectPhoto>): SubjectPhoto => ({
   item_part_id: null,
   packaging_level: "each",
   face: "front",
+  image_id: "image-1",
+  cut: null,
   digest: "d".repeat(64),
   captured_at: "2026-10-01T00:00:00Z",
   ...over,
@@ -83,4 +85,9 @@ test("a subject's photographs are its own, never another level's or its family's
   assert.deepEqual([...mine.keys()].sort(), ["front", "top"]);
   assert.equal(subjectKey(each), subjectKey(photos[0]!), "a photograph names its subject the way a subject does");
   assert.equal(subjectKey(subject({ item_id: null, item_part_id: "p", packaging_level: null })), "p:part");
+});
+
+test("a photograph shows its face cut out once somebody has, and itself until then", () => {
+  assert.equal(shown(photo({})), "d".repeat(64));
+  assert.equal(shown(photo({ cut: { digest: "c".repeat(64), corners: [0, 0, 1, 0, 1, 1, 0, 1] } })), "c".repeat(64));
 });

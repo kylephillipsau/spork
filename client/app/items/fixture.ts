@@ -81,6 +81,9 @@ const BRUSH_EACH = subject({
 });
 
 const PHOTO = "a3f1e0c2b4d6a8f0e2c4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8";
+/** The front of the family's carton, cut out and straightened (D176). */
+const CUT = "c7d1e0c2b4d6a8f0e2c4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6c7";
+const image = (n: number) => `01990000-0000-7000-8000-0000000e${String(n).padStart(4, "0")}`;
 
 export const ITEM: ItemView = {
   item_id: BRUSH,
@@ -140,19 +143,24 @@ export const ITEM: ItemView = {
       item_part_id: null,
       packaging_level: "each",
       face: "front",
+      image_id: image(1),
       digest: PHOTO,
       captured_at: "2026-09-30T04:13:00Z",
+      cut: null,
     },
     // The family's carton photographed on four of its sides and its label:
     // drawn as a box, the two sides nobody took show their names.
-    ...(["front", "right", "top", "back", "label"] as const).map((face) => ({
+    // Its front has been cut to the face; the rest are as taken.
+    ...(["front", "right", "top", "back", "label"] as const).map((face, i) => ({
       item_id: null,
       item_style_id: BRUSH_FAMILY,
       item_part_id: null,
       packaging_level: "carton",
       face,
+      image_id: image(10 + i),
       digest: PHOTO,
       captured_at: "2026-09-30T04:20:00Z",
+      cut: face === "front" ? { digest: CUT, corners: [0.12, 0.2, 0.9, 0.16, 0.94, 0.86, 0.08, 0.9] } : null,
     })),
   ],
 };
@@ -194,6 +202,10 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     measure: later,
     taken: [],
     attach: later,
+    cropping: null,
+    crop: noop,
+    uncrop: noop,
+    cut: later,
     barcodes: [],
     binding: "",
     typeBinding: noop,
@@ -249,9 +261,28 @@ export const PHOTOGRAPHING_NO_BOX = fixtureProperties(NO_BOX, {
 
 /** The camera open on the each, its front and then its top taken in this look. */
 export const PHOTOGRAPHING = fixtureProperties(
-  { ...ITEM, photos: [...ITEM.photos, { ...ITEM.photos[0]!, face: "top", captured_at: "2026-09-30T04:14:00Z" }] },
+  { ...ITEM, photos: [...ITEM.photos, { ...ITEM.photos[0]!, face: "top", image_id: image(2), captured_at: "2026-09-30T04:14:00Z" }] },
   { open: { key: `${BRUSH}:each`, action: "photos" }, taken: ["front", "top"] },
 );
+
+/** Straight after photographing the each's front: its corners to mark. */
+export const CROPPING = fixtureProperties(ITEM, {
+  open: { key: `${BRUSH}:each`, action: "photos" },
+  taken: ["front"],
+  cropping: { subject: BRUSH_EACH, face: "front", image_id: image(1), digest: PHOTO, corners: null },
+});
+
+/** The carton's front open again at a desk, where it was cut before. */
+export const RECROPPING = fixtureProperties(ITEM, {
+  open: { key: `${BRUSH_FAMILY}:carton`, action: "photos" },
+  cropping: {
+    subject: FAMILY_CARTON,
+    face: "front",
+    image_id: image(10),
+    digest: PHOTO,
+    corners: [0.12, 0.2, 0.9, 0.16, 0.94, 0.86, 0.08, 0.9],
+  },
+});
 
 let row = 0;
 const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): ItemRow => ({

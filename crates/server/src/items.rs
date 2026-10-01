@@ -124,9 +124,23 @@ pub struct SubjectPhoto {
     pub item_part_id: Option<Uuid>,
     pub packaging_level: Option<String>,
     pub face: String,
+    /// The photograph, which a cut points at (D176).
+    pub image_id: Uuid,
     /// `GET /images/{digest}` serves it.
     pub digest: String,
     pub captured_at: DateTime<Utc>,
+    /// Its newest cut to the face, when somebody has marked one.
+    pub cut: Option<PhotoCut>,
+}
+
+/// A photograph cut to its face and straightened (D176).
+#[derive(Serialize, Debug)]
+pub struct PhotoCut {
+    /// The straightened face. `GET /images/{digest}` serves it.
+    pub digest: String,
+    /// Top-left, top-right, bottom-right, bottom-left of the face, x then y,
+    /// as fractions of the photograph shown the right way up.
+    pub corners: Vec<f64>,
 }
 
 #[get("/items/{item_id}")]
@@ -246,10 +260,18 @@ pub async fn item_page(
                     .query(
                         "SELECT DISTINCT ON (o.id, oi.face)
                                 o.item_id, o.item_style_id, o.item_part_id,
-                                o.packaging_level::text, oi.face, oi.digest, oi.captured_at
+                                o.packaging_level::text, oi.face, oi.digest, oi.captured_at,
+                                oi.id, cut.digest, cut.corners
                            FROM observable o
                            JOIN observation_event e ON e.observable_id = o.id
                            JOIN observation_image oi ON oi.observation_event_id = e.id
+                           LEFT JOIN LATERAL (
+                                SELECT c.digest, c.corners
+                                  FROM observation_image_cut c
+                                 WHERE c.observation_image_id = oi.id
+                                 ORDER BY c.recorded_at DESC, c.id DESC
+                                 LIMIT 1
+                           ) cut ON true
                           WHERE o.item_id = $1
                              OR o.item_style_id = (SELECT style_id FROM item WHERE id = $1)
                              OR o.item_part_id IN (SELECT id FROM item_part WHERE item_id = $1)
@@ -264,8 +286,13 @@ pub async fn item_page(
                         item_part_id: x.get(2),
                         packaging_level: x.get(3),
                         face: x.get(4),
+                        image_id: x.get(7),
                         digest: x.get(5),
                         captured_at: x.get(6),
+                        cut: x.get::<_, Option<String>>(8).map(|digest| PhotoCut {
+                            digest,
+                            corners: x.get(9),
+                        }),
                     })
                     .collect();
 

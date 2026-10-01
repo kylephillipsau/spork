@@ -27,6 +27,7 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tokio::fs;
 
@@ -129,6 +130,57 @@ pub async fn put(root: &Path, bytes: &[u8]) -> Result<String, ApiError> {
         .map_err(|e| ApiError::Rejected(format!("could not place the image: {e}")))?;
 
     Ok(digest)
+}
+
+/// Bytes kept behind their address, and what they turned out to be.
+#[derive(Serialize, Debug, Clone)]
+pub struct StoredImage {
+    pub digest: String,
+    /// Read from the bytes, never from the request.
+    pub mime: String,
+    pub byte_count: i64,
+    pub width_px: Option<i32>,
+    pub height_px: Option<i32>,
+}
+
+/// Take an upload as an image, or refuse it, and keep it.
+///
+/// Every way bytes arrive goes through here: a photograph, and a photograph
+/// cut to its face (D176). The checks are said in words a person holding the
+/// handheld can act on, and the type is read from the bytes: a file stored as
+/// one thing and served as another is how an image endpoint becomes an XSS.
+pub async fn store(bytes: &[u8]) -> Result<StoredImage, ApiError> {
+    if bytes.is_empty() {
+        return Err(ApiError::Rejected("the upload is empty".into()));
+    }
+    if bytes.len() > MAX_BYTES {
+        return Err(ApiError::Rejected(format!(
+            "that image is {} bytes and the limit is {}",
+            bytes.len(),
+            MAX_BYTES
+        )));
+    }
+    let Some(mime) = sniff(bytes) else {
+        return Err(ApiError::Rejected(format!(
+            "those bytes are not one of {}",
+            ACCEPTED.join(", ")
+        )));
+    };
+    // **Written to the store before any row, and that order is deliberate.** A
+    // file with no row is unreferenced and the reaper's problem; a row with no
+    // file is a photograph the interface promises and cannot show.
+    let digest = put(&directory(), bytes).await?;
+    let (width_px, height_px) = match dimensions(bytes) {
+        Some((w, h)) => (Some(w), Some(h)),
+        None => (None, None),
+    };
+    Ok(StoredImage {
+        digest,
+        mime: mime.to_string(),
+        byte_count: i64::try_from(bytes.len()).unwrap_or(i64::MAX),
+        width_px,
+        height_px,
+    })
 }
 
 /// Read bytes back by address. `None` when the row survives and the file does

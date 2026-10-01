@@ -70,6 +70,11 @@ export function nameOf(s: CaptureSubject): string {
 }
 
 /** Its newest photograph of each face, its own only. */
+/** The picture to show for a photograph: its face cut out, once somebody has (D176). */
+export function shown(photo: Pick<SubjectPhoto, "digest" | "cut">): string {
+  return photo.cut?.digest ?? photo.digest;
+}
+
 export function photosOf(item: Pick<ItemView, "photos">, s: CaptureSubject): Map<string, SubjectPhoto> {
   const key = subjectKey(s);
   return new Map(item.photos.filter((p) => subjectKey(p) === key).map((p) => [p.face, p]));

@@ -318,3 +318,105 @@
   color: var(--ui-text-faint);
   font-size: var(--ui-text-xs);
 }
+
+/* The crop screen: the photograph with its corners, and the face straightened beside it. */
+.crop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ui-space-4);
+}
+/* The photograph's own shape, as large as the window allows with the title,
+   the preview and Save still in view: on a phone, nothing to scroll to. */
+.cropStage {
+  position: relative;
+  flex: none;
+  width: min(100%, calc(min(62dvh, 100dvh - 22rem) * var(--photo)));
+  aspect-ratio: var(--photo);
+  overflow: visible;
+  touch-action: none;
+  user-select: none;
+}
+.cropPhoto {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--ui-radius);
+  pointer-events: none;
+}
+.cropMarks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.cropShade {
+  fill: var(--ui-overlay);
+}
+.cropEdge {
+  fill: none;
+  stroke: var(--ui-accent);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+.cropTop {
+  stroke: var(--ui-accent);
+  stroke-width: 6px;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+/* A target a thumb can hold, round a ring an eye can place. */
+.corner {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  transform: translate(-50%, -50%);
+}
+.corner::after {
+  position: absolute;
+  inset: 12px;
+  border: 2px solid var(--ui-accent-fg);
+  border-radius: 50%;
+  background: var(--ui-accent);
+  content: "";
+  pointer-events: none;
+}
+.corner:active {
+  cursor: grabbing;
+}
+.corner:focus-visible {
+  outline: 2px solid var(--ui-ring);
+}
+/* Beside the photograph at a desk; under it on a phone, in a row, small. */
+.cropSide {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.cropPreview {
+  max-width: 100%;
+  max-height: 6rem;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+@media (min-width: 900px) {
+  .cropSide {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .cropPreview {
+    max-height: 16rem;
+  }
+}

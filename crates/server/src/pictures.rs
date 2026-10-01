@@ -53,7 +53,8 @@ pub const PICTURE_CTE: &str = "
 picture AS (
     SELECT DISTINCT ON (c.item_id)
            c.item_id,
-           oi.digest,
+           -- The face cut out and straightened, when somebody has (D176).
+           COALESCE(cut.digest, oi.digest) AS digest,
            CASE WHEN c.rank = 0 THEN 'own' ELSE 'style' END AS source
       FROM (
             -- The item's own looks, at any packaging level: a picture of the
@@ -70,6 +71,13 @@ picture AS (
            ) c
       JOIN observation_event e ON e.observable_id = c.observable_id
       JOIN observation_image oi ON oi.observation_event_id = e.id
+      LEFT JOIN LATERAL (
+           SELECT x.digest
+             FROM observation_image_cut x
+            WHERE x.observation_image_id = oi.id
+            ORDER BY x.recorded_at DESC, x.id DESC
+            LIMIT 1
+      ) cut ON true
      WHERE oi.face = 'front'
      ORDER BY c.item_id, c.rank, oi.captured_at DESC, oi.id DESC
 )";

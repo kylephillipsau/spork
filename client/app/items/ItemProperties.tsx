@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState, type ReactNode } from "react";
-import { Barcode, Camera, ChevronLeft, ChevronRight, ImageOff, Ruler, Scale } from "lucide-react";
+import { Barcode, Camera, ChevronLeft, ChevronRight, Crop, ImageOff, Ruler, Scale } from "lucide-react";
 
 import {
   Alert,
@@ -20,12 +20,13 @@ import {
   Toolbar,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import type { CaptureSubject, ItemPacking, ItemView } from "@domain/types";
+import type { CaptureSubject, ItemPacking, ItemView, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
 
-import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, type BoxFace } from "./box";
+import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, measuredAspect, type BoxFace } from "./box";
+import { FaceCrop } from "./FaceCrop";
 import {
   PRESENTATIONS,
   bindable,
@@ -36,6 +37,7 @@ import {
   subjectKey,
   weighable,
   type Face,
+  shown,
 } from "./subjects";
 
 // three.js is its own chunk, fetched the first time a box is shown.
@@ -80,6 +82,15 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
         </Card>
       ) : (
         item.subjects.map((subject) => <Subject key={subjectKey(subject)} item={item} subject={subject} desk={desk} />)
+      )}
+      {desk.cropping && (
+        <FaceCrop
+          key={desk.cropping.image_id}
+          cropping={desk.cropping}
+          name={faceName(desk.cropping.face, desk.cropping.subject)}
+          aspect={measuredAspect(desk.cropping.subject, desk.cropping.face)}
+          desk={desk}
+        />
       )}
     </Stack>
   );
@@ -446,7 +457,7 @@ function Photos({
   desk,
 }: {
   subject: CaptureSubject;
-  photos: Map<string, { digest: string }>;
+  photos: Map<string, SubjectPhoto>;
   desk: PropertiesDesk | null;
 }) {
   const box = isBox(subject);
@@ -454,7 +465,7 @@ function Photos({
   const sides: Partial<Record<BoxFace, string>> = {};
   for (const face of BOX_FACES) {
     const photo = photos.get(face);
-    if (photo) sides[face] = photo.digest;
+    if (photo) sides[face] = shown(photo);
   }
   const showBox = box && (desk !== null || Object.keys(sides).length > 1);
   // On the box, the sides need no tiles of their own until there is a camera.
@@ -477,9 +488,22 @@ function Photos({
             const name = faceName(face, subject);
             return (
               <li key={face} className={s.faceTile}>
-                <Thumb picture={photo ? { digest: photo.digest, source: "own" } : null} alt={`${subject.code}, ${name}`} />
+                <Thumb picture={photo ? { digest: shown(photo), source: "own" } : null} alt={`${subject.code}, ${name}`} />
                 <span className={s.faceName}>{name}</span>
                 {desk && <Shutter face={face} name={name} subject={subject} desk={desk} taken={desk.taken.includes(face)} />}
+                {desk && photo && (
+                  <Button
+                    size="sm"
+                    icon={<Crop />}
+                    disabled={desk.busy}
+                    aria-label={`Crop the ${name.toLowerCase()}`}
+                    onClick={() =>
+                      desk.crop({ subject, face, image_id: photo.image_id, digest: photo.digest, corners: photo.cut?.corners ?? null })
+                    }
+                  >
+                    Crop
+                  </Button>
+                )}
               </li>
             );
           })}

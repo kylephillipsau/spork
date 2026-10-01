@@ -44,6 +44,25 @@ function encodesWebp(): Promise<boolean> {
 }
 
 /**
+ * What is on a canvas, as WebP: the browser's own encoder where it has one,
+ * libwebp in WebAssembly where it does not. A photograph and a face cut from
+ * one (D176) are both made this way.
+ */
+export async function encodeWebp(canvas: HTMLCanvasElement): Promise<Blob> {
+  if (await encodesWebp()) {
+    const native = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", QUALITY));
+    if (native) return native;
+  }
+  const { default: encode } = await import("@jsquash/webp/encode");
+  const g = canvas.getContext("2d")!;
+  // Effort 2 of 6: two and a half times quicker than the default for a file
+  // within a few percent of its size, which on a phone is the difference
+  // between half a second a photo and a second and a half.
+  const bytes = await encode(g.getImageData(0, 0, canvas.width, canvas.height), { quality: QUALITY * 100, method: 2 });
+  return new Blob([bytes], { type: "image/webp" });
+}
+
+/**
  * The photo as WebP, or the photo as it is when this browser cannot read it:
  * the server reads the type from the bytes, and a photo sent as taken beats
  * no photo.
@@ -57,19 +76,8 @@ export async function asWebp(photo: Blob): Promise<Blob> {
     await image.decode();
     // The natural size is the size the right way up.
     [canvas.width, canvas.height] = fit(image.naturalWidth, image.naturalHeight);
-    const g = canvas.getContext("2d")!;
-    g.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    if (await encodesWebp()) {
-      const native = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", QUALITY));
-      if (native) return native;
-    }
-    const { default: encode } = await import("@jsquash/webp/encode");
-    // Effort 2 of 6: two and a half times quicker than the default for a file
-    // within a few percent of its size, which on a phone is the difference
-    // between half a second a photo and a second and a half.
-    const bytes = await encode(g.getImageData(0, 0, canvas.width, canvas.height), { quality: QUALITY * 100, method: 2 });
-    return new Blob([bytes], { type: "image/webp" });
+    canvas.getContext("2d")!.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return await encodeWebp(canvas);
   } catch {
     return photo;
   } finally {

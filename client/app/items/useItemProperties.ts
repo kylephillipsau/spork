@@ -22,7 +22,8 @@ import { NO_FIGURES, presentationNeeded, subjectKey, type Face } from "./subject
  * The writes are the ones the Weigh and Capture screens made, unchanged:
  * `POST /weighings` for a scale reading, `POST /observations` for figures (one
  * act, D133), its images for photographs (one look, D132), and
- * `POST /items/{id}/barcodes` for a label (D164).
+ * `POST /items/{id}/barcodes` for a label (D164). A photograph is cut to its
+ * face with `POST /images` and then its cut (D176).
  */
 
 export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } | { kind: "failed"; message: string };
@@ -33,6 +34,18 @@ export type Action = "weigh" | "measure" | "photos" | "barcodes";
 export interface Open {
   key: string;
   action: Action;
+}
+
+/**
+ * A photograph open to be cut to its face (D176): which subject and face it
+ * is, the photograph, and the corners last marked on it, if any.
+ */
+export interface Cropping {
+  subject: CaptureSubject;
+  face: Face;
+  image_id: Uuid;
+  digest: string;
+  corners: number[] | null;
 }
 
 /** What the last act said, worth showing once. */
@@ -64,7 +77,18 @@ export interface PropertiesDesk {
 
   /** Faces photographed in this look. */
   taken: Face[];
+  /** Upload a face, then open it to be cut. */
   attach: (subject: CaptureSubject, face: Face, image: Blob) => Promise<void>;
+
+  /** The photograph open to be cut, if one is. */
+  cropping: Cropping | null;
+  crop: (cropping: Cropping) => void;
+  uncrop: () => void;
+  /**
+   * Cut the open photograph at these corners. `make` straightens it into the
+   * picture to keep, inside the press, so the screen is busy while it works.
+   */
+  cut: (corners: number[], make: () => Promise<Blob>) => Promise<void>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -101,6 +125,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const [unit, setUnit] = useState("kg");
   const [figures, setFigures] = useState<Figures>(NO_FIGURES);
   const [taken, setTaken] = useState<Face[]>([]);
+  const [cropping, setCropping] = useState<Cropping | null>(null);
   const [barcodes, setBarcodes] = useState<BoundBarcode[]>([]);
   const [binding, setBinding] = useState("");
   const [count, setCount] = useState("");
@@ -148,6 +173,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setReading("");
     setFigures(NO_FIGURES);
     setTaken([]);
+    setCropping(null);
     setBarcodes([]);
     look.current = null;
     dismiss();
@@ -299,9 +325,30 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
           event = response.observation_event_id;
           look.current = { key: subjectKey(subject), event };
         }
-        await api.photograph(event, face, image);
+        const kept = await api.photograph(event, face, image);
         if (!live.current) return;
         setTaken((t) => (t.includes(face) ? t : [...t, face]));
+        // Straight on to marking its corners, while the face is in front of them.
+        setCropping({ subject, face, image_id: kept.image_id, digest: kept.digest, corners: null });
+        await reload();
+      }),
+
+    cropping,
+    crop: (next) => {
+      dismiss();
+      setCropping(next);
+    },
+    uncrop: () => {
+      dismiss();
+      setCropping(null);
+    },
+    cut: (corners, make) =>
+      press(`cut:${cropping?.image_id ?? "none"}:${corners.join(",")}`, async (act) => {
+        if (!cropping) return;
+        const kept = await api.storeImage(await make());
+        await api.recordCut(cropping.image_id, { digest: kept.digest, corners, act });
+        if (!live.current) return;
+        setCropping(null);
         await reload();
       }),
 

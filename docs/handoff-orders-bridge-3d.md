@@ -164,6 +164,28 @@ Next on photos, as the user chose:
   it;
 - keep both the original and the cut-out.
 
+### A photo cut to its face (D176, migration 100)
+
+The crop screen opens straight after each photo, and from **Crop** on any
+photo already taken, on a phone or at a desk:
+- four corners to drag onto the face's corners, by how far the pointer moves
+  (so a finger does not hide the corner it is moving), or with the arrow keys;
+- the face straightened beside them as they move, and **Turn** for a face
+  photographed sideways (the thick edge is its top);
+- Save straightens the photo at full size, to the face's measured proportions
+  when its size is known, as WebP, and keeps it as a cut beside the photo.
+
+The cut shows on the 3D box, on the tile, and as the item's picture. A cut is
+its own act, with its own person, so a desk can cut a phone's photos.
+- `observation_image_cut`: the photo, the eight corner fractions, the cut's
+  bytes, the act and its person. Newest wins.
+- `POST /images` keeps bytes (the shared `images::store` that photographs use
+  too), and `POST /observation-images/{id}/cuts` is the act.
+- `client/app/items/cut.ts` is the maths (tested), `FaceCrop.tsx` the screen.
+- The kit's `Dialog` takes a `width`.
+
+Next: SlimSAM places the corners first.
+
 ### The app fills the window
 
 The content area was capped at 1,440 px. It now fills the window; only forms

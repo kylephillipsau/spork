@@ -68,6 +68,20 @@ export function cover(faceAspectRatio: number, imageAspectRatio: number): { repe
   return { repeat: [1, y], offset: [0, (1 - y) / 2] };
 }
 
+/**
+ * A face's width over its height from what was measured, or nothing: a label
+ * has no measured size, and nor does a box nobody has measured. A face cut
+ * from a photograph is straightened to this when there is one (D176).
+ */
+export function measuredAspect(
+  subject: Pick<CaptureSubject, "dimensions_absent" | "length_mm" | "width_mm" | "height_mm">,
+  face: string,
+): number | null {
+  const size = boxSize(subject);
+  if (!isBox(subject) || !size || !(BOX_FACES as readonly string[]).includes(face)) return null;
+  return faceAspect(face as BoxFace, size);
+}
+
 /** The order three.js's box takes its six materials in: +x, −x, +y, −y, +z, −z. */
 export const MATERIAL_ORDER: readonly BoxFace[] = ["right", "left", "top", "bottom", "front", "back"];
 

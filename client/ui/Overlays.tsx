@@ -25,14 +25,30 @@ function rootProps(open: boolean | undefined, onOpenChange: ((open: boolean) => 
   };
 }
 
-/** A centred modal for a focused task or a confirmation. */
-export function Dialog({ open, onOpenChange, trigger, title, description, footer, children }: OverlayProps) {
+/**
+ * A centred modal for a focused task or a confirmation. `width` widens it for
+ * a task with a picture in it; it never runs past the window.
+ */
+export function Dialog({
+  open,
+  onOpenChange,
+  trigger,
+  title,
+  description,
+  footer,
+  width,
+  children,
+}: OverlayProps & { width?: number | undefined }) {
   return (
     <D.Root {...rootProps(open, onOpenChange)}>
       {trigger && <D.Trigger asChild>{trigger}</D.Trigger>}
       <D.Portal>
         <D.Overlay className={s.overlay} />
-        <D.Content className={s.dialog} {...(description ? {} : { "aria-describedby": undefined })}>
+        <D.Content
+          className={s.dialog}
+          {...(width ? { style: { width: `min(${width}px, calc(100vw - 32px))` } } : {})}
+          {...(description ? {} : { "aria-describedby": undefined })}
+        >
           <header className={s.overlayHeader}>
             <div>
               <D.Title className={s.overlayTitle}>{title}</D.Title>

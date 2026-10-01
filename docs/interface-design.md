@@ -211,7 +211,7 @@ Screens marked ○ have no endpoint yet.
 | Screen | Surface | Does | Behind it |
 |---|---|---|---|
 | **Items** | Desk | Find an item; filtered to what needs weighing, measuring or a photo, by demand or walking order. A row opens its properties in a drawer (D174) | `/items` |
-| **Item** | Floor | Weigh, measure, photograph and label each of its subjects | `/items/{id}`, `/weighings`, `/observations`, `/observations/{id}/images/{face}` |
+| **Item** | Floor | Weigh, measure, photograph and label each of its subjects; cut a photo to its face (D176) | `/items/{id}`, `/weighings`, `/observations`, `/observations/{id}/images/{face}`, `/images`, `/observation-images/{id}/cuts` |
 | Measurements | Desk | The history, and what disagreed | `/items/{id}/measurements` |
 
 ### Reference and account

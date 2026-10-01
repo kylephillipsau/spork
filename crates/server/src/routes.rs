@@ -685,6 +685,15 @@ pub struct FulfilmentLineProgress {
 /// The type is then read from the bytes rather than believed: a file stored as
 /// one thing and served as another is how an image endpoint becomes an XSS, and
 /// a client can be wrong or lying about `content-type`.
+/// The photograph as kept: its row, and what its bytes turned out to be.
+#[derive(Serialize, Debug)]
+pub struct RecordImageResponse {
+    /// The photograph, which a cut points at (D176).
+    pub image_id: Uuid,
+    #[serde(flatten)]
+    pub image: crate::images::StoredImage,
+}
+
 #[post("/observations/{id}/images/{face}")]
 pub async fn record_observation_image(
     req: HttpRequest,
@@ -705,37 +714,11 @@ pub async fn record_observation_image(
             crate::images::FACES.join(", ")
         )));
     }
-    if body.is_empty() {
-        return Err(ApiError::Rejected("the upload is empty".into()));
-    }
-    if body.len() > crate::images::MAX_BYTES {
-        return Err(ApiError::Rejected(format!(
-            "that image is {} bytes and the limit is {}",
-            body.len(),
-            crate::images::MAX_BYTES
-        )));
-    }
-
-    let Some(mime) = crate::images::sniff(&body) else {
-        return Err(ApiError::Rejected(format!(
-            "those bytes are not one of {}",
-            crate::images::ACCEPTED.join(", ")
-        )));
-    };
-
-    // **Written to the store before the row, and that order is deliberate.** A
-    // file with no row is unreferenced and the reaper's problem; a row with no
-    // file is a photograph the interface promises and cannot show.
-    let dir = crate::images::directory();
-    let digest = crate::images::put(&dir, &body).await?;
-    let (width, height) = match crate::images::dimensions(&body) {
-        Some((w, h)) => (Some(w), Some(h)),
-        None => (None, None),
-    };
-    let byte_count = i64::try_from(body.len()).unwrap_or(i64::MAX);
+    // Checked, typed from its bytes, and kept, before any row names it.
+    let image = crate::images::store(&body).await?;
 
     let tenant = who.tenant_id;
-    let written = digest.clone();
+    let written = image.clone();
     let mut scope = TenantScope::begin(&state.pool, tenant).await?;
     let stored = scope
         .run(move |tx| {
@@ -765,11 +748,11 @@ pub async fn record_observation_image(
                             &tenant,
                             &event_id,
                             &face,
-                            &written,
-                            &mime,
-                            &byte_count,
-                            &width,
-                            &height,
+                            &written.digest,
+                            &written.mime,
+                            &written.byte_count,
+                            &written.width_px,
+                            &written.height_px,
                             &observed_at,
                         ],
                     )
@@ -779,14 +762,7 @@ pub async fn record_observation_image(
         })
         .await?;
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "image_id": stored,
-        "digest": digest,
-        "mime": mime,
-        "byte_count": byte_count,
-        "width_px": width,
-        "height_px": height,
-    })))
+    Ok(HttpResponse::Ok().json(RecordImageResponse { image_id: stored, image }))
 }
 
 /// Serve a photograph by its content address.
@@ -817,7 +793,10 @@ pub async fn read_image(
             Box::pin(async move {
                 Ok(tx
                     .query_opt(
-                        "SELECT mime FROM observation_image WHERE digest = $1 LIMIT 1",
+                        "SELECT mime FROM observation_image WHERE digest = $1
+                         UNION ALL
+                         SELECT mime FROM observation_image_cut WHERE digest = $1
+                         LIMIT 1",
                         &[&wanted],
                     )
                     .await?
@@ -9206,6 +9185,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(investigate_discrepancy)
         .service(accept_discrepancy)
         .service(record_observation_image)
+        .service(crate::cuts::store_image)
+        .service(crate::cuts::record_cut)
         .service(record_evidence)
         .service(picking_list)
         .service(putaway_list)
