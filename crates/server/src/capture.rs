@@ -530,6 +530,42 @@ pub async fn subjects_for_item(
         .into_iter()
         .map(|(_, s)| s)
         .collect();
+    // **On an item's page, its carton is its own** (D190). A family's carton
+    // speaks for the sizes on the worklist (D108), but somebody on the page of
+    // one size, holding that size's carton, is recording that carton. So the
+    // family's card becomes the item's own, still showing the family's
+    // figures, said to be the family's, until the size is measured itself;
+    // photographs never inherit, so it asks for its own.
+    let own = found
+        .iter()
+        .any(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("carton"));
+    if !own {
+        if let Some(at) = found
+            .iter()
+            .position(|s| s.item_style_id.is_some() && s.packaging_level.as_deref() == Some("carton"))
+        {
+            let mut carton = found.remove(at);
+            let code = found
+                .iter()
+                .find(|s| s.item_id == Some(item_id))
+                .map(|s| (s.code.clone(), s.description.clone()));
+            carton.style_code = Some(carton.code.clone());
+            if let Some((c, d)) = code {
+                carton.code = c;
+                carton.description = d;
+            }
+            carton.item_id = Some(item_id);
+            carton.item_style_id = None;
+            if carton.method.is_some() {
+                carton.source = Some("style".into());
+            }
+            carton.faces.clear();
+            if !carton.wants.iter().any(|w| w == "photographs") {
+                carton.wants.push("photographs".into());
+            }
+            found.insert(0, carton);
+        }
+    }
     // **Its carton, whatever is on file** (D178). An item is modelled as
     // itself and its carton as a box of so many of it, and the carton is
     // measured apart from the each. Where neither the item's case pack nor
@@ -690,6 +726,7 @@ fn own_figures(who: &str) -> String {
                JOIN observation_event e ON e.observable_id = o.id
                JOIN observation_image oi ON oi.observation_event_id = e.id
               WHERE {who}
+                AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
          ) fa ON true"
     )
 }
@@ -997,8 +1034,9 @@ faces AS (
       FROM observation_image oi
       JOIN observation_event oe ON oe.id = oi.observation_event_id
       JOIN observable o ON o.id = oe.observable_id
-     WHERE o.item_id IS NOT NULL OR o.item_style_id IS NOT NULL
-        OR o.item_part_id IS NOT NULL
+     WHERE (o.item_id IS NOT NULL OR o.item_style_id IS NOT NULL
+        OR o.item_part_id IS NOT NULL)
+       AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
      GROUP BY coalesce(o.item_id, o.item_style_id, o.item_part_id),
               coalesce(o.packaging_level::text, 'part')
 ),

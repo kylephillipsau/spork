@@ -315,10 +315,11 @@ pub async fn item_page(
                                  ORDER BY c.recorded_at DESC, c.id DESC
                                  LIMIT 1
                            ) cut ON true
-                          WHERE o.item_id = $1
+                          WHERE (o.item_id = $1
                              OR o.item_style_id = (SELECT style_id FROM item WHERE id = $1)
                              OR o.item_part_id IN (SELECT id FROM item_part WHERE item_id = $1)
-                             OR o.lot_id IN (SELECT id FROM lot WHERE item_id = $1)
+                             OR o.lot_id IN (SELECT id FROM lot WHERE item_id = $1))
+                            AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
                           ORDER BY o.id, oi.face, oi.captured_at DESC, oi.id DESC",
                         &[&id],
                     )

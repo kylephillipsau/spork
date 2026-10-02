@@ -14185,3 +14185,25 @@ orders builds in well under a second.
 has no face to cut it to. Photos to crop (D181) and the crop screen offer
 **Use as taken**: a cut of the whole photograph, its own bytes, which takes it
 off the queue.
+
+### D190 — On an item's page its carton is its own; a photograph on the wrong card is moved
+
+*Adopted 2026-10-02, with migration 110.*
+
+**Decision.** A family's carton speaks for its sizes on the worklist (D108).
+On the page of one size, though, the carton card is that size's own: it shows
+the family's figures, said to be the family's, until the size is measured
+itself, and asks for its own photographs, which never inherit. Somebody
+holding one size's carton records that carton; recording the family's from
+the page of a size was a trap, and the crop queue then showed the photographs
+under the family's first size.
+
+**A photograph on the wrong card is moved.** Photos to crop says whose each
+photograph is (an item's carton, inner pack or each; a family's carton; a
+variant) and offers **Move…**: an item code and carton, inner pack or each.
+Every photograph of that look moves together. A move files each photograph
+again under a look of the right subject, its own bytes unchanged, and records
+that the first filing was moved (`observation_image_move`,
+`POST /observation-images/{id}/moved`). A moved photograph is shown nowhere:
+not on an item, not in the queue, not as a picture. Facts only: nothing is
+edited.

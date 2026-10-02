@@ -420,6 +420,10 @@ const QUEUED = (n: number, over: Partial<Queued> & Pick<Queued, "state">): Queue
     item_id: BRUSH,
     code: "SKU-5120B",
     description: "Floor brush, 450 mm, blue",
+    look_id: "01990000-0000-7000-8000-0000000e0099",
+    level: "each",
+    family: null,
+    variant: null,
   },
   subject: BRUSH_EACH,
   name: (["Front", "Right", "Back", "Left", "Top", "Bottom"] as const)[n % 6]!,
@@ -450,6 +454,7 @@ export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
     adjusting: null,
     adjust: noop,
     keep: later,
+    move: async () => false,
     crop: { findFace: async () => FOUND, cut: later, uncrop: noop, busy: false, problem: null, dismiss: noop },
     ...over,
   };

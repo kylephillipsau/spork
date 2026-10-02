@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLive, useWriting } from "@app/acting";
 import { partOf } from "@domain/acts";
-import { api, reason } from "@domain/api";
+import { ApiError, api, imageUrl, reason } from "@domain/api";
 import type { CaptureSubject, ItemView, UncutPhoto, Uuid } from "@domain/types";
 
 import { faceName, measuredAspect } from "./box";
@@ -60,6 +60,11 @@ export interface QueueDesk {
   adjust: (image: Uuid | null) => void;
   /** Use a photograph as it was taken: a glove on a bench has no face to cut it to. */
   keep: (image: Uuid) => Promise<void>;
+  /**
+   * Move every photograph of a look to the item and level they are really of
+   * (D190): filed again there, the first filing shown nowhere. True when moved.
+   */
+  move: (look: Uuid, code: string, level: string) => Promise<boolean>;
   /** What the crop screen asks of the queue. */
   crop: CropDesk;
 }
@@ -71,6 +76,8 @@ export function usePhotoQueue(): QueueDesk {
   const [saving, setSaving] = useState<QueueDesk["saving"]>(null);
   const [adjusting, setAdjusting] = useState<Uuid | null>(null);
   const items = useRef(new Map<Uuid, Promise<ItemView>>());
+  // Read again after a move: its photographs come back under their item.
+  const [round, setRound] = useState(0);
   const writing = useWriting();
   const phone = handheld();
 
@@ -145,7 +152,7 @@ export function usePhotoQueue(): QueueDesk {
     return () => {
       stopped = true;
     };
-  }, [itemOf, live, phone, update]);
+  }, [itemOf, live, phone, update, round]);
 
   const open = queued.find((q) => q.photo.image_id === adjusting) ?? null;
 
@@ -198,6 +205,29 @@ export function usePhotoQueue(): QueueDesk {
         await api.recordCut(image, { digest: q.photo.digest, corners: WHOLE, act });
         if (live.current) update(image, { state: "saved", ticked: false, corners: WHOLE });
       });
+    },
+    move: async (look, code, level) => {
+      let moved = false;
+      const photos = queued.filter((q) => q.photo.look_id === look && q.state !== "saved");
+      await writing.press(`move:${look}:${code.trim()}:${level}`, async (act) => {
+        const page = await api.items({ q: code.trim() });
+        const item = page.items.find((i) => i.code.toLowerCase() === code.trim().toLowerCase());
+        if (!item) throw new ApiError(`No item has the code ${code.trim()}.`, 400);
+        // A carton needs saying before it is photographed (D178); a no-op when on file.
+        if (level !== "each") await api.sayCarton(item.item_id, { holds: null, act: partOf(act, "carton") });
+        const look2 = await api.recordCapture({ item: item.item_id, level, measurements: [], photographs: true, act: partOf(act, "look") });
+        for (const q of photos) {
+          const bytes = await (await fetch(imageUrl(q.photo.digest))).blob();
+          const kept = await api.photographAsIs(look2.observation_event_id, q.photo.face, bytes);
+          await api.movePhoto(q.photo.image_id, kept.image_id, partOf(act, q.photo.image_id));
+        }
+        moved = true;
+      });
+      if (moved && live.current) {
+        items.current.clear();
+        setRound((r) => r + 1);
+      }
+      return moved;
     },
     adjusting: open,
     adjust: (image) => {

@@ -50,6 +50,7 @@ pub const UNCUT: &str = "
     WITH newest AS (
         SELECT DISTINCT ON (o.id, oi.face)
                oi.id AS image_id, oi.digest, oi.face, oi.captured_at, oi.same_as_id,
+               oi.observation_event_id AS look_id, o.packaging_level::text AS level,
                o.item_id, o.item_style_id, o.item_part_id, o.lot_id
           FROM observable o
           JOIN observation_event e ON e.observable_id = o.id
@@ -57,9 +58,12 @@ pub const UNCUT: &str = "
          WHERE (o.item_id IS NOT NULL OR o.item_style_id IS NOT NULL OR o.item_part_id IS NOT NULL
                 OR o.lot_id IS NOT NULL)
            AND oi.face IN ('front', 'back', 'left', 'right', 'top', 'bottom', 'label')
+           AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
          ORDER BY o.id, oi.face, oi.captured_at DESC, oi.id DESC
     )
-    SELECT n.image_id, n.digest, n.face, n.captured_at,
+    SELECT n.image_id, n.digest, n.face, n.captured_at, n.look_id, n.level,
+           (SELECT st.code FROM item_style st WHERE st.id = n.item_style_id) AS family,
+           (SELECT lt.code FROM lot lt WHERE lt.id = n.lot_id) AS variant,
            coalesce(n.item_id, p.item_id, (SELECT lt.item_id FROM lot lt WHERE lt.id = n.lot_id),
                     (SELECT v.id FROM item v WHERE v.style_id = n.item_style_id
                       ORDER BY v.code LIMIT 1)) AS open_item
@@ -80,6 +84,14 @@ pub struct UncutPhoto {
     pub item_id: Uuid,
     pub code: String,
     pub description: String,
+    /// The look it was taken in: photographs of one box, moved together.
+    pub look_id: Uuid,
+    /// `carton`, `inner` or `each`; absent for a part or a variant.
+    pub level: Option<String>,
+    /// Its family's code when it is a photograph of the family's carton, not
+    /// of one item's (D190); a variant's name when it is of a variant.
+    pub family: Option<String>,
+    pub variant: Option<String>,
 }
 
 /// How many the queue takes at once: a morning's photographs, not a year's.
@@ -97,7 +109,8 @@ pub async fn uncut_photos(req: HttpRequest, state: web::Data<AppState>) -> Resul
                 let rows = tx
                     .query(
                         &format!(
-                            "SELECT u.image_id, u.digest, u.face, u.captured_at, i.id, i.code, i.description
+                            "SELECT u.image_id, u.digest, u.face, u.captured_at, i.id, i.code, i.description,
+                                    u.look_id, u.level, u.family, u.variant
                                FROM ({UNCUT}) u
                                JOIN item i ON i.id = u.open_item
                               ORDER BY u.captured_at, u.image_id
@@ -116,12 +129,79 @@ pub async fn uncut_photos(req: HttpRequest, state: web::Data<AppState>) -> Resul
                         item_id: r.get(4),
                         code: r.get(5),
                         description: r.get(6),
+                        look_id: r.get(7),
+                        level: r.get(8),
+                        family: r.get(9),
+                        variant: r.get(10),
                     })
                     .collect::<Vec<_>>())
             })
         })
         .await?;
     Ok(HttpResponse::Ok().json(out))
+}
+
+/// A photograph filed against the wrong subject, moved (D190).
+#[derive(Deserialize, Debug)]
+pub struct MoveRequest {
+    /// The photograph filed again under the right subject, already made with
+    /// the same bytes under a look of that subject.
+    pub moved_to: Uuid,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Say a photograph was moved to its right subject: it is shown nowhere now,
+/// and the one it was moved to is (D190).
+#[post("/observation-images/{id}/moved")]
+pub async fn record_move(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<MoveRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let from = path.into_inner();
+    let to = body.moved_to;
+    if from == to {
+        return Err(ApiError::Rejected("a photograph is not moved onto itself".into()));
+    }
+    let ev = NewClientEvent {
+        tenant_id: who.tenant_id,
+        client_event_id: body.client_event_id,
+        site_id: who.site_id,
+        recorded_by_id: who.person_id,
+        submitted_at: body.occurred_at,
+    };
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let digests = tx
+                    .query("SELECT id, digest FROM observation_image WHERE id = ANY($1)", &[&vec![from, to]])
+                    .await?;
+                if digests.len() != 2 {
+                    return Err(ApiError::NotFound);
+                }
+                if digests[0].get::<_, String>(1) != digests[1].get::<_, String>(1) {
+                    return Err(ApiError::Rejected("a photograph is moved with its own bytes".into()));
+                }
+                if client_events::claim_act(tx, &ev).await?.is_replay() {
+                    return Ok(());
+                }
+                tx.execute(
+                    "INSERT INTO observation_image_move
+                         (tenant_id, observation_image_id, moved_to_image_id, client_event_id, recorded_by_id)
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (observation_image_id) DO NOTHING",
+                    &[&ev.tenant_id, &from, &to, &ev.client_event_id, &ev.recorded_by_id],
+                )
+                .await?;
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// An item drawn as its box from three cut faces (D186).

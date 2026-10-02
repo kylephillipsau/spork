@@ -86,6 +86,7 @@ front AS (
             LIMIT 1
       ) cut ON true
      WHERE oi.face = 'front'
+       AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
      ORDER BY c.item_id, c.rank, oi.captured_at DESC, oi.id DESC
 ),
 picture AS (

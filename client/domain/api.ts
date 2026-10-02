@@ -1171,6 +1171,21 @@ export const api = {
   /** Say another side looks like this photograph: its bytes and its cut, nothing uploaded (D183). */
   sameAs: (image: Uuid, face: string) => send<SameAsSaid>("POST", `/observation-images/${image}/same-as`, { face }),
 
+  /**
+   * A photograph's own bytes filed under another look, as they are: a move
+   * keeps the photograph, so it is not converted again (D190).
+   */
+  photographAsIs: (event: Uuid, face: string, image: Blob) =>
+    upload<RecordImageResponse>(`/observations/${event}/images/${face}`, image),
+
+  /** Say a photograph was moved to its right subject: shown nowhere now (D190). */
+  movePhoto: (image: Uuid, movedTo: Uuid, act: Act) =>
+    send<void>("POST", `/observation-images/${image}/moved`, {
+      moved_to: movedTo,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
   /** The photographs waiting to be cut to their faces, oldest first: a computer's queue (D181). */
   uncutPhotos: () => send<UncutPhoto[]>("GET", "/photos/uncut"),
 

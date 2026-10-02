@@ -1,6 +1,8 @@
 import { Crop, ImageOff } from "lucide-react";
 
-import { Alert, Button, Card, Checkbox, EmptyState, Link, Page, PageHeader, Skeleton, Stack, Toolbar, Spacer } from "@ui/index";
+import { useState } from "react";
+
+import { Alert, Button, Card, Checkbox, Dialog, EmptyState, Link, Page, PageHeader, Skeleton, Stack, Tabs, TextField, Toolbar, Spacer } from "@ui/index";
 import { imageUrl } from "@domain/api";
 import { Faint } from "@app/common/cells";
 
@@ -23,6 +25,7 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
   const looked = open.filter((q) => q.state !== "waiting" && q.state !== "finding").length;
   const ticked = open.filter((q) => q.ticked && q.corners).length;
   const still = open.length - looked;
+  const [moving, setMoving] = useState<Queued | null>(null);
 
   return (
     <Page>
@@ -69,12 +72,13 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
             </Toolbar>
             <ul className={s.queue} aria-label="Photos to crop">
               {open.map((q) => (
-                <QueuedPhoto key={q.photo.image_id} q={q} desk={desk} />
+                <QueuedPhoto key={q.photo.image_id} q={q} desk={desk} move={() => setMoving(q)} />
               ))}
             </ul>
           </Card>
         </Stack>
       )}
+      {moving && <MoveDialog desk={desk} q={moving} onClose={() => setMoving(null)} />}
       {desk.adjusting?.subject && (
         <FaceCrop
           key={desk.adjusting.photo.image_id}
@@ -104,7 +108,64 @@ const SAID: Record<Queued["state"], string> = {
 };
 
 /** One photograph: where its corners were found, drawn on it, and what to do with it. */
-function QueuedPhoto({ q, desk }: { q: Queued; desk: QueueDesk }) {
+/** Whose photograph it is: an item's, at a level; a family's carton; a variant (D190). */
+function whose(q: Queued): string {
+  const p = q.photo;
+  if (p.variant) return `${p.code} · variant ${p.variant}`;
+  if (p.family) return `${p.family} family · carton`;
+  return p.level ? `${p.code} · ${p.level === "inner" ? "inner pack" : p.level}` : p.code;
+}
+
+/**
+ * Move a look's photographs to the item and level they are of (D190): its
+ * code, and carton, inner pack or each. Every photograph of that look moves.
+ */
+function MoveDialog({ desk, q, onClose }: { desk: QueueDesk; q: Queued; onClose: () => void }) {
+  const [code, setCode] = useState(q.photo.family ? "" : q.photo.code);
+  const [level, setLevel] = useState(q.photo.level ?? "carton");
+  const count = desk.queued.filter((x) => x.photo.look_id === q.photo.look_id && x.state !== "saved").length;
+  const go = async () => {
+    if (await desk.move(q.photo.look_id, code, level)) onClose();
+  };
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      width={440}
+      title={count === 1 ? "Move this photo" : `Move these ${count} photos`}
+      description={`Now filed as ${whose(q)}. Every photo taken with it moves too.`}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={desk.crop.busy} disabled={!code.trim()} onClick={() => void go()}>
+            Move
+          </Button>
+        </>
+      }
+    >
+      <Stack gap={3}>
+        {desk.crop.problem && (
+          <Alert tone="danger" onDismiss={desk.crop.dismiss}>
+            {desk.crop.problem}
+          </Alert>
+        )}
+        <TextField label="Item code" autoComplete="off" autoFocus value={code} onChange={(e) => setCode(e.target.value)} />
+        <Tabs
+          aria-label="Of its"
+          value={level}
+          onValueChange={setLevel}
+          items={[
+            { value: "carton", label: "Carton" },
+            { value: "inner", label: "Inner pack" },
+            { value: "each", label: "Each" },
+          ]}
+        />
+      </Stack>
+    </Dialog>
+  );
+}
+
+function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () => void }) {
   const quad = q.corners ? [0, 1, 2, 3].map((i) => [q.corners![i * 2]!, q.corners![i * 2 + 1]!] as const) : null;
   return (
     <li className={s.queued}>
@@ -127,7 +188,7 @@ function QueuedPhoto({ q, desk }: { q: Queued; desk: QueueDesk }) {
         )}
       </div>
       <div className={s.queueText}>
-        <span className={s.code}>{q.photo.code}</span>
+        <span className={s.code}>{whose(q)}</span>
         <span>{q.name}</span>
         <Faint>{SAID[q.state]}</Faint>
       </div>
@@ -142,6 +203,9 @@ function QueuedPhoto({ q, desk }: { q: Queued; desk: QueueDesk }) {
             </Button>
             <Button size="sm" disabled={desk.saving !== null || desk.crop.busy} onClick={() => void desk.keep(q.photo.image_id)}>
               Use as taken
+            </Button>
+            <Button size="sm" disabled={desk.saving !== null || desk.crop.busy} onClick={move}>
+              Move…
             </Button>
           </>
         )}

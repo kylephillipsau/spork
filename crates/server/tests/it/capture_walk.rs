@@ -568,6 +568,7 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
     )
     .await;
     assert!(served.status().is_success(), "and serves it");
+
     let (status, again) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
     assert_eq!(status, 200, "a repeated press is the same act: {again}");
     assert_eq!(again["cut_id"], made["cut_id"], "and the same cut");
@@ -645,6 +646,91 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
         .expect("the walk removes its own rows");
 
     let _ = std::fs::remove_dir_all(&images);
+    // ── filed against the wrong item, moved (D190) ──────────────────────
+    let bytes = png_sized(300, 200, 321);
+    // A look of the glove, the wrong item, and a front filed under it.
+    let wrong_look: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/observations")
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "item_id": GLOVE, "packaging_level": "each", "measurements": [], "photographs": true,
+                              "method": "photographed", "ingestion_channel": "keyed",
+                              "client_event_id": Uuid::new_v4(), "occurred_at": chrono::Utc::now() }))
+            .to_request(),
+        "a look of the wrong item",
+    )
+    .await;
+    let wrong: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/observations/{}/images/front", wrong_look["observation_event_id"].as_str().unwrap()))
+                .insert_header(("authorization", bearer.clone()))
+                .insert_header(("content-type", "image/png"))
+                .set_payload(bytes.clone())
+                .to_request(),
+        )
+        .await;
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    let photo_id = wrong["image_id"].as_str().unwrap().to_string();
+    let other = "17e10000-0000-0000-0000-000000000002"; // STY-7720-08
+    let look: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/observations")
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "item_id": other, "packaging_level": "each", "measurements": [], "photographs": true,
+                              "method": "photographed", "ingestion_channel": "keyed",
+                              "client_event_id": Uuid::new_v4(), "occurred_at": chrono::Utc::now() }))
+            .to_request(),
+        "a look of the right item",
+    )
+    .await;
+    let refiled: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/observations/{}/images/front", look["observation_event_id"].as_str().unwrap()))
+                .insert_header(("authorization", bearer.clone()))
+                .insert_header(("content-type", "image/png"))
+                .set_payload(bytes)
+                .to_request(),
+        )
+        .await;
+        let status = r.status();
+        let body = test::read_body(r).await;
+        assert!(status.is_success(), "filed again with its own bytes: {status} {}", String::from_utf8_lossy(&body));
+        serde_json::from_slice(&body).unwrap()
+    };
+    let moved = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observation-images/{photo_id}/moved"))
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "moved_to": refiled["image_id"], "client_event_id": Uuid::new_v4(), "occurred_at": chrono::Utc::now() }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(moved.status().as_u16(), 204);
+    let glove: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items/{GLOVE}")).insert_header(("authorization", bearer.clone())).to_request(),
+        "the glove's page",
+    )
+    .await;
+    assert!(
+        glove["photos"].as_array().unwrap().iter().all(|p| p["image_id"] != photo_id.as_str()),
+        "a moved photograph is no longer the glove's"
+    );
+    let theirs: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items/{other}")).insert_header(("authorization", bearer.clone())).to_request(),
+        "the other item's page",
+    )
+    .await;
+    assert!(theirs["photos"].as_array().unwrap().iter().any(|p| p["image_id"] == refiled["image_id"]), "it is theirs");
 }
 
 /// One variant's picture stands for its family (D188).

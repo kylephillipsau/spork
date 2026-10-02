@@ -112,13 +112,18 @@ async fn a_scan_resolves_to_what_it_names_and_to_nothing_else() {
         }
     }
     // STY-7720-08 is in style STY-7720, and the seed gives the style the carton
-    // figures. So the carton subject offered here is the style's.
-    let styled_carton = capture.iter().find(|s| {
-        s["packaging_level"] == "carton" && s["item_style_id"].is_string()
-    });
+    // figures. Scanned, it is that size's own carton that is offered (D190),
+    // showing the family's figures and saying they are the family's, so what
+    // is recorded next is recorded against the size in hand.
+    let own_carton = capture
+        .iter()
+        .find(|s| s["packaging_level"] == "carton" && s["item_id"].is_string())
+        .unwrap_or_else(|| panic!("the size's own carton is offered: {capture:?}"));
+    assert_eq!(own_carton["source"], "style", "with the family's figures: {own_carton}");
+    assert!(own_carton["gross_weight_g"].is_number(), "{own_carton}");
     assert!(
-        styled_carton.is_some(),
-        "the style's carton is offered rather than the variant's: {capture:?}"
+        capture.iter().all(|s| s["item_style_id"].is_null()),
+        "and no card for the family's carton on a size's page: {capture:?}"
     );
 
     // ── an internal code, and an exact one ──────────────────────────────

@@ -1403,6 +1403,14 @@ export interface UncutPhoto {
   item_id: Uuid;
   code: string;
   description: string;
+  /** The look it was taken in: photographs of one box, moved together (D190). */
+  look_id: Uuid;
+  /** `carton`, `inner` or `each`; null for a part or a variant. */
+  level: string | null;
+  /** Its family's code when it is of the family's carton, not one item's. */
+  family: string | null;
+  /** A variant's name when it is of a variant (D182). */
+  variant: string | null;
 }
 
 /** `POST /observation-images/{id}/cuts`. */
