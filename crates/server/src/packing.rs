@@ -169,6 +169,7 @@ pub async fn queue(
                                 WHERE m.fulfilment_line_id = fl.id
                                   AND m.to_package_id IS NOT NULL) bx ON true
                           WHERE f.state <> 'cancelled'
+                            AND f.closed_elsewhere IS NULL
                             AND ($1::uuid IS NULL OR f.site_id = $1)
                             AND ($2::text IS NULL
                                  OR f.reference ILIKE $2

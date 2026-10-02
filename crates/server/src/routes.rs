@@ -1555,6 +1555,7 @@ pub async fn open_lines(
                            JOIN item i ON i.id = ol.item_id
                           WHERE f.site_id = $1
                             AND f.state <> 'cancelled'
+                            AND f.closed_elsewhere IS NULL
                             AND fl.despatched_quantity < fl.quantity
                           ORDER BY f.state, ol.line_number, fl.id",
                         &[&site_id],
@@ -6985,6 +6986,99 @@ fn sales_order_number(raw: &str) -> String {
 /// Items the catalogue lacks are created from the page's code and description:
 /// the page is as much evidence an item exists as an order is that a warehouse
 /// does. A warehouse with no clock on file is still refused, by line.
+/// The fulfilments still open here that came from another system, by that
+/// system's id: what the bridge checks the status of (D187).
+#[derive(Serialize, Debug)]
+pub struct OpenElsewhere {
+    pub fulfilment_id: String,
+    pub reference: Option<String>,
+}
+
+#[get("/import/fulfilments/open")]
+pub async fn open_fulfilments(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let rows = tx
+                    .query(
+                        "SELECT f.external_id, f.reference FROM fulfilment f
+                          WHERE f.external_id IS NOT NULL
+                            AND f.state <> 'cancelled'
+                            AND f.closed_elsewhere IS NULL
+                          ORDER BY f.external_id",
+                        &[],
+                    )
+                    .await?;
+                Ok(rows
+                    .iter()
+                    .map(|r| OpenElsewhere { fulfilment_id: r.get(0), reference: r.get(1) })
+                    .collect::<Vec<_>>())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ClosedElsewhere {
+    /// The other system's id for the item fulfilment.
+    pub fulfilment_id: String,
+    /// `Packed`, `Shipped`, `Deleted`, or `Picked` to open it again; NetSuite's
+    /// letters and codes too.
+    pub status: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ClosedElsewhereSaid {
+    /// How many fulfilments it changed: none when it was already so, or unknown here.
+    pub changed: u64,
+    pub closed: Option<String>,
+}
+
+/// What the other system's status means here: closed how, or open.
+pub fn closed_as(status: &str) -> Result<Option<&'static str>, String> {
+    match status.trim().to_ascii_lowercase().as_str() {
+        "packed" | "b" | "itemship:b" => Ok(Some("packed")),
+        "shipped" | "c" | "itemship:c" => Ok(Some("shipped")),
+        "deleted" | "gone" => Ok(Some("gone")),
+        "picked" | "a" | "itemship:a" => Ok(None),
+        other => Err(format!("a status is Picked, Packed, Shipped or Deleted, not {other}")),
+    }
+}
+
+/// Say an item fulfilment has moved on in the other system, or come back to
+/// Picked (D187). Nothing in the ledger moves.
+#[post("/import/fulfilment/status")]
+pub async fn fulfilment_status(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<ClosedElsewhere>,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+    let closed = closed_as(&body.status).map_err(ApiError::Rejected)?;
+    let id = body.fulfilment_id.trim().to_string();
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let changed = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                Ok(tx
+                    .execute(
+                        "UPDATE fulfilment
+                            SET closed_elsewhere = $2,
+                                closed_elsewhere_at = CASE WHEN $2::text IS NULL THEN NULL ELSE now() END
+                          WHERE external_id = $1
+                            AND closed_elsewhere IS DISTINCT FROM $2::text",
+                        &[&id, &closed],
+                    )
+                    .await?)
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(ClosedElsewhereSaid { changed, closed: closed.map(str::to_string) }))
+}
+
 #[post("/import/fulfilment")]
 pub async fn import_fulfilment(
     req: HttpRequest,
@@ -7050,6 +7144,7 @@ pub async fn import_fulfilment(
             .map(|l| (l.external_line.clone(), l.picked.unwrap_or(l.quantity).round() as i64))
             .collect::<Vec<_>>(),
     );
+    let reopen: Option<String> = report.as_ref().map(|r| r.fulfilment_id.clone());
     let (loaded, picks, arrival) = scope
         .run(move |tx| {
             Box::pin(async move {
@@ -7068,6 +7163,15 @@ pub async fn import_fulfilment(
                     ),
                     _ => None,
                 };
+                // Back to Picked in the other system: open here again (D187).
+                if apply && reopen.is_some() {
+                    tx.execute(
+                        "UPDATE fulfilment SET closed_elsewhere = NULL, closed_elsewhere_at = NULL
+                          WHERE external_id = $1 AND closed_elsewhere IS NOT NULL",
+                        &[&reopen],
+                    )
+                    .await?;
+                }
                 read_through(tx, arrival).await?;
                 Ok((loaded, picks, arrival))
             })
@@ -9218,6 +9322,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::say_carton)
         .service(crate::cartons::add_lot)
         .service(crate::cartons::set_default_lot)
+        .service(open_fulfilments)
+        .service(fulfilment_status)
         .service(crate::cuts::record_box_picture)
         .service(crate::lists::make_list)
         .service(crate::lists::lists)

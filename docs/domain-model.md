@@ -14119,3 +14119,26 @@ WebP. It carries its act and its person, as a cut does.
 **Also.** An item whose photographs are all of its variants (D182) showed no
 picture on the list. The variant that stands for its carton now counts as its
 own, and any other variant as a last resort, captioned so.
+
+### D187 — A fulfilment finished in the other system is closed here
+
+*Adopted 2026-10-02, with migration 108.*
+
+**Decision.** The bridge (D172) sent only item fulfilments that NetSuite says
+are Picked; one packed or shipped there, or deleted, simply stopped arriving
+and stayed work here. Spork's queues filled with orders long gone. Now each
+sync the bridge asks Spork which of NetSuite's fulfilments it still has open
+(`GET /import/fulfilments/open`), reads the status of those no longer Picked
+at its location, and says which NetSuite has packed, shipped or deleted
+(`POST /import/fulfilment/status`). Spork records how it was finished
+(`fulfilment.closed_elsewhere`) and an open fulfilment is one with nothing
+recorded: the pick list, the pack queue, despatch and the sidebar counts all
+leave it out. Sent back to Picked, it opens again.
+
+**Closed, not cancelled.** Cancelled says it is not going ahead; these went
+ahead elsewhere, and say how. Nothing in the ledger moves, because Spork did
+not pack them.
+
+**Why ask Spork for the list.** The bridge forgets what is no longer Picked,
+so it could not have said what it once sent. Asking Spork closes what was
+already stuck as well as what moves on from now.

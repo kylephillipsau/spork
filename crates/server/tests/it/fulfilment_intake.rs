@@ -369,3 +369,79 @@ async fn a_pick_made_elsewhere_is_reported_as_a_level() {
     let s = common::ok_json(&app, send(stray, true), "stray").await;
     assert_eq!(s["picks"]["recorded"], json!(1), "line 99 was loaded by the same send, so it matches: {s}");
 }
+
+/// Packed or shipped in NetSuite, it is not work here; Picked again, it is (D187).
+#[actix_web::test]
+async fn a_fulfilment_finished_elsewhere_is_closed_here() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    let session = common::bearer(&app).await;
+    let minted: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/tokens")
+            .insert_header(("authorization", session.clone()))
+            .set_json(json!({ "label": "the bridge, closing, from a test" }))
+            .to_request(),
+        "POST /tokens",
+    )
+    .await;
+    let token = format!("Bearer {}", minted["token"].as_str().unwrap());
+    let run = &Uuid::new_v4().simple().to_string()[..8];
+    let if_id = format!("if-cl-{run}");
+    let picked = json!({
+        "order": format!("S-cl-{run}"), "customer": format!("Close Test {run}"),
+        "order_id": format!("so-cl-{run}"), "fulfilment_id": if_id, "fulfilment_number": format!("IF-CL-{run}"),
+        "status": "Picked", "observed_at": "2026-10-02T09:00:00+10:00",
+        "lines": [{ "line": 1, "item": "GLOVE-M", "location": "Melbourne Warehouse", "quantity": 2, "picked": 2, "external_line": "1" }]
+    });
+    let call = |method: &str, uri: &str, body: Option<Value>| {
+        let mut r = match method {
+            "GET" => test::TestRequest::get(),
+            _ => test::TestRequest::post(),
+        }
+        .uri(uri)
+        .insert_header(("authorization", token.clone()));
+        if let Some(b) = body {
+            r = r.set_payload(b.to_string()).insert_header(("content-type", "application/json"));
+        }
+        r.to_request()
+    };
+    let open = |app| {
+        let req = call("GET", "/import/fulfilments/open", None);
+        async move { common::ok_json(app, req, "the open fulfilments").await }
+    };
+    let listed = |v: &Value| v.as_array().unwrap().iter().any(|f| f["fulfilment_id"] == if_id.as_str());
+
+    common::ok_json(&app, call("POST", "/import/fulfilment?apply=true", Some(picked.clone())), "picked").await;
+    assert!(listed(&open(&app).await), "a picked fulfilment is open");
+
+    let said = common::ok_json(
+        &app,
+        call("POST", "/import/fulfilment/status", Some(json!({ "fulfilment_id": if_id, "status": "ItemShip:C" }))),
+        "shipped in NetSuite",
+    )
+    .await;
+    assert_eq!((said["changed"].as_u64(), said["closed"].as_str()), (Some(1), Some("shipped")));
+    assert!(!listed(&open(&app).await), "shipped there is not open here");
+    let again = common::ok_json(
+        &app,
+        call("POST", "/import/fulfilment/status", Some(json!({ "fulfilment_id": if_id, "status": "Shipped" }))),
+        "shipped again",
+    )
+    .await;
+    assert_eq!(again["changed"], 0, "saying it twice changes nothing");
+    let r = test::call_service(&app, call("POST", "/import/fulfilment/status", Some(json!({ "fulfilment_id": if_id, "status": "Lost" })))).await;
+    assert_eq!(r.status().as_u16(), 400);
+
+    // Back to Picked there: work here again.
+    let mut back = picked.clone();
+    back["observed_at"] = json!("2026-10-02T11:00:00+10:00");
+    common::ok_json(&app, call("POST", "/import/fulfilment?apply=true", Some(back)), "picked again").await;
+    assert!(listed(&open(&app).await), "picked again is open again");
+}

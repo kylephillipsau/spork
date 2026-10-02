@@ -89,6 +89,7 @@ pub async fn waiting(
                            (SELECT count(*) FROM fulfilment f
                              WHERE f.site_id = $1
                                AND f.state <> 'cancelled'
+                               AND f.closed_elsewhere IS NULL
                                AND EXISTS (SELECT 1 FROM fulfilment_line fl
                                             WHERE fl.fulfilment_id = f.id
                                               AND fl.picked_quantity < fl.quantity)),
@@ -96,6 +97,7 @@ pub async fn waiting(
                               JOIN fulfilment f ON f.id = fl.fulfilment_id
                              WHERE f.site_id = $1
                                AND f.state <> 'cancelled'
+                               AND f.closed_elsewhere IS NULL
                                AND fl.picked_quantity < fl.quantity),
                            -- Sealed and on no consignment: the despatch bench's
                            -- own definition of a carton waiting.

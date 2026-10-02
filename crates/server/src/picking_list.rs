@@ -194,6 +194,7 @@ static LINES: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
        ) cell ON true
       WHERE f.site_id = $1
         AND f.state <> 'cancelled'
+        AND f.closed_elsewhere IS NULL
         AND fl.picked_quantity < fl.quantity
       ORDER BY cell.pick_sequence NULLS LAST, i.code, fl.id
       LIMIT $2",
