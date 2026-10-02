@@ -48,6 +48,7 @@ import type {
   RecordCutResponse,
   RecordImageResponse,
   StoredImage,
+  UncutPhoto,
   Resolution,
   SetupDone,
   SetupRequest,
@@ -1135,6 +1136,9 @@ export const api = {
    * (D176).
    */
   storeImage: (image: Blob) => upload<StoredImage>("/images", image),
+
+  /** The photographs waiting to be cut to their faces, oldest first: a computer's queue (D181). */
+  uncutPhotos: () => send<UncutPhoto[]>("GET", "/photos/uncut"),
 
   /**
    * Cut a photograph to its face (D176): the corners somebody marked, and the

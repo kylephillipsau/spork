@@ -6,6 +6,7 @@ import { ApiError, api, reason } from "@domain/api";
 import type { BoundBarcode, CaptureSubject, ItemView, Uuid } from "@domain/types";
 
 import type { Pixels, Point } from "./cut";
+import { handheld } from "./crop";
 import { measurementsOf, type Figures } from "./figures";
 import { NO_FIGURES, cartonHolds, isOwnCarton, presentationNeeded, readHolds, sayFirst, subjectKey, type Face } from "./subjects";
 
@@ -36,47 +37,6 @@ import { NO_FIGURES, cartonHolds, isOwnCarton, presentationNeeded, readHolds, sa
 
 /** The face-finding model: its own chunk, with the ONNX runtime, fetched when first wanted. */
 const model = () => import("./faceModel");
-
-/**
- * A phone, by its pointer: a finger rather than a mouse. A phone's page has
- * little memory to spare (D177), so the model is not fetched while the camera
- * is up, and is let go when a crop is done.
- */
-const handheld = () => typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-const letModelGo = () => {
-  if (handheld()) void model().then((m) => m.release());
-};
-
-/**
- * The photograph waiting to be cut, kept in the browser's storage until it is
- * cut or let go. A phone that runs out of memory reloads the page, and the
- * crop screen comes back for the photograph rather than being lost with it.
- */
-const PENDING = "spork.pendingCrop";
-interface Pending {
-  item: string;
-  subject: string;
-  face: Face;
-  image_id: Uuid;
-  at: number;
-}
-function keepPending(p: Pending | null): void {
-  try {
-    if (p) window.localStorage.setItem(PENDING, JSON.stringify(p));
-    else window.localStorage.removeItem(PENDING);
-  } catch {
-    // Storage refused: the crop screen is simply not brought back.
-  }
-}
-function pending(item: string): Pending | null {
-  try {
-    const p = JSON.parse(window.localStorage.getItem(PENDING) ?? "null") as Pending | null;
-    // A quarter of an hour: long enough for a reload, not a crop from yesterday.
-    return p && p.item === item && Date.now() - p.at < 15 * 60_000 ? p : null;
-  } catch {
-    return null;
-  }
-}
 
 export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } | { kind: "failed"; message: string };
 
@@ -151,7 +111,7 @@ export interface PropertiesDesk {
    * reuses its encoding; `pixels` is it at the model's size; `at` is a point
    * on the face as fractions, the middle when not given.
    */
-  findFace: (key: string, pixels: Pixels, at?: Point, anyway?: boolean) => Promise<number[] | null>;
+  findFace: (key: string, pixels: Pixels, at?: Point) => Promise<number[] | null>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -202,8 +162,6 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const looks = useRef(0);
   const asking = useRef(0);
   const later = useRef<number[]>([]);
-  // Whether this item's waiting crop, if any, has been looked for since it loaded.
-  const resumed = useRef<string | null>(null);
 
   const { busy, problem, dismiss, press } = useWriting();
 
@@ -228,18 +186,6 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     for (const ms of [2500, 6000, 12000]) later.current.push(window.setTimeout(() => void reload(), ms));
   }, [reload]);
   useEffect(() => () => later.current.forEach((t) => window.clearTimeout(t)), []);
-
-  // A crop the page was reloaded out of: back on screen, for the same photograph.
-  useEffect(() => {
-    if (read.kind !== "ready" || !itemId || resumed.current === itemId) return;
-    resumed.current = itemId;
-    const p = pending(itemId);
-    if (!p) return;
-    const subject = read.item.subjects.find((s) => subjectKey(s) === p.subject);
-    const photo = read.item.photos.find((ph) => ph.image_id === p.image_id);
-    if (!subject || !photo || photo.cut) return keepPending(null);
-    setCropping({ subject, face: p.face, image_id: photo.image_id, digest: photo.digest, corners: null });
-  }, [read, itemId]);
 
   // A different item is a fresh start: nothing typed for one is for another.
   useEffect(() => {
@@ -436,9 +382,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         const kept = await api.photograph(event, face, image);
         if (!live.current) return;
         setTaken((t) => (t.includes(face) ? t : [...t, face]));
-        // Straight on to marking its corners, while the face is in front of them.
-        if (itemId) keepPending({ item: itemId, subject: subjectKey(subject), face, image_id: kept.image_id, at: Date.now() });
-        setCropping({ subject, face, image_id: kept.image_id, digest: kept.digest, corners: null });
+        // At a desk, straight on to marking its corners. A phone's photographs
+        // are cut at a computer, which finds their faces (D181).
+        if (!handheld()) setCropping({ subject, face, image_id: kept.image_id, digest: kept.digest, corners: null });
         await reload();
       }),
 
@@ -449,18 +395,14 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     },
     uncrop: () => {
       dismiss();
-      keepPending(null);
       setCropping(null);
-      letModelGo();
     },
-    findFace: (key, pixels, at, anyway) => model().then((m) => m.findFace(key, pixels, at, anyway)),
+    findFace: (key, pixels, at) => model().then((m) => m.findFace(key, pixels, at)),
     cut: (corners, make) =>
       press(`cut:${cropping?.image_id ?? "none"}:${corners.join(",")}`, async (act) => {
         if (!cropping) return;
         const kept = await api.storeImage(await make());
         await api.recordCut(cropping.image_id, { digest: kept.digest, corners, act });
-        keepPending(null);
-        letModelGo();
         if (!live.current) return;
         setCropping(null);
         await reload();

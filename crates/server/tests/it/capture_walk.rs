@@ -385,6 +385,40 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
     assert_eq!(front["cut"], Value::Null, "nobody has cut it to its face yet: {front}");
     let photo_id = front["image_id"].as_str().expect("the photograph a cut points at").to_string();
 
+    // ── waiting to be cut, at a computer (D181) ─────────────────────────
+    let queue = || {
+        let bearer = bearer.clone();
+        let app = &app;
+        async move {
+            let r = test::call_service(
+                app,
+                test::TestRequest::get().uri("/photos/uncut").insert_header(("authorization", bearer)).to_request(),
+            )
+            .await;
+            assert!(r.status().is_success(), "the queue answers");
+            serde_json::from_slice::<Value>(&test::read_body(r).await).unwrap()
+        }
+    };
+    let waiting = queue().await;
+    let mine = waiting
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|q| q["image_id"] == photo_id.as_str())
+        .unwrap_or_else(|| panic!("the uncut front waits to be cut: {waiting}"));
+    assert_eq!(mine["item_id"], GLOVE, "and opens on the item whose page shows it: {mine}");
+    assert_eq!(mine["face"], "front");
+    assert_eq!(mine["code"], "GLOVE-M");
+    let work: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/work").insert_header(("authorization", bearer.clone())).to_request(),
+        )
+        .await;
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    assert!(work["crop"].as_i64().unwrap_or(0) >= 1, "the sidebar counts it: {work}");
+
     // ── cut to its face (D176) ──────────────────────────────────────────
     //
     // Two requests: the straightened face's bytes, then the act naming the
@@ -443,6 +477,11 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
 
     let (status, made) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
     assert_eq!(status, 200, "{made}");
+    let after = queue().await;
+    assert!(
+        after.as_array().unwrap().iter().all(|q| q["image_id"] != photo_id.as_str()),
+        "a cut photograph leaves the queue: {after}"
+    );
     let (status, again) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
     assert_eq!(status, 200, "a repeated press is the same act: {again}");
     assert_eq!(again["cut_id"], made["cut_id"], "and the same cut");

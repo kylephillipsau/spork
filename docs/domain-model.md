@@ -13849,18 +13849,8 @@ answer, and kept until the worker ends), and an iPhone's browser reloads a
 page that grows past what it allows, silently. Every photo taken on the floor
 came back as a look of its own with no crop screen: the page had reloaded
 under it. The runtime's arena and memory-pattern options made no difference;
-the memory is the encoder's. So, on a phone (a coarse pointer):
-- the model is not fetched while the camera is up, and is let go when a crop
-  is saved or cancelled;
-- the photograph waiting to be cut is kept in the browser's storage, and a
-  page reloaded out of its crop opens the crop screen again;
-- a find is marked as under way while it runs, and a page that loads to find
-  the mark still there was taken down by it: the face-finder is off on that
-  device, the screen says so, and the corners are dragged by hand, with a
-  button to try it anyway. At a desk it runs as before.
-
-Finding faces on the phone wants a model built for one, or the finding done
-somewhere with the memory.
+the memory is the encoder's. So a phone's photographs are cut at a computer
+(D181).
 
 ### D178 — An item's carton is a box of so many of it, said at the item
 
@@ -13976,3 +13966,43 @@ each record names, and the bins list.
 **A setting, not an act.** Like the rest of a place, reach is part of the
 drawing: set, not appended. Who changed the layout, and when, is the layout's
 history, which is not built yet for any of it.
+
+### D181 — A phone takes the photographs and a computer cuts them
+
+*Adopted 2026-10-02.*
+
+**Decision.** On a phone (a finger for a pointer and nothing that hovers) a
+photograph is saved as it is taken and nothing more: no crop screen opens and
+the face-finder's model is never fetched. At a computer, **Photos to crop**
+(`/photos`, in the sidebar with a count) is the queue of photographs nobody
+has cut: an item page's newest photograph of each face of each subject, with
+no cut (`GET /photos/uncut`, oldest first). The computer finds each face in
+turn and draws its corners on the photograph:
+- what is right stays ticked, and **Save** cuts every ticked photograph, one
+  press for all of them;
+- what is wrong, or where no face was found, opens in the crop screen to be
+  put right and saved on its own.
+
+Nothing is kept until the person saves. A cut is their judgement and an act of
+theirs (D176): the batch is one press, each cut its own write with its own
+name, so a retry is the same act for each.
+
+**Why.** A phone's browser has not the memory to find a face (D177's note),
+and a smaller model made for phones would find worse faces. The computer has
+the memory and the person at it can check a morning's photographs at a glance
+instead of one crop screen per photograph. The crop screen's corners on the
+phone were also the slowest part of photographing a box.
+
+**What went.** For an hour the phone kept the photograph waiting to be cut in
+the browser's storage, brought the crop screen back after a reload, and turned
+the face-finder off on a device a find had taken down. The last of those also
+turned it off on a computer whose page was refreshed mid-find. With the phone
+never running the model, none of it is needed, and it is gone.
+
+**One crop screen.** The queue opens the same screen as an item's photo does;
+what it asks of whoever opened it is the six things it uses (`CropDesk`).
+Loading a photograph, its pixels and the straightened face as WebP are one
+module (`crop.ts`), used by both.
+
+**Not built.** The queue is the tenant's, not a site's: photographs have no
+site. A queue of hundreds is read three hundred at a time.

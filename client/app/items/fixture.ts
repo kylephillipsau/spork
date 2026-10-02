@@ -3,6 +3,7 @@ import type { CaptureSubject, ItemListRow, ItemRow, ItemView } from "@domain/typ
 import { NO_FIGURES } from "./subjects";
 import type { PropertiesDesk } from "./useItemProperties";
 import type { Asked, ItemsDesk, ItemsState } from "./useItems";
+import type { QueueDesk, Queued } from "./usePhotoQueue";
 
 /**
  * Items with no network.
@@ -389,3 +390,47 @@ export const ITEMS_LISTED: ItemsState = {
 export const ITEMS_PAGE: ItemsState = { kind: "ready", items: ITEMS, total: 9181, next: "SKU-8837", more: false };
 export const ITEMS_NONE: ItemsState = { kind: "ready", items: [], total: 0, next: null, more: false };
 export { BRUSH };
+
+/** One photograph in the queue to cut (D181). */
+const QUEUED = (n: number, over: Partial<Queued> & Pick<Queued, "state">): Queued => ({
+  photo: {
+    image_id: image(40 + n),
+    digest: PHOTO,
+    face: (["front", "right", "back", "left", "top", "bottom"] as const)[n % 6]!,
+    captured_at: "2026-10-02T00:08:00Z",
+    item_id: BRUSH,
+    code: "SKU-5120B",
+    description: "Floor brush, 450 mm, blue",
+  },
+  subject: BRUSH_EACH,
+  name: (["Front", "Right", "Back", "Left", "Top", "Bottom"] as const)[n % 6]!,
+  aspect: null,
+  corners: null,
+  ticked: false,
+  ...over,
+});
+
+const FOUND = [0.16, 0.2, 0.86, 0.18, 0.9, 0.84, 0.12, 0.86];
+
+/** A morning's photographs part-way through: found and ticked, one missed, the rest still to look at. */
+export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
+  return {
+    read: { kind: "ready" },
+    queued: [
+      QUEUED(0, { state: "found", corners: FOUND, ticked: true }),
+      QUEUED(1, { state: "found", corners: [0.2, 0.24, 0.8, 0.22, 0.84, 0.8, 0.18, 0.82], ticked: true }),
+      QUEUED(2, { state: "missed" }),
+      QUEUED(3, { state: "finding" }),
+      QUEUED(4, { state: "waiting" }),
+      QUEUED(5, { state: "waiting" }),
+    ],
+    phone: false,
+    tick: noop,
+    save: later,
+    saving: null,
+    adjusting: null,
+    adjust: noop,
+    crop: { findFace: async () => FOUND, cut: later, uncrop: noop, busy: false, problem: null, dismiss: noop },
+    ...over,
+  };
+}

@@ -9187,6 +9187,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(record_observation_image)
         .service(crate::cuts::store_image)
         .service(crate::cuts::record_cut)
+        .service(crate::cuts::uncut_photos)
         .service(record_evidence)
         .service(picking_list)
         .service(putaway_list)

@@ -105,6 +105,7 @@ import {
   ITEMS_PAGE,
   LISTS,
   CARTON_MEASURING,
+  fixturePhotoQueue,
   CROPPING,
   MEASURING,
   PHOTOGRAPHING,
@@ -115,6 +116,7 @@ import {
   fixtureProperties,
 } from "@app/items/fixture";
 import { ItemsPage, NewList } from "@app/items/ItemsPage";
+import { PhotosPage } from "@app/items/PhotosPage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
 import type { Screen, Surface } from "./Router";
@@ -571,6 +573,12 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureProperties(ITEM_UNKNOWN)} />
+  )),
+  // D181: a phone's photographs, their faces found at a computer and checked;
+  // and the queue when every photo has been cut.
+  app("f-photos", "/fixtures/photos", "Photos to crop", "desk", { screen: "photos" }, () => <PhotosPage desk={fixturePhotoQueue()} />),
+  app("f-photos-none", "/fixtures/photos/none", "Photos to crop — none", "desk", { screen: "photos" }, () => (
+    <PhotosPage desk={fixturePhotoQueue({ queued: [] })} />
   )),
   // D178: its own carton measured, and how many it holds said with it.
   app("f-item-carton", "/fixtures/item/carton", "Item — measuring its carton", "floor", { screen: "item" }, () => (

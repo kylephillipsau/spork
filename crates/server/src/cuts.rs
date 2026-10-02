@@ -20,8 +20,15 @@
 //! From the session, as for every act (D11): a cut is somebody's judgement of
 //! where the corners are, and it can be made long after the photograph, by
 //! somebody else, at a desk.
+//!
+//! # What is waiting to be cut
+//!
+//! A phone takes the photographs and a computer cuts them (D181): the phone
+//! has not the memory to find a face, and the computer finds each one and a
+//! person checks it. `GET /photos/uncut` is that queue: the photographs an
+//! item's page would show, its newest of each face, that nobody has cut.
 
-use actix_web::{post, web, HttpRequest, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -32,6 +39,87 @@ use crate::images::{self, StoredImage};
 use crate::routes::caller;
 use crate::tenancy::TenantScope;
 use crate::AppState;
+
+/// The photographs an item's page shows, the newest of each face of each
+/// subject, that have no cut: the queue a computer works through (D181).
+/// Answers the photograph, its face, when it was taken, and the item whose
+/// page shows it (a family's photograph opens on its first variant, a part's
+/// on its product). Every face of the seven; never a detail, which is evidence
+/// and not a side of anything.
+pub const UNCUT: &str = "
+    WITH newest AS (
+        SELECT DISTINCT ON (o.id, oi.face)
+               oi.id AS image_id, oi.digest, oi.face, oi.captured_at,
+               o.item_id, o.item_style_id, o.item_part_id
+          FROM observable o
+          JOIN observation_event e ON e.observable_id = o.id
+          JOIN observation_image oi ON oi.observation_event_id = e.id
+         WHERE (o.item_id IS NOT NULL OR o.item_style_id IS NOT NULL OR o.item_part_id IS NOT NULL)
+           AND oi.face IN ('front', 'back', 'left', 'right', 'top', 'bottom', 'label')
+         ORDER BY o.id, oi.face, oi.captured_at DESC, oi.id DESC
+    )
+    SELECT n.image_id, n.digest, n.face, n.captured_at,
+           coalesce(n.item_id, p.item_id,
+                    (SELECT v.id FROM item v WHERE v.style_id = n.item_style_id
+                      ORDER BY v.code LIMIT 1)) AS open_item
+      FROM newest n
+      LEFT JOIN item_part p ON p.id = n.item_part_id
+     WHERE NOT EXISTS (SELECT 1 FROM observation_image_cut c WHERE c.observation_image_id = n.image_id)";
+
+/// A photograph waiting to be cut.
+#[derive(Serialize, Debug)]
+pub struct UncutPhoto {
+    pub image_id: Uuid,
+    pub digest: String,
+    pub face: String,
+    pub captured_at: DateTime<Utc>,
+    /// The item whose page shows it, and so whose subjects say what it is of.
+    pub item_id: Uuid,
+    pub code: String,
+    pub description: String,
+}
+
+/// How many the queue takes at once: a morning's photographs, not a year's.
+const QUEUE: i64 = 300;
+
+/// The photographs waiting to be cut, oldest first, so a computer works
+/// through them in the order the phone took them (D181).
+#[get("/photos/uncut")]
+pub async fn uncut_photos(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let rows = tx
+                    .query(
+                        &format!(
+                            "SELECT u.image_id, u.digest, u.face, u.captured_at, i.id, i.code, i.description
+                               FROM ({UNCUT}) u
+                               JOIN item i ON i.id = u.open_item
+                              ORDER BY u.captured_at, u.image_id
+                              LIMIT $1"
+                        ),
+                        &[&QUEUE],
+                    )
+                    .await?;
+                Ok(rows
+                    .iter()
+                    .map(|r| UncutPhoto {
+                        image_id: r.get(0),
+                        digest: r.get(1),
+                        face: r.get(2),
+                        captured_at: r.get(3),
+                        item_id: r.get(4),
+                        code: r.get(5),
+                        description: r.get(6),
+                    })
+                    .collect::<Vec<_>>())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
 
 /// Keep an image's bytes and say their address. Nothing names them yet: an
 /// act does that, and until one does they cannot be read back.

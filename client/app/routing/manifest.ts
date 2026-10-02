@@ -107,6 +107,8 @@ export const SCREENS: readonly ScreenSpec[] = [
   // A floor screen for the bin page's reason: a product is scanned standing
   // beside it, and the answer is read there.
   spec("item", "/items/:item", "Item", "floor"),
+  // Photographs taken on a phone, cut to their faces at a computer (D181).
+  spec("photos", "/photos", "Photos to crop", "desk"),
   // Every place and the bins in each, and drafting the layout from the bin list.
   spec("warehouse", "/warehouse", "Warehouse", "desk"),
   spec("findings", "/findings", "Findings", "desk"),

@@ -26,6 +26,7 @@ import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
 
 import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, measuredAspect, type BoxFace } from "./box";
+import { handheld } from "./crop";
 import { FaceCrop } from "./FaceCrop";
 import {
   PRESENTATIONS,
@@ -268,6 +269,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
             {isBox(subject)
               ? "Photograph each side you can, and its label. Each photo is saved as it is taken."
               : "Take its photo, and its label. Each is saved as it is taken."}
+            {handheld() && " They are cut to their faces at a computer, under Photos to crop."}
           </p>
           <Photos subject={subject} photos={photos} desk={desk} />
           <div className={s.formActions}>

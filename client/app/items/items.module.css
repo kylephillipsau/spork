@@ -435,3 +435,45 @@
     max-height: 16rem;
   }
 }
+
+/* The queue of photographs to cut (D181): each with where its face was found. */
+.queue {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--ui-space-4);
+  margin: 0;
+  padding: var(--ui-space-4);
+  list-style: none;
+}
+.queued {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  min-width: 0;
+}
+.queuePhoto {
+  position: relative;
+}
+.queuePhoto img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-sunken);
+}
+.queuePhoto .photo {
+  width: 100%;
+}
+.queueText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  min-width: 0;
+}
+.queueActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+}

@@ -39,7 +39,7 @@ export function useWork(
       setCounts(
         w.no_site
           ? {}
-          : { pack: w.pack, pick: w.pick, despatch: w.despatch, findings: w.findings },
+          : { pack: w.pack, pick: w.pick, despatch: w.despatch, findings: w.findings, crop: w.crop },
       );
     } catch {
       /* a count nobody could read is a badge that does not appear */

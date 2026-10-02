@@ -286,7 +286,7 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-One hundred and eighty recorded decisions, a hundred and thirty-four rules the design must always
+One hundred and eighty-one recorded decisions, a hundred and thirty-four rules the design must always
 satisfy, and a database that a hundred and three migrations build and reverse cleanly, both
 from empty and with data in them.
 
@@ -310,15 +310,16 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of ninety-one endpoints and a projection
-scheduler. Above that is a React client of twenty-four screens, and two retired
+policy resolver. Above it sits an API of ninety-two endpoints and a projection
+scheduler. Above that is a React client of twenty-five screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, picking, receiving, put away and despatch;
 - orders, items and the warehouse, each with a page per order, item, place and
   bin;
 - an item's weight, size and photographs, recorded at the item. A photograph
   is sent as WebP (D175), cut to its face where a model in the browser finds
-  it and a person checks it (D176, D177), and drawn on a 3D box. An item's
+  it and a person checks it (D176, D177), at a computer for a phone's photos
+  (D181), and drawn on a 3D box. An item's
   carton is a box of so many of it, said at the item and measured apart from
   it (D178), and a sheet of items to measure is a list to work down (D179);
 - the findings queue;
@@ -342,7 +343,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D180
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D181
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being

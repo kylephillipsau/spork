@@ -44,6 +44,8 @@ pub struct WorkWaiting {
     /// Discrepancies open or under investigation — the findings screen's own
     /// default view, so the badge and the screen agree by construction.
     pub findings: i64,
+    /// Photographs waiting to be cut: the crop queue's own query (D181).
+    pub crop: i64,
     /// True when the session names no site. Everything above is then zero, and
     /// the screen must say *choose where you are working* rather than *nothing
     /// to do* — opposite instructions that must not look the same.
@@ -83,7 +85,7 @@ pub async fn waiting(
                 // a screen somebody opens all day.
                 Ok(tx
                     .query_one(
-                        "SELECT
+                        &format!("SELECT
                            (SELECT count(*) FROM fulfilment f
                              WHERE f.site_id = $1
                                AND f.state <> 'cancelled'
@@ -104,7 +106,9 @@ pub async fn waiting(
                                AND p.sealed_at IS NOT NULL
                                AND cp.consignment_id IS NULL),
                            (SELECT count(*) FROM discrepancy d
-                             WHERE d.state IN ('open', 'investigating'))",
+                             WHERE d.state IN ('open', 'investigating')),
+                           (SELECT count(*) FROM ({uncut}) u)",
+                        uncut = crate::cuts::UNCUT),
                         &[&site],
                     )
                     .await?)
@@ -117,6 +121,7 @@ pub async fn waiting(
         pick: row.get(1),
         despatch: row.get(2),
         findings: row.get(3),
+        crop: row.get(4),
         no_site: false,
     })
 }

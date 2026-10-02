@@ -881,6 +881,8 @@ export interface WorkWaiting {
   pick: number;
   despatch: number;
   findings: number;
+  /** Photographs waiting to be cut to their faces (D181). */
+  crop: number;
   /** No site chosen. Everything above is zero and means nothing. */
   no_site: boolean;
 }
@@ -1354,6 +1356,18 @@ export interface StoredImage {
 /** `POST /observations/{id}/images/{face}`: the photograph as kept. */
 export interface RecordImageResponse extends StoredImage {
   image_id: Uuid;
+}
+
+/** `GET /photos/uncut`: a photograph waiting to be cut to its face, at a computer (D181). */
+export interface UncutPhoto {
+  image_id: Uuid;
+  digest: string;
+  face: string;
+  captured_at: string;
+  /** The item whose page shows it, and so whose subjects say what it is of. */
+  item_id: Uuid;
+  code: string;
+  description: string;
 }
 
 /** `POST /observation-images/{id}/cuts`. */

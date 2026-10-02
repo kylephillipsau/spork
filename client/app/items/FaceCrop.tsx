@@ -3,19 +3,19 @@ import { RotateCw } from "lucide-react";
 
 import { Alert, Button, Dialog } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import { LONGEST_PX, encodeWebp, fit } from "@domain/webp";
 import { Faint } from "@app/common/cells";
 
-import { START, aspectOf, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
-import { SAM_SIZE, UNFIT } from "./faceFind";
+import { draw, handheld, loadPhoto, pixelsOf, ratioOf, straightened } from "./crop";
+import { START, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
+import { SAM_SIZE } from "./faceFind";
 import type { PropertiesDesk, Cropping } from "./useItemProperties";
 import s from "./items.module.css";
 
 /**
  * A photograph cut to the face it is of (D176). Four corners to drag onto the
  * face's corners, the face straightened beside them as they move, and a turn
- * for a face photographed sideways. The same screen on a phone, straight
- * after the photo, and at a desk, from a photo already taken.
+ * for a face photographed sideways. The same screen from an item's photo, at
+ * a computer's queue of photos to cut (D181), and on a phone by hand.
  *
  * **Dragged by how far the pointer moves**, not to where it is, so a finger
  * on a corner moves it without jumping it under the fingertip, and arrow keys
@@ -24,51 +24,28 @@ import s from "./items.module.css";
  * **The corners are found first** (D177): a model looks for the face in the
  * middle of a photograph not cut before, and a tap on the photograph asks it
  * again at that point. Its answer never moves a corner somebody has moved
- * since they asked.
+ * since they asked. Not on a phone, which has not the memory (D181): there the
+ * corners are dragged.
+ *
+ * `desk` is what the screen asks of whoever opened it, so an item's
+ * properties and the queue open the same screen.
  */
+export type CropDesk = Pick<PropertiesDesk, "findFace" | "cut" | "uncrop" | "busy" | "problem" | "dismiss">;
 
 /** What the face-finder is doing, as the screen says it. */
-type Finding = "looking" | "found" | "missed" | "broken" | "unfit" | null;
+type Finding = "looking" | "found" | "missed" | "broken" | "phone" | null;
 const FINDING: Record<Exclude<Finding, null>, string> = {
   looking: "Finding the face…",
   found: "Found it. Drag a corner to correct it, or tap the face to look again.",
   missed: "No face found there. Tap the face, or drag the corners.",
   broken: "The face-finder could not run here. Drag the corners.",
-  unfit: "The face-finder needed more memory than this phone gives a page, so it is off here. Drag the corners; at a computer it finds them.",
+  phone: "Drag the corners onto the face. At a computer, the face-finder places them.",
 };
 
 const CORNERS = ["Top-left", "Top-right", "Bottom-right", "Bottom-left"] as const;
 /** How far an arrow key moves a corner, and with Shift. */
 const NUDGE = 0.004;
 const SHOVE = 0.02;
-
-/**
- * The photograph's pixels, scaled so its longest side is at most `longest`,
- * or exactly that when `exactly`: the model takes its own size, up or down.
- */
-function pixelsOf(image: HTMLImageElement, longest: number, exactly = false): Pixels {
-  const scale = longest / Math.max(image.naturalWidth, image.naturalHeight);
-  const [width, height] = exactly
-    ? [Math.round(image.naturalWidth * scale), Math.round(image.naturalHeight * scale)]
-    : fit(image.naturalWidth, image.naturalHeight, longest);
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const g = canvas.getContext("2d", { willReadFrequently: true })!;
-  g.drawImage(image, 0, 0, width, height);
-  const { data } = g.getImageData(0, 0, width, height);
-  // iOS holds a canvas's memory until its size is zero.
-  canvas.width = canvas.height = 0;
-  return { data, width, height };
-}
-
-/** Pixels drawn onto a canvas, a new one or the one given. */
-function draw(data: Uint8ClampedArray<ArrayBuffer>, width: number, height: number, into = document.createElement("canvas")) {
-  into.width = width;
-  into.height = height;
-  into.getContext("2d")!.putImageData(new ImageData(data, width, height), 0, 0);
-  return into;
-}
 
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
 
@@ -83,7 +60,7 @@ export function FaceCrop({
   name: string;
   /** Its width over its height when its size is measured; otherwise from the corners. */
   aspect: number | null;
-  desk: PropertiesDesk;
+  desk: CropDesk;
 }) {
   const [quad, setQuad] = useState<Quad>(() => (cropping.corners ? fromCorners(cropping.corners) : START));
   const [photo, setPhoto] = useState<{ image: HTMLImageElement; small: Pixels } | "failed" | null>(null);
@@ -97,10 +74,11 @@ export function FaceCrop({
   const asked = useRef(0);
   const face = name.toLowerCase();
 
-  const find = (image: HTMLImageElement, at?: Point, anyway = false) => {
+  const find = (image: HTMLImageElement, at?: Point) => {
+    if (handheld()) return setFinding("phone");
     const ask = ++asked.current;
     setFinding("looking");
-    desk.findFace(cropping.image_id, pixelsOf(image, SAM_SIZE, true), at, anyway).then(
+    desk.findFace(cropping.image_id, pixelsOf(image, SAM_SIZE, true), at).then(
       (corners) => {
         if (ask !== asked.current) return;
         const found = corners && fromCorners(corners);
@@ -111,7 +89,6 @@ export function FaceCrop({
       },
       (error: unknown) => {
         if (ask !== asked.current) return;
-        if (String(error).includes(UNFIT)) return setFinding("unfit");
         // Said on the screen in words; the reason is for whoever opens the console.
         console.warn("face-finder:", error);
         setFinding("broken");
@@ -122,10 +99,8 @@ export function FaceCrop({
   // The photograph, and a small copy of its pixels for the preview.
   useEffect(() => {
     let live = true;
-    const image = new Image();
-    image.src = imageUrl(cropping.digest);
-    image.decode().then(
-      () => {
+    loadPhoto(cropping.digest).then(
+      (image) => {
         if (!live) return;
         setPhoto({ image, small: pixelsOf(image, 720) });
         // A photograph cut before keeps its corners; a new one is looked at.
@@ -139,7 +114,7 @@ export function FaceCrop({
   }, [cropping.digest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loaded = photo && photo !== "failed" ? photo : null;
-  const ratio = loaded ? (aspect ?? aspectOf(quad, loaded.image.naturalWidth, loaded.image.naturalHeight)) : 1;
+  const ratio = loaded ? ratioOf(loaded.image, quad, aspect) : 1;
   const whole = isFace(quad);
 
   // The face straightened, small, redrawn as the corners move: once a frame at most.
@@ -170,7 +145,7 @@ export function FaceCrop({
       const down = tap.current;
       tap.current = null;
       const box = stage.current?.getBoundingClientRect();
-      if (!down || !box || !loaded || finding === "unfit" || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
+      if (!down || !box || !loaded || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
       find(loaded.image, [clamp((e.clientX - box.left) / box.width), clamp((e.clientY - box.top) / box.height)]);
     },
   };
@@ -201,17 +176,8 @@ export function FaceCrop({
   const save = () => {
     if (!loaded) return;
     const { image } = loaded;
-    void desk.cut(toCorners(quad), async () => {
-      // Straightened from the photograph at full size, not from the preview's copy.
-      const full = pixelsOf(image, LONGEST_PX);
-      const [w, h] = cutSize(quad, full.width, full.height, ratio);
-      const canvas = draw(straighten(full, quad, w, h), w, h);
-      try {
-        return await encodeWebp(canvas);
-      } finally {
-        canvas.width = canvas.height = 0;
-      }
-    });
+    // Straightened from the photograph at full size, not from the preview's copy.
+    void desk.cut(toCorners(quad), () => straightened(image, quad, ratio));
   };
 
   const [top, right] = [quad[0], quad[1]];
@@ -284,11 +250,7 @@ export function FaceCrop({
                 {FINDING[finding]}
               </p>
             )}
-            {finding === "unfit" && loaded && (
-              <Button size="sm" onClick={() => find(loaded.image, undefined, true)} disabled={desk.busy}>
-                Try the face-finder anyway
-              </Button>
-            )}
+
           </div>
         </div>
       )}

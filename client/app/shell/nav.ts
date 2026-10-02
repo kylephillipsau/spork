@@ -12,6 +12,7 @@ import {
   Boxes,
   Building2,
   ClipboardList,
+  Crop,
   KeyRound,
   LayoutDashboard,
   Map as MapIcon,
@@ -68,6 +69,7 @@ export const NAV: readonly NavGroup[] = [
     label: "Inventory",
     items: [
       { id: "items", label: "Items", path: "/items", icon: Boxes },
+      { id: "photos", label: "Photos to crop", path: "/photos", icon: Crop, badge: "crop" },
       { id: "warehouse", label: "Warehouse", path: "/warehouse", icon: MapIcon },
       { id: "findings", label: "Findings", path: "/findings", icon: TriangleAlert, badge: "findings" },
     ],

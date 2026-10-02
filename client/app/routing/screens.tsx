@@ -63,6 +63,8 @@ import { chosenFrom, useWarehouse } from "@app/layout/useWarehouse";
 import { ItemPage } from "@app/items/ItemPage";
 import { useItemProperties } from "@app/items/useItemProperties";
 import { ItemsPage } from "@app/items/ItemsPage";
+import { PhotosPage } from "@app/items/PhotosPage";
+import { usePhotoQueue } from "@app/items/usePhotoQueue";
 import { askedFrom, useItems } from "@app/items/useItems";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
 import { useQueue } from "@app/outbound/pack/useQueue";
@@ -282,6 +284,11 @@ function LivePlace({ place }: { place: string }) {
   return <PlacePage desk={usePlace(place)} />;
 }
 
+/** The photographs waiting to be cut to their faces, worked through here (D181). */
+function LivePhotos() {
+  return <PhotosPage desk={usePhotoQueue()} />;
+}
+
 /** The site's places and their bins, and drafting them from the bin list. */
 function LiveWarehouse() {
   return <WarehousePage desk={useWarehouse(chosenFrom(window.location.search))} />;
@@ -318,6 +325,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   place: (params) => <LivePlace place={params["place"] ?? ""} />,
   items: () => <LiveItems />,
   item: (params) => <LiveItem item={params["item"] ?? ""} />,
+  photos: () => <LivePhotos />,
   warehouse: () => <LiveWarehouse />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,
