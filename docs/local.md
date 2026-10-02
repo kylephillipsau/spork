@@ -33,6 +33,7 @@ scripts\local.ps1 start -Lan   # the same, reachable from other devices on this 
 scripts\local.ps1 firewall  # let other devices in: TCP 18080, Private networks, local subnet (asks for admin)
 scripts\local.ps1 seed      # optional demo data (two tenants, password dock-station-1)
 scripts\local.ps1 reset     # drop and recreate the local database
+scripts\local.ps1 restore <backup.zip>   # a workspace backup into an empty Spork (asks its password)
 ```
 
 The first time you run `start` against an empty database, the server logs a setup

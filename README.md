@@ -95,6 +95,20 @@ The rest comes from NetSuite's CSV exports:
 NetSuite's balance is kept as its report, beside Spork's own ledger and never
 merged into it. [docs/local.md](docs/local.md) has the commands.
 
+## Backups
+
+An administrator downloads a backup under Settings, Backup: one zip of every
+row in the workspace, its people and sign-ins, and every photo, encrypted with
+a password set there. Restore it into an empty Spork of the same version:
+
+```powershell
+scripts\local.ps1 setup
+scripts\local.ps1 restore spork-backup-2026-10-02-0900.zip
+```
+
+`scripts/backup.sh` is the other kind: a `pg_dump` of the whole database in
+the compose stack, for whoever runs the server.
+
 ## The design record
 
 `docs/` holds the reasoning rather than the instructions: the domain decision

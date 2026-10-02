@@ -1,4 +1,4 @@
-# Handoff: capture on the phone, crops at the computer, search
+# Handoff: capture, crops, search and backups
 
 Written 2026-10-02. Read this first. The earlier handoff,
 [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md), still covers the
@@ -6,11 +6,12 @@ toolchain, tests, layout and packing.
 
 ## State
 
-- Spork `main` is ahead of `origin/main` and not pushed.
+- Spork `main` is pushed, through D193.
 - `warehouse-scripts` is pushed. Spork Bridge 0.4.0 is published.
-- Migration 111 applies on the next `local.ps1 start`.
-- The full server suite passed on a fresh database before D191. Run it again
-  before pushing.
+- The database is at migration 112 after the next `local.ps1 start`.
+- The full server suite last passed before D191. Since then only the affected
+  test files have run: packaging, capture, pictures and backup. A full run was
+  stopped for low memory. Run it on a fresh database.
 
 ## What landed
 
@@ -66,6 +67,20 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   (`GET /search`). Tantivy, one index per tenant, in memory, rebuilt from the
   database at most a minute after a change. On a phone it opens full screen.
 
+**Photos to crop, revised**
+- Each photo has its own Save, or Adjust first. Saves queue, so the next can
+  be pressed before the last lands.
+
+**Backups**
+- D192. `person_tenant.role` means something: `administrator`. Setup writes
+  it; migration 112 gives it to each workspace's earliest member. Read through
+  the definer `role_in_tenant()`. Only an administrator sees Backup.
+- D193. Settings, Backup downloads one zip: every row with the workspace's
+  `tenant_id`, the workspace, its people and sign-ins, and every photo, each
+  entry AES-256 encrypted with a password of 12 or more characters.
+  `scripts\local.ps1 restore <zip>` (`spork-restore`) puts it back into an
+  empty Spork at the same migration, in one transaction, as the database owner.
+
 ## Known limits
 
 - Firefox finds faces about 13 times slower than Chrome or Edge: 78 s against
@@ -74,12 +89,20 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - Moving a look leaves its "same as" sides on the old subject.
 - The bin's reach has no screen. Set it with `POST /places/{id}/reach` or wait
   for the Warehouse setting.
+- `spork-restore` is proved by the round-trip test (`backup_http.rs`), not yet
+  run end to end against a freshly migrated database.
+- No screen gives the administrator role to someone else (Q176).
+- A non-box item can be photographed but not trimmed: its photo is used as
+  taken. A white-background cutout is the planned next step for those.
 
 ## Next
 
-1. Reach on the Warehouse screen and rack face, and a forklift mark on the
+1. Run the full server suite on a fresh database.
+2. Restore a real backup into a scratch database with `spork-restore` and
+   compare row counts.
+3. Reach on the Warehouse screen and rack face, and a forklift mark on the
    item list's bin.
-2. A completed sheet for a list: each item with its own and its carton's
+4. A completed sheet for a list: each item with its own and its carton's
    figures, as CSV.
-3. Apply the real layout, so A to D can say which levels are reachable.
-4. Push Spork once the whole suite passes.
+5. Apply the real layout, so A to D can say which levels are reachable.
+6. Cut a non-box item's photo out onto white at the computer.
