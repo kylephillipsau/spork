@@ -18,6 +18,7 @@ import {
   Tabs,
   TextField,
   Toolbar,
+  cx,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
 import type { CaptureSubject, ItemView, SubjectPhoto } from "@domain/types";
@@ -267,10 +268,11 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
         <div className={s.form}>
           <p className={s.note}>
             {isBox(subject)
-              ? "Photograph each side you can, and its label. Each photo is saved as it is taken."
-              : "Take its photo, and its label. Each is saved as it is taken."}
+              ? "Take each side in turn, then its label. Each photo sends while you take the next."
+              : "Take its photo, then its label. Each sends while you take the next."}
             {handheld() && " They are cut to their faces at a computer, under Photos to crop."}
           </p>
+          <NextSide subject={subject} desk={desk} />
           <Photos subject={subject} photos={photos} desk={desk} />
           <div className={s.formActions}>
             <Button onClick={desk.close}>Done</Button>
@@ -521,6 +523,12 @@ function Photos({
               <li key={face} className={s.faceTile}>
                 <Thumb picture={photo ? { digest: shown(photo), source: "own" } : null} alt={`${subject.code}, ${name}`} />
                 <span className={s.faceName}>{name}</span>
+                {desk?.sending[face] === "sending" && <Faint>Sending…</Faint>}
+                {desk?.sending[face] === "failed" && (
+                  <Button size="sm" onClick={() => desk.resend(face)}>
+                    Send again
+                  </Button>
+                )}
                 {desk && <Shutter face={face} name={name} subject={subject} desk={desk} taken={desk.taken.includes(face)} />}
                 {desk && photo && (
                   <Button
@@ -544,13 +552,56 @@ function Photos({
   );
 }
 
-/** A label dressed as a button around a hidden file input: a button cannot open a camera. */
-function Shutter({ face, name, subject, desk, taken }: { face: Face; name: string; subject: CaptureSubject; desk: PropertiesDesk; taken: boolean }) {
+/**
+ * The next side to take, as one big button, and Skip for a side there is no
+ * getting at: a box photographed in one walk round it, a tap a side, the
+ * photographs sending behind it (D181).
+ */
+function NextSide({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+  const [skipped, setSkipped] = useState<Face[]>([]);
+  const order = facesToAsk(subject);
+  const next = order.find((f) => !desk.taken.includes(f) && !skipped.includes(f));
+  const done = order.filter((f) => desk.taken.includes(f)).length;
+  const on = Object.values(desk.sending).filter((v) => v === "sending").length;
   return (
-    <label className={s.shutter} aria-disabled={desk.busy || undefined}>
+    <div className={s.nextSide}>
+      {next ? (
+        <>
+          <Shutter face={next} name={faceName(next, subject)} subject={subject} desk={desk} taken={false} big />
+          <Button onClick={() => setSkipped((k) => [...k, next])}>Skip</Button>
+        </>
+      ) : (
+        <span>Every side taken.</span>
+      )}
+      <Faint>
+        {done} of {order.length} taken{on > 0 ? ` · sending ${on}` : ""}
+      </Faint>
+    </div>
+  );
+}
+
+/** A label dressed as a button around a hidden file input: a button cannot open a camera. */
+function Shutter({
+  face,
+  name,
+  subject,
+  desk,
+  taken,
+  big = false,
+}: {
+  face: Face;
+  name: string;
+  subject: CaptureSubject;
+  desk: PropertiesDesk;
+  taken: boolean;
+  /** The next side, as the one button to press. */
+  big?: boolean;
+}) {
+  return (
+    <label className={cx(s.shutter, big && s.shutterBig)} aria-disabled={desk.busy || undefined}>
       <span className={s.hidden}>Take the {name.toLowerCase()}</span>
       <Camera aria-hidden />
-      <span aria-hidden="true">{taken ? "Again" : "Take"}</span>
+      <span aria-hidden="true">{big ? `Take the ${name.toLowerCase()}` : taken ? "Again" : "Take"}</span>
       <input
         type="file"
         accept="image/*"
@@ -560,7 +611,7 @@ function Shutter({ face, name, subject, desk, taken }: { face: Face; name: strin
           const file = e.currentTarget.files?.[0];
           // Cleared so the same file twice still fires: a retake is a new row (D132).
           e.currentTarget.value = "";
-          if (file) void desk.attach(subject, face, file);
+          if (file) desk.attach(subject, face, file);
         }}
       />
     </label>

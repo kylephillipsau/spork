@@ -215,6 +215,24 @@
   width: var(--ui-icon-sm);
   height: var(--ui-icon-sm);
 }
+/* The next side: the one button to press, a thumb's width and more. */
+.shutterBig {
+  height: var(--ui-control-lg);
+  padding: 0 var(--ui-space-4);
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-fg);
+  font-size: var(--ui-text-md);
+}
+.shutterBig:hover {
+  background: var(--ui-accent-hover);
+}
+.nextSide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-3);
+}
 .shutter input {
   position: absolute;
   inset: 0;

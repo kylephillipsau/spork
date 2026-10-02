@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLive, useWriting } from "@app/acting";
-import { partOf, type Act } from "@domain/acts";
+import { anAct, partOf, type Act } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
 import type { BoundBarcode, CaptureSubject, ItemView, Uuid } from "@domain/types";
 
@@ -21,6 +21,11 @@ import { NO_FIGURES, cartonHolds, isOwnCarton, presentationNeeded, readHolds, sa
  * **One action open at a time.** Weighing the carton and measuring the each are
  * two things in two hands; a screen with both forms open is a screen that has
  * to be aimed at before it is typed into.
+ *
+ * **Photographs are sent while the next is taken.** Each goes into a line of
+ * its own, one after another, so the camera is never waiting on the WiFi; a
+ * photograph that did not send says so on its tile and is sent again from
+ * there, as the same act.
  *
  * The writes are the ones the Weigh and Capture screens made, unchanged:
  * `POST /weighings` for a scale reading, `POST /observations` for figures (one
@@ -60,6 +65,9 @@ export interface Cropping {
   corners: number[] | null;
 }
 
+/** A photograph on its way: being sent, or not sent and waiting to be sent again. */
+export type Sending = "sending" | "failed";
+
 /** What the last act said, worth showing once. */
 export interface Said {
   tone: "success" | "warning";
@@ -91,10 +99,14 @@ export interface PropertiesDesk {
   toggleNoDimensions: () => void;
   measure: (subject: CaptureSubject) => Promise<void>;
 
-  /** Faces photographed in this look. */
+  /** Faces photographed in this look, sent or still on their way. */
   taken: Face[];
-  /** Upload a face, then open it to be cut. */
-  attach: (subject: CaptureSubject, face: Face, image: Blob) => Promise<void>;
+  /** Faces whose photograph is on its way, or did not send. */
+  sending: Partial<Record<Face, Sending>>;
+  /** Send a face in the background; at a desk, open it to be cut once sent. */
+  attach: (subject: CaptureSubject, face: Face, image: Blob) => void;
+  /** Send again a face that did not send. */
+  resend: (face: Face) => void;
 
   /** The photograph open to be cut, if one is. */
   cropping: Cropping | null;
@@ -149,6 +161,13 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const [figures, setFigures] = useState<Figures>(NO_FIGURES);
   const [holds, setHolds] = useState("");
   const [taken, setTaken] = useState<Face[]>([]);
+  const [sending, setSending] = useState<Partial<Record<Face, Sending>>>({});
+  // Photographs being sent, one after another, and each one's act so that
+  // sending it again is the same act.
+  const line = useRef<Promise<void>>(Promise.resolve());
+  const held = useRef(new Map<Face, { subject: CaptureSubject; image: Blob; act: Act }>());
+  // The item on screen, which a photograph sent for another must not touch.
+  const showing = useRef(itemId);
   const [cropping, setCropping] = useState<Cropping | null>(null);
   const [barcodes, setBarcodes] = useState<BoundBarcode[]>([]);
   const [binding, setBinding] = useState("");
@@ -197,6 +216,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setReading("");
     setFigures(NO_FIGURES);
     setTaken([]);
+    setSending({});
+    held.current.clear();
+    showing.current = itemId;
     setCropping(null);
     setBarcodes([]);
     look.current = null;
@@ -255,6 +277,56 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     if ("problem" in typed) throw new ApiError(typed.problem, 400);
     if (!sayFirst(read.item.packing, typed.holds)) return;
     await api.sayCarton(subject.item_id, { holds: typed.holds, act: partOf(act, "carton") });
+  };
+
+  /**
+   * One face, sent behind whatever is already on its way. **Taken at once,
+   * sent when its turn comes**, so the next face can be photographed straight
+   * away. Photographing without measuring first takes a look of its own, made
+   * by the first photograph sent; a retake is a new row (D132).
+   */
+  const send = (face: Face) => {
+    const job = held.current.get(face);
+    if (!job) return;
+    const item = itemId;
+    const here = () => live.current && showing.current === item;
+    setTaken((t) => (t.includes(face) ? t : [...t, face]));
+    setSending((s) => ({ ...s, [face]: "sending" }));
+    line.current = line.current.then(async () => {
+      try {
+        let event = look.current?.key === subjectKey(job.subject) ? look.current.event : null;
+        if (!event) {
+          await sayCartonFirst(job.subject, job.act);
+          const response = await api.recordCapture({
+            ...named(job.subject),
+            level: job.subject.packaging_level,
+            measurements: [],
+            photographs: true,
+            act: job.act,
+          });
+          event = response.observation_event_id;
+          if (here()) look.current = { key: subjectKey(job.subject), event };
+        }
+        const kept = await api.photograph(event, face, job.image);
+        if (held.current.get(face) === job) held.current.delete(face);
+        if (!here()) return;
+        setSending((s) => {
+          const { [face]: _, ...rest } = s;
+          return rest;
+        });
+        // At a desk, straight on to marking its corners, unless a crop is
+        // already open: one in hand is not swapped for the next, which waits
+        // in Photos to crop. A phone's photographs are cut at a computer,
+        // which finds their faces (D181).
+        if (!handheld()) {
+          setCropping((open) => open ?? { subject: job.subject, face, image_id: kept.image_id, digest: kept.digest, corners: null });
+        }
+        await reload();
+      } catch (error) {
+        console.warn("photograph:", error);
+        if (here()) setSending((s) => ({ ...s, [face]: "failed" }));
+      }
+    });
   };
 
   return {
@@ -359,34 +431,12 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     },
 
     taken,
-    /**
-     * One face. **Uploaded as it is taken**, so a failed upload is one photo to
-     * retake rather than a session to redo; a retake is a new row (D132).
-     * Photographing without measuring first takes a look of its own.
-     */
-    attach: (subject, face, image) =>
-      press(`photo:${subjectKey(subject)}:${looks.current}:${face}:${image.size}`, async (act) => {
-        let event = look.current?.key === subjectKey(subject) ? look.current.event : null;
-        if (!event) {
-          await sayCartonFirst(subject, act);
-          const response = await api.recordCapture({
-            ...named(subject),
-            level: subject.packaging_level,
-            measurements: [],
-            photographs: true,
-            act,
-          });
-          event = response.observation_event_id;
-          look.current = { key: subjectKey(subject), event };
-        }
-        const kept = await api.photograph(event, face, image);
-        if (!live.current) return;
-        setTaken((t) => (t.includes(face) ? t : [...t, face]));
-        // At a desk, straight on to marking its corners. A phone's photographs
-        // are cut at a computer, which finds their faces (D181).
-        if (!handheld()) setCropping({ subject, face, image_id: kept.image_id, digest: kept.digest, corners: null });
-        await reload();
-      }),
+    sending,
+    attach: (subject, face, image) => {
+      held.current.set(face, { subject, image, act: anAct() });
+      send(face);
+    },
+    resend: send,
 
     cropping,
     crop: (next) => {

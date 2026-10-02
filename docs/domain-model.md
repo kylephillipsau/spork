@@ -13999,6 +13999,17 @@ the face-finder off on a device a find had taken down. The last of those also
 turned it off on a computer whose page was refreshed mid-find. With the phone
 never running the model, none of it is needed, and it is gone.
 
+**Taking them is one walk round the box.** The photograph panel offers the
+next side as one big button, in the order a box is turned (front, right,
+back, left, top, bottom, then its label), with Skip for a side there is no
+getting at. Each photograph is sent in the background, one after another,
+behind the next being taken: the camera never waits on the WiFi. A tap
+opens the camera each time, because a page over plain HTTP can neither show a
+live camera nor open one by itself; a live camera in the page needs HTTPS.
+A photograph that did not send says so on its tile and is sent again from
+there, as the same act. At a desk a sent photograph still opens to be cut,
+unless a crop is already open, which is not swapped for the next.
+
 **One crop screen.** The queue opens the same screen as an item's photo does;
 what it asks of whoever opened it is the six things it uses (`CropDesk`).
 Loading a photograph, its pixels and the straightened face as WebP are one

@@ -13,9 +13,10 @@ import type { Figures } from "./figures.ts";
  * edited on its own.
  */
 
-/** The seven faces, in the order somebody walks round the box; `label` last
- *  because it is the one that is not a geometric face. */
-export const FACES = ["front", "back", "left", "right", "top", "bottom", "label"] as const;
+/** The seven faces, in the order somebody photographs a box: round it from the
+ *  front, turning it right, then its top and bottom; `label` last because it is
+ *  the one that is not a geometric face. */
+export const FACES = ["front", "right", "back", "left", "top", "bottom", "label"] as const;
 export type Face = (typeof FACES)[number];
 
 /**
