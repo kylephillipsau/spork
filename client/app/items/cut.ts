@@ -14,6 +14,9 @@ export type Point = [number, number];
 /** The face's top-left, top-right, bottom-right and bottom-left, in that order. */
 export type Quad = [Point, Point, Point, Point];
 
+/** The whole photograph, its corners as taken: a photograph used as it is. */
+export const WHOLE = [0, 0, 1, 0, 1, 1, 0, 1];
+
 /** Where the corners start before anybody moves them: a margin in from the edges. */
 export const START: Quad = [
   [0.15, 0.15],

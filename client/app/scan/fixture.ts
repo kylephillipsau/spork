@@ -1,3 +1,4 @@
+import type { Found } from "@domain/types";
 import type { Landing } from "./destination";
 import type { ChromeScan } from "./useScan";
 
@@ -11,9 +12,26 @@ import type { ChromeScan } from "./useScan";
  */
 const noop = async () => {};
 
-export function fixtureScan(landing: Landing | null = null, value = ""): ChromeScan {
-  return { value, busy: false, landing, type: () => {}, scan: noop, dismiss: () => {} };
+export function fixtureScan(landing: Landing | null = null, value = "", results: Found[] | null = null): ChromeScan {
+  return { value, busy: false, landing, results, type: () => {}, scan: noop, open: () => {}, dismiss: () => {} };
 }
+
+const found = (kind: Found["kind"], n: number, title: string, detail: string): Found => ({
+  kind,
+  id: `01990000-0000-7000-8000-00000000f${String(n).padStart(3, "0")}`,
+  title,
+  detail,
+  path: kind === "item" ? "/items/x" : kind === "bin" ? "/bins/x" : "/orders/x",
+  score: 10 - n,
+});
+
+/** What the search finds for "30", as it is typed (D189). */
+export const SEARCHED: Found[] = [
+  found("item", 1, "SKU-3010-10", "Cut liner glove, white, XL"),
+  found("item", 2, "SKU-3010-08", "Cut liner glove, white, M"),
+  found("bin", 3, "C-30-01", "Bin · Rack C"),
+  found("order", 4, "S100300", "North Foods · PO 4430"),
+];
 
 /** Two things answer to one code. Nothing is resolved by preference (D111). */
 export const AMBIGUOUS: Landing = {

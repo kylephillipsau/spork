@@ -42,6 +42,7 @@ mod receipt_header;
 mod receipt_http;
 mod receiving_list_http;
 mod reported_stock_import;
+mod search_http;
 mod setup_first_administrator;
 mod sign_on;
 mod tenancy;

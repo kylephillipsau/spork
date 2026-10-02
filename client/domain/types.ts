@@ -1451,6 +1451,22 @@ export interface LotAdded {
   added: boolean;
 }
 
+/** One thing the global search found (D189). */
+export interface Found {
+  kind: "item" | "bin" | "order";
+  id: Uuid;
+  title: string;
+  detail: string;
+  /** Where it opens. */
+  path: string;
+  score: number;
+}
+
+/** `GET /search?q=`. */
+export interface SearchAnswer {
+  results: Found[];
+}
+
 /** `GET /item-lists`, and `POST /item-lists`'s answer: a list of items to work through (D179). */
 export interface ItemListRow {
   item_list_id: Uuid;

@@ -14156,3 +14156,32 @@ then the family's own photograph.
 
 **Why.** Thirteen sizes of a glove look alike, and nobody photographs thirteen
 boxes. One photographed well stands for the rest on every list.
+
+### D189 — One search for bins, items and orders, as it is typed
+
+*Adopted 2026-10-02.*
+
+**Decision.** The header's box searches as it is typed (`GET /search?q=`):
+bins, items and orders, grouped by what they are, picked with the arrows or a
+tap. Enter on a whole code still goes where a scan always went (D111), and on
+anything else opens the best match. On a phone the box is a magnifier that
+opens the search over the whole screen, keyboard up, results below.
+
+**How it matches.** A code or number exactly (an item code, a barcode, a sales
+order, a PO, an item fulfilment) first; then any run of two or more characters
+inside one, so `3010` finds every code with 3010 in it; then every word by its
+start across descriptions, customers and the places bins are in, a typo
+forgiven in a word of five letters or more. Bins only at the site being
+worked at; no kind crowds out the others.
+
+**Tantivy, in memory, rebuilt from the tables.** One index per tenant, built
+on its first search and rebuilt behind the search once a minute old, so what
+was added a minute ago is found and no write has to tell the index anything.
+Nothing is on disk: nothing to migrate, lose, or keep in step, and the server
+stays one program. A site of nine thousand items, two thousand bins and its
+orders builds in well under a second.
+
+**Also: a photograph used as taken.** A single glove photographed on a bench
+has no face to cut it to. Photos to crop (D181) and the crop screen offer
+**Use as taken**: a cut of the whole photograph, its own bytes, which takes it
+off the queue.

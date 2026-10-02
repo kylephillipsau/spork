@@ -36,6 +36,7 @@ export function AppShell({
   showSearch = true,
   counts: fixedCounts,
   scan,
+  searchOpen = false,
   sites,
   at,
   children,
@@ -48,6 +49,8 @@ export function AppShell({
   counts?: Readonly<Partial<Record<Badge, number>>> | undefined;
   /** A literal search state, for fixtures. */
   scan?: ChromeScan | undefined;
+  /** The search drawn in use, for fixtures. */
+  searchOpen?: boolean | undefined;
   /** A literal site list, for fixtures. */
   sites?: SiteRow[] | undefined;
   /** The path this frame stands for, for fixtures, whose own URL is under /fixtures. */
@@ -133,7 +136,7 @@ export function AppShell({
             <Breadcrumbs items={crumbs} />
           </div>
           <div className={s.tools}>
-            {showSearch && <ScanSearch fixed={scan} />}
+            {showSearch && <ScanSearch fixed={scan} opened={searchOpen} />}
             <SiteSwitcher fixed={sites} />
             <UserMenu />
           </div>

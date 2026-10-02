@@ -236,6 +236,8 @@ const PAIRS = [
   ["SameAsSaid", ["SameAsSaid"]],
   ["BoxPicture", ["BoxPicture"]],
   ["BoxPictureSaid", ["BoxPictureSaid"]],
+  ["Found", ["Found"]],
+  ["SearchAnswer", ["SearchAnswer"]],
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
   ["ItemHeld", ["ItemHeld"]],

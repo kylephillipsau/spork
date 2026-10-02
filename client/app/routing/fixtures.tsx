@@ -19,10 +19,10 @@ import { Dock, DockHost } from "@app/shell/dock";
 import { SessionProvider } from "@app/session/SessionContext";
 import type { Badge } from "@app/shell/nav";
 import { pattern } from "@domain/routing";
-import type { BenchScreen, SiteRow } from "@domain/types";
+import type { BenchScreen, Found, SiteRow } from "@domain/types";
 import { SCREENS } from "./manifest";
 import type { Landing } from "@app/scan/destination";
-import { AMBIGUOUS, NO_SCREEN, UNKNOWN, UNRECOGNISED, fixtureScan } from "@app/scan/fixture";
+import { AMBIGUOUS, SEARCHED, NO_SCREEN, UNKNOWN, UNRECOGNISED, fixtureScan } from "@app/scan/fixture";
 
 import { witness } from "@app/measurement/baseline";
 
@@ -159,6 +159,8 @@ interface Frame {
   screen: string;
   counts?: Counts;
   landing?: Landing | null;
+  /** The search in use: what is typed and what it found (D189). */
+  search?: { value: string; results: Found[] };
 }
 
 /** A desktop or handheld screen in the app shell. */
@@ -170,7 +172,8 @@ function AppFrame({ frame, title, touch, children }: { frame: Frame; title: stri
           screenId={frame.screen}
           title={title}
           counts={frame.counts ?? BUSY}
-          scan={fixtureScan(frame.landing ?? null)}
+          scan={fixtureScan(frame.landing ?? null, frame.search?.value ?? "", frame.search?.results ?? null)}
+          searchOpen={frame.search !== undefined}
           sites={SITES}
           at={pathOf(frame.screen)}
           // Handheld screens claim the scanner themselves (D117).
@@ -341,6 +344,10 @@ export const FIXTURES: readonly Screen[] = [
   )),
   // The header search's D111 outcomes. A live screen shows one for a moment,
   // and three of the four need a warehouse with the wrong labels in it.
+  // D189: the search as it is typed, at a desk and (as "pocket") on a phone.
+  app("f-search", "/fixtures/search", "Search — typing", "bench", { screen: "home", search: { value: "30", results: SEARCHED } }, () => (
+    <Dashboard dash={DASHBOARD} site="MEL" />
+  )),
   app("f-scan-ambiguous", "/fixtures/scan/ambiguous", "Scan — ambiguous", "bench", { screen: "home", landing: AMBIGUOUS }, () => (
     <Dashboard dash={DASHBOARD} site="MEL" />
   )),

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, api } from "@domain/api";
+import type { Found } from "@domain/types";
 import { destinationFor } from "./destination";
 import type { Landing } from "./destination";
 import { useNavigate, usePath } from "@app/routing/Router";
@@ -27,10 +28,18 @@ export interface ChromeScan {
   value: string;
   busy: boolean;
   landing: Landing | null;
+  /** What the global search found for what is typed, as it is typed (D189); null before it answers. */
+  results: Found[] | null;
   type: (next: string) => void;
-  scan: () => Promise<void>;
+  /** Enter: the result picked with the arrows, or what was typed as one code (D111), or the best result. */
+  scan: (picked?: Found | null) => Promise<void>;
+  /** Open a result. */
+  open: (found: Found) => void;
   dismiss: () => void;
 }
+
+/** How long typing pauses before the search is asked: a scan arrives whole and asks once. */
+const PAUSE_MS = 120;
 
 /**
  * The chrome's locator.
@@ -48,6 +57,9 @@ export function useChromeScan(): ChromeScan {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [landing, setLanding] = useState<Landing | null>(null);
+  const [results, setResults] = useState<Found[] | null>(null);
+  // The newest question wins: an answer to an earlier one is dropped.
+  const asked = useRef(0);
 
   // **Arriving somewhere else answers the question.** The chrome outlives the
   // screen now, so a scan that came back ambiguous would otherwise keep its
@@ -57,40 +69,84 @@ export function useChromeScan(): ChromeScan {
   useEffect(() => {
     setLanding(null);
     setValue("");
+    setResults(null);
   }, [path]);
 
-  const scan = useCallback(async () => {
-    const scanned = value.trim();
-    if (!scanned || busy) return;
-    setBusy(true);
-    try {
-      const landed = destinationFor(await api.resolve(scanned));
-      if (landed.kind === "go") {
-        setValue("");
-        setLanding(null);
-        navigate(landed.path);
-      } else {
-        setLanding(landed);
-      }
-    } catch (error) {
-      setLanding({
-        kind: "unrecognised",
-        scanned: error instanceof ApiError ? error.message : scanned,
-      });
-    } finally {
-      setBusy(false);
+  // Search as it is typed, once typing pauses.
+  useEffect(() => {
+    const q = value.trim();
+    const n = ++asked.current;
+    if (!q) {
+      setResults(null);
+      return;
     }
-  }, [value, busy, navigate]);
+    const t = window.setTimeout(() => {
+      api
+        .search(q)
+        .then((a) => n === asked.current && setResults(a.results))
+        .catch(() => n === asked.current && setResults([]));
+    }, PAUSE_MS);
+    return () => window.clearTimeout(t);
+  }, [value]);
+
+  const open = useCallback(
+    (found: Found) => {
+      setValue("");
+      setLanding(null);
+      setResults(null);
+      navigate(found.path);
+    },
+    [navigate],
+  );
+
+  const scan = useCallback(
+    async (picked?: Found | null) => {
+      if (picked) return open(picked);
+      const scanned = value.trim();
+      if (!scanned || busy) return;
+      setBusy(true);
+      try {
+        const landed = destinationFor(await api.resolve(scanned));
+        if (landed.kind === "go") {
+          setValue("");
+          setLanding(null);
+          setResults(null);
+          navigate(landed.path);
+        } else if (landed.kind !== "choose" && results && results.length > 0) {
+          // Not one code: the best of what the search found.
+          open(results[0]!);
+        } else {
+          setLanding(landed);
+        }
+      } catch (error) {
+        if (results && results.length > 0) open(results[0]!);
+        else
+          setLanding({
+            kind: "unrecognised",
+            scanned: error instanceof ApiError ? error.message : scanned,
+          });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [value, busy, navigate, results, open],
+  );
 
   return {
     value,
     busy,
     landing,
-    type: setValue,
+    results,
+    type: (next) => {
+      setValue(next);
+      setLanding(null);
+    },
     scan,
+    open,
     dismiss: () => {
       setLanding(null);
       setValue("");
+      setResults(null);
       release("chrome");
     },
   };

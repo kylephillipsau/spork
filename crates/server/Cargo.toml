@@ -14,6 +14,10 @@ name = "spork-scheduler"
 path = "src/bin/scheduler.rs"
 
 [dependencies]
+# The global search (D189): bins, items and orders in one index per tenant,
+# held in memory and rebuilt from the database. In memory only, so none of the
+# storage features.
+tantivy = { version = "0.26", default-features = false }
 actix-web = "4"
 # Serving the client bundle from the same origin as the API, because the
 # session is a cookie and a separately-hosted bundle would trade a working

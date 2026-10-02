@@ -16,6 +16,7 @@ import type {
   BinsList,
   CartonSaid,
   ItemListRow,
+  SearchAnswer,
   BoxPictureSaid,
   LotAdded,
   SameAsSaid,
@@ -790,6 +791,9 @@ export const api = {
   /** Say which variant stands for the item's carton, or none (D184). */
   setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/default-lot`, { lot_id: lot }),
+
+  /** Bins, items and orders matching what was typed, best first (D189). */
+  search: (q: string) => send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}`),
 
   /** The lists of items worked at this site, newest first (D179). */
   itemLists: () => send<ItemListRow[]>("GET", "/item-lists"),

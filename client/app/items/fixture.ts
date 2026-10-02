@@ -449,6 +449,7 @@ export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
     saving: null,
     adjusting: null,
     adjust: noop,
+    keep: later,
     crop: { findFace: async () => FOUND, cut: later, uncrop: noop, busy: false, problem: null, dismiss: noop },
     ...over,
   };

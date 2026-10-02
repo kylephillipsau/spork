@@ -7,7 +7,7 @@ import type { CaptureSubject, ItemView, UncutPhoto, Uuid } from "@domain/types";
 
 import { faceName, measuredAspect } from "./box";
 import { handheld, loadPhoto, pixelsOf, ratioOf, straightened } from "./crop";
-import { fromCorners, isFace } from "./cut";
+import { WHOLE, fromCorners, isFace } from "./cut";
 import { SAM_SIZE } from "./faceFind";
 import type { CropDesk } from "./FaceCrop";
 import { subjectKey } from "./subjects";
@@ -58,6 +58,8 @@ export interface QueueDesk {
   /** The one open in the crop screen. */
   adjusting: Queued | null;
   adjust: (image: Uuid | null) => void;
+  /** Use a photograph as it was taken: a glove on a bench has no face to cut it to. */
+  keep: (image: Uuid) => Promise<void>;
   /** What the crop screen asks of the queue. */
   crop: CropDesk;
 }
@@ -186,6 +188,15 @@ export function usePhotoQueue(): QueueDesk {
         } finally {
           if (live.current) setSaving(null);
         }
+      });
+    },
+    keep: (image) => {
+      const q = queued.find((x) => x.photo.image_id === image);
+      return writing.press(`keep:${image}`, async (act) => {
+        if (!q) return;
+        // The photograph's own bytes, named as its cut: nothing is redrawn.
+        await api.recordCut(image, { digest: q.photo.digest, corners: WHOLE, act });
+        if (live.current) update(image, { state: "saved", ticked: false, corners: WHOLE });
       });
     },
     adjusting: open,

@@ -52,6 +52,7 @@ pub mod pictures;
 pub mod receiving;
 pub mod revalidation;
 pub mod routes;
+pub mod search;
 pub mod setup;
 pub mod tenancy;
 pub mod tokens;

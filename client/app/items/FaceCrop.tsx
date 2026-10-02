@@ -6,7 +6,7 @@ import { imageUrl } from "@domain/api";
 import { Faint } from "@app/common/cells";
 
 import { draw, handheld, loadPhoto, pixelsOf, ratioOf, straightened } from "./crop";
-import { START, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
+import { START, WHOLE, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
 import { SAM_SIZE } from "./faceFind";
 import type { PropertiesDesk, Cropping } from "./useItemProperties";
 import s from "./items.module.css";
@@ -192,6 +192,15 @@ export function FaceCrop({
         <>
           <Button onClick={desk.uncrop} disabled={desk.busy}>
             Cancel
+          </Button>
+          <Button
+            onClick={() =>
+              // Not a box face, or framed already: the photograph as it is, its own bytes.
+              void desk.cut(WHOLE, async () => (await fetch(imageUrl(cropping.digest))).blob())
+            }
+            disabled={desk.busy}
+          >
+            Use as taken
           </Button>
           <Button variant="primary" onClick={save} disabled={!loaded || !whole || desk.busy}>
             {desk.busy ? "Saving…" : "Save"}

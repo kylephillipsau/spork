@@ -57,8 +57,10 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: var(--ui-z-popover);
-  width: max(100%, 320px);
-  padding: var(--ui-space-3);
+  width: max(100%, 420px);
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: var(--ui-space-2);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
@@ -114,17 +116,61 @@
 }
 .resultsOption {
   display: flex;
-  justify-content: space-between;
-  gap: var(--ui-space-3);
+  align-items: center;
+  gap: var(--ui-space-2);
+  width: 100%;
   padding: var(--ui-space-1-5) var(--ui-space-2);
+  border: 0;
   border-radius: var(--ui-radius-sm);
+  background: none;
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.resultsOption:hover {
+.resultsOption:hover,
+.resultsPicked {
   background: var(--ui-surface-hover);
 }
+.resultsIconCell {
+  display: inline-flex;
+  flex: none;
+  color: var(--ui-text-faint);
+}
+.resultsIconCell svg {
+  width: 16px;
+  height: 16px;
+}
+.resultsTitle {
+  flex: none;
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
 .resultsDetail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--ui-text-faint);
   font-size: var(--ui-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resultsGroup + .resultsGroup {
+  margin-top: var(--ui-space-2);
+}
+.resultsGroupName {
+  margin: var(--ui-space-1) var(--ui-space-2) 0;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* The magnifier and Cancel belong to the phone's layout only. */
+.searchToggle,
+.searchCancel {
+  display: none;
 }
 
 /* ---- site: a dyed nylon tag ---- */
@@ -196,25 +242,71 @@
     display: none;
   }
 }
+/* A phone: a magnifier in the header, opening the search over the whole
+   screen with its results below it (D189). The box stays in the page, hidden,
+   so the magnifier can focus it in the same tap and raise the keyboard. */
 @media (max-width: 640px) {
-  .searchBox {
-    width: 40px;
-    padding: 0;
+  .searchToggle {
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
+    width: var(--ui-control);
+    height: var(--ui-control);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius);
+    background: var(--ui-surface-sunken);
+    color: var(--ui-text-muted);
   }
-  .searchBox:focus-within {
-    position: fixed;
-    left: var(--ui-space-4);
-    right: var(--ui-space-4);
-    width: auto;
-    padding: 0 var(--ui-space-2-5);
+  .searchToggle svg {
+    width: 18px;
+    height: 18px;
   }
-  /* Collapsed to the icon until focused; the input takes no room and its
-     placeholder does not show past the icon. */
-  .searchBox:not(:focus-within) .searchInput {
-    flex: 0 0 0;
-    width: 0;
-    min-width: 0;
+  .search:not(.open) .searchBox {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
     opacity: 0;
+    pointer-events: none;
+  }
+  .open {
+    position: fixed;
+    inset: 0;
+    z-index: var(--ui-z-popover);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-3);
+    background: var(--ui-surface);
+  }
+  .open .searchToggle {
+    display: none;
+  }
+  .open .searchBox {
+    width: auto;
+    height: var(--ui-control-lg);
+    font-size: var(--ui-text-md);
+  }
+  .open .searchCancel {
+    display: inline-flex;
+    flex: none;
+    padding: 0 var(--ui-space-1);
+    border: 0;
+    background: none;
+    color: var(--ui-accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .open .results {
+    position: static;
+    flex: 1;
+    width: auto;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .open .resultsOption {
+    min-height: 44px;
   }
 }

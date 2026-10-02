@@ -140,6 +140,9 @@ function QueuedPhoto({ q, desk }: { q: Queued; desk: QueueDesk }) {
             <Button size="sm" icon={<Crop />} disabled={!q.subject || desk.saving !== null} onClick={() => desk.adjust(q.photo.image_id)}>
               Adjust
             </Button>
+            <Button size="sm" disabled={desk.saving !== null || desk.crop.busy} onClick={() => void desk.keep(q.photo.image_id)}>
+              Use as taken
+            </Button>
           </>
         )}
       </div>
