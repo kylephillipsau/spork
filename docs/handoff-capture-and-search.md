@@ -80,6 +80,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   entry AES-256 encrypted with a password of 12 or more characters.
   `scripts\local.ps1 restore <zip>` (`spork-restore`) puts it back into an
   empty Spork at the same migration, in one transaction, as the database owner.
+- D194. The first real restore lost every metric: a migration draws the
+  platform's metric ids as it runs, the restore passed over the backup's as
+  already here, and the measurements named ids this server never had. A backup
+  now holds the catalogue its rows refer to, a restore matches shared rows by
+  their key and repoints what named them, and a reference to nothing refuses
+  the restore.
 
 ## Known limits
 
@@ -89,8 +95,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - Moving a look leaves its "same as" sides on the old subject.
 - The bin's reach has no screen. Set it with `POST /places/{id}/reach` or wait
   for the Warehouse setting.
-- `spork-restore` is proved by the round-trip test (`backup_http.rs`), not yet
-  run end to end against a freshly migrated database.
+- `spork-restore` is proved by the round-trip test (`backup_http.rs`), which
+  now restores into a database with other ids for the drawn rows (D194).
+- A backup taken before D194 has no catalogue. One with a measurement taken
+  in a stated presentation is refused, naming the column. Take it again, or
+  give the empty database the source's presentation ids before restoring.
 - No screen gives the administrator role to someone else (Q176).
 - A non-box item can be photographed but not trimmed: its photo is used as
   taken. A white-background cutout is the planned next step for those.

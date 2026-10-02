@@ -14279,3 +14279,30 @@ the workspace. Nothing on the web writes a backup back.
 **Why.** A backup replaces who can sign in, so restoring is a job for whoever
 runs the server, not a page. Rows are only meaningful at their schema, so the
 migration must match.
+
+### D194: A restore matches the platform's rows by their key, and checks every reference
+
+*Adopted 2026-10-02. Amends D193.*
+
+**Decision.** A backup also holds the catalogue its rows refer to: every
+table without a `tenant_id` that a table with one points at (`presentation`,
+`dimension`, `unit`, `packaging_type` and the rest), whole. A restore puts a
+shared row that is already here under another id against the row that is,
+matched by a unique key of its table (`metric` by its code, `presentation` by
+its code), and points the restored rows that named it at this server's. Then
+it checks every reference the restored tables make, and refuses the restore,
+naming each one, if any row points at nothing.
+
+**Why.** A migration seeds `metric`, `presentation`, `adjustment_reason` and
+`source_channel` with ids drawn as it runs, so two Sporks migrated apart have
+the same `gross_weight` under different ids. The first real restore, into a
+freshly migrated database, passed over the backup's metrics because their
+codes were here already. With constraints set aside for the load, nothing
+noticed. Every measurement named a metric that was not there, and every card
+read "Not weighed". The round-trip test restored into the database the backup
+came from, where the ids agreed, so it could not see this. It now gives this
+database other ids for those rows before restoring.
+
+A backup taken before this has no catalogue. It still restores when nothing in
+it names a catalogue row by a drawn id. If something does, such as a
+measurement taken "as supplied", the restore refuses and names the column.
