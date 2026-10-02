@@ -6,28 +6,36 @@ import { FACES, type Face } from "./subjects.ts";
  * An item as a box: its six faces, which way each faces, and how a photograph
  * of one sits on it. No three.js here, so a test runner can read it.
  *
- * **A box unless it said otherwise.** A carton is always one (D138); an each or
- * a part is one until somebody records that it has no box shape, and then it
- * is a thing with a picture rather than six sides.
+ * **A box unless it said otherwise.** Anything is one until somebody says it is
+ * packed in something without six sides, shrink-wrap or a bag (D191), or that
+ * it has no size (D138). Then it is a thing with a photo, and what else is
+ * worth taking, rather than six sides.
  */
 
 /** A box's six sides: every face a photo can be of, but its label. */
-export type BoxFace = Exclude<Face, "label">;
-export const BOX_FACES: readonly BoxFace[] = FACES.filter((f): f is BoxFace => f !== "label");
+export type BoxFace = Exclude<Face, "label" | "detail">;
+export const BOX_FACES: readonly BoxFace[] = FACES.filter((f) => f !== "label") as BoxFace[];
 
-/** Whether to treat it as a box: everything but a thing said to have no box shape. */
-export function isBox(subject: Pick<CaptureSubject, "dimensions_absent">): boolean {
-  return !subject.dimensions_absent;
+/** Whether to treat it as a box: the server says, from what it is packed in. */
+export function isBox(subject: Pick<CaptureSubject, "box_shaped">): boolean {
+  return subject.box_shaped;
 }
 
-/** What to photograph: a box's six sides and its label, or a thing's one picture and its label. */
-export function facesToAsk(subject: Pick<CaptureSubject, "dimensions_absent">): readonly Face[] {
-  return isBox(subject) ? FACES : ["front", "label"];
+/** A thing that is not a box: its photo, then its back, label and a close-up, any of them skipped. */
+export const THING_FACES: readonly Face[] = ["front", "back", "label", "detail"];
+
+/**
+ * What to photograph: a box's six sides and its label, or a thing's photo and
+ * what else is worth taking. `sides` asks a thing for every side as well.
+ */
+export function facesToAsk(subject: Pick<CaptureSubject, "box_shaped">, sides = false): readonly Face[] {
+  return isBox(subject) ? FACES : sides ? [...FACES, "detail"] : THING_FACES;
 }
 
 /** A face's name on screen: a thing that is not a box has a photo, not a front. */
-export function faceName(face: string, subject: Pick<CaptureSubject, "dimensions_absent">): string {
+export function faceName(face: string, subject: Pick<CaptureSubject, "box_shaped">): string {
   if (!isBox(subject) && face === "front") return "Photo";
+  if (face === "detail") return "Close-up";
   return face.charAt(0).toUpperCase() + face.slice(1);
 }
 
@@ -74,7 +82,7 @@ export function cover(faceAspectRatio: number, imageAspectRatio: number): { repe
  * from a photograph is straightened to this when there is one (D176).
  */
 export function measuredAspect(
-  subject: Pick<CaptureSubject, "dimensions_absent" | "length_mm" | "width_mm" | "height_mm">,
+  subject: Pick<CaptureSubject, "box_shaped" | "length_mm" | "width_mm" | "height_mm">,
   face: string,
 ): number | null {
   const size = boxSize(subject);

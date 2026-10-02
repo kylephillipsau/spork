@@ -6,13 +6,11 @@ toolchain, tests, layout and packing.
 
 ## State
 
-- Spork `main` is 14 commits ahead of `origin/main`, through `ef3d1b6`. Not
-  pushed.
+- Spork `main` is ahead of `origin/main` and not pushed.
 - `warehouse-scripts` is pushed. Spork Bridge 0.4.0 is published.
-- The working `spork` database is at migration 110. The LAN server runs the
-  release build from 13:30 on 2026-10-02.
-- The full server suite passed on a fresh database before D190. After D190
-  the affected test files pass. Run the whole suite once before pushing.
+- Migration 111 applies on the next `local.ps1 start`.
+- The full server suite passed on a fresh database before D191. Run it again
+  before pushing.
 
 ## What landed
 
@@ -53,6 +51,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - D186. Once front, right and top are cropped, the computer draws the item as
   a 3D box and the list shows that drawing (migration 107).
 - D188. One item can picture its family (migration 109).
+- D191. Each card says what it is packed in, as a GS1 packaging type code
+  (migration 111). A case or box is photographed side by side and drawn.
+  Anything else gets a photo, then back, label or close-up, and is never
+  cropped or drawn.
 
 **NetSuite**
 - D187. The bridge asks Spork which NetSuite fulfilments are still open and

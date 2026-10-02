@@ -89,12 +89,28 @@ front AS (
        AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
      ORDER BY c.item_id, c.rank, oi.captured_at DESC, oi.id DESC
 ),
+-- Drawings of a box (D186). A thing packed in something without six sides is
+-- pictured by its front photo (D191); a drawing of one, made before it said
+-- so, is passed over.
+boxed AS (
+    SELECT b.*
+      FROM box_picture b
+     WHERE NOT EXISTS (
+           SELECT 1
+      FROM observation_image_cut x
+      JOIN observation_image oi ON oi.id = x.observation_image_id
+      JOIN observation_event e ON e.id = oi.observation_event_id
+      JOIN observable o ON o.id = e.observable_id
+      JOIN LATERAL packed_in(o.item_id, o.item_style_id, o.lot_id, o.item_part_id, o.packaging_level) pk ON true
+      JOIN packaging_type t ON t.code = pk.packaging_type AND NOT t.six_sided
+            WHERE x.digest = b.made_from[1])
+),
 picture AS (
     SELECT DISTINCT ON (p.item_id) p.item_id, p.digest, p.source
       FROM (
             -- Its box, drawn from three cut faces (D186), before any photograph.
             SELECT b.item_id, b.digest, 'own' AS source, 0 AS rank, b.recorded_at AS at
-              FROM box_picture b
+              FROM boxed b
             UNION ALL
             -- Its own front, or a variant's, before anything of the family's;
             -- the family's own photograph last.
@@ -103,7 +119,7 @@ picture AS (
             UNION ALL
             -- The variant chosen to picture the family (D188): its box, or its front.
             SELECT i.id, coalesce(
-                       (SELECT b.digest FROM box_picture b WHERE b.item_id = st.picture_item_id
+                       (SELECT b.digest FROM boxed b WHERE b.item_id = st.picture_item_id
                          ORDER BY b.recorded_at DESC, b.id DESC LIMIT 1),
                        (SELECT fc.digest FROM front fc
                          WHERE fc.item_id = st.picture_item_id AND fc.source <> 'style')),

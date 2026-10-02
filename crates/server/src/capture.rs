@@ -169,6 +169,15 @@ pub struct CaptureSubject {
     /// All three lengths declared absent. Two of three is not an answer, for
     /// the same reason two of three is not a cube.
     pub dimensions_absent: bool,
+    /// What it is packed in, a GS1 packaging type code (D191); absent when
+    /// nobody has said.
+    pub packed_in: Option<String>,
+    /// Whose saying that is: `own`, `item` (a variant's item's carton) or
+    /// `style` (its family's carton).
+    pub packed_in_source: Option<String>,
+    /// Photographed side by side, cut to its faces and drawn as a box: a
+    /// six-sided type, or nothing said, and not declared without a size.
+    pub box_shaped: bool,
     /// `own`, `style` or `mixed` — D108's vocabulary, and the reason it exists:
     /// a screen that cannot tell them apart reports a number nobody took
     /// against this code as though somebody had.
@@ -480,6 +489,9 @@ async fn classified_subjects(
                 height_mm,
                 weight_absent,
                 dimensions_absent,
+                packed_in: None,
+                packed_in_source: None,
+                box_shaped: !dimensions_absent,
                 source: r.get(9),
                 style_code: r.get(10),
                 wants: wants(held),
@@ -597,6 +609,9 @@ pub async fn subjects_for_item(
                 height_mm: None,
                 weight_absent: false,
                 dimensions_absent: false,
+                packed_in: None,
+                packed_in_source: None,
+                box_shaped: true,
                 source: None,
                 style_code: None,
                 method: None,
@@ -658,7 +673,29 @@ pub async fn subjects_for_item(
     // is usually the bigger one, so carton leads, then the each, then the parts
     // — which are what to measure when the each turns out to have no box. Its
     // runs that look different come last (D182).
+    packed(tx, &mut found).await?;
     Ok(found)
+}
+
+/// What each subject is packed in, own before inherited, and so whether it
+/// is photographed as a box (D191). A handful of subjects per item.
+async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubject]) -> Result<(), ApiError> {
+    for s in found.iter_mut() {
+        let said = tx
+            .query_opt(
+                "SELECT p.packaging_type, p.source, t.six_sided
+                   FROM packed_in($1, $2, $3, $4, $5::text::packaging_level) p
+                   JOIN packaging_type t ON t.code = p.packaging_type",
+                &[&s.item_id, &s.item_style_id, &s.lot_id, &s.item_part_id, &s.packaging_level],
+            )
+            .await?;
+        if let Some(r) = said {
+            s.packed_in = r.get(0);
+            s.packed_in_source = r.get(1);
+            s.box_shaped = !s.dimensions_absent && r.get::<_, bool>(2);
+        }
+    }
+    Ok(())
 }
 
 /// An item's runs that look different, each a subject of its own (D182): its
@@ -782,6 +819,9 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         height_mm,
         weight_absent,
         dimensions_absent,
+        packed_in: None,
+        packed_in_source: None,
+        box_shaped: !dimensions_absent,
         source: method.as_ref().map(|_| "own".to_string()),
         style_code: None,
         wants: wants(held),

@@ -14208,3 +14208,40 @@ that the first filing was moved (`observation_image_move`,
 `POST /observation-images/{id}/moved`). A moved photograph is shown nowhere:
 not on an item, not in the queue, not as a picture. Facts only: nothing is
 edited.
+
+### D191: A subject says what it is packed in, in GS1's words
+
+*Adopted 2026-10-02, with migration 111.*
+
+**Decision.** Each capture subject (an item's each, inner pack or carton, a
+family's carton, a variant, a part) can say what it is packed in, as a GS1
+packaging type code: `CS` case, `BX` box, `BG` bag, `SW` shrinkwrapped, `NE`
+not packed, and the rest of GS1's list (`packaging_type`, `subject_packaging`,
+`GET /packaging-types`, `POST /packaging`). The codes, names and definitions
+are GS1's, unchanged. The newest saying wins. An item's carton with nothing
+said of its own is packed as its family's carton, and a variant as its item's
+carton (`packed_in()`).
+
+**What follows from it.** Spork marks each type `six_sided` or not.
+- Six-sided, or nothing said: a box. Its sides are taken in turn, cut to their
+  faces and drawn (D176, D181, D186), as before.
+- Anything else: a thing. The card asks for its photo, then its back, label
+  and a close-up (`detail`), any of them skipped, and offers every side as
+  well. Its photos never wait in Photos to crop, it is never drawn, and its
+  picture is its front photo. The server refuses a drawing of one and passes
+  over a drawing made before it said so.
+
+Its weight and size are kept either way: a size is the box a thing fits in,
+whatever its shape. "No size" (D138) is a separate answer from what it is
+packed in.
+
+**Why the standard's list.** Product data already records this, at every level
+of a trade item, and a catalogue or a customer's system will ask for it in
+these codes. A home-made list would need mapping later, once there was data to
+map. A shipping carton is GS1's `CS` (case); GS1's `CT` (carton) is an egg
+carton.
+
+**Why.** A brush in shrink-wrap has no flat sides. Photographed as a box, each
+side showed part of the brush and the bench behind it, and the drawing pasted
+those onto a box. Whether a thing is a box is not its level: an each can come
+boxed, and an inner pack can be a banded bundle.

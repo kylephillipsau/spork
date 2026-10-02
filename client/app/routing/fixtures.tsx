@@ -574,8 +574,8 @@ export const FIXTURES: readonly Screen[] = [
   app("f-item-recropping", "/fixtures/item/recropping", "Item — cropping again", "desk", { screen: "item" }, () => (
     <ItemPage desk={RECROPPING} />
   )),
-  // A thing with no box shape is asked for a photo and its label, not six sides.
-  app("f-item-no-box", "/fixtures/item/no-box", "Item — no box shape", "floor", { screen: "item" }, () => (
+  // A thing in a bag is asked for its photo and what else helps, not six sides (D191).
+  app("f-item-no-box", "/fixtures/item/no-box", "Item — in a bag", "floor", { screen: "item" }, () => (
     <ItemPage desk={PHOTOGRAPHING_NO_BOX} />
   )),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (

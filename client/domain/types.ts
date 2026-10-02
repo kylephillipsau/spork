@@ -310,6 +310,12 @@ export interface CaptureSubject {
   weight_absent: boolean;
   /** All three lengths declared absent. Two of three is not an answer. */
   dimensions_absent: boolean;
+  /** What it is packed in, a GS1 packaging type code (D191); null when nobody has said. */
+  packed_in: string | null;
+  /** Whose saying that is: `own`, `item` (a variant's item's carton) or `style` (its family's carton). */
+  packed_in_source: string | null;
+  /** Photographed side by side, cut to its faces and drawn: six-sided, or nothing said. */
+  box_shaped: boolean;
   /** `own`, `style` or `mixed` — D108. A screen that cannot tell them apart
    *  reports a number nobody took against this code as though somebody had. */
   source: string | null;
@@ -1457,6 +1463,18 @@ export interface LotAdded {
   code: string;
   /** False when the item already had a run of that name. */
   added: boolean;
+}
+
+/** One of GS1's packaging types (D191). */
+export interface PackagingType {
+  code: string;
+  name: string;
+  /** GS1's definition, as published. */
+  definition: string;
+  /** A box with six flat faces: photographed side by side and drawn. */
+  six_sided: boolean;
+  /** Offered first, in this order; null for the rest. */
+  common: number | null;
 }
 
 /** One thing the global search found (D189). */

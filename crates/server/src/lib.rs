@@ -41,6 +41,7 @@ pub mod observing;
 pub mod orders;
 pub mod prepack;
 pub mod packages;
+pub mod packaging;
 pub mod packing;
 pub mod passkeys;
 pub mod picking;

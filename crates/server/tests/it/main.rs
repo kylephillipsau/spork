@@ -29,6 +29,7 @@ mod observations;
 mod order_search;
 mod outbound_reads;
 mod own_carton_http;
+mod packaging_http;
 mod pack_walk_http;
 mod packing_list;
 mod passkeys_http;

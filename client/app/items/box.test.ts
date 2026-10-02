@@ -5,12 +5,14 @@ import { BOX_FACES, MATERIAL_ORDER, boxSize, cover, faceAspect, faceName, facesT
 /** An item as a box: which faces to ask for, and how a photo sits on one. */
 
 test("a box is asked for its six sides, walked round from the front, then its label; a thing with no box shape for a photo and its label", () => {
-  assert.equal(isBox({ dimensions_absent: false }), true);
-  assert.deepEqual(facesToAsk({ dimensions_absent: false }), ["front", "right", "back", "left", "top", "bottom", "label"]);
-  assert.deepEqual(facesToAsk({ dimensions_absent: true }), ["front", "label"]);
-  assert.equal(faceName("front", { dimensions_absent: true }), "Photo", "a thing that is not a box has a photo, not a front");
-  assert.equal(faceName("front", { dimensions_absent: false }), "Front");
-  assert.equal(faceName("label", { dimensions_absent: true }), "Label");
+  assert.equal(isBox({ box_shaped: true }), true);
+  assert.deepEqual(facesToAsk({ box_shaped: true }), ["front", "right", "back", "left", "top", "bottom", "label"]);
+  assert.deepEqual(facesToAsk({ box_shaped: false }), ["front", "back", "label", "detail"], "a thing: its photo and what else is worth taking");
+  assert.deepEqual(facesToAsk({ box_shaped: false }, true).length, 8, "every side as well, when asked");
+  assert.equal(faceName("front", { box_shaped: false }), "Photo", "a thing that is not a box has a photo, not a front");
+  assert.equal(faceName("front", { box_shaped: true }), "Front");
+  assert.equal(faceName("label", { box_shaped: false }), "Label");
+  assert.equal(faceName("detail", { box_shaped: false }), "Close-up");
 });
 
 test("a size is all three lengths or nothing", () => {

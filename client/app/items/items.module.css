@@ -227,6 +227,16 @@
 .shutterBig:hover {
   background: var(--ui-accent-hover);
 }
+.packedIn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+}
+.packedInChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
 .nextSide {
   display: flex;
   flex-wrap: wrap;

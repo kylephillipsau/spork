@@ -1,4 +1,4 @@
-import type { CaptureSubject, ItemListRow, ItemRow, ItemView } from "@domain/types";
+import type { CaptureSubject, ItemListRow, ItemRow, ItemView, PackagingType } from "@domain/types";
 
 import { NO_FIGURES } from "./subjects";
 import type { PropertiesDesk } from "./useItemProperties";
@@ -17,6 +17,16 @@ import type { QueueDesk, Queued } from "./usePhotoQueue";
  */
 
 const AS_AT = "2026-09-29T23:10:00Z";
+
+/** A few of GS1's packaging types, as the server lists them: the common first. */
+export const PACKAGING_TYPES: PackagingType[] = [
+  { code: "CS", name: "Case", definition: "A container designed to hold its content while protecting it.", six_sided: true, common: 1 },
+  { code: "BX", name: "Box", definition: "A rigid container with closed faces.", six_sided: true, common: 2 },
+  { code: "BG", name: "Bag", definition: "A preformed, flexible container.", six_sided: false, common: 3 },
+  { code: "SW", name: "Shrinkwrapped", definition: "A film heated to shrink around an item.", six_sided: false, common: 4 },
+  { code: "NE", name: "Not packed", definition: "The item is provided without packaging.", six_sided: false, common: 11 },
+  { code: "TU", name: "Tube", definition: "A cylindrical container sealed on one end.", six_sided: false, common: null },
+];
 const BRUSH = "01990000-0000-7000-8000-0000000b5120";
 const BRUSH_FAMILY = "01990000-0000-7000-8000-0000000a5120";
 const TAPE_GUN = "01990000-0000-7000-8000-0000000b8837";
@@ -38,6 +48,9 @@ const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "
   height_mm: null,
   weight_absent: false,
   dimensions_absent: false,
+  packed_in: null,
+  packed_in_source: null,
+  box_shaped: true,
   source: null,
   style_code: null,
   method: null,
@@ -226,6 +239,8 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     addVariant: async () => false,
     chooseVariant: later,
     pictureFamily: later,
+    packagingTypes: PACKAGING_TYPES,
+    packIn: later,
     taken: [],
     sending: {},
     attach: noop,
@@ -276,7 +291,7 @@ export const WEIGHED_APART = fixtureProperties(ITEM, {
   },
 });
 
-/** A thing with no box shape: one photo and its label, not six sides. */
+/** A thing in a bag (D191): its photo and what else is worth taking, not six sides. */
 export const NO_BOX: ItemView = {
   ...ITEM_UNKNOWN,
   code: "SKU-4410",
@@ -288,7 +303,9 @@ export const NO_BOX: ItemView = {
       code: "SKU-4410",
       packaging_level: "each",
       gross_weight_g: 400,
-      dimensions_absent: true,
+      packed_in: "BG",
+      packed_in_source: "own",
+      box_shaped: false,
       method: "instrument",
       source: "own",
       observed_at: "2026-09-30T05:00:00Z",

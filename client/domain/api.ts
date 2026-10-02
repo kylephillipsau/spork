@@ -19,6 +19,8 @@ import type {
   SearchAnswer,
   BoxPictureSaid,
   LotAdded,
+  CaptureSubject,
+  PackagingType,
   SameAsSaid,
   ItemView,
   ItemsList,
@@ -791,6 +793,26 @@ export const api = {
   /** Say which variant stands for the item's carton, or none (D184). */
   setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/default-lot`, { lot_id: lot }),
+
+  /** GS1's packaging types, the common ones first (D191). */
+  packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),
+
+  /** Say what a subject is packed in, as a GS1 packaging type code (D191). */
+  sayPackedIn: (
+    subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
+    code: string,
+    act: Act,
+  ) =>
+    send<void>("POST", "/packaging", {
+      item_id: subject.item_id,
+      item_style_id: subject.item_style_id,
+      lot_id: subject.lot_id,
+      item_part_id: subject.item_part_id,
+      packaging_level: subject.item_id || subject.item_style_id ? subject.packaging_level : null,
+      packaging_type: code,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
 
   /** Bins, items and orders matching what was typed, best first (D189). */
   search: (q: string) => send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}`),

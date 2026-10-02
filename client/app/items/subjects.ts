@@ -17,7 +17,8 @@ import type { Figures } from "./figures.ts";
  *  front, turning it right, then its top and bottom; `label` last because it is
  *  the one that is not a geometric face. */
 export const FACES = ["front", "right", "back", "left", "top", "bottom", "label"] as const;
-export type Face = (typeof FACES)[number];
+/** A side, or its label; `detail` is a close-up that is not a side (D140, D191). */
+export type Face = (typeof FACES)[number] | "detail";
 
 /**
  * The seven arrangements, likeliest first. D138: a shipped vocabulary, so this

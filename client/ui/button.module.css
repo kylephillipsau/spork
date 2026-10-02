@@ -74,6 +74,12 @@
 .secondary:hover:not(:disabled) {
   background: var(--ui-surface-hover);
 }
+/* A toggle that is on: the open action, the chosen option. */
+.secondary[aria-pressed="true"] {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-soft-fg);
+  border-color: var(--ui-accent);
+}
 
 .ghost {
   background: transparent;

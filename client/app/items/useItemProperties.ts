@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { anAct, partOf, type Act } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
-import type { BoundBarcode, CaptureSubject, ItemView, Uuid } from "@domain/types";
+import type { BoundBarcode, CaptureSubject, ItemView, PackagingType, Uuid } from "@domain/types";
 
 import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
@@ -138,6 +138,11 @@ export interface PropertiesDesk {
   /** Say this item pictures its family, or that none does (D188). */
   pictureFamily: (pictures: boolean) => Promise<void>;
 
+  /** GS1's packaging types, the common ones first; empty until read (D191). */
+  packagingTypes: PackagingType[];
+  /** Say what a subject is packed in, as a GS1 packaging type code. */
+  packIn: (subject: CaptureSubject, code: string) => Promise<void>;
+
   barcodes: BoundBarcode[];
   binding: string;
   typeBinding: (next: string) => void;
@@ -176,6 +181,16 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const [holds, setHolds] = useState("");
   const [per, setPer] = useState("");
   const [taken, setTaken] = useState<Face[]>([]);
+  const [packagingTypes, setPackagingTypes] = useState<PackagingType[]>([]);
+  // GS1's list, read once an item is open: the same for everyone, changed only by a release.
+  const wanted = itemId !== null && packagingTypes.length === 0;
+  useEffect(() => {
+    if (!wanted) return;
+    api.packagingTypes().then(
+      (types) => live.current && setPackagingTypes(types),
+      () => {},
+    );
+  }, [wanted, live]);
   const [sending, setSending] = useState<Partial<Record<Face, Sending>>>({});
   // Photographs being sent, one after another, and each one's act so that
   // sending it again is the same act.
@@ -379,8 +394,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         // At a desk, straight on to marking its corners, unless a crop is
         // already open: one in hand is not swapped for the next, which waits
         // in Photos to crop. A phone's photographs are cut at a computer,
-        // which finds their faces (D181).
-        if (!handheld()) {
+        // which finds their faces (D181). A thing that is not a box has no
+        // faces to cut (D191), nor has a close-up.
+        if (!handheld() && job.subject.box_shaped && face !== "detail") {
           setCropping((open) => open ?? { subject: job.subject, face, image_id: kept.image_id, digest: kept.digest, corners: null });
         }
         await reload();
@@ -539,6 +555,14 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       });
       return named;
     },
+
+    packagingTypes,
+    packIn: (subject, code) =>
+      press(`packed:${subjectKey(subject)}:${code}`, async (act) => {
+        await api.sayPackedIn(subject, code, act);
+        if (!live.current) return;
+        await reload();
+      }),
 
     pictureFamily: (pictures) =>
       press(`family-picture:${pictures}`, async () => {

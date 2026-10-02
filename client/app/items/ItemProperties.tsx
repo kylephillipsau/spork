@@ -21,7 +21,7 @@ import {
   cx,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import type { CaptureSubject, ItemView, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, ItemView, PackagingType, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
@@ -220,6 +220,8 @@ const ACTIONS: { action: Action; label: string; icon: ReactNode; when: (s: Captu
 function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
   const open = desk.open?.key === subjectKey(subject) ? desk.open.action : null;
   const photos = photosOf(item, subject);
+  // A thing that is not a box is asked for every side only when somebody wants them.
+  const [sides, setSides] = useState(false);
   // An item's own carton is a box of so many of it (D178).
   const carton = isOwnCarton(subject);
   const needs = [
@@ -254,6 +256,9 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           <Fact label="Size (L × W × H)" always>
             {sizeOf(subject)}
           </Fact>
+          <Fact label="Packed in" always>
+            {packedInWords(subject, desk.packagingTypes)}
+          </Fact>
           {carton && (
             <Fact label="Holds" always>
               {item.packing?.inners_per_carton != null ? holdsInWords(item.packing) : <Faint>{holdsInWords(item.packing)}</Faint>}
@@ -261,7 +266,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           )}
         </Facts>
         {/* With the camera open its photos are shown there, once. */}
-        {open !== "photos" && <Photos subject={subject} photos={photos} desk={null} />}
+        {open !== "photos" && <Photos subject={subject} photos={photos} desk={null} everySide={sides} />}
         {subject.parts > 0 && (
           <p className={s.note}>
             It comes as {subject.parts} parts, each listed below. Measure each part; this has no box of its own.
@@ -286,14 +291,22 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
       {open === "measure" && <MeasureForm subject={subject} desk={desk} />}
       {open === "photos" && (
         <div className={s.form}>
+          <PackedIn subject={subject} desk={desk} />
           <p className={s.note}>
             {isBox(subject)
               ? "Take each side in turn, then its label. Each photo sends while you take the next."
-              : "Take its photo, then its label. Each sends while you take the next."}
-            {handheld() && " They are cut to their faces at a computer, under Photos to crop."}
+              : "Take its photo, then its back, label or a close-up if they help. Each sends while you take the next."}
+            {handheld() && isBox(subject) && " They are cut to their faces at a computer, under Photos to crop."}
           </p>
-          <NextSide subject={subject} desk={desk} />
-          <Photos subject={subject} photos={photos} desk={desk} />
+          <NextSide subject={subject} desk={desk} order={facesToAsk(subject, sides)} />
+          {!isBox(subject) && !sides && (
+            <div>
+              <Button size="sm" onClick={() => setSides(true)}>
+                Take every side as well
+              </Button>
+            </div>
+          )}
+          <Photos subject={subject} photos={photos} desk={desk} everySide={sides} />
           <div className={s.formActions}>
             <Button onClick={desk.close}>Done</Button>
           </div>
@@ -396,10 +409,11 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
       {offered && (
         <div>
           <Button size="sm" aria-pressed={f.noDimensions} onClick={desk.toggleNoDimensions}>
-            {f.noDimensions ? "It has a size after all" : "It has no box shape to measure"}
+            {f.noDimensions ? "It has a size after all" : "It has no size to measure"}
           </Button>
         </div>
       )}
+      <PackedIn subject={subject} desk={desk} />
       {offered && !f.noDimensions && (
         <div className={s.arrangement}>
           <span className={s.fieldLabel}>
@@ -583,13 +597,16 @@ function Photos({
   subject,
   photos,
   desk,
+  everySide,
 }: {
   subject: CaptureSubject;
   photos: Map<string, SubjectPhoto>;
   desk: PropertiesDesk | null;
+  /** A thing asked for every side as well (D191). */
+  everySide: boolean;
 }) {
   const box = isBox(subject);
-  const asked = facesToAsk(subject);
+  const asked = facesToAsk(subject, everySide || BOX_FACES.some((f) => f !== "front" && f !== "back" && photos.has(f)));
   const sides: Partial<Record<BoxFace, string>> = {};
   for (const face of BOX_FACES) {
     const photo = photos.get(face);
@@ -599,7 +616,7 @@ function Photos({
   // On the box, the sides need no tiles of their own until there is a camera.
   const tiles = asked.filter((face) => (desk ? true : photos.has(face) && !(showBox && face !== "label")));
   const last = desk?.taken[desk.taken.length - 1];
-  const facing = last && last !== "label" ? last : null;
+  const facing = last && last !== "label" && last !== "detail" ? last : null;
 
   if (!showBox && tiles.length === 0) return <Faint>No photos yet</Faint>;
   return (
@@ -626,7 +643,7 @@ function Photos({
                   </Button>
                 )}
                 {desk && <Shutter face={face} name={name} subject={subject} desk={desk} taken={desk.taken.includes(face)} />}
-                {desk && photo && !photo.same_as && (
+                {desk && photo && !photo.same_as && box && (
                   <Button
                     size="sm"
                     icon={<Crop />}
@@ -648,6 +665,56 @@ function Photos({
   );
 }
 
+/** What it is packed in, in GS1's words, and whose saying it is (D191). */
+function packedInWords(subject: CaptureSubject, types: PackagingType[]): ReactNode {
+  if (!subject.packed_in) return <Faint>Not said</Faint>;
+  const name = types.find((t) => t.code === subject.packed_in)?.name ?? subject.packed_in;
+  if (subject.packed_in_source === "style") return `${name} (the family's)`;
+  if (subject.packed_in_source === "item") return `${name} (the item's carton)`;
+  return name;
+}
+
+/**
+ * What it is packed in (D191): GS1's common types as buttons, the rest in a
+ * list. A type without six sides is photographed as a thing, not a box.
+ */
+function PackedIn({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+  const types = desk.packagingTypes;
+  if (types.length === 0) return null;
+  const own = subject.packed_in_source === "own" ? subject.packed_in : null;
+  const rest = types.filter((t) => t.common === null);
+  return (
+    <div className={s.packedIn}>
+      <span className={s.fieldLabel}>Packed in{subject.packed_in && !own ? `: ${packedInWords(subject, types) as string}` : ""}</span>
+      <div className={s.packedInChoices} role="group" aria-label="Packed in">
+        {types
+          .filter((t) => t.common !== null)
+          .map((t) => (
+            <Button
+              key={t.code}
+              size="sm"
+              aria-pressed={own === t.code}
+              title={t.definition}
+              disabled={desk.busy}
+              onClick={() => void desk.packIn(subject, t.code)}
+            >
+              {t.name}
+            </Button>
+          ))}
+      </div>
+      <Select
+        size="sm"
+        aria-label="Packed in, other"
+        placeholder="Something else…"
+        value={own && rest.some((t) => t.code === own) ? own : undefined}
+        disabled={desk.busy}
+        onValueChange={(code) => void desk.packIn(subject, code)}
+        options={rest.map((t) => ({ value: t.code, label: t.name }))}
+      />
+    </div>
+  );
+}
+
 /** The side a side is often printed like, taken before it in the walk round. */
 const OPPOSITE: Partial<Record<Face, Face>> = { back: "front", left: "right", bottom: "top" };
 
@@ -656,9 +723,8 @@ const OPPOSITE: Partial<Record<Face, Face>> = { back: "front", left: "right", bo
  * getting at: a box photographed in one walk round it, a tap a side, the
  * photographs sending behind it (D181).
  */
-function NextSide({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+function NextSide({ subject, desk, order }: { subject: CaptureSubject; desk: PropertiesDesk; order: readonly Face[] }) {
   const [skipped, setSkipped] = useState<Face[]>([]);
-  const order = facesToAsk(subject);
   const next = order.find((f) => !desk.taken.includes(f) && !skipped.includes(f));
   const done = order.filter((f) => desk.taken.includes(f)).length;
   const on = Object.values(desk.sending).filter((v) => v === "sending").length;
@@ -670,11 +736,11 @@ function NextSide({ subject, desk }: { subject: CaptureSubject; desk: Properties
       {next ? (
         <>
           <Shutter face={next} name={faceName(next, subject)} subject={subject} desk={desk} taken={false} big />
-          {copy && <Button onClick={() => desk.same(subject, next, copy)}>Same as {copy}</Button>}
+          {copy && isBox(subject) && <Button onClick={() => desk.same(subject, next, copy)}>Same as {copy}</Button>}
           <Button onClick={() => setSkipped((k) => [...k, next])}>Skip</Button>
         </>
       ) : (
-        <span>Every side taken.</span>
+        <span>{isBox(subject) ? "Every side taken." : "All taken."}</span>
       )}
       <Faint>
         {done} of {order.length} taken{on > 0 ? ` · sending ${on}` : ""}
@@ -777,5 +843,5 @@ function weightOf(s: CaptureSubject): ReactNode {
 function sizeOf(s: CaptureSubject): ReactNode {
   const d = [s.length_mm, s.width_mm, s.height_mm];
   if (d.some((v) => v !== null)) return `${d.map((v) => (v === null ? "?" : centimetres(v))).join(" × ")} cm`;
-  return <Faint>{s.dimensions_absent ? "No box shape" : "Not measured"}</Faint>;
+  return <Faint>{s.dimensions_absent ? "No size" : "Not measured"}</Faint>;
 }

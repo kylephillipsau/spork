@@ -28,7 +28,8 @@ const DRAWN = ["front", "right", "top"] as const;
 /** What to draw an item from: the subject whose front, right and top are all cut, carton first. */
 export function boxFaces(item: Pick<ItemView, "photos" | "subjects">): { subject: CaptureSubject; faces: SubjectPhoto[] } | null {
   for (const subject of item.subjects) {
-    if (subject.dimensions_absent) continue;
+    // Only a box is drawn: a thing in shrink-wrap is pictured by its photo (D191).
+    if (!subject.box_shaped) continue;
     const photos = photosOf(item, subject);
     const faces = DRAWN.map((f) => photos.get(f));
     if (faces.every((p): p is SubjectPhoto => p !== undefined && p.cut !== null)) return { subject, faces };

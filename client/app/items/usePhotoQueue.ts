@@ -130,7 +130,7 @@ export function usePhotoQueue(): QueueDesk {
         photos.map((photo) => ({
           photo,
           subject: null,
-          name: faceName(photo.face, { dimensions_absent: false }),
+          name: faceName(photo.face, { box_shaped: true }),
           aspect: null,
           corners: null,
           state: "waiting",
