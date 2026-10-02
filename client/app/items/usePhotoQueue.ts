@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLive, useWriting } from "@app/acting";
-import { partOf } from "@domain/acts";
+import { partOf, pressing } from "@domain/acts";
 import { ApiError, api, imageUrl, reason } from "@domain/api";
 import type { CaptureSubject, ItemView, UncutPhoto, Uuid } from "@domain/types";
 
@@ -17,16 +17,15 @@ import { subjectKey } from "./subjects";
  *
  * A phone takes the photographs and has not the memory to find their faces.
  * This finds each one, a photograph at a time, the oldest first, and keeps
- * the corners it found; the person looks down the results, leaves ticked
- * what is right, and saves them together. One that is wrong, or where no face
- * was found, opens in the crop screen to be put right. **Nothing is kept
- * until the person saves** (D177): a cut is their judgement, and an act of
- * theirs.
+ * the corners it found; the person looks down the results and saves each one
+ * that is right with one press. One that is wrong, or where no face was
+ * found, opens in the crop screen to be put right. **Nothing is kept until
+ * the person saves** (D177): a cut is their judgement, and an act of theirs.
  */
 
 const model = () => import("./faceModel");
 
-export type QueueState = "waiting" | "finding" | "found" | "missed" | "failed" | "saved";
+export type QueueState = "waiting" | "finding" | "found" | "missed" | "failed" | "saving" | "saved";
 
 export interface Queued {
   photo: UncutPhoto;
@@ -39,8 +38,6 @@ export interface Queued {
   /** Where the face-finder put its corners; null until found, or when it found none. */
   corners: number[] | null;
   state: QueueState;
-  /** Left ticked, it is saved with the rest. */
-  ticked: boolean;
 }
 
 export type QueueRead = { kind: "loading" } | { kind: "ready" } | { kind: "failed"; message: string };
@@ -50,11 +47,11 @@ export interface QueueDesk {
   queued: Queued[];
   /** A phone: nothing is found here, and the screen says to open it at a computer. */
   phone: boolean;
-  tick: (image: Uuid, on: boolean) => void;
-  /** Save every ticked photograph's cut, one after another. */
-  save: () => Promise<void>;
-  /** How far the saving has got, while it runs. */
-  saving: { done: number; of: number } | null;
+  /**
+   * Save a photograph's cut where its face was found. Saves wait their turn,
+   * so the next can be pressed before the last has landed.
+   */
+  save: (image: Uuid) => Promise<void>;
   /** The one open in the crop screen. */
   adjusting: Queued | null;
   adjust: (image: Uuid | null) => void;
@@ -71,17 +68,29 @@ export interface QueueDesk {
   crop: CropDesk;
 }
 
+/** An item drawn as its box once front, right and top are cut (D186). Never fails a save. */
+async function drawBox(item: Uuid): Promise<void> {
+  try {
+    const { ensureBoxPicture } = await import("./boxPicture");
+    await ensureBoxPicture(await api.item(item));
+  } catch (error) {
+    console.warn("box drawing:", error);
+  }
+}
+
 export function usePhotoQueue(): QueueDesk {
   const live = useLive();
   const [read, setRead] = useState<QueueRead>({ kind: "loading" });
   const [queued, setQueued] = useState<Queued[]>([]);
-  const [saving, setSaving] = useState<QueueDesk["saving"]>(null);
   const [adjusting, setAdjusting] = useState<Uuid | null>(null);
   const items = useRef(new Map<Uuid, Promise<ItemView>>());
   // Read again after a move: its photographs come back under their item.
   const [round, setRound] = useState(0);
   const writing = useWriting();
   const phone = handheld();
+  // Saves run one after another, each its own act until it lands.
+  const saves = useRef(pressing());
+  const turn = useRef<Promise<void>>(Promise.resolve());
 
   const update = useCallback((image: Uuid, next: Partial<Queued>) => {
     setQueued((qs) => qs.map((q) => (q.photo.image_id === image ? { ...q, ...next } : q)));
@@ -125,7 +134,6 @@ export function usePhotoQueue(): QueueDesk {
           aspect: null,
           corners: null,
           state: "waiting",
-          ticked: false,
         })),
       );
       setRead({ kind: "ready" });
@@ -159,7 +167,7 @@ export function usePhotoQueue(): QueueDesk {
           const corners = await (await model()).findFace(id, pixelsOf(image, SAM_SIZE, true));
           if (stopped || !live.current) return;
           const found = corners !== null && isFace(fromCorners(corners));
-          update(id, { corners: found ? corners : null, state: found ? "found" : "missed", ticked: found });
+          update(id, { corners: found ? corners : null, state: found ? "found" : "missed" });
         } catch (error) {
           console.warn("photo queue:", error);
           if (live.current) update(id, { state: "failed" });
@@ -177,42 +185,29 @@ export function usePhotoQueue(): QueueDesk {
     read,
     queued,
     phone,
-    tick: (image, on) => update(image, { ticked: on }),
-    saving,
-    /**
-     * Every ticked cut, as one press: the person said once that these are
-     * right. Each cut is its own write, named apart so a retry is the same
-     * act for each (`partOf`).
-     */
-    save: () => {
-      const ready = queued.filter((q) => q.ticked && q.corners && q.state === "found");
-      return writing.press(`save:${ready.map((q) => q.photo.image_id).join(",")}`, async (act) => {
+    save: (image) => {
+      const q = queued.find((x) => x.photo.image_id === image);
+      if (!q?.corners || q.state !== "found") return turn.current;
+      const corners = q.corners;
+      update(image, { state: "saving" });
+      turn.current = turn.current.then(async () => {
+        const key = `save:${image}`;
         try {
-          let done = 0;
-          for (const q of ready) {
-            if (!live.current) return;
-            setSaving({ done, of: ready.length });
-            // Straightened from the photograph at full size, as the crop screen does.
-            const image = await loadPhoto(q.photo.digest);
-            const quad = fromCorners(q.corners!);
-            const kept = await api.storeImage(await straightened(image, quad, ratioOf(image, quad, q.aspect)));
-            await api.recordCut(q.photo.image_id, { digest: kept.digest, corners: q.corners!, act: partOf(act, q.photo.image_id) });
-            if (live.current) update(q.photo.image_id, { state: "saved", ticked: false });
-            done += 1;
-          }
-          // Each item cut, drawn as its box where three faces now are (D186).
-          for (const id of new Set(ready.map((q) => q.photo.item_id))) {
-            try {
-              const { ensureBoxPicture } = await import("./boxPicture");
-              await ensureBoxPicture(await api.item(id));
-            } catch (error) {
-              console.warn("box drawing:", error);
-            }
-          }
-        } finally {
-          if (live.current) setSaving(null);
+          // Straightened from the photograph at full size, as the crop screen does.
+          const photo = await loadPhoto(q.photo.digest);
+          const quad = fromCorners(corners);
+          const kept = await api.storeImage(await straightened(photo, quad, ratioOf(photo, quad, q.aspect)));
+          await api.recordCut(image, { digest: kept.digest, corners, act: saves.current.attempt(key) });
+          saves.current.landed(key);
+          if (live.current) update(image, { state: "saved" });
+          await drawBox(q.photo.item_id);
+        } catch (error) {
+          if (!live.current) return;
+          update(image, { state: "found" });
+          writing.say(reason(error, "Could not save the photo."));
         }
       });
+      return turn.current;
     },
     again: () => {
       items.current.clear();
@@ -224,7 +219,7 @@ export function usePhotoQueue(): QueueDesk {
         if (!q) return;
         // The photograph's own bytes, named as its cut: nothing is redrawn.
         await api.recordCut(image, { digest: q.photo.digest, corners: WHOLE, act });
-        if (live.current) update(image, { state: "saved", ticked: false, corners: WHOLE });
+        if (live.current) update(image, { state: "saved", corners: WHOLE });
       });
     },
     move: async (look, code, level) => {
@@ -262,9 +257,11 @@ export function usePhotoQueue(): QueueDesk {
           if (!open) return;
           const kept = await api.storeImage(await make());
           await api.recordCut(open.photo.image_id, { digest: kept.digest, corners, act });
-          if (!live.current) return;
-          update(open.photo.image_id, { state: "saved", ticked: false, corners });
-          setAdjusting(null);
+          if (live.current) {
+            update(open.photo.image_id, { state: "saved", corners });
+            setAdjusting(null);
+          }
+          await drawBox(open.photo.item_id);
         }),
       uncrop: () => {
         writing.dismiss();

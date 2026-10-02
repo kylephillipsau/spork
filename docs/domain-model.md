@@ -13978,14 +13978,15 @@ the face-finder's model is never fetched. At a computer, **Photos to crop**
 has cut: an item page's newest photograph of each face of each subject, with
 no cut (`GET /photos/uncut`, oldest first). The computer finds each face in
 turn and draws its corners on the photograph:
-- what is right stays ticked, and **Save** cuts every ticked photograph, one
-  press for all of them;
-- what is wrong, or where no face was found, opens in the crop screen to be
-  put right and saved on its own.
+- what is right is saved with its own **Save**, one press per photograph;
+- what is wrong, or where no face was found, opens with **Adjust** in the crop
+  screen to be put right and saved there.
 
 Nothing is kept until the person saves. A cut is their judgement and an act of
-theirs (D176): the batch is one press, each cut its own write with its own
-name, so a retry is the same act for each.
+theirs (D176). Saves wait their turn, so the next can be pressed before the
+last has landed, and each keeps its name until it lands, so a retry is the same
+act. (Revised 2026-10-02: ticking several and saving them together was one
+step too many.)
 
 **Why.** A phone's browser has not the memory to find a face (D177's note),
 and a smaller model made for phones would find worse faces. The computer has

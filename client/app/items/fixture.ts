@@ -429,28 +429,25 @@ const QUEUED = (n: number, over: Partial<Queued> & Pick<Queued, "state">): Queue
   name: (["Front", "Right", "Back", "Left", "Top", "Bottom"] as const)[n % 6]!,
   aspect: null,
   corners: null,
-  ticked: false,
   ...over,
 });
 
 const FOUND = [0.16, 0.2, 0.86, 0.18, 0.9, 0.84, 0.12, 0.86];
 
-/** A morning's photographs part-way through: found and ticked, one missed, the rest still to look at. */
+/** A morning's photographs part-way through: one saving, one found, one missed, the rest still to look at. */
 export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
   return {
     read: { kind: "ready" },
     queued: [
-      QUEUED(0, { state: "found", corners: FOUND, ticked: true }),
-      QUEUED(1, { state: "found", corners: [0.2, 0.24, 0.8, 0.22, 0.84, 0.8, 0.18, 0.82], ticked: true }),
+      QUEUED(0, { state: "saving", corners: FOUND }),
+      QUEUED(1, { state: "found", corners: [0.2, 0.24, 0.8, 0.22, 0.84, 0.8, 0.18, 0.82] }),
       QUEUED(2, { state: "missed" }),
       QUEUED(3, { state: "finding" }),
       QUEUED(4, { state: "waiting" }),
       QUEUED(5, { state: "waiting" }),
     ],
     phone: false,
-    tick: noop,
     save: later,
-    saving: null,
     adjusting: null,
     adjust: noop,
     again: noop,

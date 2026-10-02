@@ -42,7 +42,7 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 **Photos**
 - D181. A phone takes photos and never runs the face-finder. It needs about
   1.5 GB above the page, and iOS reloads the tab. Photos to crop (`/photos`)
-  finds each face at a computer; ticked results save in one press.
+  finds each face at a computer. Each photo has Save, or Adjust first.
 - The panel offers the next side as one button, in the order front, right,
   back, left, top, bottom, label. Photos send in the background.
 - D183. A side printed like its opposite is recorded as "Same as front" and
