@@ -14080,3 +14080,20 @@ photographed as itself, which wins. The choice can be undone.
 **Why a pointer and not a copy.** Copying the variant's photographs and
 figures onto the carton would claim a second look at a carton nobody looked
 at again; pointing says what is true, that the carton is that printing.
+
+### D185 — A carton of packs, and the pack measured on its own
+
+*Adopted 2026-10-02.*
+
+**Decision.** Saying what a carton holds (D178) takes **In packs of** beside
+**How many in it**: a box of six bundles of 24 gloves is six packs of 24
+(`units_per_inner` 24, `inners_per_carton` 6), 144 of the item. Left blank,
+the carton holds the item loose, a pack of one. Once the case pack in force
+says packs of more than one, the item's page offers its **Inner pack** between
+the carton and the each, weighed, measured and photographed on its own like
+the others. The two counts are compared as they are, so loose sixteen is not
+sixteen packs.
+
+**Why.** The case pack had both counts since migration 7, and the writer took
+an inner level all along; only saying it and showing it were missing. A glove,
+its bundle and the box of bundles are three things a packer handles.

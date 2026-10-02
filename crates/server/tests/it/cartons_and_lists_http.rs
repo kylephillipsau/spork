@@ -178,6 +178,40 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
         .get(0);
     assert!(who.is_some(), "and who said it travels on the row");
 
+    // ── a carton of packs: six bundles of 24, and the bundle its own (D185)
+    let gloves = made(format!("CTN-{n}-P")).await;
+    let (status, packs) = post(
+        format!("/items/{gloves}/carton"),
+        json!({ "holds": 6, "per": 24, "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z" }),
+    )
+    .await;
+    assert_eq!(status, 200, "{packs}");
+    assert_eq!((packs["inners_per_carton"].as_i64(), packs["units_per_inner"].as_i64()), (Some(6), Some(24)));
+    let levels: Vec<String> = page(gloves).await["subjects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|s| s["packaging_level"].as_str().map(str::to_string))
+        .collect();
+    assert_eq!(levels, ["carton", "inner", "each"], "the bundle between the box and the glove");
+    let (status, bundle) = post(
+        "/observations".into(),
+        json!({
+            "item_id": gloves, "packaging_level": "inner",
+            "measurements": [{ "metric": "gross_weight", "entered_value": "0.9", "unit": "kg" }],
+            "method": "instrument", "ingestion_channel": "keyed",
+            "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z",
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "the bundle is weighed on its own: {bundle}");
+    let (status, _) = post(
+        format!("/items/{gloves}/carton"),
+        json!({ "per": 24, "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z" }),
+    )
+    .await;
+    assert_eq!(status, 400, "packs of 24, but how many packs?");
+
     // ── an empty count makes a carton and says nothing of what is in it ──
     let unsaid = made(format!("CTN-{n}-U")).await;
     let (status, bare) = say(unsaid, Value::Null, Uuid::new_v4()).await;

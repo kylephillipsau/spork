@@ -214,6 +214,8 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     weigh: later,
     holds: "",
     typeHolds: noop,
+    per: "",
+    typePer: noop,
     figures: NO_FIGURES,
     type: noop,
     choosePresentation: noop,

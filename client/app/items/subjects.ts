@@ -70,6 +70,7 @@ export function subjectKey(
 export function nameOf(s: CaptureSubject): string {
   if (s.lot_id) return `Variant: ${s.lot_code ?? "unnamed"}`;
   if (s.item_part_id) return s.part_label ? sentence(s.part_label) : "Part";
+  if (s.packaging_level === "inner" && !s.item_style_id) return "Inner pack";
   const level = sentence(s.packaging_level ?? "item");
   return s.item_style_id ? `${level} of the ${s.code} family` : level;
 }
@@ -142,12 +143,18 @@ export function holdsInWords(p: Counts | null): string {
   return `${n} packs of ${u} (${(n * u).toLocaleString()} × each)`;
 }
 
-/** How many a carton holds, as typed: a whole number from 1, or nothing said. */
-export function readHolds(typed: string): { holds: number | null } | { problem: string } {
+/**
+ * How many a carton holds, as typed: a whole number from 1, or nothing said;
+ * and, when it holds packs, how many of the item are in each (D185).
+ */
+export function readHolds(typed: string, perTyped = ""): { holds: number | null; per: number | null } | { problem: string } {
   const t = typed.trim();
-  if (!t) return { holds: null };
-  if (!/^\d+$/.test(t) || Number(t) < 1) return { problem: "How many it holds is a whole number, 1 or more." };
-  return { holds: Number(t) };
+  const p = perTyped.trim();
+  const whole = (v: string) => /^\d+$/.test(v) && Number(v) >= 1;
+  if (t && !whole(t)) return { problem: "How many it holds is a whole number, 1 or more." };
+  if (p && !whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
+  if (p && !t) return { problem: "Say how many packs are in it, as well as what is in each." };
+  return { holds: t ? Number(t) : null, per: p ? Number(p) : null };
 }
 
 /**
@@ -155,7 +162,8 @@ export function readHolds(typed: string): { holds: number | null } | { problem: 
  * photographed: there is no carton on file (the writer refuses one, D23), or
  * a count was typed that is not the one on file.
  */
-export function sayFirst(packing: Counts | null, typed: number | null): boolean {
+export function sayFirst(packing: Counts | null, typed: number | null, per: number | null = null): boolean {
   if (!packing) return true;
-  return typed !== null && typed !== cartonHolds(packing);
+  if (typed === null) return false;
+  return typed !== packing.inners_per_carton || (per ?? 1) !== (packing.units_per_inner ?? 1);
 }

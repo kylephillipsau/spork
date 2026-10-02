@@ -762,9 +762,10 @@ export const api = {
    * carton a thing to measure. `holds` null: there is a carton, its count
    * unsaid.
    */
-  sayCarton: (itemId: Uuid, input: { holds: number | null; act: Act }) =>
+  sayCarton: (itemId: Uuid, input: { holds: number | null; per?: number | null; act: Act }) =>
     send<CartonSaid>("POST", `/items/${encodeURIComponent(itemId)}/carton`, {
       holds: input.holds,
+      ...(input.per ? { per: input.per } : {}),
       client_event_id: input.act.id("event"),
       occurred_at: input.act.at,
     }),

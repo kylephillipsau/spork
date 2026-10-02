@@ -39,6 +39,9 @@ pub struct SayCartonRequest {
     /// How many of the item one carton holds. Absent: there is a carton, and
     /// how many it holds is not being said.
     pub holds: Option<i32>,
+    /// When the carton holds packs: how many of the item are in each pack, and
+    /// `holds` counts the packs (D185). Absent: `holds` counts the item.
+    pub per: Option<i32>,
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
 }
@@ -55,6 +58,7 @@ pub struct CartonSaid {
 }
 
 /// How many of the item a case pack's carton holds, when it says.
+#[cfg_attr(not(test), allow(dead_code))]
 fn total(units_per_inner: Option<i32>, inners_per_carton: Option<i32>) -> Option<i64> {
     inners_per_carton.map(|n| i64::from(n) * i64::from(units_per_inner.unwrap_or(1)))
 }
@@ -63,8 +67,8 @@ fn total(units_per_inner: Option<i32>, inners_per_carton: Option<i32>) -> Option
 enum Change {
     Nothing,
     Make,
-    FillIn(Uuid, i32),
-    Version(i32),
+    FillIn(Uuid),
+    Version,
 }
 
 /// The case pack in force on the day, by the rule the observation writer
@@ -114,6 +118,17 @@ pub async fn say_carton(
             )));
         }
     }
+    if let Some(p) = body.per {
+        if !(1..=MOST).contains(&p) {
+            return Err(ApiError::Rejected(format!("a pack holds from 1 to {MOST} of an item, not {p}")));
+        }
+        if body.holds.is_none() {
+            return Err(ApiError::Rejected("say how many packs a carton holds as well as what is in each".into()));
+        }
+    }
+    // What the carton is, as the case pack's two counts: packs of so many, or
+    // so many of the item (a pack of one).
+    let wanted: (Option<i32>, Option<i32>) = (body.holds.map(|_| body.per.unwrap_or(1)), body.holds);
 
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
@@ -136,12 +151,15 @@ pub async fn say_carton(
                 // that changed something finds it on file and answers the same.
                 let change = match &now {
                     None => Change::Make,
-                    Some(c) => match (total(c.get(1), c.get(2)), body.holds) {
-                        (_, None) => Change::Nothing,
-                        (Some(was), Some(n)) if was == i64::from(n) => Change::Nothing,
-                        (None, Some(n)) => Change::FillIn(c.get(0), n),
-                        (Some(_), Some(n)) => Change::Version(n),
-                    },
+                    Some(c) => {
+                        let on_file: (Option<i32>, Option<i32>) = (c.get(1), c.get(2));
+                        match (on_file, body.holds) {
+                            (_, None) => Change::Nothing,
+                            (was, Some(_)) if was == wanted => Change::Nothing,
+                            ((_, None), Some(_)) => Change::FillIn(c.get(0)),
+                            ((_, Some(_)), Some(_)) => Change::Version,
+                        }
+                    }
                 };
                 if let (Change::Nothing, Some(c)) = (&change, &now) {
                     return Ok(said(c, false));
@@ -156,24 +174,20 @@ pub async fn say_carton(
                 const RETURNING: &str = "RETURNING id, units_per_inner, inners_per_carton, effective_from";
                 let row = match change {
                     // The count, never said, now is: the same carton.
-                    Change::FillIn(id, n) => {
+                    Change::FillIn(id) => {
                         tx.query_one(
                             &format!(
                                 "UPDATE item_packing_config
-                                    SET units_per_inner = 1, inners_per_carton = $2,
-                                        client_event_id = $3, recorded_by_id = $4
+                                    SET units_per_inner = $2, inners_per_carton = $3,
+                                        client_event_id = $4, recorded_by_id = $5
                                   WHERE id = $1 {RETURNING}"
                             ),
-                            &[&id, &n, &ev.client_event_id, &ev.recorded_by_id],
+                            &[&id, &wanted.0, &wanted.1, &ev.client_event_id, &ev.recorded_by_id],
                         )
                         .await?
                     }
                     // No carton on file, or a different one from today (D23).
-                    Change::Make | Change::Version(_) | Change::Nothing => {
-                        let holds = match change {
-                            Change::Version(n) => Some(n),
-                            _ => body.holds,
-                        };
+                    Change::Make | Change::Version | Change::Nothing => {
                         tx.query_one(
                             &format!(
                                 "INSERT INTO item_packing_config
@@ -184,8 +198,8 @@ pub async fn say_carton(
                             &[
                                 &ev.tenant_id,
                                 &item_id,
-                                &holds.map(|_| 1i32),
-                                &holds,
+                                &wanted.0,
+                                &wanted.1,
                                 &body.occurred_at,
                                 &ev.client_event_id,
                                 &ev.recorded_by_id,

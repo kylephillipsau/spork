@@ -130,8 +130,10 @@ test("a carton holds its packs times what is in each, or nobody has said", () =>
 });
 
 test("a count typed is a whole number from one, or nothing said", () => {
-  assert.deepEqual(readHolds(" 16 "), { holds: 16 });
-  assert.deepEqual(readHolds(""), { holds: null });
+  assert.deepEqual(readHolds(" 16 "), { holds: 16, per: null });
+  assert.deepEqual(readHolds(""), { holds: null, per: null });
+  assert.deepEqual(readHolds("6", "24"), { holds: 6, per: 24 }, "six packs of 24");
+  assert.ok("problem" in readHolds("", "24"), "packs of 24, but how many packs?");
   assert.ok("problem" in readHolds("0"));
   assert.ok("problem" in readHolds("1.5"));
   assert.ok("problem" in readHolds("a dozen"));
@@ -145,4 +147,6 @@ test("the carton is said first when none is on file, or a different count is typ
   assert.equal(sayFirst(sixteen, 16), false, "the same count is no act");
   assert.equal(sayFirst(sixteen, 12), true);
   assert.equal(sayFirst({ units_per_inner: null, inners_per_carton: null }, 6), true, "an unsaid count, said");
+  assert.equal(sayFirst({ units_per_inner: 24, inners_per_carton: 6 }, 6, 24), false, "six packs of 24, as on file");
+  assert.equal(sayFirst(sixteen, 16, 24), true, "loose sixteen is not sixteen packs");
 });

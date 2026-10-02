@@ -89,9 +89,11 @@ export interface PropertiesDesk {
   setUnit: (next: string) => void;
   weigh: (subject: CaptureSubject) => Promise<void>;
 
-  /** How many of the item its carton holds, as typed (D178). */
+  /** How many of the item its carton holds, as typed (D178); or how many packs, with `per` in each (D185). */
   holds: string;
   typeHolds: (next: string) => void;
+  per: string;
+  typePer: (next: string) => void;
 
   figures: Figures;
   type: (field: "weight" | "length" | "width" | "height", next: string) => void;
@@ -168,6 +170,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const [unit, setUnit] = useState("kg");
   const [figures, setFigures] = useState<Figures>(NO_FIGURES);
   const [holds, setHolds] = useState("");
+  const [per, setPer] = useState("");
   const [taken, setTaken] = useState<Face[]>([]);
   const [sending, setSending] = useState<Partial<Record<Face, Sending>>>({});
   // Photographs being sent, one after another, and each one's act so that
@@ -259,8 +262,11 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setBinding("");
     setCount("");
     // The count on file, to keep or correct; nothing, for a carton not said.
-    const known = read.kind === "ready" && isOwnCarton(subject) ? cartonHolds(read.item.packing) : null;
-    setHolds(known === null ? "" : String(known));
+    const packing = read.kind === "ready" && isOwnCarton(subject) ? read.item.packing : null;
+    const packs = (packing?.units_per_inner ?? 1) > 1;
+    const known = packs ? packing!.inners_per_carton : cartonHolds(packing);
+    setHolds(known === null || known === undefined ? "" : String(known));
+    setPer(packs ? String(packing!.units_per_inner) : "");
     // Measuring starts from nothing typed; photographing after measuring keeps
     // the measuring look, and photographing on its own starts a new one.
     if (action === "measure") setFigures(NO_FIGURES);
@@ -287,10 +293,10 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
    */
   const sayCartonFirst = async (subject: CaptureSubject, act: Act) => {
     if (!isOwnCarton(subject) || !subject.item_id || read.kind !== "ready") return;
-    const typed = readHolds(holds);
+    const typed = readHolds(holds, per);
     if ("problem" in typed) throw new ApiError(typed.problem, 400);
-    if (!sayFirst(read.item.packing, typed.holds)) return;
-    await api.sayCarton(subject.item_id, { holds: typed.holds, act: partOf(act, "carton") });
+    if (!sayFirst(read.item.packing, typed.holds, typed.per)) return;
+    await api.sayCarton(subject.item_id, { holds: typed.holds, per: typed.per, act: partOf(act, "carton") });
   };
 
   /**
@@ -382,7 +388,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
      */
     weigh: (subject) => {
       const entered = reading.trim();
-      return press(`weigh:${subjectKey(subject)}:${entered}:${unit}:${holds.trim()}`, async (act) => {
+      return press(`weigh:${subjectKey(subject)}:${entered}:${unit}:${holds.trim()}:${per.trim()}`, async (act) => {
         if (!entered) throw new ApiError("Read the scale first.", 400);
         if (!subject.packaging_level) throw new ApiError("A part is weighed with its size: use Measure.", 400);
         await sayCartonFirst(subject, act);
@@ -419,6 +425,8 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
 
     holds,
     typeHolds: setHolds,
+    per,
+    typePer: setPer,
 
     figures,
     type: (field, next) => setFigures((f) => ({ ...f, [field]: next })),
@@ -433,7 +441,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
      */
     measure: (subject) => {
       const measurements = measurementsOf(figures);
-      return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}:${holds.trim()}`, async (act) => {
+      return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}:${holds.trim()}:${per.trim()}`, async (act) => {
         if (measurements.length === 0) throw new ApiError("Nothing has been measured yet.", 400);
         // Said sooner than the server would say it (D138).
         const lengths = measurements.some((m) => !m.absent_reason && m.metric !== "gross_weight");

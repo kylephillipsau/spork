@@ -420,17 +420,31 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
  * said together. Blank says nothing of the count.
  */
 function HoldsField({ desk }: { desk: PropertiesDesk }) {
+  const packs = desk.per.trim() !== "";
   return (
-    <div className={s.holds}>
-      <TextField
-        label="How many in it"
-        inputMode="numeric"
-        autoComplete="off"
-        trailing="× each"
-        value={desk.holds}
-        onChange={(e) => desk.typeHolds(e.target.value)}
-      />
-    </div>
+    <>
+      <div className={s.holds}>
+        <TextField
+          label="How many in it"
+          inputMode="numeric"
+          autoComplete="off"
+          trailing={packs ? "packs" : "× each"}
+          value={desk.holds}
+          onChange={(e) => desk.typeHolds(e.target.value)}
+        />
+      </div>
+      <div className={s.holds}>
+        <TextField
+          label="In packs of"
+          hint="Blank if loose"
+          inputMode="numeric"
+          autoComplete="off"
+          trailing="× each"
+          value={desk.per}
+          onChange={(e) => desk.typePer(e.target.value)}
+        />
+      </div>
+    </>
   );
 }
 

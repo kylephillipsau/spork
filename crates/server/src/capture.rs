@@ -575,6 +575,14 @@ pub async fn subjects_for_item(
             found.insert(0, carton);
         }
     }
+    // The inner pack sits between the carton and the each (D185).
+    if let Some(inner) = inner_subject(tx, item_id).await? {
+        let at = found
+            .iter()
+            .position(|s| s.packaging_level.as_deref() == Some("each"))
+            .unwrap_or(found.len());
+        found.insert(at, inner);
+    }
     found.extend(lot_subjects(tx, item_id).await?);
     // **The variant that is its carton** (D184): the carton card shows it
     // until the carton has figures or photographs of its own.
@@ -626,104 +634,160 @@ async fn lot_subjects(
 ) -> Result<Vec<CaptureSubject>, ApiError> {
     let lots = tx
         .query(
-            "SELECT l.id, l.code, i.code, i.description,
-                    f.weight::bigint, f.length::bigint, f.width::bigint, f.height::bigint,
-                    coalesce(f.weight_absent, false), coalesce(f.dimensions_absent, false),
-                    f.method, f.observed_at, fa.faces
-               FROM lot l
-               JOIN item i ON i.id = l.item_id
-               LEFT JOIN LATERAL (
-                   SELECT max(oc.value_numeric) FILTER (WHERE m.code = 'gross_weight') AS weight,
-                          max(oc.value_numeric) FILTER (WHERE m.code = 'length') AS length,
-                          max(oc.value_numeric) FILTER (WHERE m.code = 'width') AS width,
-                          max(oc.value_numeric) FILTER (WHERE m.code = 'height') AS height,
-                          bool_or(m.code = 'gross_weight' AND oc.absent_reason IS NOT NULL) AS weight_absent,
-                          count(*) FILTER (WHERE m.code IN ('length', 'width', 'height')
-                                             AND oc.absent_reason IS NOT NULL) = 3 AS dimensions_absent,
-                          (array_agg(oc.method::text ORDER BY oc.observed_at DESC)
-                               FILTER (WHERE oc.absent_reason IS NULL))[1] AS method,
-                          max(oc.observed_at) FILTER (WHERE oc.absent_reason IS NULL) AS observed_at
-                     FROM observable o
-                     JOIN observation_current oc ON oc.observable_id = o.id
-                     JOIN metric m ON m.id = oc.metric_id
-                    WHERE o.lot_id = l.id AND m.code IN ('gross_weight', 'length', 'width', 'height')
-               ) f ON true
-               LEFT JOIN LATERAL (
-                   SELECT array_agg(DISTINCT oi.face) AS faces
-                     FROM observable o
-                     JOIN observation_event e ON e.observable_id = o.id
-                     JOIN observation_image oi ON oi.observation_event_id = e.id
-                    WHERE o.lot_id = l.id
-               ) fa ON true
-              WHERE l.item_id = $1
-              ORDER BY l.code",
+            &format!(
+                "SELECT l.id, l.code, i.code, i.description, {OWN_FIGURES_COLUMNS}
+                   FROM lot l
+                   JOIN item i ON i.id = l.item_id
+                   {own}
+                  WHERE l.item_id = $1
+                  ORDER BY l.code",
+                own = own_figures("o.lot_id = l.id")
+            ),
             &[&item_id],
         )
         .await?;
-    let now = Utc::now();
     Ok(lots
         .iter()
         .map(|r| {
-            let (gross_weight_g, length_mm, width_mm, height_mm): (Option<i64>, Option<i64>, Option<i64>, Option<i64>) =
-                (r.get(4), r.get(5), r.get(6), r.get(7));
-            let (weight_absent, dimensions_absent): (bool, bool) = (r.get(8), r.get(9));
-            let method: Option<String> = r.get(10);
-            let observed_at: Option<DateTime<Utc>> = r.get(11);
-            let faces: Vec<String> = r.get::<_, Option<Vec<String>>>(12).unwrap_or_default();
-            let held = Held {
-                weight: if gross_weight_g.is_some() {
-                    Answer::Recorded
-                } else if weight_absent {
-                    Answer::NotApplicable
-                } else {
-                    Answer::Missing
-                },
-                dimensions: if length_mm.is_some() && width_mm.is_some() && height_mm.is_some() {
-                    Answer::Recorded
-                } else if dimensions_absent {
-                    Answer::NotApplicable
-                } else {
-                    Answer::Missing
-                },
-                photographs: !faces.is_empty(),
-            };
-            let staleness = match observed_at {
-                Some(at) => revalidation::staleness(at, method.as_deref().unwrap_or(""), now),
-                None => 0.0,
-            };
-            let class = classify(held, method.as_deref(), staleness);
-            CaptureSubject {
-                item_id: None,
-                item_style_id: None,
-                item_part_id: None,
-                part_label: None,
-                lot_id: r.get(0),
-                lot_code: r.get(1),
-                variant_lot_id: None,
-                variant_code: None,
-                code: r.get(2),
-                description: r.get(3),
-                packaging_level: None,
-                parts: 0,
-                gross_weight_g,
-                length_mm,
-                width_mm,
-                height_mm,
-                weight_absent,
-                dimensions_absent,
-                source: method.as_ref().map(|_| "own".to_string()),
-                style_code: None,
-                wants: wants(held),
-                because: because(class, method.as_deref()).to_string(),
-                method,
-                observed_at,
-                faces,
-                demand: 0,
-                location_code: None,
-                soh: 0,
-            }
+            let mut subject = own_subject(r, 4);
+            subject.lot_id = r.get(0);
+            subject.lot_code = r.get(1);
+            subject.code = r.get(2);
+            subject.description = r.get(3);
+            subject
         })
         .collect())
+}
+
+/// The columns [`own_figures`] adds, in the order [`own_subject`] reads them.
+const OWN_FIGURES_COLUMNS: &str = "f.weight::bigint, f.length::bigint, f.width::bigint, f.height::bigint,
+                    coalesce(f.weight_absent, false), coalesce(f.dimensions_absent, false),
+                    f.method, f.observed_at, fa.faces";
+
+/// A subject's own figures and photographed faces, for the observables `who`
+/// names (`o` is the observable): the joins `f` and `fa`. Nothing inherits.
+fn own_figures(who: &str) -> String {
+    format!(
+        "LEFT JOIN LATERAL (
+             SELECT max(oc.value_numeric) FILTER (WHERE m.code = 'gross_weight') AS weight,
+                    max(oc.value_numeric) FILTER (WHERE m.code = 'length') AS length,
+                    max(oc.value_numeric) FILTER (WHERE m.code = 'width') AS width,
+                    max(oc.value_numeric) FILTER (WHERE m.code = 'height') AS height,
+                    bool_or(m.code = 'gross_weight' AND oc.absent_reason IS NOT NULL) AS weight_absent,
+                    count(*) FILTER (WHERE m.code IN ('length', 'width', 'height')
+                                       AND oc.absent_reason IS NOT NULL) = 3 AS dimensions_absent,
+                    (array_agg(oc.method::text ORDER BY oc.observed_at DESC)
+                         FILTER (WHERE oc.absent_reason IS NULL))[1] AS method,
+                    max(oc.observed_at) FILTER (WHERE oc.absent_reason IS NULL) AS observed_at
+               FROM observable o
+               JOIN observation_current oc ON oc.observable_id = o.id
+               JOIN metric m ON m.id = oc.metric_id
+              WHERE {who} AND m.code IN ('gross_weight', 'length', 'width', 'height')
+         ) f ON true
+         LEFT JOIN LATERAL (
+             SELECT array_agg(DISTINCT oi.face) AS faces
+               FROM observable o
+               JOIN observation_event e ON e.observable_id = o.id
+               JOIN observation_image oi ON oi.observation_event_id = e.id
+              WHERE {who}
+         ) fa ON true"
+    )
+}
+
+/// A subject from [`OWN_FIGURES_COLUMNS`] starting at column `at`: its
+/// figures, what it wants and why, with every arm and name left for the
+/// caller to say.
+fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
+    let (gross_weight_g, length_mm, width_mm, height_mm): (Option<i64>, Option<i64>, Option<i64>, Option<i64>) =
+        (r.get(at), r.get(at + 1), r.get(at + 2), r.get(at + 3));
+    let (weight_absent, dimensions_absent): (bool, bool) = (r.get(at + 4), r.get(at + 5));
+    let method: Option<String> = r.get(at + 6);
+    let observed_at: Option<DateTime<Utc>> = r.get(at + 7);
+    let faces: Vec<String> = r.get::<_, Option<Vec<String>>>(at + 8).unwrap_or_default();
+    let held = Held {
+        weight: if gross_weight_g.is_some() {
+            Answer::Recorded
+        } else if weight_absent {
+            Answer::NotApplicable
+        } else {
+            Answer::Missing
+        },
+        dimensions: if length_mm.is_some() && width_mm.is_some() && height_mm.is_some() {
+            Answer::Recorded
+        } else if dimensions_absent {
+            Answer::NotApplicable
+        } else {
+            Answer::Missing
+        },
+        photographs: !faces.is_empty(),
+    };
+    let staleness = match observed_at {
+        Some(at) => revalidation::staleness(at, method.as_deref().unwrap_or(""), Utc::now()),
+        None => 0.0,
+    };
+    let class = classify(held, method.as_deref(), staleness);
+    CaptureSubject {
+        item_id: None,
+        item_style_id: None,
+        item_part_id: None,
+        part_label: None,
+        lot_id: None,
+        lot_code: None,
+        variant_lot_id: None,
+        variant_code: None,
+        code: String::new(),
+        description: None,
+        packaging_level: None,
+        parts: 0,
+        gross_weight_g,
+        length_mm,
+        width_mm,
+        height_mm,
+        weight_absent,
+        dimensions_absent,
+        source: method.as_ref().map(|_| "own".to_string()),
+        style_code: None,
+        wants: wants(held),
+        because: because(class, method.as_deref()).to_string(),
+        method,
+        observed_at,
+        faces,
+        demand: 0,
+        location_code: None,
+        soh: 0,
+    }
+}
+
+/// The item's inner pack, when its case pack says the carton holds packs of
+/// more than one (D185): measured and photographed on its own, between the
+/// carton and the each.
+async fn inner_subject(
+    tx: &tokio_postgres::Transaction<'_>,
+    item_id: uuid::Uuid,
+) -> Result<Option<CaptureSubject>, ApiError> {
+    let row = tx
+        .query_opt(
+            &format!(
+                "SELECT i.code, i.description, {OWN_FIGURES_COLUMNS}
+                   FROM item i
+                   {own}
+                  WHERE i.id = $1
+                    AND (SELECT c.units_per_inner FROM item_packing_config c
+                          WHERE c.item_id = i.id AND c.effective_from <= current_date
+                          ORDER BY c.effective_from DESC, c.id DESC LIMIT 1) > 1",
+                own = own_figures("o.item_id = i.id AND o.packaging_level = 'inner'")
+            ),
+            &[&item_id],
+        )
+        .await?;
+    Ok(row.map(|r| {
+        let mut subject = own_subject(&r, 2);
+        subject.item_id = Some(item_id);
+        subject.packaging_level = Some("inner".into());
+        subject.code = r.get(0);
+        subject.description = r.get(1);
+        subject
+    }))
 }
 
 /// Every subject the floor may be asked to capture, with what is known of it.
