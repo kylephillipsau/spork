@@ -42,6 +42,8 @@ import { NO_FIGURES, cartonHolds, isOwnCarton, photosOf, presentationNeeded, rea
 
 /** The face-finding model: its own chunk, with the ONNX runtime, fetched when first wanted. */
 const model = () => import("./faceModel");
+/** The box drawing (D186): its own chunk, as it is only ever wanted at a computer. */
+const drawing = () => import("./boxPicture");
 
 export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } | { kind: "failed"; message: string };
 
@@ -221,6 +223,26 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     for (const ms of [2500, 6000, 12000]) later.current.push(window.setTimeout(() => void reload(), ms));
   }, [reload]);
   useEffect(() => () => later.current.forEach((t) => window.clearTimeout(t)), []);
+
+  // At a computer, an item whose front, right and top are cut and not yet
+  // drawn as a box is drawn now, once per set of cuts (D186).
+  const drew = useRef<string | null>(null);
+  useEffect(() => {
+    if (read.kind !== "ready" || handheld()) return;
+    const item = read.item;
+    void drawing().then(async (d) => {
+      const wanted = d.wantsDrawing(item);
+      if (!wanted) return;
+      const key = `${item.item_id}:${d.madeFrom(wanted.faces).join(",")}`;
+      if (drew.current === key) return;
+      drew.current = key;
+      try {
+        await d.ensureBoxPicture(item);
+      } catch (error) {
+        console.warn("box drawing:", error);
+      }
+    });
+  }, [read]);
 
   // A different item is a fresh start: nothing typed for one is for another.
   useEffect(() => {

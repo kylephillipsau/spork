@@ -796,6 +796,8 @@ pub async fn read_image(
                         "SELECT mime FROM observation_image WHERE digest = $1
                          UNION ALL
                          SELECT mime FROM observation_image_cut WHERE digest = $1
+                         UNION ALL
+                         SELECT mime FROM box_picture WHERE digest = $1
                          LIMIT 1",
                         &[&wanted],
                     )
@@ -9216,6 +9218,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::say_carton)
         .service(crate::cartons::add_lot)
         .service(crate::cartons::set_default_lot)
+        .service(crate::cuts::record_box_picture)
         .service(crate::lists::make_list)
         .service(crate::lists::lists)
         .service(crate::places::set_reach)

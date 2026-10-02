@@ -124,6 +124,100 @@ pub async fn uncut_photos(req: HttpRequest, state: web::Data<AppState>) -> Resul
     Ok(HttpResponse::Ok().json(out))
 }
 
+/// An item drawn as its box from three cut faces (D186).
+#[derive(Deserialize, Debug)]
+pub struct BoxPictureRequest {
+    /// Where `POST /images` kept the drawing.
+    pub digest: String,
+    /// The front, right and top cuts it was drawn from, by content address.
+    pub made_from: Vec<String>,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct BoxPictureSaid {
+    pub box_picture_id: Uuid,
+    pub digest: String,
+}
+
+/// Keep an item's box drawing (D186): the newest is its picture.
+#[post("/items/{id}/box-picture")]
+pub async fn record_box_picture(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<BoxPictureRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let item_id = path.into_inner();
+    let body = body.into_inner();
+    if body.made_from.len() != 3 || !body.made_from.iter().all(|d| images::is_digest(d)) {
+        return Err(ApiError::Rejected("a box is drawn from three cut faces: front, right and top".into()));
+    }
+    if !images::is_digest(&body.digest) {
+        return Err(ApiError::Rejected("that is not a content address".into()));
+    }
+    let bytes = images::get(&images::directory(), &body.digest)
+        .await?
+        .ok_or_else(|| ApiError::Rejected("nothing is kept at that address; store the drawing first".into()))?;
+    let Some(mime) = images::sniff(&bytes) else {
+        return Err(ApiError::Rejected("the bytes at that address are not an image".into()));
+    };
+    let (width, height) = match images::dimensions(&bytes) {
+        Some((w, h)) => (Some(w), Some(h)),
+        None => (None, None),
+    };
+    let byte_count = i64::try_from(bytes.len()).unwrap_or(i64::MAX);
+    let ev = NewClientEvent {
+        tenant_id: who.tenant_id,
+        client_event_id: body.client_event_id,
+        site_id: who.site_id,
+        recorded_by_id: who.person_id,
+        submitted_at: body.occurred_at,
+    };
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item_id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?;
+                if client_events::claim_act(tx, &ev).await?.is_replay() {
+                    let prior = tx
+                        .query_opt("SELECT id, digest FROM box_picture WHERE client_event_id = $1", &[&ev.client_event_id])
+                        .await?
+                        .ok_or_else(|| ApiError::Rejected("client_event exists but no drawing was kept; incomplete act".into()))?;
+                    return Ok(BoxPictureSaid { box_picture_id: prior.get(0), digest: prior.get(1) });
+                }
+                let row = tx
+                    .query_one(
+                        "INSERT INTO box_picture
+                             (tenant_id, item_id, digest, mime, byte_count, width_px, height_px,
+                              made_from, client_event_id, recorded_by_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                         RETURNING id",
+                        &[
+                            &ev.tenant_id,
+                            &item_id,
+                            &body.digest,
+                            &mime,
+                            &byte_count,
+                            &width,
+                            &height,
+                            &body.made_from,
+                            &ev.client_event_id,
+                            &ev.recorded_by_id,
+                        ],
+                    )
+                    .await?;
+                Ok(BoxPictureSaid { box_picture_id: row.get(0), digest: body.digest })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
 /// A side said to look like another (D183).
 #[derive(Deserialize, Debug)]
 pub struct SameAsRequest {

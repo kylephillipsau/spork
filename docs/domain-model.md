@@ -14097,3 +14097,25 @@ sixteen packs.
 **Why.** The case pack had both counts since migration 7, and the writer took
 an inner level all along; only saying it and showing it were missing. A glove,
 its bundle and the box of bundles are three things a packer handles.
+
+### D186 — An item is pictured as its box, drawn from three cut faces
+
+*Adopted 2026-10-02, with migration 107.*
+
+**Decision.** Once a box's front, right and top are cut to their faces (its
+carton first, or the variant standing for it, D184, then its pack and each),
+a computer draws the box at an isometric angle from those three cuts, at its
+measured proportions or, unmeasured, the cuts' own, and keeps the drawing
+(`box_picture`, `POST /items/{id}/box-picture`). The item's picture, on every
+list, is its newest drawing before any photograph. It is drawn when Photos to
+crop saves the cuts and whenever the item is opened at a computer, and drawn
+again when a face is cut again: a drawing names the three cuts it was made
+from.
+
+**Why stored.** A list draws fifty pictures, often on a phone. Drawing each
+there would fetch three full-size cuts per row; a kept drawing is one small
+WebP. It carries its act and its person, as a cut does.
+
+**Also.** An item whose photographs are all of its variants (D182) showed no
+picture on the list. The variant that stands for its carton now counts as its
+own, and any other variant as a last resort, captioned so.

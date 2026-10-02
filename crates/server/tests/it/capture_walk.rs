@@ -524,6 +524,50 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
         queue().await.as_array().unwrap().iter().all(|q| q["image_id"] != said["image_id"]),
         "a side said to look like another never waits to be cut"
     );
+
+    // ── drawn as its box from three cut faces (D186) ────────────────────
+    let drawn: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/images")
+                .insert_header(("authorization", bearer.clone()))
+                .insert_header(("content-type", "image/png"))
+                .set_payload(png_sized(512, 512, 99))
+                .to_request(),
+        )
+        .await;
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    let box_digest = drawn["digest"].as_str().unwrap().to_string();
+    let kept: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/items/{GLOVE}/box-picture"))
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({
+                "digest": box_digest, "made_from": [cut_digest, cut_digest, cut_digest],
+                "client_event_id": Uuid::new_v4(), "occurred_at": chrono::Utc::now(),
+            }))
+            .to_request(),
+        "the box drawing",
+    )
+    .await;
+    assert_eq!(kept["digest"], box_digest.as_str());
+    let listed: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri("/items?q=GLOVE-M").insert_header(("authorization", bearer.clone())).to_request(),
+        "the list",
+    )
+    .await;
+    let row = listed["items"].as_array().unwrap().iter().find(|i| i["code"] == "GLOVE-M").unwrap();
+    assert_eq!(row["picture"]["digest"], box_digest.as_str(), "the list shows the box: {row}");
+    let served = test::call_service(
+        &app,
+        test::TestRequest::get().uri(&format!("/images/{box_digest}")).insert_header(("authorization", bearer.clone())).to_request(),
+    )
+    .await;
+    assert!(served.status().is_success(), "and serves it");
     let (status, again) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
     assert_eq!(status, 200, "a repeated press is the same act: {again}");
     assert_eq!(again["cut_id"], made["cut_id"], "and the same cut");

@@ -144,6 +144,7 @@ export const ITEM: ItemView = {
       source: "netsuite-inventory-balance",
     },
   ],
+  box_picture: null,
   subjects: [FAMILY_CARTON, BRUSH_EACH],
   photos: [
     {
@@ -190,6 +191,7 @@ export const ITEM_UNKNOWN: ItemView = {
   held: [],
   reported: [],
   // Its own carton offered before anybody has said it has one (D178).
+  box_picture: null,
   subjects: [
     subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "carton", wants: [] }),
     subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "each" }),
@@ -278,6 +280,7 @@ export const NO_BOX: ItemView = {
   ...ITEM_UNKNOWN,
   code: "SKU-4410",
   description: "Mop head, cotton, 400 g",
+  box_picture: null,
   subjects: [
     subject({
       item_id: TAPE_GUN,

@@ -111,6 +111,8 @@ pub struct ItemView {
     /// What gets measured for it, each with what is known, in the order to
     /// offer them: its carton, its each, its family's carton, its parts.
     pub subjects: Vec<CaptureSubject>,
+    /// Its newest box drawing (D186), and the cuts it was drawn from.
+    pub box_picture: Option<BoxPicture>,
     /// The newest photograph of each face of each of those subjects. Their own
     /// only: a photograph is what one look at one box saw, and does not
     /// inherit (D132, D141).
@@ -140,6 +142,14 @@ pub struct SubjectPhoto {
     pub cut: Option<PhotoCut>,
     /// The side it was said to look like, rather than photographed (D183).
     pub same_as: Option<String>,
+}
+
+/// An item drawn as its box (D186).
+#[derive(Serialize, Debug)]
+pub struct BoxPicture {
+    pub digest: String,
+    /// The front, right and top cuts it was drawn from.
+    pub made_from: Vec<String>,
 }
 
 /// A photograph cut to its face and straightened (D176).
@@ -275,6 +285,15 @@ pub async fn item_page(
 
                 let subjects = capture::subjects_for_item(tx, site, id).await?;
 
+                let box_picture = tx
+                    .query_opt(
+                        "SELECT digest, made_from FROM box_picture WHERE item_id = $1
+                          ORDER BY recorded_at DESC, id DESC LIMIT 1",
+                        &[&id],
+                    )
+                    .await?
+                    .map(|b| BoxPicture { digest: b.get(0), made_from: b.get(1) });
+
                 let photos = tx
                     .query(
                         "SELECT DISTINCT ON (o.id, oi.face)
@@ -331,6 +350,7 @@ pub async fn item_page(
                     held,
                     reported,
                     subjects,
+                    box_picture,
                     photos,
                 })
             })

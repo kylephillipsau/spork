@@ -1324,8 +1324,22 @@ export interface ItemView {
    * worklist's own enumeration, so the item and the to-do list agree.
    */
   subjects: CaptureSubject[];
+  /** Its newest box drawing, and the cuts it was drawn from (D186). */
+  box_picture: BoxPicture | null;
   /** The newest photograph of each face of each subject; its own only (D132). */
   photos: SubjectPhoto[];
+}
+
+/** An item drawn as its box from its front, right and top cuts (D186). */
+export interface BoxPicture {
+  digest: string;
+  made_from: string[];
+}
+
+/** `POST /items/{id}/box-picture`. */
+export interface BoxPictureSaid {
+  box_picture_id: Uuid;
+  digest: string;
 }
 
 /** One face of one subject, as last photographed. */

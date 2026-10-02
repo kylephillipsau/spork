@@ -16,6 +16,7 @@ import type {
   BinsList,
   CartonSaid,
   ItemListRow,
+  BoxPictureSaid,
   LotAdded,
   SameAsSaid,
   ItemView,
@@ -772,6 +773,15 @@ export const api = {
 
   /** Name a run of the item that looks different, to photograph and measure on its own (D182). */
   addLot: (itemId: Uuid, code: string) => send<LotAdded>("POST", `/items/${encodeURIComponent(itemId)}/lots`, { code }),
+
+  /** Keep the item's box drawing, made from its front, right and top cuts (D186). */
+  recordBoxPicture: (itemId: Uuid, input: { digest: string; made_from: string[]; act: Act }) =>
+    send<BoxPictureSaid>("POST", `/items/${encodeURIComponent(itemId)}/box-picture`, {
+      digest: input.digest,
+      made_from: input.made_from,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
 
   /** Say which variant stands for the item's carton, or none (D184). */
   setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>

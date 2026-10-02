@@ -174,6 +174,15 @@ export function usePhotoQueue(): QueueDesk {
             if (live.current) update(q.photo.image_id, { state: "saved", ticked: false });
             done += 1;
           }
+          // Each item cut, drawn as its box where three faces now are (D186).
+          for (const id of new Set(ready.map((q) => q.photo.item_id))) {
+            try {
+              const { ensureBoxPicture } = await import("./boxPicture");
+              await ensureBoxPicture(await api.item(id));
+            } catch (error) {
+              console.warn("box drawing:", error);
+            }
+          }
         } finally {
           if (live.current) setSaving(null);
         }

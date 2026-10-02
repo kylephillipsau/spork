@@ -50,17 +50,24 @@ pub struct Picture {
 /// cost the capture worklist 1.4 seconds. Every join here is a plain equality
 /// so the planner can hash.
 pub const PICTURE_CTE: &str = "
-picture AS (
+front AS (
     SELECT DISTINCT ON (c.item_id)
            c.item_id,
            -- The face cut out and straightened, when somebody has (D176).
            COALESCE(cut.digest, oi.digest) AS digest,
-           CASE WHEN c.rank = 0 THEN 'own' ELSE 'style' END AS source
+           CASE c.rank WHEN 0 THEN 'own' WHEN 1 THEN 'style' ELSE 'variant' END AS source
       FROM (
             -- The item's own looks, at any packaging level: a picture of the
             -- carton and a picture of the each are both pictures of the thing.
             SELECT i.id AS item_id, o.id AS observable_id, 0 AS rank
               FROM item i JOIN observable o ON o.item_id = i.id
+            UNION ALL
+            -- The variant that stands for its carton (D184) is as good as its
+            -- own; any other variant of it is better than nothing (D182).
+            SELECT i.id, o.id, CASE WHEN o.lot_id = i.default_lot_id THEN 0 ELSE 2 END
+              FROM item i
+              JOIN lot l ON l.item_id = i.id
+              JOIN observable o ON o.lot_id = l.id
             UNION ALL
             -- Its style's, which is the inheritance this module exists to
             -- allow and to label. D141.
@@ -80,6 +87,18 @@ picture AS (
       ) cut ON true
      WHERE oi.face = 'front'
      ORDER BY c.item_id, c.rank, oi.captured_at DESC, oi.id DESC
+),
+picture AS (
+    SELECT DISTINCT ON (p.item_id) p.item_id, p.digest, p.source
+      FROM (
+            -- Its box, drawn from three cut faces (D186), before any photograph.
+            SELECT b.item_id, b.digest, 'own' AS source, 0 AS rank, b.recorded_at AS at
+              FROM box_picture b
+            UNION ALL
+            SELECT f.item_id, f.digest, f.source, 1, NULL
+              FROM front f
+           ) p
+     ORDER BY p.item_id, p.rank, p.at DESC NULLS LAST
 )";
 
 /// Build a [`Picture`] from a row's digest and source columns.

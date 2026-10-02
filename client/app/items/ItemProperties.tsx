@@ -729,7 +729,13 @@ function Photo({ item }: { item: ItemView }) {
     <figure className={s.figure}>
       <img className={s.photo} src={imageUrl(picture.digest)} alt={`${item.code}, front`} onError={() => setMissing(true)} />
       {picture.source !== "own" && (
-        <figcaption className={s.caption}>{item.style ? `Photo of the ${item.style.code} family` : "Photo of its family"}</figcaption>
+        <figcaption className={s.caption}>
+          {picture.source === "variant"
+            ? "Photo of a variant"
+            : item.style
+              ? `Photo of the ${item.style.code} family`
+              : "Photo of its family"}
+        </figcaption>
       )}
     </figure>
   );
