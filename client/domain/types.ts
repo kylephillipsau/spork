@@ -922,6 +922,8 @@ export interface CurrentSession {
   tenant_name: string;
   site_id: Uuid | null;
   site_code: string | null;
+  /** Their role in the workspace is `administrator` (D192): Backup is shown. */
+  administrator: boolean;
 }
 
 // ── changing your own password ─────────────────────────────────────────────
@@ -1463,6 +1465,16 @@ export interface LotAdded {
   code: string;
   /** False when the item already had a run of that name. */
   added: boolean;
+}
+
+/** `GET /backup`: what a backup of this workspace would hold (D193). */
+export interface BackupSummary {
+  items: number;
+  photos: number;
+  /** The photographs' size in bytes, as recorded when each was kept. */
+  photo_bytes: number;
+  /** The database's newest migration. */
+  schema: string;
 }
 
 /** One of GS1's packaging types (D191). */

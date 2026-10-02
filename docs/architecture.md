@@ -286,8 +286,8 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-One hundred and ninety-one recorded decisions, a hundred and thirty-four rules the design must always
-satisfy, and a database that a hundred and eleven migrations build and reverse cleanly, both
+One hundred and ninety-three recorded decisions, a hundred and thirty-four rules the design must always
+satisfy, and a database that a hundred and twelve migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
@@ -310,7 +310,7 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of a hundred and three endpoints and a projection
+policy resolver. Above it sits an API of a hundred and five endpoints and a projection
 scheduler. Above that is a React client of twenty-five screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, picking, receiving, put away and despatch;
@@ -344,7 +344,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D191
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D193
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being

@@ -14245,3 +14245,37 @@ carton.
 side showed part of the brush and the bench behind it, and the drawing pasted
 those onto a box. Whether a thing is a box is not its level: an each can come
 boxed, and an inner pack can be a banded bundle.
+
+### D192: Whoever set a workspace up administers it
+
+*Adopted 2026-10-02, with migration 112.*
+
+**Decision.** `person_tenant.role` gains its first meaning: `administrator`.
+Setup writes it for the person who sets the workspace up, and migration 112
+gives it to each workspace's earliest current member. Only an administrator
+takes a backup (D193); anyone else gets 403 and does not see Backup. The role
+is read through a definer, `role_in_tenant()`, like every identity read. A
+screen to give the role to someone else, and the rest of the vocabulary,
+remain Q176's.
+
+### D193: A workspace's backup is one encrypted zip, restored by a command
+
+*Adopted 2026-10-02.*
+
+**Decision.** Settings, Backup downloads one zip (`POST /backup`, a form post
+so the browser saves it as it arrives). It holds `manifest.json` (format,
+newest migration, workspace, row counts), `data/<table>.jsonl` for every table
+with a `tenant_id` plus the workspace, its people and their sign-ins, and
+`images/<digest>` for every photo its rows name. Sessions are left out. Every
+entry is AES-256 encrypted with a password of at least 12 characters set when
+downloading.
+
+A restore is `scripts\local.ps1 restore <zip>` (`spork-restore`): into an
+empty Spork at the backup's migration, as the database owner, in one
+transaction, with constraints and triggers set aside while rows load. It
+refuses a wrong password, another migration, or a database that already has
+the workspace. Nothing on the web writes a backup back.
+
+**Why.** A backup replaces who can sign in, so restoring is a job for whoever
+runs the server, not a page. Rows are only meaningful at their schema, so the
+migration must match.

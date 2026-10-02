@@ -121,6 +121,8 @@ export const SCREENS: readonly ScreenSpec[] = [
   spec("workspace", "/workspace", "Workspace", "desk"),
   spec("import", "/import", "Import", "desk"),
   spec("tokens", "/tokens", "Import tokens", "desk"),
+  // Every row and photo of the workspace in one encrypted file (D193).
+  spec("backup", "/backup", "Backup", "desk"),
   spec("keys", "/keys", "Passkeys", "plain"),
   spec("sign-in", "/sign-in", "Sign in", "plain", { session: "none", align: "centre" }),
   spec("setup", "/setup", "Setup", "plain", { session: "none" }),

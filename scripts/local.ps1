@@ -17,14 +17,18 @@
       scripts\local.ps1 seed      load fixtures/seed.sql (demo tenants; password dock-station-1)
       scripts\local.ps1 reset     drop and recreate the local database, then migrate
       scripts\local.ps1 status    say what is installed and what is pending
+      scripts\local.ps1 restore <backup.zip>   restore a workspace backup into an empty Spork
 
     State the server writes (setup token, uploaded images) lives in .local\,
     which is ignored by git.
 #>
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'start', 'migrate', 'seed', 'reset', 'status', 'firewall')]
+    [ValidateSet('setup', 'start', 'migrate', 'seed', 'reset', 'status', 'firewall', 'restore')]
     [string]$Command = 'status',
+    # The backup a restore reads (D193).
+    [Parameter(Position = 1)]
+    [string]$File,
     # Listen on every interface rather than loopback only. Opt-in, because the
     # server speaks plain HTTP: over the LAN a password crosses the WiFi in the
     # clear until the site has a certificate (see the plan's risks).
@@ -137,7 +141,7 @@ function Build-Server {
     Push-Location $Root
     try {
         Invoke-Checked 'cargo build' {
-            cargo build --release -p spork-server --bin spork-server --bin spork-scheduler
+            cargo build --release -p spork-server --bin spork-server --bin spork-scheduler --bin spork-restore
         }
     } finally { Pop-Location }
 }
@@ -167,6 +171,30 @@ function Start-Spork {
     } finally {
         if (-not $scheduler.HasExited) { Stop-Process -Id $scheduler.Id -Force }
     }
+}
+
+# A workspace's backup, put back into an empty Spork (D193). The database is
+# brought to this Spork's migration first; the backup must have been taken at
+# the same one. The password is asked here and handed over in the environment,
+# never on a command line where the process list would show it.
+function Restore-Backup {
+    $ErrorActionPreference = 'Continue'   # native stderr is not a failure; see Invoke-Checked
+    if (-not $File) { throw "Say which backup: scripts\local.ps1 restore <backup.zip>" }
+    $path = Resolve-Path $File -ErrorAction Stop
+    $exe = Join-Path $Root 'target\release\spork-restore.exe'
+    if (-not (Test-Path $exe)) { throw "spork-restore.exe is not built. Run: scripts\local.ps1 setup" }
+    New-Item -ItemType Directory -Force $env:SPORK_IMAGE_DIR | Out-Null
+    Initialize-Database
+    Invoke-Migrate
+    $secret = Read-Host -AsSecureString 'Backup password'
+    $env:SPORK_BACKUP_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret))
+    try {
+        Invoke-Checked 'restore' { & $exe $path }
+    } finally {
+        Remove-Item Env:SPORK_BACKUP_PASSWORD -ErrorAction SilentlyContinue
+    }
+    Write-Host "`nRestored. Run: scripts\local.ps1 start"
 }
 
 # IPv4 addresses other devices can reach: DHCP or manual, not loopback or
@@ -237,4 +265,5 @@ switch ($Command) {
     }
     'status' { Show-Status }
     'firewall' { Open-Firewall }
+    'restore' { Restore-Backup }
 }

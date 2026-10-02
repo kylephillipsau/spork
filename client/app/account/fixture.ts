@@ -18,6 +18,7 @@ const who = {
   tenant_name: "Spork Pty Ltd",
   site_id: "a5170000-0000-0000-0000-000000000001",
   site_code: "MEL",
+  administrator: true,
 };
 
 const noop = async () => {};

@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "spork-scheduler"
 path = "src/bin/scheduler.rs"
 
+[[bin]]
+name = "spork-restore"
+path = "src/bin/restore.rs"
+
 [dependencies]
 # The global search (D189): bins, items and orders in one index per tenant,
 # held in memory and rebuilt from the database. In memory only, so none of the
@@ -56,6 +60,8 @@ maud = { version = "0.27", features = ["actix-web"] }
 csv = "1"
 webauthn-rs = { version = "0.5.5", features = ["conditional-ui", "danger-allow-state-serialisation"] }
 webauthn-rs-proto = "0.5.5"
+# A workspace's backup (D193): one zip, every entry AES-256 encrypted.
+zip = { version = "8.6.0", default-features = false, features = ["aes-crypto", "deflate"] }
 
 [dev-dependencies]
 # `test::init_service` builds the real `App` in-process, so the harness exercises

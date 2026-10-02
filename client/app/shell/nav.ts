@@ -10,6 +10,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowDownToLine,
   Boxes,
+  DatabaseBackup,
   Building2,
   ClipboardList,
   Crop,
@@ -36,6 +37,8 @@ export interface NavItem {
   readonly icon: LucideIcon;
   /** Which `/work` count to show beside it (D112: work waiting here, now). */
   readonly badge?: Badge;
+  /** Shown to a workspace's administrators only (D192). */
+  readonly administrators?: true;
 }
 
 export interface NavGroup {
@@ -83,6 +86,7 @@ export const SETTINGS: NavGroup = {
     { id: "workspace", label: "Workspace", path: "/workspace", icon: Building2 },
     { id: "import", label: "Import", path: "/import", icon: Upload },
     { id: "tokens", label: "Import tokens", path: "/tokens", icon: KeyRound },
+    { id: "backup", label: "Backup", path: "/backup", icon: DatabaseBackup, administrators: true },
   ],
 };
 

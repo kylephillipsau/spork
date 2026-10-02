@@ -392,7 +392,8 @@ pub async fn create_first_administrator(
     .await?;
 
     tx.execute(
-        "INSERT INTO person_tenant (person_id, tenant_id, role) VALUES ($1, $2, 'operator')",
+        // Whoever sets the workspace up administers it (D192).
+        "INSERT INTO person_tenant (person_id, tenant_id, role) VALUES ($1, $2, 'administrator')",
         &[&person_id, &tenant_id],
     )
     .await?;

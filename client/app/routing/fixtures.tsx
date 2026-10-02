@@ -95,6 +95,8 @@ import { FAILED as TOKENS_FAILED, MINTED, NONE as TOKENS_NONE, READY as TOKENS_R
 import { ImportPage } from "@app/admin/ImportPage";
 import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
+import { BackupPage } from "@app/admin/BackupPage";
+import { BACKUP_READY, fixtureBackup } from "@app/admin/backup-fixture";
 import { ItemPage } from "@app/items/ItemPage";
 import {
   BRUSH,
@@ -137,6 +139,7 @@ const WHO = {
     tenant_name: "Alpha Foods",
     site_id: "s",
     site_code: "MEL",
+    administrator: true,
   },
 };
 
@@ -715,6 +718,11 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-workspace-failed", "/fixtures/workspace/failed", "Workspace — unreachable", "desk", { screen: "workspace" }, () => (
     <WorkspacePage bench={fixtureWorkspace(WS_FAILED)} />
+  )),
+  // A backup of the whole workspace, and the moment after it was asked for (D193).
+  app("f-backup", "/fixtures/backup", "Backup", "desk", { screen: "backup" }, () => <BackupPage bench={fixtureBackup(BACKUP_READY)} />),
+  app("f-backup-asked", "/fixtures/backup/asked", "Backup — downloading", "desk", { screen: "backup" }, () => (
+    <BackupPage bench={fixtureBackup(BACKUP_READY, { asked: true })} />
   )),
 
   // Import tokens (D158). The secret shows for seconds on a live screen and

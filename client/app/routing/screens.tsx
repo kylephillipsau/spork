@@ -37,11 +37,13 @@ import { AccountPage } from "@app/account/AccountPage";
 import { KeysPage } from "@app/account/KeysPage";
 import { useKeys } from "@app/account/useKeys";
 import { TokensPage } from "@app/admin/TokensPage";
+import { BackupPage } from "@app/admin/BackupPage";
 import { ImportPage } from "@app/admin/ImportPage";
 import { useImport } from "@app/admin/useImport";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { useWorkspace } from "@app/admin/useWorkspace";
 import { useTokens } from "@app/admin/useTokens";
+import { useBackup } from "@app/admin/useBackup";
 import { usePassword } from "@app/account/usePassword";
 
 import { SCREENS } from "./manifest";
@@ -238,6 +240,11 @@ function LiveTokens() {
   return <TokensPage bench={useTokens()} />;
 }
 
+/** The workspace's backup (D193): an administrator's. */
+function LiveBackup() {
+  return <BackupPage bench={useBackup()} />;
+}
+
 /**
  * Finding an order (D39, D44). The reference lives in the query string rather
  * than the path: a filter is not a place, and `?reference=` keeps `/orders`
@@ -332,6 +339,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   where: () => <LiveWhere />,
   account: () => <LivePassword />,
   tokens: () => <LiveTokens />,
+  backup: () => <LiveBackup />,
   workspace: () => <LiveWorkspace />,
   import: () => <LiveImport />,
   keys: () => <LiveKeys />,

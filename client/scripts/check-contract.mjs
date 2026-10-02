@@ -234,6 +234,7 @@ const PAIRS = [
   ["UncutPhoto", ["UncutPhoto"]],
   ["LotAdded", ["LotAdded"]],
   ["PackagingType", ["PackagingType"]],
+  ["BackupSummary", ["BackupSummary"]],
   ["SameAsSaid", ["SameAsSaid"]],
   ["BoxPicture", ["BoxPicture"]],
   ["BoxPictureSaid", ["BoxPictureSaid"]],

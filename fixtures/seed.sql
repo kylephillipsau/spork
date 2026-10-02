@@ -35,7 +35,7 @@ INSERT INTO person (id, display_name, email) VALUES
 
 INSERT INTO person_tenant (person_id, tenant_id, role, joined_at) VALUES
     ('77770000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
-     'operator', '2026-01-01T00:00:00Z'),
+     'administrator', '2026-01-01T00:00:00Z'),
     ('77770000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222',
      'operator', '2026-01-01T00:00:00Z');
 

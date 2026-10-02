@@ -61,5 +61,6 @@ export const SIGNED_IN: Session = {
     tenant_name: "Spork Pty Ltd",
     site_id: MEL.id,
     site_code: "MEL",
+    administrator: true,
   },
 };

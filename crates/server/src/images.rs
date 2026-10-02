@@ -93,7 +93,7 @@ fn hex(bytes: &[u8]) -> String {
 /// `<root>/ab/cd/abcd…` — two levels of fan-out, so a tenant with a hundred
 /// thousand photographs does not have a hundred thousand entries in one
 /// directory, which is where several filesystems stop being fast.
-fn path_for(root: &Path, digest: &str) -> PathBuf {
+pub fn path_for(root: &Path, digest: &str) -> PathBuf {
     root.join(&digest[0..2]).join(&digest[2..4]).join(digest)
 }
 

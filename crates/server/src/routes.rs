@@ -6161,6 +6161,28 @@ async fn machine(
     crate::tokens::machine(&state.pool, &token).await
 }
 
+/// The caller's role in their workspace is `administrator` (D192), or the
+/// answer is 403 in words.
+pub async fn administrator(state: &AppState, who: &crate::auth::Caller) -> Result<(), ApiError> {
+    let person = who.person_id;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let is: bool = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                Ok(tx
+                    .query_one("SELECT role_in_tenant($1) IS NOT DISTINCT FROM 'administrator'", &[&person])
+                    .await?
+                    .get(0))
+            })
+        })
+        .await?;
+    if is {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden("only an administrator can do this".into()))
+    }
+}
+
 pub async fn caller(
     state: &web::Data<AppState>,
     req: &HttpRequest,
@@ -6205,6 +6227,8 @@ pub struct CurrentSession {
     pub tenant_name: String,
     pub site_id: Option<Uuid>,
     pub site_code: Option<String>,
+    /// Their role in the workspace is `administrator` (D192): Backup is shown.
+    pub administrator: bool,
 }
 
 /// Who am I. What a screen calls to decide whether to show a sign-on form.
@@ -6224,7 +6248,8 @@ pub async fn current_session(
             Box::pin(async move {
                 Ok(tx
                     .query_one(
-                        "SELECT p.display_name, t.name, s.code
+                        "SELECT p.display_name, t.name, s.code,
+                                role_in_tenant(p.id) IS NOT DISTINCT FROM 'administrator'
                            FROM person p
                            CROSS JOIN tenant t
                            LEFT JOIN site s ON s.id = $3
@@ -6247,6 +6272,7 @@ pub async fn current_session(
         tenant_name: row.get(1),
         site_id: who.site_id,
         site_code: row.get(2),
+        administrator: row.get(3),
     }))
 }
 
@@ -9326,6 +9352,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::set_family_picture)
         .service(crate::packaging::packaging_types)
         .service(crate::packaging::say_packed_in)
+        .service(crate::backup::backup_summary)
+        .service(crate::backup::download_backup)
         .service(crate::search::global_search)
         .service(open_fulfilments)
         .service(fulfilment_status)

@@ -12,6 +12,7 @@ import type { ChromeScan } from "@app/scan/useScan";
 import type { SiteRow } from "@domain/types";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { UserMenu } from "./UserMenu";
+import { useSession } from "@app/session/SessionContext";
 import s from "./app-shell.module.css";
 
 const COLLAPSED_KEY = "spork.sidebar.collapsed";
@@ -84,6 +85,10 @@ export function AppShell({
   }
 
   const here = currentItem(path);
+  // Backup is an administrator's (D192): not offered to anyone else.
+  const session = useSession();
+  const administrator = session.kind === "signed-in" && session.who.administrator;
+  const settings: NavGroup = { ...SETTINGS, items: SETTINGS.items.filter((i) => !i.administrators || administrator) };
   // Keyed on the sidebar item, not the screen: /findings and /findings/:id are
   // two screens and one place, and choosing a row is not arriving anywhere.
   const counts = useWork(here?.item.id ?? screenId, fixedCounts);
@@ -117,7 +122,7 @@ export function AppShell({
         </nav>
 
         <div className={s.foot}>
-          <Group group={SETTINGS} here={here?.item.id} counts={counts} collapsed={collapsed} />
+          <Group group={settings} here={here?.item.id} counts={counts} collapsed={collapsed} />
           <button type="button" className={s.collapse} onClick={toggleCollapsed}>
             {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
             <span className={s.itemLabel}>Collapse</span>

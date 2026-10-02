@@ -21,6 +21,7 @@ import type {
   LotAdded,
   CaptureSubject,
   PackagingType,
+  BackupSummary,
   SameAsSaid,
   ItemView,
   ItemsList,
@@ -793,6 +794,9 @@ export const api = {
   /** Say which variant stands for the item's carton, or none (D184). */
   setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/default-lot`, { lot_id: lot }),
+
+  /** What a backup of this workspace would hold (D193). An administrator's. */
+  backupSummary: () => send<BackupSummary>("GET", "/backup"),
 
   /** GS1's packaging types, the common ones first (D191). */
   packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),

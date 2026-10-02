@@ -25,6 +25,10 @@ pub enum ApiError {
     #[error("not found")]
     NotFound,
 
+    /// Signed in, and not allowed this: a backup is an administrator's (D192).
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+
     /// A write the client asked for is structurally invalid. The body carries
     /// the problem list; this is the class only.
     #[error("rejected: {0}")]
@@ -37,6 +41,7 @@ impl ResponseError for ApiError {
             ApiError::NoTenant | ApiError::Rejected(_) => StatusCode::BAD_REQUEST,
             ApiError::Unauthenticated => StatusCode::UNAUTHORIZED,
             ApiError::NotFound => StatusCode::NOT_FOUND,
+            ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -53,6 +58,7 @@ impl ResponseError for ApiError {
             ApiError::Unauthenticated => ("not signed in", None),
             ApiError::NotFound => ("not found", None),
             ApiError::Rejected(d) => ("rejected", Some(d.as_str())),
+            ApiError::Forbidden(d) => ("forbidden", Some(d.as_str())),
             _ => ("internal error", None),
         };
         let mut body = serde_json::json!({ "error": error });
