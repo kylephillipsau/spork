@@ -81,7 +81,10 @@ export function shown(photo: Pick<SubjectPhoto, "digest" | "cut">): string {
 }
 
 export function photosOf(item: Pick<ItemView, "photos">, s: CaptureSubject): Map<string, SubjectPhoto> {
-  const key = subjectKey(s);
+  const own = subjectKey(s);
+  // A carton standing in for by a variant shows the variant's, until it has its own (D184).
+  const key =
+    s.variant_lot_id && !item.photos.some((p) => subjectKey(p) === own) ? `${s.variant_lot_id}:lot` : own;
   return new Map(item.photos.filter((p) => subjectKey(p) === key).map((p) => [p.face, p]));
 }
 

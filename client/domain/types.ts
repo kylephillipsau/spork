@@ -290,6 +290,9 @@ export interface CaptureSubject {
   lot_id: Uuid | null;
   /** What the run is known by: the order number on its carton, say. */
   lot_code: string | null;
+  /** For the item's own carton: the variant standing for it, shown until the carton is recorded as itself (D184). */
+  variant_lot_id: Uuid | null;
+  variant_code: string | null;
   code: string;
   description: string | null;
   /** `each` or `carton`, and null for a part — a part has no packaging level,

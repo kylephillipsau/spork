@@ -14064,3 +14064,19 @@ Said of a side that was itself said, it points at the photograph taken.
 **Why.** Four photographs instead of six, on a phone over a warehouse's WiFi,
 and two fewer faces to check at the computer, with the 3D box still dressed
 on every side.
+
+### D184 — An item names the variant that is its carton
+
+*Adopted 2026-10-02, with migration 106.*
+
+**Decision.** An item whose cartons come printed two ways has each printing as
+a variant (D182), and its own carton card went on asking for photographs of a
+carton that is one of them. A variant's card now offers **Use for the
+carton** (`POST /items/{id}/default-lot`; `item.default_lot_id`). The item's
+carton card then shows that variant's figures and photographs, says so, and
+asks for nothing the variant has, until the carton is measured or
+photographed as itself, which wins. The choice can be undone.
+
+**Why a pointer and not a copy.** Copying the variant's photographs and
+figures onto the carton would claim a second look at a carton nobody looked
+at again; pointing says what is true, that the carton is that printing.

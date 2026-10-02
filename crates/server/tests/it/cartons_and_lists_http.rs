@@ -346,4 +346,34 @@ async fn a_run_that_looks_different_is_measured_on_its_own() {
     assert_eq!(subject["lot_code"], "O/N 66081, made in India");
     assert!(subject["packaging_level"].is_null(), "a run has no level: {subject}");
     assert!(subject["wants"].as_array().unwrap().iter().any(|w| w == "photographs"), "{subject}");
+
+    // ── the variant that is its carton (D184) ───────────────────────────
+    let r = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/items/{item}/default-lot"))
+            .insert_header(auth.clone())
+            .set_json(json!({ "lot_id": run["lot_id"] }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(r.status().as_u16(), 204);
+    let (status, _) = post(format!("/items/{item}/default-lot"), json!({ "lot_id": Uuid::new_v4() })).await;
+    assert_eq!(status, 400, "only a variant of this item");
+    // The rebuild that fills observation_current runs in the scheduler; the
+    // carton reads whatever the variant shows, so ask for the page again.
+    let page: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items/{item}")).insert_header(auth.clone()).to_request(),
+        "the item's page",
+    )
+    .await;
+    let carton = page["subjects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["packaging_level"] == "carton")
+        .unwrap_or_else(|| panic!("its carton: {page}"));
+    assert_eq!(carton["variant_lot_id"], run["lot_id"], "{carton}");
+    assert_eq!(carton["variant_code"], "O/N 66081, made in India");
 }

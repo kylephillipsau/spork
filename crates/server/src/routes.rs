@@ -9215,6 +9215,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::items::item_page)
         .service(crate::cartons::say_carton)
         .service(crate::cartons::add_lot)
+        .service(crate::cartons::set_default_lot)
         .service(crate::lists::make_list)
         .service(crate::lists::lists)
         .service(crate::places::set_reach)

@@ -223,8 +223,19 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
   return (
     <Card
       title={nameOf(subject)}
-      description={carton && !item.packing ? "Say how many it holds when you weigh or measure it" : provenance(subject)}
-      actions={needs.length > 0 && <Badge tone="warning">Needs {needs.join(", ")}</Badge>}
+      description={
+        subject.source === "variant"
+          ? `Shown from the variant ${subject.variant_code ?? ""}`
+          : carton && !item.packing
+            ? "Say how many it holds when you weigh or measure it"
+            : provenance(subject)
+      }
+      actions={
+        <>
+          {needs.length > 0 && <Badge tone="warning">Needs {needs.join(", ")}</Badge>}
+          {subject.lot_id && <VariantChoice item={item} subject={subject} desk={desk} />}
+        </>
+      }
       padded={false}
     >
       <div className={s.known}>
@@ -420,6 +431,22 @@ function HoldsField({ desk }: { desk: PropertiesDesk }) {
         onChange={(e) => desk.typeHolds(e.target.value)}
       />
     </div>
+  );
+}
+
+/** Whether this variant stands for the item's carton, and choosing it (D184). */
+function VariantChoice({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
+  const carton = item.subjects.find((s) => s.item_id === item.item_id && s.packaging_level === "carton");
+  if (!carton) return null;
+  const chosen = carton.variant_lot_id === subject.lot_id;
+  return chosen ? (
+    <Button size="sm" disabled={desk.busy} onClick={() => void desk.chooseVariant(null)}>
+      The carton · undo
+    </Button>
+  ) : (
+    <Button size="sm" disabled={desk.busy} onClick={() => void desk.chooseVariant(subject.lot_id)}>
+      Use for the carton
+    </Button>
   );
 }
 

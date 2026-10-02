@@ -29,6 +29,8 @@ const subject = (over: Partial<CaptureSubject>): CaptureSubject => ({
   part_label: null,
   lot_id: null,
   lot_code: null,
+  variant_lot_id: null,
+  variant_code: null,
   code: "GLOVE-M",
   description: null,
   packaging_level: "each",

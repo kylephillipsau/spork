@@ -129,6 +129,8 @@ export interface PropertiesDesk {
 
   /** Name a run of the item that looks different, to photograph on its own (D182). True when named. */
   addVariant: (code: string) => Promise<boolean>;
+  /** Say which variant stands for the item's carton, or none (D184). */
+  chooseVariant: (lot: Uuid | null) => Promise<void>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -505,6 +507,15 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       });
       return named;
     },
+
+    chooseVariant: (lot) =>
+      press(`carton-variant:${lot ?? "none"}`, async () => {
+        if (!itemId) return;
+        await api.setDefaultLot(itemId, lot);
+        if (!live.current) return;
+        setSaid({ tone: "success", text: lot ? "That variant now stands for the carton." : "The carton stands for itself again." });
+        await reload();
+      }),
 
     barcodes,
     binding,

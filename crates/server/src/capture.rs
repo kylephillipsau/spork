@@ -146,6 +146,10 @@ pub struct CaptureSubject {
     pub lot_id: Option<Uuid>,
     /// What the run is known by: the order number on its carton, say.
     pub lot_code: Option<String>,
+    /// For the item's own carton: the variant standing for it, whose figures
+    /// and photographs it shows until it is recorded as itself (D184).
+    pub variant_lot_id: Option<Uuid>,
+    pub variant_code: Option<String>,
     pub code: String,
     pub description: Option<String>,
     /// `each` or `carton`, and **absent for a part** — a part has no packaging
@@ -458,6 +462,8 @@ async fn classified_subjects(
                 part_label: r.get(18),
                 lot_id: None,
                 lot_code: None,
+                variant_lot_id: None,
+                variant_code: None,
                 code: r.get(2),
                 description: r.get(3),
                 // `part` is this query's join key and never a packaging level.
@@ -543,6 +549,8 @@ pub async fn subjects_for_item(
                 part_label: None,
                 lot_id: None,
                 lot_code: None,
+                variant_lot_id: None,
+                variant_code: None,
                 code: each.code.clone(),
                 description: each.description.clone(),
                 packaging_level: Some("carton".into()),
@@ -568,6 +576,40 @@ pub async fn subjects_for_item(
         }
     }
     found.extend(lot_subjects(tx, item_id).await?);
+    // **The variant that is its carton** (D184): the carton card shows it
+    // until the carton has figures or photographs of its own.
+    let chosen: Option<uuid::Uuid> = tx
+        .query_opt("SELECT default_lot_id FROM item WHERE id = $1", &[&item_id])
+        .await?
+        .and_then(|r| r.get(0));
+    if let Some(lot) = chosen {
+        let standing = found.iter().find(|s| s.lot_id == Some(lot)).map(|v| {
+            (v.gross_weight_g, v.length_mm, v.width_mm, v.height_mm, v.weight_absent, v.dimensions_absent,
+             v.method.clone(), v.observed_at, v.faces.clone(), v.wants.clone(), v.because.clone(), v.lot_code.clone())
+        });
+        if let (Some(v), Some(carton)) = (
+            standing,
+            found.iter_mut().find(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("carton")),
+        ) {
+            let own = carton.gross_weight_g.is_some() || carton.length_mm.is_some() || !carton.faces.is_empty();
+            carton.variant_lot_id = Some(lot);
+            carton.variant_code = v.11;
+            if !own {
+                carton.gross_weight_g = v.0;
+                carton.length_mm = v.1;
+                carton.width_mm = v.2;
+                carton.height_mm = v.3;
+                carton.weight_absent = v.4;
+                carton.dimensions_absent = v.5;
+                carton.method = v.6;
+                carton.observed_at = v.7;
+                carton.faces = v.8;
+                carton.wants = v.9;
+                carton.because = v.10;
+                carton.source = Some("variant".into());
+            }
+        }
+    }
     // A scan off a carton is the common case and the level the operator wants
     // is usually the bigger one, so carton leads, then the each, then the parts
     // — which are what to measure when the each turns out to have no box. Its
@@ -657,6 +699,8 @@ async fn lot_subjects(
                 part_label: None,
                 lot_id: r.get(0),
                 lot_code: r.get(1),
+                variant_lot_id: None,
+                variant_code: None,
                 code: r.get(2),
                 description: r.get(3),
                 packaging_level: None,

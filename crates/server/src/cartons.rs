@@ -264,6 +264,43 @@ pub async fn add_lot(
     Ok(HttpResponse::Ok().json(out))
 }
 
+#[derive(Deserialize, Debug)]
+pub struct DefaultLotRequest {
+    /// The variant that stands for the item's carton; absent for none.
+    pub lot_id: Option<Uuid>,
+}
+
+/// Say which variant is the item's carton, or that none is (D184).
+#[post("/items/{id}/default-lot")]
+pub async fn set_default_lot(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<DefaultLotRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let item_id = path.into_inner();
+    let lot = body.lot_id;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item_id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?;
+                if let Some(l) = lot {
+                    tx.query_opt("SELECT 1 FROM lot WHERE id = $1 AND item_id = $2", &[&l, &item_id])
+                        .await?
+                        .ok_or_else(|| ApiError::Rejected("that is not a variant of this item".into()))?;
+                }
+                tx.execute("UPDATE item SET default_lot_id = $2 WHERE id = $1", &[&item_id, &lot]).await?;
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

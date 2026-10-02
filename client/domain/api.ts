@@ -772,6 +772,10 @@ export const api = {
   /** Name a run of the item that looks different, to photograph and measure on its own (D182). */
   addLot: (itemId: Uuid, code: string) => send<LotAdded>("POST", `/items/${encodeURIComponent(itemId)}/lots`, { code }),
 
+  /** Say which variant stands for the item's carton, or none (D184). */
+  setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>
+    send<void>("POST", `/items/${encodeURIComponent(itemId)}/default-lot`, { lot_id: lot }),
+
   /** The lists of items worked at this site, newest first (D179). */
   itemLists: () => send<ItemListRow[]>("GET", "/item-lists"),
 
