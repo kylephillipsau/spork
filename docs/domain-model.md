@@ -13852,7 +13852,7 @@ under it. The runtime's arena and memory-pattern options made no difference;
 the memory is the encoder's. So a phone's photographs are cut at a computer
 (D181).
 
-### D178 — An item's carton is a box of so many of it, said at the item
+### D178: An item's carton is a box of so many of it, said at the item
 
 *Adopted 2026-10-02, with migration 101.*
 
@@ -13897,7 +13897,7 @@ somebody has recorded against is listed whether or not its count was ever
 said. A carton copied off the prepack list with no count stated has figures,
 and they are its own.
 
-### D179 — A sheet of items is kept as a list to work down
+### D179: A sheet of items is kept as a list to work down
 
 *Adopted 2026-10-02, with migration 102.*
 
@@ -13932,7 +13932,7 @@ some codes have in them.
 **Next.** The completed sheet: each item on a list with its own figures and its
 carton's, to hand back.
 
-### D180 — A rack says how many of its levels are within reach
+### D180: A rack says how many of its levels are within reach
 
 *Adopted 2026-10-02, with migration 103.*
 
@@ -13967,7 +13967,7 @@ each record names, and the bins list.
 drawing: set, not appended. Who changed the layout, and when, is the layout's
 history, which is not built yet for any of it.
 
-### D181 — A phone takes the photographs and a computer cuts them
+### D181: A phone takes the photographs and a computer cuts them
 
 *Adopted 2026-10-02.*
 
@@ -14018,7 +14018,7 @@ module (`crop.ts`), used by both.
 **Not built.** The queue is the tenant's, not a site's: photographs have no
 site. A queue of hundreds is read three hundred at a time.
 
-### D182 — A run that looks different is a variant of the item, measured on its own
+### D182: A run that looks different is a variant of the item, measured on its own
 
 *Adopted 2026-10-02, with migration 104.*
 
@@ -14045,7 +14045,7 @@ items, styles, parts and packages.
 **Not built.** A run says nothing yet about where it is or how many of it are
 here, and receiving does not ask which run arrived.
 
-### D183 — A side printed like its opposite is said, not photographed
+### D183: A side printed like its opposite is said, not photographed
 
 *Adopted 2026-10-02, with migration 105.*
 
@@ -14065,7 +14065,7 @@ Said of a side that was itself said, it points at the photograph taken.
 and two fewer faces to check at the computer, with the 3D box still dressed
 on every side.
 
-### D184 — An item names the variant that is its carton
+### D184: An item names the variant that is its carton
 
 *Adopted 2026-10-02, with migration 106.*
 
@@ -14081,7 +14081,7 @@ photographed as itself, which wins. The choice can be undone.
 figures onto the carton would claim a second look at a carton nobody looked
 at again; pointing says what is true, that the carton is that printing.
 
-### D185 — A carton of packs, and the pack measured on its own
+### D185: A carton of packs, and the pack measured on its own
 
 *Adopted 2026-10-02.*
 
@@ -14098,7 +14098,7 @@ sixteen packs.
 an inner level all along; only saying it and showing it were missing. A glove,
 its bundle and the box of bundles are three things a packer handles.
 
-### D186 — An item is pictured as its box, drawn from three cut faces
+### D186: An item is pictured as its box, drawn from three cut faces
 
 *Adopted 2026-10-02, with migration 107.*
 
@@ -14120,7 +14120,7 @@ WebP. It carries its act and its person, as a cut does.
 picture on the list. The variant that stands for its carton now counts as its
 own, and any other variant as a last resort, captioned so.
 
-### D187 — A fulfilment finished in the other system is closed here
+### D187: A fulfilment finished in the other system is closed here
 
 *Adopted 2026-10-02, with migration 108.*
 
@@ -14143,7 +14143,7 @@ not pack them.
 so it could not have said what it once sent. Asking Spork closes what was
 already stuck as well as what moves on from now.
 
-### D188 — A family is pictured by one of its items
+### D188: A family is pictured by one of its items
 
 *Adopted 2026-10-02, with migration 109.*
 
@@ -14157,7 +14157,7 @@ then the family's own photograph.
 **Why.** Thirteen sizes of a glove look alike, and nobody photographs thirteen
 boxes. One photographed well stands for the rest on every list.
 
-### D189 — One search for bins, items and orders, as it is typed
+### D189: One search for bins, items and orders, as it is typed
 
 *Adopted 2026-10-02.*
 
@@ -14186,7 +14186,7 @@ has no face to cut it to. Photos to crop (D181) and the crop screen offer
 **Use as taken**: a cut of the whole photograph, its own bytes, which takes it
 off the queue.
 
-### D190 — On an item's page its carton is its own; a photograph on the wrong card is moved
+### D190: On an item's page its carton is its own; a photograph on the wrong card is moved
 
 *Adopted 2026-10-02, with migration 110.*
 

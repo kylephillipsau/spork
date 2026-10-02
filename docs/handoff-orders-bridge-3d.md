@@ -1,5 +1,8 @@
 # Handoff: the bridge, orders, items and their photos, packing, and the warehouse
 
+Photos, capture, lists and search since 2026-10-02 are in
+[handoff-capture-and-search.md](./handoff-capture-and-search.md).
+
 Written 2026-09-28, updated 2026-10-01. Read this before continuing on the
 client's UI work, packing, items and their photos, or anything spatial.
 

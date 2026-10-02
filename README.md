@@ -102,7 +102,7 @@ record, the invariant and open-question registers, and the analyses behind them.
 Start at [docs/architecture.md](docs/architecture.md).
 
 Where work stands is in the newest handoff,
-[docs/handoff-orders-bridge-3d.md](docs/handoff-orders-bridge-3d.md).
+[docs/handoff-capture-and-search.md](docs/handoff-capture-and-search.md).
 
 ## Licence
 

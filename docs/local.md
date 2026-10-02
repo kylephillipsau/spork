@@ -70,10 +70,10 @@ Two limits apply until the site has a certificate:
   `localhost`, because browsers require HTTPS for them anywhere else.
 - **Traffic is not encrypted.** Passwords cross the WiFi in plain text. That's
   why LAN mode is opt-in.
-- **The face-finder runs on one thread.** It finds a box's face in the crop
-  screen (D177). Browsers give a page several threads only on HTTPS or at
-  localhost, so a phone reaching this PC by address waits several seconds
-  for its first answer. A tap to look again is under a second either way.
+- **The face-finder runs at a computer only.** A phone takes photos, and
+  Photos to crop finds their faces at a computer (D181). At an address the
+  page gets one thread, at localhost several. Firefox is about 13 times
+  slower than Chrome or Edge.
 
 A page on plain HTTP at an address is not what browsers call a secure context,
 so they leave out what they offer only over HTTPS. **Nothing in the client may
@@ -137,3 +137,19 @@ bottom-left corner. Hover over it for why, or click it to try again.
 Only one NetSuite tab syncs at a time, and moving between NetSuite screens hands
 the job on without a gap. Sending the same fulfilment again writes nothing. Items
 Spork hasn't seen are created from the fulfilment's code and description.
+
+Each sync also closes what NetSuite finished (D187). The bridge asks Spork which
+NetSuite fulfilments are open (`GET /api/import/fulfilments/open`), reads their
+status in NetSuite, and reports any packed, shipped or deleted
+(`POST /api/import/fulfilment/status`). Spork drops them from picking, packing,
+despatch and the counts. A fulfilment sent back to Picked opens again. Bridge
+0.4.0 needs Spork at migration 108.
+
+## After an update
+
+A new server build or migration needs a restart: Ctrl+C, then
+`scripts\local.ps1 start -Lan`. Starting applies pending migrations.
+
+A client change goes live on `npm run build`, because the server reads
+`client/dist` from disk. When the client needs a new endpoint, restart the
+server on the new build first.
