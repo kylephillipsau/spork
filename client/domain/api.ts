@@ -17,6 +17,7 @@ import type {
   CartonSaid,
   ItemListRow,
   LotAdded,
+  SameAsSaid,
   ItemView,
   ItemsList,
   OwnerSet,
@@ -1143,6 +1144,9 @@ export const api = {
    * (D176).
    */
   storeImage: (image: Blob) => upload<StoredImage>("/images", image),
+
+  /** Say another side looks like this photograph: its bytes and its cut, nothing uploaded (D183). */
+  sameAs: (image: Uuid, face: string) => send<SameAsSaid>("POST", `/observation-images/${image}/same-as`, { face }),
 
   /** The photographs waiting to be cut to their faces, oldest first: a computer's queue (D181). */
   uncutPhotos: () => send<UncutPhoto[]>("GET", "/photos/uncut"),

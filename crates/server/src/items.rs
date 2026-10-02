@@ -135,8 +135,11 @@ pub struct SubjectPhoto {
     /// `GET /images/{digest}` serves it.
     pub digest: String,
     pub captured_at: DateTime<Utc>,
-    /// Its newest cut to the face, when somebody has marked one.
+    /// Its newest cut to the face, when somebody has marked one: for a side
+    /// said to look like another, that other's.
     pub cut: Option<PhotoCut>,
+    /// The side it was said to look like, rather than photographed (D183).
+    pub same_as: Option<String>,
 }
 
 /// A photograph cut to its face and straightened (D176).
@@ -277,14 +280,15 @@ pub async fn item_page(
                         "SELECT DISTINCT ON (o.id, oi.face)
                                 o.item_id, o.item_style_id, o.item_part_id,
                                 o.packaging_level::text, oi.face, oi.digest, oi.captured_at,
-                                oi.id, cut.digest, cut.corners, o.lot_id
+                                oi.id, cut.digest, cut.corners, o.lot_id, src.face
                            FROM observable o
                            JOIN observation_event e ON e.observable_id = o.id
                            JOIN observation_image oi ON oi.observation_event_id = e.id
+                           LEFT JOIN observation_image src ON src.id = oi.same_as_id
                            LEFT JOIN LATERAL (
                                 SELECT c.digest, c.corners
                                   FROM observation_image_cut c
-                                 WHERE c.observation_image_id = oi.id
+                                 WHERE c.observation_image_id = coalesce(oi.same_as_id, oi.id)
                                  ORDER BY c.recorded_at DESC, c.id DESC
                                  LIMIT 1
                            ) cut ON true
@@ -311,6 +315,7 @@ pub async fn item_page(
                             digest,
                             corners: x.get(9),
                         }),
+                        same_as: x.get(11),
                     })
                     .collect();
 

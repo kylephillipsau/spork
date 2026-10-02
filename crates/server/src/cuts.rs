@@ -49,7 +49,7 @@ use crate::AppState;
 pub const UNCUT: &str = "
     WITH newest AS (
         SELECT DISTINCT ON (o.id, oi.face)
-               oi.id AS image_id, oi.digest, oi.face, oi.captured_at,
+               oi.id AS image_id, oi.digest, oi.face, oi.captured_at, oi.same_as_id,
                o.item_id, o.item_style_id, o.item_part_id, o.lot_id
           FROM observable o
           JOIN observation_event e ON e.observable_id = o.id
@@ -65,7 +65,9 @@ pub const UNCUT: &str = "
                       ORDER BY v.code LIMIT 1)) AS open_item
       FROM newest n
       LEFT JOIN item_part p ON p.id = n.item_part_id
-     WHERE NOT EXISTS (SELECT 1 FROM observation_image_cut c WHERE c.observation_image_id = n.image_id)";
+     WHERE NOT EXISTS (SELECT 1 FROM observation_image_cut c WHERE c.observation_image_id = n.image_id)
+       -- A side said to look like another is cut with it (D183).
+       AND n.same_as_id IS NULL";
 
 /// A photograph waiting to be cut.
 #[derive(Serialize, Debug)]
@@ -120,6 +122,91 @@ pub async fn uncut_photos(req: HttpRequest, state: web::Data<AppState>) -> Resul
         })
         .await?;
     Ok(HttpResponse::Ok().json(out))
+}
+
+/// A side said to look like another (D183).
+#[derive(Deserialize, Debug)]
+pub struct SameAsRequest {
+    /// The side that looks like the photograph's.
+    pub face: String,
+}
+
+/// The sides a box has: a label looks like nothing but itself.
+const SIDES: [&str; 6] = ["front", "right", "back", "left", "top", "bottom"];
+
+/// Say that another side of the same thing looks like this photograph: a
+/// photograph of that side, in the same look, carrying these bytes and, once
+/// it is cut, this cut (D183). Nothing is uploaded.
+#[post("/observation-images/{id}/same-as")]
+pub async fn same_as(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<SameAsRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let source = path.into_inner();
+    let face = body.face.clone();
+    if !SIDES.contains(&face.as_str()) {
+        return Err(ApiError::Rejected(format!("a side is one of {}, not {face}", SIDES.join(", "))));
+    }
+    let tenant = who.tenant_id;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let src = tx
+                    .query_opt(
+                        "SELECT observation_event_id, face, digest, mime, byte_count, width_px, height_px,
+                                captured_at, same_as_id
+                           FROM observation_image WHERE id = $1",
+                        &[&source],
+                    )
+                    .await?
+                    .ok_or(ApiError::NotFound)?;
+                let src_face: String = src.get(1);
+                if src_face == face {
+                    return Err(ApiError::Rejected("a side looks like itself already".into()));
+                }
+                if !SIDES.contains(&src_face.as_str()) {
+                    return Err(ApiError::Rejected("only a side of the box can stand for another".into()));
+                }
+                // Said of a side that was itself said: point at the photograph taken.
+                let taken: Uuid = src.get::<_, Option<Uuid>>(8).unwrap_or(source);
+                let row = tx
+                    .query_one(
+                        "INSERT INTO observation_image
+                             (tenant_id, observation_event_id, face, digest, mime, byte_count,
+                              width_px, height_px, captured_at, same_as_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                         RETURNING id",
+                        &[
+                            &tenant,
+                            &src.get::<_, Uuid>(0),
+                            &face,
+                            &src.get::<_, String>(2),
+                            &src.get::<_, String>(3),
+                            &src.get::<_, i64>(4),
+                            &src.get::<_, Option<i32>>(5),
+                            &src.get::<_, Option<i32>>(6),
+                            &src.get::<_, DateTime<Utc>>(7),
+                            &taken,
+                        ],
+                    )
+                    .await?;
+                Ok(SameAsSaid { image_id: row.get(0), same_as_id: taken, face })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
+#[derive(Serialize, Debug)]
+pub struct SameAsSaid {
+    pub image_id: Uuid,
+    /// The photograph it stands for.
+    pub same_as_id: Uuid,
+    pub face: String,
 }
 
 /// Keep an image's bytes and say their address. Nothing names them yet: an

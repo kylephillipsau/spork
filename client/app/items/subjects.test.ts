@@ -61,6 +61,7 @@ const photo = (over: Partial<SubjectPhoto>): SubjectPhoto => ({
   face: "front",
   image_id: "image-1",
   cut: null,
+  same_as: null,
   digest: "d".repeat(64),
   captured_at: "2026-10-01T00:00:00Z",
   ...over,

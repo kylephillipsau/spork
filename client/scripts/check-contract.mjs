@@ -233,6 +233,7 @@ const PAIRS = [
   ["CartonSaid", ["CartonSaid"]],
   ["UncutPhoto", ["UncutPhoto"]],
   ["LotAdded", ["LotAdded"]],
+  ["SameAsSaid", ["SameAsSaid"]],
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
   ["ItemHeld", ["ItemHeld"]],

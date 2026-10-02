@@ -14044,3 +14044,23 @@ items, styles, parts and packages.
 
 **Not built.** A run says nothing yet about where it is or how many of it are
 here, and receiving does not ask which run arrived.
+
+### D183 — A side printed like its opposite is said, not photographed
+
+*Adopted 2026-10-02, with migration 105.*
+
+**Decision.** Many cartons are printed the same front and back, and the same
+on both ends. When the walk round a box (D181) reaches the back with the front
+taken, the left with the right taken, or the bottom with the top taken, it
+offers **Same as front** (right, top) beside the camera. Pressed, it records a
+photograph of that side in the same look that points at the photograph it
+looks like (`observation_image.same_as_id`, `POST
+/observation-images/{id}/same-as`) and carries its bytes. Nothing is uploaded.
+
+**Its cut is the other side's.** The item page shows it with that photograph's
+newest cut, so it is never cut on its own and never waits in the crop queue.
+Said of a side that was itself said, it points at the photograph taken.
+
+**Why.** Four photographs instead of six, on a phone over a warehouse's WiFi,
+and two fewer faces to check at the computer, with the 3D box still dressed
+on every side.

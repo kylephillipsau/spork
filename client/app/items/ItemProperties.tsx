@@ -569,6 +569,7 @@ function Photos({
               <li key={face} className={s.faceTile}>
                 <Thumb picture={photo ? { digest: shown(photo), source: "own" } : null} alt={`${subject.code}, ${name}`} />
                 <span className={s.faceName}>{name}</span>
+                {photo?.same_as && <Faint>Same as {photo.same_as}</Faint>}
                 {desk?.sending[face] === "sending" && <Faint>Sending…</Faint>}
                 {desk?.sending[face] === "failed" && (
                   <Button size="sm" onClick={() => desk.resend(face)}>
@@ -576,7 +577,7 @@ function Photos({
                   </Button>
                 )}
                 {desk && <Shutter face={face} name={name} subject={subject} desk={desk} taken={desk.taken.includes(face)} />}
-                {desk && photo && (
+                {desk && photo && !photo.same_as && (
                   <Button
                     size="sm"
                     icon={<Crop />}
@@ -598,6 +599,9 @@ function Photos({
   );
 }
 
+/** The side a side is often printed like, taken before it in the walk round. */
+const OPPOSITE: Partial<Record<Face, Face>> = { back: "front", left: "right", bottom: "top" };
+
 /**
  * The next side to take, as one big button, and Skip for a side there is no
  * getting at: a box photographed in one walk round it, a tap a side, the
@@ -609,11 +613,15 @@ function NextSide({ subject, desk }: { subject: CaptureSubject; desk: Properties
   const next = order.find((f) => !desk.taken.includes(f) && !skipped.includes(f));
   const done = order.filter((f) => desk.taken.includes(f)).length;
   const on = Object.values(desk.sending).filter((v) => v === "sending").length;
+  // A side printed like its opposite, already taken, is said rather than shot (D183).
+  const like = next ? OPPOSITE[next] : undefined;
+  const copy = like && desk.taken.includes(like) ? like : undefined;
   return (
     <div className={s.nextSide}>
       {next ? (
         <>
           <Shutter face={next} name={faceName(next, subject)} subject={subject} desk={desk} taken={false} big />
+          {copy && <Button onClick={() => desk.same(subject, next, copy)}>Same as {copy}</Button>}
           <Button onClick={() => setSkipped((k) => [...k, next])}>Skip</Button>
         </>
       ) : (

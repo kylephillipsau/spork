@@ -8,7 +8,7 @@ import type { BoundBarcode, CaptureSubject, ItemView, Uuid } from "@domain/types
 import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
 import { measurementsOf, type Figures } from "./figures";
-import { NO_FIGURES, cartonHolds, isOwnCarton, presentationNeeded, readHolds, sayFirst, subjectKey, type Face } from "./subjects";
+import { NO_FIGURES, cartonHolds, isOwnCarton, photosOf, presentationNeeded, readHolds, sayFirst, subjectKey, type Face } from "./subjects";
 
 /**
  * One item's properties, as logic: what it is and what is known of it, and
@@ -107,6 +107,8 @@ export interface PropertiesDesk {
   attach: (subject: CaptureSubject, face: Face, image: Blob) => void;
   /** Send again a face that did not send. */
   resend: (face: Face) => void;
+  /** Say a side looks like another already taken, rather than photograph it (D183). */
+  same: (subject: CaptureSubject, face: Face, as: Face) => void;
 
   /** The photograph open to be cut, if one is. */
   cropping: Cropping | null;
@@ -169,7 +171,12 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   // Photographs being sent, one after another, and each one's act so that
   // sending it again is the same act.
   const line = useRef<Promise<void>>(Promise.resolve());
-  const held = useRef(new Map<Face, { subject: CaptureSubject; image: Blob; act: Act }>());
+  // A job is a photograph, or a side said to look like another (`as`).
+  const held = useRef(new Map<Face, { subject: CaptureSubject; act: Act; image?: Blob; as?: Face }>());
+  // The photograph each face sent in this look, for a side said to look like it.
+  const sent = useRef(new Map<Face, Uuid>());
+  const latest = useRef(read);
+  latest.current = read;
   // The item on screen, which a photograph sent for another must not touch.
   const showing = useRef(itemId);
   const [cropping, setCropping] = useState<Cropping | null>(null);
@@ -222,6 +229,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setTaken([]);
     setSending({});
     held.current.clear();
+    sent.current.clear();
     showing.current = itemId;
     setCropping(null);
     setBarcodes([]);
@@ -299,7 +307,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     line.current = line.current.then(async () => {
       try {
         let event = look.current?.key === subjectKey(job.subject) ? look.current.event : null;
-        if (!event) {
+        if (!event && !job.as) {
           await sayCartonFirst(job.subject, job.act);
           const response = await api.recordCapture({
             ...named(job.subject),
@@ -311,7 +319,25 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
           event = response.observation_event_id;
           if (here()) look.current = { key: subjectKey(job.subject), event };
         }
-        const kept = await api.photograph(event, face, job.image);
+        if (job.as) {
+          // Said, not taken: it stands for the photograph of the side it looks like.
+          const shown = latest.current.kind === "ready" ? photosOf(latest.current.item, job.subject).get(job.as)?.image_id : undefined;
+          const source = sent.current.get(job.as) ?? shown;
+          if (!source) throw new Error(`the ${job.as} has not been photographed`);
+          const said = await api.sameAs(source, face);
+          sent.current.set(face, said.image_id);
+          if (held.current.get(face) === job) held.current.delete(face);
+          if (!here()) return;
+          setSending((s) => {
+            const { [face]: _, ...rest } = s;
+            return rest;
+          });
+          await reload();
+          return;
+        }
+        if (!event) throw new Error("a photograph needs its look");
+        const kept = await api.photograph(event, face, job.image!);
+        sent.current.set(face, kept.image_id);
         if (held.current.get(face) === job) held.current.delete(face);
         if (!here()) return;
         setSending((s) => {
@@ -441,6 +467,10 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       send(face);
     },
     resend: send,
+    same: (subject, face, as) => {
+      held.current.set(face, { subject, act: anAct(), as });
+      send(face);
+    },
 
     cropping,
     crop: (next) => {

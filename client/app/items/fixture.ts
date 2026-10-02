@@ -155,6 +155,7 @@ export const ITEM: ItemView = {
       digest: PHOTO,
       captured_at: "2026-09-30T04:13:00Z",
       cut: null,
+      same_as: null,
     },
     // The family's carton photographed on four of its sides and its label:
     // drawn as a box, the two sides nobody took show their names.
@@ -170,6 +171,7 @@ export const ITEM: ItemView = {
       digest: PHOTO,
       captured_at: "2026-09-30T04:20:00Z",
       cut: face === "front" ? { digest: CUT, corners: [0.12, 0.2, 0.9, 0.16, 0.94, 0.86, 0.08, 0.9] } : null,
+      same_as: null,
     })),
   ],
 };
@@ -220,6 +222,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     sending: {},
     attach: noop,
     resend: noop,
+    same: noop,
     cropping: null,
     crop: noop,
     uncrop: noop,

@@ -1338,8 +1338,17 @@ export interface SubjectPhoto {
   image_id: Uuid;
   digest: string;
   captured_at: string;
-  /** Its newest cut to the face, when somebody has marked one. */
+  /** Its newest cut to the face, when somebody has marked one: for a side said to look like another, that other's. */
   cut: PhotoCut | null;
+  /** The side it was said to look like, rather than photographed (D183). */
+  same_as: string | null;
+}
+
+/** `POST /observation-images/{id}/same-as`: another side said to look like this photograph (D183). */
+export interface SameAsSaid {
+  image_id: Uuid;
+  same_as_id: Uuid;
+  face: string;
 }
 
 /** A photograph cut to its face and straightened (D176). */

@@ -482,6 +482,48 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
         after.as_array().unwrap().iter().all(|q| q["image_id"] != photo_id.as_str()),
         "a cut photograph leaves the queue: {after}"
     );
+
+    // ── the back looks like the front (D183) ────────────────────────────
+    let said: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observation-images/{photo_id}/same-as"))
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "face": "back" }))
+            .to_request(),
+        "the back said to look like the front",
+    )
+    .await;
+    assert_eq!(said["same_as_id"], photo_id.as_str());
+    let refused = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observation-images/{photo_id}/same-as"))
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "face": "label" }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(refused.status().as_u16(), 400, "a label looks like nothing but itself");
+    let paged: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items/{GLOVE}")).insert_header(("authorization", bearer.clone())).to_request(),
+        "the glove's page",
+    )
+    .await;
+    let back = paged["photos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["image_id"] == said["image_id"])
+        .unwrap_or_else(|| panic!("the back is one of its photographs: {paged}"));
+    assert_eq!(back["face"], "back");
+    assert_eq!(back["same_as"], "front");
+    assert_eq!(back["cut"]["digest"], cut_digest.as_str(), "and wears the front's cut: {back}");
+    assert!(
+        queue().await.as_array().unwrap().iter().all(|q| q["image_id"] != said["image_id"]),
+        "a side said to look like another never waits to be cut"
+    );
     let (status, again) = cut(photo_id.clone(), act(cut_event, &cut_digest, &corners)).await;
     assert_eq!(status, 200, "a repeated press is the same act: {again}");
     assert_eq!(again["cut_id"], made["cut_id"], "and the same cut");
