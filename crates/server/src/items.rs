@@ -126,6 +126,8 @@ pub struct SubjectPhoto {
     pub item_id: Option<Uuid>,
     pub item_style_id: Option<Uuid>,
     pub item_part_id: Option<Uuid>,
+    /// A run of the item that looks different (D182).
+    pub lot_id: Option<Uuid>,
     pub packaging_level: Option<String>,
     pub face: String,
     /// The photograph, which a cut points at (D176).
@@ -275,7 +277,7 @@ pub async fn item_page(
                         "SELECT DISTINCT ON (o.id, oi.face)
                                 o.item_id, o.item_style_id, o.item_part_id,
                                 o.packaging_level::text, oi.face, oi.digest, oi.captured_at,
-                                oi.id, cut.digest, cut.corners
+                                oi.id, cut.digest, cut.corners, o.lot_id
                            FROM observable o
                            JOIN observation_event e ON e.observable_id = o.id
                            JOIN observation_image oi ON oi.observation_event_id = e.id
@@ -289,6 +291,7 @@ pub async fn item_page(
                           WHERE o.item_id = $1
                              OR o.item_style_id = (SELECT style_id FROM item WHERE id = $1)
                              OR o.item_part_id IN (SELECT id FROM item_part WHERE item_id = $1)
+                             OR o.lot_id IN (SELECT id FROM lot WHERE item_id = $1)
                           ORDER BY o.id, oi.face, oi.captured_at DESC, oi.id DESC",
                         &[&id],
                     )
@@ -298,6 +301,7 @@ pub async fn item_page(
                         item_id: x.get(0),
                         item_style_id: x.get(1),
                         item_part_id: x.get(2),
+                        lot_id: x.get(10),
                         packaging_level: x.get(3),
                         face: x.get(4),
                         image_id: x.get(7),

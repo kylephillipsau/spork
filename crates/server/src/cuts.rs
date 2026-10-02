@@ -50,16 +50,17 @@ pub const UNCUT: &str = "
     WITH newest AS (
         SELECT DISTINCT ON (o.id, oi.face)
                oi.id AS image_id, oi.digest, oi.face, oi.captured_at,
-               o.item_id, o.item_style_id, o.item_part_id
+               o.item_id, o.item_style_id, o.item_part_id, o.lot_id
           FROM observable o
           JOIN observation_event e ON e.observable_id = o.id
           JOIN observation_image oi ON oi.observation_event_id = e.id
-         WHERE (o.item_id IS NOT NULL OR o.item_style_id IS NOT NULL OR o.item_part_id IS NOT NULL)
+         WHERE (o.item_id IS NOT NULL OR o.item_style_id IS NOT NULL OR o.item_part_id IS NOT NULL
+                OR o.lot_id IS NOT NULL)
            AND oi.face IN ('front', 'back', 'left', 'right', 'top', 'bottom', 'label')
          ORDER BY o.id, oi.face, oi.captured_at DESC, oi.id DESC
     )
     SELECT n.image_id, n.digest, n.face, n.captured_at,
-           coalesce(n.item_id, p.item_id,
+           coalesce(n.item_id, p.item_id, (SELECT lt.item_id FROM lot lt WHERE lt.id = n.lot_id),
                     (SELECT v.id FROM item v WHERE v.style_id = n.item_style_id
                       ORDER BY v.code LIMIT 1)) AS open_item
       FROM newest n

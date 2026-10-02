@@ -14017,3 +14017,30 @@ module (`crop.ts`), used by both.
 
 **Not built.** The queue is the tenant's, not a site's: photographs have no
 site. A queue of hundreds is read three hundred at a time.
+
+### D182 — A run that looks different is a variant of the item, measured on its own
+
+*Adopted 2026-10-02, with migration 104.*
+
+**Decision.** One product can arrive in cartons that look different: the same
+code and the same goods, one carton printed in colour with a barcode, the next
+plain kraft with an order number on a sticker, from another factory. Each such
+run is a **lot** of the item, named by what is on its carton
+(`POST /items/{id}/lots`; a name the item already has is that run). On the
+item's page each run is a card of its own, "Variant: O/N …", photographed six
+sides round and measured like any subject, its figures and photographs its
+own: nothing inherits either way, because a carton from another factory can
+be another size. Its photographs join the crop queue (D181) under the item.
+
+**Why a lot.** The lot table and the observation registry's lot arm were both
+already here; a run of an item is what a lot is. The item keeps one code, one
+stock figure and one set of photographs of its usual carton. Stock is not
+split by run: making the item lot-tracked would make every receipt and pick
+name the run, which nobody needs to tell bin liners apart.
+
+**Weight and size apply to a lot now** (migration 104): the writer refuses a
+metric that does not apply to the subject's kind, and these four applied to
+items, styles, parts and packages.
+
+**Not built.** A run says nothing yet about where it is or how many of it are
+here, and receiving does not ask which run arrived.

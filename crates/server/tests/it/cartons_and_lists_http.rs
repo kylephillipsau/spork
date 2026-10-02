@@ -276,3 +276,74 @@ async fn a_list_is_kept_in_its_order_and_narrows_the_item_list() {
     let (_, plain) = get("/items?q=GLOVE-M".into()).await;
     assert!(plain["items"][0]["list_position"].is_null(), "no list, no place on one: {plain}");
 }
+
+/// A run of an item that looks different is a subject of its own (D182).
+#[actix_web::test]
+async fn a_run_that_looks_different_is_measured_on_its_own() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let db = state.pool.get().await.expect("a connection");
+    db.execute("SELECT set_config('spork.tenant_id', $1, false)", &[&TENANT]).await.expect("the tenant scope");
+    let item: Uuid = db
+        .query_one(
+            "INSERT INTO item (tenant_id, code, description, base_unit_id, tracking)
+             SELECT current_tenant(), $1, 'Bin liners, two printings', u.id, 'none'
+               FROM unit u WHERE u.code = 'ea' RETURNING id",
+            &[&format!("RUN-{}", nonce())],
+        )
+        .await
+        .expect("the item")
+        .get(0);
+    let app = test::init_service(App::new().app_data(state.clone()).configure(routes::configure)).await;
+    let auth = ("authorization", common::bearer(&app).await);
+    let post = |uri: String, body: Value| {
+        let auth = auth.clone();
+        let app = &app;
+        async move {
+            let r = test::call_service(app, test::TestRequest::post().uri(&uri).insert_header(auth).set_json(body).to_request()).await;
+            let status = r.status().as_u16();
+            (status, serde_json::from_slice::<Value>(&test::read_body(r).await).unwrap_or(Value::Null))
+        }
+    };
+
+    let (status, run) = post(format!("/items/{item}/lots"), json!({ "code": "O/N 66081, made in India" })).await;
+    assert_eq!(status, 200, "{run}");
+    assert_eq!(run["added"], true);
+    let (_, again) = post(format!("/items/{item}/lots"), json!({ "code": " O/N 66081, made in India " })).await;
+    assert_eq!(again["lot_id"], run["lot_id"], "the same name is the same run");
+    assert_eq!(again["added"], false);
+    let (status, _) = post(format!("/items/{item}/lots"), json!({ "code": "  " })).await;
+    assert_eq!(status, 400, "a run needs a name");
+
+    let (status, weighed) = post(
+        "/observations".into(),
+        json!({
+            "lot_id": run["lot_id"],
+            "measurements": [{ "metric": "gross_weight", "entered_value": "4.1", "unit": "kg" }],
+            "method": "instrument", "ingestion_channel": "keyed",
+            "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z",
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "a run is weighed on its own: {weighed}");
+
+    let page: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items/{item}")).insert_header(auth.clone()).to_request(),
+        "the item's page",
+    )
+    .await;
+    let subject = page["subjects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["lot_id"] == run["lot_id"])
+        .unwrap_or_else(|| panic!("the run is a subject of the item: {page}"));
+    assert_eq!(subject["lot_code"], "O/N 66081, made in India");
+    assert!(subject["packaging_level"].is_null(), "a run has no level: {subject}");
+    assert!(subject["wants"].as_array().unwrap().iter().any(|w| w == "photographs"), "{subject}");
+}

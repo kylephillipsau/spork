@@ -232,6 +232,7 @@ const PAIRS = [
   ["ItemListRow", ["ItemListRow"]],
   ["CartonSaid", ["CartonSaid"]],
   ["UncutPhoto", ["UncutPhoto"]],
+  ["LotAdded", ["LotAdded"]],
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
   ["ItemHeld", ["ItemHeld"]],

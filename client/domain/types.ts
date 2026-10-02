@@ -285,6 +285,11 @@ export interface CaptureSubject {
    *  and no packaging level. */
   item_part_id: Uuid | null;
   part_label: string | null;
+  /** D182. A run of the item that looks different, measured and photographed
+   *  on its own. Posts `lot_id` and no packaging level. */
+  lot_id: Uuid | null;
+  /** What the run is known by: the order number on its carton, say. */
+  lot_code: string | null;
   code: string;
   description: string | null;
   /** `each` or `carton`, and null for a part — a part has no packaging level,
@@ -1325,6 +1330,8 @@ export interface SubjectPhoto {
   item_id: Uuid | null;
   item_style_id: Uuid | null;
   item_part_id: Uuid | null;
+  /** A run of the item that looks different (D182). */
+  lot_id: Uuid | null;
   packaging_level: string | null;
   face: string;
   /** The photograph, which a cut points at (D176). */
@@ -1406,6 +1413,14 @@ export interface ItemRow {
   held: number;
   /** Its place on the list asked for, from 1; null when no list was (D179). */
   list_position: number | null;
+}
+
+/** `POST /items/{id}/lots`: a run of the item that looks different (D182). */
+export interface LotAdded {
+  lot_id: Uuid;
+  code: string;
+  /** False when the item already had a run of that name. */
+  added: boolean;
 }
 
 /** `GET /item-lists`, and `POST /item-lists`'s answer: a list of items to work through (D179). */

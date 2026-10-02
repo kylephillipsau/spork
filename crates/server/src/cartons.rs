@@ -201,6 +201,69 @@ pub async fn say_carton(
     Ok(HttpResponse::Ok().json(out))
 }
 
+/// A run of an item that looks different from the others (D182).
+#[derive(Deserialize, Debug)]
+pub struct AddLotRequest {
+    /// What it is known by: the order number on its carton, say, and where it
+    /// was made.
+    pub code: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct LotAdded {
+    pub lot_id: Uuid,
+    pub code: String,
+    /// False when the item already had a run of that name: it is that one.
+    pub added: bool,
+}
+
+/// Name a run of the item that looks different, so its own photographs and
+/// figures can be taken (D182). A name the item already has is that run.
+#[post("/items/{id}/lots")]
+pub async fn add_lot(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<AddLotRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let item_id = path.into_inner();
+    let code = body.code.trim().to_string();
+    if code.is_empty() || code.chars().count() > 80 {
+        return Err(ApiError::Rejected("a run needs a name, up to 80 characters".into()));
+    }
+    let tenant = who.tenant_id;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item_id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?;
+                let made = tx
+                    .query_opt(
+                        "INSERT INTO lot (tenant_id, item_id, code) VALUES ($1, $2, $3)
+                         ON CONFLICT (tenant_id, item_id, code) DO NOTHING
+                         RETURNING id",
+                        &[&tenant, &item_id, &code],
+                    )
+                    .await?;
+                let (lot_id, added) = match made {
+                    Some(r) => (r.get(0), true),
+                    None => (
+                        tx.query_one("SELECT id FROM lot WHERE item_id = $1 AND code = $2", &[&item_id, &code])
+                            .await?
+                            .get(0),
+                        false,
+                    ),
+                };
+                Ok(LotAdded { lot_id, code, added })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

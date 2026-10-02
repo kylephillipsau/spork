@@ -16,6 +16,7 @@ import type {
   BinsList,
   CartonSaid,
   ItemListRow,
+  LotAdded,
   ItemView,
   ItemsList,
   OwnerSet,
@@ -767,6 +768,9 @@ export const api = {
       occurred_at: input.act.at,
     }),
 
+  /** Name a run of the item that looks different, to photograph and measure on its own (D182). */
+  addLot: (itemId: Uuid, code: string) => send<LotAdded>("POST", `/items/${encodeURIComponent(itemId)}/lots`, { code }),
+
   /** The lists of items worked at this site, newest first (D179). */
   itemLists: () => send<ItemListRow[]>("GET", "/item-lists"),
 
@@ -1092,6 +1096,8 @@ export const api = {
     style?: Uuid;
     /** D139. A part takes no packaging level: there is one handle. */
     part?: Uuid;
+    /** D182. A run that looks different takes none either. */
+    lot?: Uuid;
     level: string | null;
     /** D138. What state the thing was in. Required by the writer for a length
      *  at `each`, where arranging the thing is part of measuring it. */
@@ -1111,6 +1117,7 @@ export const api = {
       ...(input.item ? { item_id: input.item } : {}),
       ...(input.style ? { item_style_id: input.style } : {}),
       ...(input.part ? { item_part_id: input.part } : {}),
+      ...(input.lot ? { lot_id: input.lot } : {}),
       ...(input.presentation ? { presentation: input.presentation } : {}),
       packaging_level: input.level,
       measurements: input.measurements,

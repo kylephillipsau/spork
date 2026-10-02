@@ -140,6 +140,12 @@ pub struct CaptureSubject {
     pub item_part_id: Option<Uuid>,
     /// Which part it is, for a screen that shows two rows under one code.
     pub part_label: Option<String>,
+    /// **The lot arm, and it takes no level** (D182): one run of the item that
+    /// looks different from the others, a carton printed another way. A
+    /// subject carrying this posts `lot_id` and nothing else.
+    pub lot_id: Option<Uuid>,
+    /// What the run is known by: the order number on its carton, say.
+    pub lot_code: Option<String>,
     pub code: String,
     pub description: Option<String>,
     /// `each` or `carton`, and **absent for a part** — a part has no packaging
@@ -450,6 +456,8 @@ async fn classified_subjects(
                 item_style_id: r.get(1),
                 item_part_id: r.get(17),
                 part_label: r.get(18),
+                lot_id: None,
+                lot_code: None,
                 code: r.get(2),
                 description: r.get(3),
                 // `part` is this query's join key and never a packaging level.
@@ -533,6 +541,8 @@ pub async fn subjects_for_item(
                 item_style_id: None,
                 item_part_id: None,
                 part_label: None,
+                lot_id: None,
+                lot_code: None,
                 code: each.code.clone(),
                 description: each.description.clone(),
                 packaging_level: Some("carton".into()),
@@ -557,10 +567,119 @@ pub async fn subjects_for_item(
             found.insert(0, carton);
         }
     }
+    found.extend(lot_subjects(tx, item_id).await?);
     // A scan off a carton is the common case and the level the operator wants
     // is usually the bigger one, so carton leads, then the each, then the parts
-    // — which are what to measure when the each turns out to have no box.
+    // — which are what to measure when the each turns out to have no box. Its
+    // runs that look different come last (D182).
     Ok(found)
+}
+
+/// An item's runs that look different, each a subject of its own (D182): its
+/// figures and photographs are its own, and nothing inherits either way. The
+/// worklist does not list them; they are found on the item.
+async fn lot_subjects(
+    tx: &tokio_postgres::Transaction<'_>,
+    item_id: uuid::Uuid,
+) -> Result<Vec<CaptureSubject>, ApiError> {
+    let lots = tx
+        .query(
+            "SELECT l.id, l.code, i.code, i.description,
+                    f.weight::bigint, f.length::bigint, f.width::bigint, f.height::bigint,
+                    coalesce(f.weight_absent, false), coalesce(f.dimensions_absent, false),
+                    f.method, f.observed_at, fa.faces
+               FROM lot l
+               JOIN item i ON i.id = l.item_id
+               LEFT JOIN LATERAL (
+                   SELECT max(oc.value_numeric) FILTER (WHERE m.code = 'gross_weight') AS weight,
+                          max(oc.value_numeric) FILTER (WHERE m.code = 'length') AS length,
+                          max(oc.value_numeric) FILTER (WHERE m.code = 'width') AS width,
+                          max(oc.value_numeric) FILTER (WHERE m.code = 'height') AS height,
+                          bool_or(m.code = 'gross_weight' AND oc.absent_reason IS NOT NULL) AS weight_absent,
+                          count(*) FILTER (WHERE m.code IN ('length', 'width', 'height')
+                                             AND oc.absent_reason IS NOT NULL) = 3 AS dimensions_absent,
+                          (array_agg(oc.method::text ORDER BY oc.observed_at DESC)
+                               FILTER (WHERE oc.absent_reason IS NULL))[1] AS method,
+                          max(oc.observed_at) FILTER (WHERE oc.absent_reason IS NULL) AS observed_at
+                     FROM observable o
+                     JOIN observation_current oc ON oc.observable_id = o.id
+                     JOIN metric m ON m.id = oc.metric_id
+                    WHERE o.lot_id = l.id AND m.code IN ('gross_weight', 'length', 'width', 'height')
+               ) f ON true
+               LEFT JOIN LATERAL (
+                   SELECT array_agg(DISTINCT oi.face) AS faces
+                     FROM observable o
+                     JOIN observation_event e ON e.observable_id = o.id
+                     JOIN observation_image oi ON oi.observation_event_id = e.id
+                    WHERE o.lot_id = l.id
+               ) fa ON true
+              WHERE l.item_id = $1
+              ORDER BY l.code",
+            &[&item_id],
+        )
+        .await?;
+    let now = Utc::now();
+    Ok(lots
+        .iter()
+        .map(|r| {
+            let (gross_weight_g, length_mm, width_mm, height_mm): (Option<i64>, Option<i64>, Option<i64>, Option<i64>) =
+                (r.get(4), r.get(5), r.get(6), r.get(7));
+            let (weight_absent, dimensions_absent): (bool, bool) = (r.get(8), r.get(9));
+            let method: Option<String> = r.get(10);
+            let observed_at: Option<DateTime<Utc>> = r.get(11);
+            let faces: Vec<String> = r.get::<_, Option<Vec<String>>>(12).unwrap_or_default();
+            let held = Held {
+                weight: if gross_weight_g.is_some() {
+                    Answer::Recorded
+                } else if weight_absent {
+                    Answer::NotApplicable
+                } else {
+                    Answer::Missing
+                },
+                dimensions: if length_mm.is_some() && width_mm.is_some() && height_mm.is_some() {
+                    Answer::Recorded
+                } else if dimensions_absent {
+                    Answer::NotApplicable
+                } else {
+                    Answer::Missing
+                },
+                photographs: !faces.is_empty(),
+            };
+            let staleness = match observed_at {
+                Some(at) => revalidation::staleness(at, method.as_deref().unwrap_or(""), now),
+                None => 0.0,
+            };
+            let class = classify(held, method.as_deref(), staleness);
+            CaptureSubject {
+                item_id: None,
+                item_style_id: None,
+                item_part_id: None,
+                part_label: None,
+                lot_id: r.get(0),
+                lot_code: r.get(1),
+                code: r.get(2),
+                description: r.get(3),
+                packaging_level: None,
+                parts: 0,
+                gross_weight_g,
+                length_mm,
+                width_mm,
+                height_mm,
+                weight_absent,
+                dimensions_absent,
+                source: method.as_ref().map(|_| "own".to_string()),
+                style_code: None,
+                wants: wants(held),
+                because: because(class, method.as_deref()).to_string(),
+                method,
+                observed_at,
+                faces,
+                demand: 0,
+                location_code: None,
+                soh: 0,
+            }
+        })
+        .collect())
 }
 
 /// Every subject the floor may be asked to capture, with what is known of it.

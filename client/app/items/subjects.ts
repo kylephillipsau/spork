@@ -58,13 +58,17 @@ export function presentationOffered(subject: CaptureSubject): boolean {
   return presentationNeeded(subject) || subject.item_part_id !== null;
 }
 
-/** A subject's identity: whose it is and at what level. A part has no level. */
-export function subjectKey(s: Pick<CaptureSubject, "item_id" | "item_style_id" | "item_part_id" | "packaging_level">): string {
+/** A subject's identity: whose it is and at what level. A part and a run have no level. */
+export function subjectKey(
+  s: Pick<CaptureSubject, "item_id" | "item_style_id" | "item_part_id" | "lot_id" | "packaging_level">,
+): string {
+  if (s.lot_id) return `${s.lot_id}:lot`;
   return `${s.item_id ?? s.item_style_id ?? s.item_part_id}:${s.packaging_level ?? "part"}`;
 }
 
-/** What to call it: "Carton", "Each", "Carton of the STY-7720 family", or the part's own name. */
+/** What to call it: "Carton", "Each", "Carton of the STY-7720 family", the part's own name, or "Variant: O/N 123". */
 export function nameOf(s: CaptureSubject): string {
+  if (s.lot_id) return `Variant: ${s.lot_code ?? "unnamed"}`;
   if (s.item_part_id) return s.part_label ? sentence(s.part_label) : "Part";
   const level = sentence(s.packaging_level ?? "item");
   return s.item_style_id ? `${level} of the ${s.code} family` : level;

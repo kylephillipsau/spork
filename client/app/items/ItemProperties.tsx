@@ -87,6 +87,7 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
       ) : (
         item.subjects.map((subject) => <Subject key={subjectKey(subject)} item={item} subject={subject} desk={desk} />)
       )}
+      <AddVariant desk={desk} />
       {desk.cropping && (
         <FaceCrop
           key={desk.cropping.image_id}
@@ -419,6 +420,51 @@ function HoldsField({ desk }: { desk: PropertiesDesk }) {
         onChange={(e) => desk.typeHolds(e.target.value)}
       />
     </div>
+  );
+}
+
+/**
+ * Another variant: the same product in a carton that looks different, a
+ * different printing or factory, named by what is on the carton (D182). It
+ * gets a card of its own to photograph and measure.
+ */
+function AddVariant({ desk }: { desk: PropertiesDesk }) {
+  const [code, setCode] = useState("");
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <div>
+        <Button size="sm" onClick={() => setOpen(true)}>
+          Add a variant
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <Card title="Add a variant" description="The same product in a carton that looks different. Name it by what is printed on it.">
+      <form
+        className={s.fields}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void desk.addVariant(code).then((named) => {
+            if (named) {
+              setCode("");
+              setOpen(false);
+            }
+          });
+        }}
+      >
+        <div className={s.grow}>
+          <TextField label="Name" autoComplete="off" autoFocus placeholder="O/N 66081, made in India" value={code} onChange={(e) => setCode(e.target.value)} />
+        </div>
+        <div className={s.formActions}>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button type="submit" variant="primary" loading={desk.busy} disabled={!code.trim()}>
+            Add
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }
 

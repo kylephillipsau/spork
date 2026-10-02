@@ -125,6 +125,9 @@ export interface PropertiesDesk {
    */
   findFace: (key: string, pixels: Pixels, at?: Point) => Promise<number[] | null>;
 
+  /** Name a run of the item that looks different, to photograph on its own (D182). True when named. */
+  addVariant: (code: string) => Promise<boolean>;
+
   barcodes: BoundBarcode[];
   binding: string;
   typeBinding: (next: string) => void;
@@ -149,6 +152,7 @@ function named(s: CaptureSubject) {
     ...(s.item_id ? { item: s.item_id } : {}),
     ...(s.item_style_id ? { style: s.item_style_id } : {}),
     ...(s.item_part_id ? { part: s.item_part_id } : {}),
+    ...(s.lot_id ? { lot: s.lot_id } : {}),
   };
 }
 
@@ -457,6 +461,20 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         setCropping(null);
         await reload();
       }),
+
+    addVariant: async (code) => {
+      let named = false;
+      await press(`variant:${code.trim()}`, async () => {
+        if (!itemId) return;
+        if (!code.trim()) throw new ApiError("Give the variant a name: what is printed on its carton.", 400);
+        const added = await api.addLot(itemId, code.trim());
+        if (!live.current) return;
+        named = true;
+        setSaid({ tone: "success", text: added.added ? `${added.code} added. Photograph it and measure it below.` : `${added.code} was already a variant.` });
+        await reload();
+      });
+      return named;
+    },
 
     barcodes,
     binding,
