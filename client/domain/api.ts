@@ -783,6 +783,10 @@ export const api = {
       occurred_at: input.act.at,
     }),
 
+  /** Say this item's picture stands for its family, or that none does (D188). */
+  setFamilyPicture: (itemId: Uuid, pictures: boolean) =>
+    send<void>("POST", `/items/${encodeURIComponent(itemId)}/family-picture`, { pictures }),
+
   /** Say which variant stands for the item's carton, or none (D184). */
   setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/default-lot`, { lot_id: lot }),

@@ -1266,6 +1266,8 @@ export interface ItemStyleRef {
   description: string | null;
   /** Codes on file that are variants of it, this one included. */
   variants: number;
+  /** The variant whose picture stands for the family (D188). */
+  picture_item_id: Uuid | null;
 }
 
 /** What a carton holds, as the case pack in force says. Either count may be unknown. */

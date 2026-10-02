@@ -46,6 +46,8 @@ pub struct ItemStyleRef {
     pub description: Option<String>,
     /// Codes on file that are variants of it, this one included.
     pub variants: i64,
+    /// The variant whose picture stands for the family (D188).
+    pub picture_item_id: Option<Uuid>,
 }
 
 /// What a carton of it holds, as the case pack in force says.
@@ -178,7 +180,8 @@ pub async fn item_page(
                 let Some(r) = tx
                     .query_opt(
                         "SELECT i.code, i.description, i.active, s.code, s.description,
-                                (SELECT count(*) FROM item v WHERE v.style_id = s.id)
+                                (SELECT count(*) FROM item v WHERE v.style_id = s.id),
+                                s.picture_item_id
                            FROM item i
                            LEFT JOIN item_style s ON s.id = i.style_id
                           WHERE i.id = $1",
@@ -192,6 +195,7 @@ pub async fn item_page(
                     code,
                     description: r.get(4),
                     variants: r.get(5),
+                    picture_item_id: r.get(6),
                 });
 
                 let picture = tx

@@ -9322,6 +9322,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::say_carton)
         .service(crate::cartons::add_lot)
         .service(crate::cartons::set_default_lot)
+        .service(crate::cartons::set_family_picture)
         .service(open_fulfilments)
         .service(fulfilment_status)
         .service(crate::cuts::record_box_picture)

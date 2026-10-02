@@ -102,7 +102,8 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
 }
 
 /** What it is: its photo and its family. What a carton of it holds is on the carton. */
-export function ItemSummary({ item }: { item: ItemView }) {
+export function ItemSummary({ item, desk }: { item: ItemView; desk?: PropertiesDesk | undefined }) {
+  const pictures = item.style?.picture_item_id === item.item_id;
   return (
     <div className={s.summary}>
       <Photo key={item.item_id} item={item} />
@@ -112,6 +113,13 @@ export function ItemSummary({ item }: { item: ItemView }) {
             <>
               <span className={s.code}>{item.style.code}</span>
               <Faint> · {item.style.variants === 1 ? "1 code" : `${item.style.variants} codes`}</Faint>
+              {desk && item.style.variants > 1 && (
+                <div>
+                  <Button size="sm" disabled={desk.busy} onClick={() => void desk.pictureFamily(!pictures)}>
+                    {pictures ? "Pictures the family · undo" : "Use as the family’s picture"}
+                  </Button>
+                </div>
+              )}
             </>
           ) : (
             <Faint>Not part of a family</Faint>
@@ -181,7 +189,7 @@ export function ItemDrawer({
         </Stack>
       ) : (
         <Stack gap={5}>
-          <ItemSummary item={item} />
+          <ItemSummary item={item} desk={d} />
           <ItemProperties item={item} desk={d} />
         </Stack>
       )}

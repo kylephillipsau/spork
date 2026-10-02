@@ -95,9 +95,23 @@ picture AS (
             SELECT b.item_id, b.digest, 'own' AS source, 0 AS rank, b.recorded_at AS at
               FROM box_picture b
             UNION ALL
-            SELECT f.item_id, f.digest, f.source, 1, NULL
+            -- Its own front, or a variant's, before anything of the family's;
+            -- the family's own photograph last.
+            SELECT f.item_id, f.digest, f.source, CASE WHEN f.source = 'style' THEN 3 ELSE 1 END, NULL
               FROM front f
+            UNION ALL
+            -- The variant chosen to picture the family (D188): its box, or its front.
+            SELECT i.id, coalesce(
+                       (SELECT b.digest FROM box_picture b WHERE b.item_id = st.picture_item_id
+                         ORDER BY b.recorded_at DESC, b.id DESC LIMIT 1),
+                       (SELECT fc.digest FROM front fc
+                         WHERE fc.item_id = st.picture_item_id AND fc.source <> 'style')),
+                   'style', 2, NULL
+              FROM item i
+              JOIN item_style st ON st.id = i.style_id
+             WHERE st.picture_item_id IS NOT NULL AND st.picture_item_id <> i.id
            ) p
+     WHERE p.digest IS NOT NULL
      ORDER BY p.item_id, p.rank, p.at DESC NULLS LAST
 )";
 

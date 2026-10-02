@@ -646,3 +646,93 @@ async fn a_capture_session_is_one_event_with_figures_and_photographs_on_it() {
 
     let _ = std::fs::remove_dir_all(&images);
 }
+
+/// One variant's picture stands for its family (D188).
+#[actix_web::test]
+async fn a_family_is_pictured_by_one_of_its_items() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let db = state.pool.get().await.expect("a connection");
+    db.execute("SELECT set_config('spork.tenant_id', $1, false)", &[&"11111111-1111-1111-1111-111111111111"])
+        .await
+        .expect("the tenant scope");
+    let run = &Uuid::new_v4().simple().to_string()[..8];
+    let style: Uuid = db
+        .query_one(
+            "INSERT INTO item_style (tenant_id, code, description) VALUES (current_tenant(), $1, 'Gloves, by size') RETURNING id",
+            &[&format!("FAM-{run}")],
+        )
+        .await
+        .expect("the family")
+        .get(0);
+    let mut ids = vec![];
+    for size in ["L", "XL"] {
+        let id: Uuid = db
+            .query_one(
+                "INSERT INTO item (tenant_id, code, description, base_unit_id, tracking, style_id)
+                 SELECT current_tenant(), $1, 'A glove', u.id, 'none', $2 FROM unit u WHERE u.code = 'ea' RETURNING id",
+                &[&format!("FAM-{run}-{size}"), &style],
+            )
+            .await
+            .expect("a size")
+            .get(0);
+        ids.push(id);
+    }
+    let app = test::init_service(App::new().app_data(state.clone()).configure(routes::configure)).await;
+    let bearer = common::bearer(&app).await;
+    let stored: Value = {
+        let r = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/images")
+                .insert_header(("authorization", bearer.clone()))
+                .insert_header(("content-type", "image/png"))
+                .set_payload(png_sized(256, 256, 7))
+                .to_request(),
+        )
+        .await;
+        serde_json::from_slice(&test::read_body(r).await).unwrap()
+    };
+    let digest = stored["digest"].as_str().unwrap().to_string();
+    common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/items/{}/box-picture", ids[0]))
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "digest": digest, "made_from": [digest, digest, digest],
+                              "client_event_id": Uuid::new_v4(), "occurred_at": chrono::Utc::now() }))
+            .to_request(),
+        "the large size drawn",
+    )
+    .await;
+    let r = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/items/{}/family-picture", ids[0]))
+            .insert_header(("authorization", bearer.clone()))
+            .set_json(json!({ "pictures": true }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(r.status().as_u16(), 204);
+    let listed: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items?q=FAM-{run}")).insert_header(("authorization", bearer.clone())).to_request(),
+        "the family on the list",
+    )
+    .await;
+    let xl = listed["items"].as_array().unwrap().iter().find(|i| i["item_id"] == ids[1].to_string()).expect("the XL");
+    assert_eq!(xl["picture"]["digest"], digest.as_str(), "the XL shows the L's box: {xl}");
+    assert_eq!(xl["picture"]["source"], "style");
+    let page: Value = common::ok_json(
+        &app,
+        test::TestRequest::get().uri(&format!("/items/{}", ids[0])).insert_header(("authorization", bearer.clone())).to_request(),
+        "the L's page",
+    )
+    .await;
+    assert_eq!(page["style"]["picture_item_id"], ids[0].to_string());
+}

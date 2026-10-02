@@ -315,6 +315,42 @@ pub async fn set_default_lot(
     Ok(HttpResponse::NoContent().finish())
 }
 
+#[derive(Deserialize, Debug)]
+pub struct FamilyPictureRequest {
+    /// True: this item pictures its family. False: none does.
+    pub pictures: bool,
+}
+
+/// Say this item's picture stands for its family, or that none does (D188).
+#[post("/items/{id}/family-picture")]
+pub async fn set_family_picture(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<FamilyPictureRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let item_id = path.into_inner();
+    let pictures = body.pictures;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let style: Option<Uuid> = tx
+                    .query_opt("SELECT style_id FROM item WHERE id = $1", &[&item_id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?
+                    .get(0);
+                let style = style.ok_or_else(|| ApiError::Rejected("it is not part of a family".into()))?;
+                let chosen = pictures.then_some(item_id);
+                tx.execute("UPDATE item_style SET picture_item_id = $2 WHERE id = $1", &[&style, &chosen]).await?;
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

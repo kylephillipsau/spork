@@ -69,7 +69,7 @@ export function ItemPage({ desk }: { desk: PropertiesDesk }) {
 
       <Stack gap={5}>
         <Card>
-          <ItemSummary item={item} />
+          <ItemSummary item={item} desk={desk} />
         </Card>
 
         <Section title="Size, weight and photos">

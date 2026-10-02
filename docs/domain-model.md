@@ -14142,3 +14142,17 @@ not pack them.
 **Why ask Spork for the list.** The bridge forgets what is no longer Picked,
 so it could not have said what it once sent. Asking Spork closes what was
 already stuck as well as what moves on from now.
+
+### D188 — A family is pictured by one of its items
+
+*Adopted 2026-10-02, with migration 109.*
+
+**Decision.** An item in a family offers **Use as the family's picture**
+(`POST /items/{id}/family-picture`; `item_style.picture_item_id`). Every
+other variant with no picture of its own then shows the chosen one's: its
+box drawing (D186), else its front. The order an item's picture is chosen in
+is its own box, its own or its variant's front, the chosen family member's,
+then the family's own photograph.
+
+**Why.** Thirteen sizes of a glove look alike, and nobody photographs thirteen
+boxes. One photographed well stands for the rest on every list.

@@ -135,6 +135,8 @@ export interface PropertiesDesk {
   addVariant: (code: string) => Promise<boolean>;
   /** Say which variant stands for the item's carton, or none (D184). */
   chooseVariant: (lot: Uuid | null) => Promise<void>;
+  /** Say this item pictures its family, or that none does (D188). */
+  pictureFamily: (pictures: boolean) => Promise<void>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -537,6 +539,15 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       });
       return named;
     },
+
+    pictureFamily: (pictures) =>
+      press(`family-picture:${pictures}`, async () => {
+        if (!itemId) return;
+        await api.setFamilyPicture(itemId, pictures);
+        if (!live.current) return;
+        setSaid({ tone: "success", text: pictures ? "This item now pictures its family." : "The family has no chosen picture now." });
+        await reload();
+      }),
 
     chooseVariant: (lot) =>
       press(`carton-variant:${lot ?? "none"}`, async () => {
