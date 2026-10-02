@@ -66,6 +66,11 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
                     : `${open.length} ${open.length === 1 ? "photo" : "photos"} to check`}
               </Faint>
               <Spacer />
+              {open.some((q) => q.state === "failed") && (
+                <Button onClick={desk.again} disabled={desk.saving !== null}>
+                  Try again
+                </Button>
+              )}
               <Button variant="primary" disabled={ticked === 0 || desk.crop.busy} loading={desk.saving !== null} onClick={() => void desk.save()}>
                 {ticked === 1 ? "Save the ticked photo" : `Save the ${ticked} ticked`}
               </Button>

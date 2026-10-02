@@ -58,6 +58,8 @@ export interface QueueDesk {
   /** The one open in the crop screen. */
   adjusting: Queued | null;
   adjust: (image: Uuid | null) => void;
+  /** Look again at every photograph that could not be read: after the server or the WiFi came back. */
+  again: () => void;
   /** Use a photograph as it was taken: a glove on a bench has no face to cut it to. */
   keep: (image: Uuid) => Promise<void>;
   /**
@@ -85,12 +87,20 @@ export function usePhotoQueue(): QueueDesk {
     setQueued((qs) => qs.map((q) => (q.photo.image_id === image ? { ...q, ...next } : q)));
   }, []);
 
-  /** An item's page, read once however many of its photographs are waiting. */
+  /**
+   * An item's page, read once however many of its photographs are waiting.
+   * **A failed read is not kept**: kept, one dropped request (the server
+   * restarting, the WiFi) failed every photograph of that item until the page
+   * was reloaded.
+   */
   const itemOf = useCallback((id: Uuid) => {
     let found = items.current.get(id);
     if (!found) {
       found = api.item(id);
       items.current.set(id, found);
+      found.catch(() => {
+        if (items.current.get(id) === found) items.current.delete(id);
+      });
     }
     return found;
   }, []);
@@ -126,7 +136,14 @@ export function usePhotoQueue(): QueueDesk {
         try {
           const item = await itemOf(photo.item_id);
           const shown = item.photos.find((p) => p.image_id === id);
-          const subject = shown ? (item.subjects.find((s) => subjectKey(s) === subjectKey(shown)) ?? null) : null;
+          // Its own card; or, for a photograph of the family's carton, which an
+          // item's page no longer shows (D190), the item's card at that level:
+          // it is only named and proportioned by it, and cut where it is.
+          const subject = shown
+            ? (item.subjects.find((s) => subjectKey(s) === subjectKey(shown)) ??
+              item.subjects.find((s) => s.item_id === item.item_id && s.packaging_level === shown.packaging_level) ??
+              null)
+            : null;
           if (!subject) {
             update(id, { state: "failed" });
             continue;
@@ -196,6 +213,10 @@ export function usePhotoQueue(): QueueDesk {
           if (live.current) setSaving(null);
         }
       });
+    },
+    again: () => {
+      items.current.clear();
+      setRound((r) => r + 1);
     },
     keep: (image) => {
       const q = queued.find((x) => x.photo.image_id === image);
