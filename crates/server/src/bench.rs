@@ -79,6 +79,9 @@ pub struct BenchLine {
     /// Still to do at the bench: committed less the larger of what this system
     /// picked and what has gone into a carton (D172).
     pub remaining: i64,
+    /// What the line commits, all of it: what the whole order view counts
+    /// every unit against, packed or not (D202).
+    pub committed: i64,
     pub cells: Vec<Cell>,
     /// Present when another system says this line was picked there (D172).
     pub elsewhere: Option<PickedElsewhere>,
@@ -354,7 +357,7 @@ pub async fn bench_view(
                 let lines = tx
                     .query(
                         "SELECT fl.id, i.code, i.description, ol.item_id,
-                                fl.quantity - greatest(fl.picked_quantity, bx.q)
+                                fl.quantity - greatest(fl.picked_quantity, bx.q), fl.quantity
                            FROM fulfilment_line fl
                            JOIN order_line ol ON ol.id = fl.order_line_id
                            JOIN item i ON i.id = ol.item_id
@@ -440,6 +443,7 @@ pub async fn bench_view(
                         item_code: l.get(1),
                         description: l.get(2),
                         remaining: l.get(4),
+                        committed: l.get(5),
                         cells: cells
                             .iter()
                             .map(|c| Cell {

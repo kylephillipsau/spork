@@ -83,6 +83,9 @@ export interface AsIs extends Aside {
   /** Eaches in one of them. */
   per: number;
   size: Dims | null;
+  /** Its sides, to draw it with, and its line's place, for its colour. */
+  faces: PackUnit["faces"];
+  index: number;
 }
 
 export interface BoxPlan {
@@ -110,6 +113,10 @@ export interface Arrangement {
   oversize: Aside[];
   /** Things with no size, when there is no box for them to go round. */
   loose: Aside[];
+  /** The ones still to pack that went round a box, and which box (D202):
+   *  a box's `loose` also holds what is in the open carton already. */
+  placedLoose: Aside[];
+  looseBox: number | null;
   /** More pieces than are worth arranging one by one. */
   tooMany: boolean;
 }
@@ -352,7 +359,7 @@ function split(
       const alone = unit.ships_as_is && !inBox;
       if (level !== "each" && !alone && !size) continue;
       const count = Math.floor(units / unit.units);
-      if (alone) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size });
+      if (alone) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size, faces: unit.faces, index });
       else if (size) pieces.push({ kind: kindOf(line, index, unit, size), count });
       else if (unit.no_size) loose.push(aside(count, unit));
       else unmeasured.push(aside(count));
@@ -420,7 +427,7 @@ export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton 
   const boxes = presets
     .filter((p): p is Preset & { size: StatedSize } => p.size !== null && p.suggested)
     .sort((a, b) => volume(dims(a.size)) - volume(dims(b.size)));
-  const none: Arrangement = { boxes: [], asIs, unmeasured, oversize: [], loose, tooMany: false };
+  const none: Arrangement = { boxes: [], asIs, unmeasured, oversize: [], loose, placedLoose: [], looseBox: null, tooMany: false };
   if (pieces.reduce((t, p) => t + p.count, 0) > MOST_PIECES) return { ...none, tooMany: true };
 
   const plans: BoxPlan[] = [];
@@ -484,7 +491,14 @@ export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton 
     units: e.count * e.kind.units,
     weight_g: e.kind.weight_g === null ? null : e.kind.weight_g * e.count,
   }));
-  return { ...none, boxes: plans, oversize, loose: roomiest ? [] : loose };
+  return {
+    ...none,
+    boxes: plans,
+    oversize,
+    loose: roomiest ? [] : loose,
+    placedLoose: roomiest ? loose : [],
+    looseBox: roomiest ? plans.indexOf(roomiest) : null,
+  };
 }
 
 /**

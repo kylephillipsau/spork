@@ -29,6 +29,8 @@ export interface BenchLine {
   description: string | null;
   /** Still to do at the bench: committed less what is picked here or boxed. */
   remaining: number;
+  /** What the line commits, all of it: what the whole order counts against (D202). */
+  committed: number;
   cells: Cell[];
   /** Present when another system says this line was picked there (D172). */
   elsewhere: PickedElsewhere | null;

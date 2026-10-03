@@ -36,6 +36,7 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
     item_code: code,
     description: null,
     remaining,
+    committed: remaining,
     cells: [],
     elsewhere: null,
     own_carton: null,

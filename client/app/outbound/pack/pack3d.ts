@@ -30,7 +30,19 @@ import { tone } from "./tones";
  *
  * Built on the shared [`Stage`]; the faces go on as the item page's box puts
  * them on ([`cover`], [`faceAspect`]), so a thing looks the same in both.
+ *
+ * **The whole order, side by side** (D202): every parcel on one bench, each
+ * box with what goes in it, each thing that ships as it is as itself, and each
+ * carton already sealed as a closed box with its number on it.
  */
+
+/** One parcel to draw: a box with its layers, outlined, or a closed thing. */
+export interface ParcelShape {
+  size: Dims;
+  layers: Layer[];
+  /** Draw the box's outline round what is in it. */
+  outline: boolean;
+}
 
 /** Where the camera stands, from the box's middle: in front, to the right, above. */
 const HOME: [number, number, number] = [0.8, 0.9, 1.2];
@@ -57,12 +69,11 @@ export class PackScene {
   private readonly boxMaterial = new LineBasicMaterial();
   /** Outlines what is still to put into the carton being filled (D198). */
   private readonly toAddMaterial = new LineBasicMaterial();
-  private outline: LineSegments | null = null;
+  private outlines: LineSegments[] = [];
   private dressed = new Map<Kind, Dressed>();
   private textures: Texture[] = [];
   private layered: { layer: number; objects: (Mesh | LineSegments)[] }[] = [];
-  private size: Dims = [1, 1, 1];
-  private layers: Layer[] = [];
+  private groups: ParcelShape[] = [];
   private shown = Infinity;
   private filling = false;
   private painting = 0;
@@ -87,9 +98,13 @@ export class PackScene {
 
   /** Draw this box and what goes in it. */
   set(size: Dims, layers: Layer[]): void {
-    this.filling = layers.some((l) => l.placements.some((p) => p.packed !== undefined));
-    this.size = size;
-    this.layers = layers;
+    this.show([{ size, layers, outline: true }]);
+  }
+
+  /** Draw these parcels side by side, in the order given (D202). */
+  show(groups: ParcelShape[]): void {
+    this.filling = groups.some((g) => g.layers.some((l) => l.placements.some((p) => p.packed !== undefined)));
+    this.groups = groups;
     this.build();
   }
 
@@ -110,8 +125,8 @@ export class PackScene {
 
   private clear(): void {
     this.root.clear();
-    this.outline?.geometry.dispose();
-    this.outline = null;
+    for (const o of this.outlines) o.geometry.dispose();
+    this.outlines = [];
     for (const d of this.dressed.values()) {
       d.geometry.dispose();
       d.edges.dispose();
@@ -126,34 +141,73 @@ export class PackScene {
   private build(): void {
     this.clear();
     const painting = ++this.painting;
-    const [L, W, H] = this.size;
-    // The longest side is two units, so every box fills the view alike.
+    if (this.groups.length === 0) return;
+    // Side by side on one floor, in rows, so a long order is a squarish bench
+    // rather than a line too thin to see: a row runs as long as the whole would
+    // be square, or the longest parcel, and each sits at its row's back edge.
+    const longest = Math.max(...this.groups.map((g) => Math.max(...g.size)));
+    const gap = this.groups.length > 1 ? longest * 0.15 : 0;
+    const area = this.groups.reduce((t, g) => t + (g.size[0] + gap) * (g.size[1] + gap), 0);
+    const rowMax = Math.max(...this.groups.map((g) => g.size[0]), Math.sqrt(area) * 1.3);
+    const placed: { g: ParcelShape; x: number; y: number }[] = [];
+    let x = 0;
+    let y = 0;
+    let rowDepth = 0;
+    let L = 0;
+    for (const g of this.groups) {
+      if (x > 0 && x + g.size[0] > rowMax) {
+        y += rowDepth + gap;
+        x = 0;
+        rowDepth = 0;
+      }
+      placed.push({ g, x, y });
+      x += g.size[0] + gap;
+      L = Math.max(L, x - gap);
+      rowDepth = Math.max(rowDepth, g.size[1]);
+    }
+    const W = y + rowDepth;
+    const H = Math.max(...this.groups.map((g) => g.size[2]));
+    // The whole of it is two units across, so any bench fills the view alike.
     const scale = 2 / Math.max(L, W, H);
     this.lineMaterial.color.copy(this.stage.token("--ui-border-strong"));
     this.boxMaterial.color.copy(this.stage.token("--ui-text-muted"));
     this.toAddMaterial.color.copy(this.stage.token("--ui-accent"));
 
-    const box = new BoxGeometry(L * scale, H * scale, W * scale);
-    this.outline = new LineSegments(new EdgesGeometry(box), this.boxMaterial);
-    box.dispose();
-    this.root.add(this.outline);
-
-    this.layers.forEach((layer, index) => {
-      const objects: (Mesh | LineSegments)[] = [];
-      for (const p of layer.placements) {
-        const d = this.dress(p.kind, scale, painting);
-        const mesh = new Mesh(d.geometry, d.materials);
-        const edges = new LineSegments(d.edges, this.filling && !p.packed ? this.toAddMaterial : this.lineMaterial);
-        for (const o of [mesh, edges]) {
-          o.quaternion.setFromRotationMatrix(rotation(p));
-          o.position.set((p.x + p.dims[0] / 2 - L / 2) * scale, (p.z + p.dims[2] / 2 - H / 2) * scale, (p.y + p.dims[1] / 2 - W / 2) * scale);
-          o.visible = index < this.shown;
-          this.root.add(o);
-          objects.push(o);
-        }
+    for (const { g, x: gx, y: gy } of placed) {
+      const [gl, gw, gh] = g.size;
+      // This parcel's back left bottom corner, in millimetres from the middle of the whole.
+      const ox = gx - L / 2;
+      const oy = gy - W / 2;
+      const oz = -H / 2;
+      if (g.outline) {
+        const box = new BoxGeometry(gl * scale, gh * scale, gw * scale);
+        const outline = new LineSegments(new EdgesGeometry(box), this.boxMaterial);
+        box.dispose();
+        outline.position.set((ox + gl / 2) * scale, (oz + gh / 2) * scale, (oy + gw / 2) * scale);
+        this.root.add(outline);
+        this.outlines.push(outline);
       }
-      this.layered.push({ layer: index, objects });
-    });
+      g.layers.forEach((layer, index) => {
+        const objects: (Mesh | LineSegments)[] = [];
+        for (const p of layer.placements) {
+          const d = this.dress(p.kind, scale, painting);
+          const mesh = new Mesh(d.geometry, d.materials);
+          const edges = new LineSegments(d.edges, this.filling && p.packed === false ? this.toAddMaterial : this.lineMaterial);
+          for (const o of [mesh, edges]) {
+            o.quaternion.setFromRotationMatrix(rotation(p));
+            o.position.set(
+              (ox + p.x + p.dims[0] / 2) * scale,
+              (oz + p.z + p.dims[2] / 2) * scale,
+              (oy + p.y + p.dims[1] / 2) * scale,
+            );
+            o.visible = index < this.shown;
+            this.root.add(o);
+            objects.push(o);
+          }
+        }
+        this.layered.push({ layer: index, objects });
+      });
+    }
     this.stage.invalidate();
   }
 

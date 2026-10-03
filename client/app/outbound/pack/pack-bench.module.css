@@ -286,3 +286,81 @@
   color: var(--ui-text-faint);
   text-decoration: line-through;
 }
+
+/* ---- the whole order, checked off (D202) ---- */
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+}
+.orderLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.orderLine {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-1-5) var(--ui-space-2);
+  border-radius: var(--ui-radius);
+}
+.orderLine[data-done] {
+  background: var(--ui-success-soft);
+}
+.orderLine[data-trouble] {
+  background: var(--ui-warning-soft);
+}
+.orderMark {
+  display: inline-flex;
+  flex: none;
+  color: var(--ui-text-faint);
+}
+.orderMark svg {
+  width: var(--ui-icon);
+  height: var(--ui-icon);
+}
+.orderLine[data-done] .orderMark {
+  color: var(--ui-success);
+}
+.orderLine[data-trouble] .orderMark {
+  color: var(--ui-warning);
+}
+.orderCount {
+  flex: none;
+  font-family: var(--ui-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.parcelIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-control-lg);
+  height: var(--ui-control-lg);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-muted);
+}
+.parcelIcon svg {
+  width: var(--ui-icon);
+  height: var(--ui-icon);
+}
+
+/* A parcel: its icon, what it is and holds, its state; its press beneath. */
+.parcelRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--ui-space-3);
+  row-gap: var(--ui-space-1-5);
+}
+.parcelAct {
+  grid-column: 2 / -1;
+  justify-self: start;
+}

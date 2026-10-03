@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Boxes, ChevronLeft, ChevronRight, PackageOpen, Ruler } from "lucide-react";
+import { Boxes, ChevronLeft, ChevronRight, Circle, CircleCheck, Package, PackageCheck, PackageOpen, Ruler, TriangleAlert } from "lucide-react";
 
 import { Badge, Button, Card, Skeleton, Tabs, Toolbar, Spacer } from "@ui/index";
 import { imageUrl } from "@domain/api";
@@ -7,7 +7,9 @@ import type { BenchScreen, Picture, Uuid } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { kg } from "@app/common/format";
 
-import { arrange, contentsOf, type Aside, type AsIs, type BoxPlan, type Layer, type OpenCarton } from "./arrange";
+import { arrange, contentsOf, type Aside, type AsIs, type BoxPlan, type Dims, type Kind, type Layer, type OpenCarton } from "./arrange";
+import { wholeOrder, type OrderLine, type OrderView, type Parcel, type ParcelState } from "./order";
+import type { ParcelShape } from "./pack3d";
 import { tone } from "./tones";
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
@@ -15,7 +17,8 @@ import s from "./pack-bench.module.css";
 const PackView = lazy(() => import("./PackView"));
 
 /**
- * The box for what is left on the bench and how it goes in (D195), layer by
+ * The whole order as it will leave, checked off as it goes (D202), and the box
+ * for what is left on the bench and how it goes in (D195), layer by
  * layer from the bottom, as a plan from above or in 3D. Made from what is
  * recorded: what has no size is listed with a way to measure it, and the
  * suggestion is made again when the drawer closes.
@@ -40,63 +43,82 @@ export function Suggestion({
 }) {
   const open = useMemo(() => openOf(screen, bench.openCarton), [screen, bench.openCarton]);
   const plan = useMemo(() => arrange(screen.lines, screen.presets, open), [screen.lines, screen.presets, open]);
+  const order = useMemo(() => wholeOrder(screen, plan), [screen, plan]);
+  const shapes = useMemo(() => orderShapes(order), [order]);
   const pictures = useMemo(() => new Map(screen.lines.map((l) => [l.item_id, l.picture])), [screen.lines]);
-  const [which, setWhich] = useState(0);
+  // The whole order first (D202); a box's own layers one tab along.
+  const [which, setWhich] = useState<"order" | number>("order");
   const [step, setStep] = useState(0);
   const [view, setView] = useState<"plan" | "3d">("plan");
 
-
-  const box: BoxPlan | undefined = plan.boxes[Math.min(which, plan.boxes.length - 1)];
+  const box: BoxPlan | undefined = which === "order" ? undefined : plan.boxes[Math.min(which, plan.boxes.length - 1)];
   const layers = box?.layers ?? [];
   const at = Math.min(step, Math.max(0, layers.length - 1));
-  // Filling a carton, each press moves the plan on to what to put in next.
+  // Filling a carton, each press moves its plan on to what to put in next.
   const done = plan.boxes[0]?.carton ? plan.boxes[0].layers.flatMap((l) => l.placements).filter((p) => p.packed).length : -1;
   useEffect(() => {
     if (done < 0) return;
-    setWhich(0);
     setStep(nextLayer(plan.boxes[0]!.layers));
   }, [done]); // eslint-disable-line react-hooks/exhaustive-deps
-  const choose = (n: number) => {
+  const choose = (n: "order" | number) => {
     setWhich(n);
-    setStep(0);
+    setStep(n === "order" ? 0 : nextLayer(plan.boxes[n]?.layers ?? []));
   };
 
-  const anything =
-    plan.boxes.length + plan.asIs.length + plan.unmeasured.length + plan.oversize.length + plan.loose.length > 0 || plan.tooMany;
-  if (!anything) return null;
+  if (order.lines.length === 0) return null;
 
   return (
     <Card
-      title="Suggested packing"
-      description={
-        box ? describe(box) : plan.asIs.length > 0 && plan.unmeasured.length === 0 ? "Everything left ships as it is." : "Nothing here can be arranged yet."
-      }
+      title="Packing plan"
+      description={box ? describe(box) : tally(order)}
       actions={
-        box && (
-          <Tabs
-            aria-label="Show the arrangement as"
-            value={view}
-            onValueChange={(v) => setView(v as "plan" | "3d")}
-            items={[
-              { value: "plan", label: "Layers" },
-              { value: "3d", label: "3D" },
-            ]}
-          />
-        )
+        <Tabs
+          aria-label="Show it as"
+          value={view}
+          onValueChange={(v) => setView(v as "plan" | "3d")}
+          items={[
+            { value: "plan", label: box ? "Layers" : "List" },
+            { value: "3d", label: "3D" },
+          ]}
+        />
       }
       padded={false}
     >
-      {plan.boxes.length > 1 && (
+      {plan.boxes.length > 0 && (
         <div className={s.suggestTabs}>
           <Tabs
-            aria-label="Box"
+            aria-label="Parcel"
             value={String(which)}
-            onValueChange={(v) => choose(Number(v))}
-            items={plan.boxes.map((b, i) => ({
-              value: String(i),
-              label: b.carton ? `Carton ${b.carton.sequence} · ${b.preset.name} (open)` : `${i + 1} · ${b.preset.name}`,
-            }))}
+            onValueChange={(v) => choose(v === "order" ? "order" : Number(v))}
+            items={[
+              { value: "order", label: "Whole order" },
+              ...plan.boxes.map((b, i) => ({
+                value: String(i),
+                label: b.carton ? `Carton ${b.carton.sequence} · ${b.preset.name} (open)` : `${b.preset.name} (to start)`,
+              })),
+            ]}
           />
+        </div>
+      )}
+
+      {!box && (
+        <div className={s.suggestBody}>
+          {view === "3d" && shapes.length > 0 ? (
+            <Suspense fallback={<Skeleton height={280} />}>
+              <PackView groups={shapes} upTo={Infinity} label={`The order's ${shapes.length} parcels, side by side`} />
+            </Suspense>
+          ) : (
+            <WholeOrder
+              order={order}
+              pictures={pictures}
+              ship={ship}
+              canShip={canShip}
+              show={(n) => choose(n)}
+              start={(id) => void bench.startCarton(id)}
+              canStart={!bench.busy && !!screen.dock_id}
+              boxes={plan.boxes}
+            />
+          )}
         </div>
       )}
 
@@ -107,8 +129,7 @@ export function Suggestion({
           ) : (
             <Suspense fallback={<Skeleton height={280} />}>
               <PackView
-                size={[box.preset.size.length_mm, box.preset.size.width_mm, box.preset.size.height_mm]}
-                layers={layers}
+                groups={[{ size: [box.preset.size.length_mm, box.preset.size.width_mm, box.preset.size.height_mm], layers, outline: true }]}
                 upTo={at + 1}
                 label={`${box.preset.name}, packed to layer ${at + 1} of ${layers.length}`}
               />
@@ -165,15 +186,11 @@ export function Suggestion({
         </div>
       )}
 
-      <AsItIs plan={plan} pictures={pictures} ship={ship} canShip={canShip} />
       <Asides plan={plan} pictures={pictures} look={look} />
 
       {box && !box.carton && (
         <Toolbar placement="bottom">
-          <span className={s.note}>
-            {plan.boxes.length > 1 ? `${plan.boxes.length} boxes for what is left` : "One box for what is left"}
-            {plan.asIs.length > 0 ? `, and ${parcels(plan.asIs)} as ${plan.asIs.reduce((t, a) => t + a.count, 0) === 1 ? "it is" : "they are"}` : ""}
-          </span>
+          <span className={s.note}>Not started yet</span>
           <Spacer />
           {/* Secondary: Start carton below is the bench's one primary act. */}
           <Button
@@ -188,6 +205,145 @@ export function Suggestion({
       )}
     </Card>
   );
+}
+
+/** "21 of 47 units packed · 26 planned · everything accounted for". */
+function tally(o: OrderView): string {
+  const parts = [`${o.packed} of ${o.committed} units packed`];
+  if (o.planned > 0) parts.push(`${o.planned} planned`);
+  if (o.unplaced > 0) parts.push(`${o.unplaced} can't be placed yet`);
+  if (o.notBoxed > 0) parts.push(`${o.notBoxed} picked, not in a carton`);
+  if (o.missing > 0) parts.push(`${o.missing} not accounted for`);
+  else if (o.unplaced === 0 && o.notBoxed === 0) parts.push(o.packed === o.committed ? "all packed" : "everything accounted for");
+  return parts.join(" · ");
+}
+
+/** A closed thing to draw: one placement filling its own size. */
+function closed(size: Dims, code: string, index: number, faces: Kind["faces"]): ParcelShape {
+  const kind: Kind = { line: "", item_id: "", item_code: code, level: "carton", units: 1, size, weight_g: null, faces, upright: false, index };
+  return { size, outline: false, layers: [{ z: 0, height: size[2], placements: [{ kind, x: 0, y: 0, z: 0, dims: size, axes: [0, 1, 2] }] }] };
+}
+
+/**
+ * The whole order to draw side by side (D202): each box with what goes in it,
+ * each carton nobody is filling as a closed box with its number on it, and each
+ * thing that ships as it is as itself, once for every parcel of it.
+ */
+function orderShapes(o: OrderView): ParcelShape[] {
+  const out: ParcelShape[] = [];
+  o.parcels.forEach((p, i) => {
+    if (!p.size) return;
+    if (p.layers) out.push({ size: p.size, layers: p.layers, outline: true });
+    else if (p.asIs) for (let n = 0; n < p.count; n++) out.push(closed(p.size, p.asIs.item_code, p.index ?? i, p.faces));
+    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, {}));
+  });
+  return out;
+}
+
+const STATE_WORDS: Record<ParcelState, string> = { sealed: "Sealed", open: "Open", planned: "To start", "as-is": "Ships as it is" };
+
+/**
+ * The whole order, checked off (D202): every line with how much of it is in a
+ * carton and where the rest is going, ticked when all of it is packed; then
+ * every parcel the order leaves as, with what is in it and the press for it.
+ */
+function WholeOrder({
+  order,
+  pictures,
+  ship,
+  canShip,
+  show,
+  start,
+  canStart,
+  boxes,
+}: {
+  order: OrderView;
+  pictures: Map<Uuid, Picture | null>;
+  ship: (a: AsIs) => void;
+  canShip: (line: Uuid) => boolean;
+  show: (box: number) => void;
+  start: (presetId: Uuid) => void;
+  canStart: boolean;
+  boxes: BoxPlan[];
+}) {
+  return (
+    <div className={s.order}>
+      <ul className={s.orderLines} aria-label="The order's lines">
+        {order.lines.map((l) => {
+          const trouble = l.missing > 0 || l.unplaced > 0 || l.notBoxed > 0;
+          return (
+            <li key={l.line} className={s.orderLine} data-done={l.done || undefined} data-trouble={(!l.done && trouble) || undefined}>
+              <span className={s.orderMark} aria-label={l.done ? "Packed" : trouble ? "Needs attention" : "Not packed yet"} role="img">
+                {l.done ? <CircleCheck /> : trouble ? <TriangleAlert /> : <Circle />}
+              </span>
+              <Thumb picture={pictures.get(l.item_id) ?? null} alt={l.item_code} />
+              <span className={s.asideWhat}>
+                <span className={s.code}>{l.item_code}</span>
+                <span className={s.note}>{whereWords(l)}</span>
+              </span>
+              <span className={s.orderCount}>
+                {l.packed} / {l.committed}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      <span className={s.asidesTitle}>Parcels</span>
+      <ul className={s.asideList} aria-label="Parcels">
+        {order.parcels.map((p) => (
+          <li key={p.key} className={s.parcelRow}>
+            <span className={s.parcelIcon} aria-hidden>
+              {p.state === "sealed" ? <PackageCheck /> : p.state === "open" ? <PackageOpen /> : p.state === "as-is" ? <Boxes /> : <Package />}
+            </span>
+            <span className={s.asideWhat}>
+              <span className={s.code}>
+                {p.count > 1 ? `${p.count} × ` : ""}
+                {p.title}
+              </span>
+              <span className={s.note}>{[p.detail, contentsWords(p)].filter(Boolean).join(" · ")}</span>
+            </span>
+            <Badge tone={p.state === "sealed" ? "success" : p.state === "open" ? "accent" : "neutral"}>{STATE_WORDS[p.state]}</Badge>
+            {p.asIs ? (
+              <span className={s.parcelAct}>
+                <Button size="sm" icon={<Boxes />} disabled={!canShip(p.asIs.line)} onClick={() => ship(p.asIs!)}>
+                  Ship {shipLabel(p.asIs)}
+                </Button>
+              </span>
+            ) : p.box !== null ? (
+              <span className={s.parcelAct}>
+                {p.state === "planned" ? (
+                  <Button size="sm" icon={<PackageOpen />} disabled={!canStart} onClick={() => start(boxes[p.box!]!.preset.id)}>
+                    Start {p.title}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="ghost" onClick={() => show(p.box!)}>
+                    Its layers
+                  </Button>
+                )}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** "Carton 1 · 8; small box, to go in · 4", and what is not anywhere. */
+function whereWords(l: OrderLine): string {
+  const parts = l.where.map((w) => `${w.parcel}${w.state === "planned" ? ", to go in" : ""} · ${w.units}`);
+  if (l.unplaced > 0) parts.push(`${l.unplaced} can't be placed yet`);
+  if (l.notBoxed > 0) parts.push(`${l.notBoxed} picked, not in a carton`);
+  if (l.missing > 0) parts.push(`${l.missing} not accounted for`);
+  return parts.length > 0 ? parts.join("; ") : "Nothing yet";
+}
+
+/** "8 × GLV-NIT-BLU-M in; 4 × APR-PE-CLR-L to go in", and what goes round the rest. */
+function contentsWords(p: Parcel): string {
+  const parts = p.lines.map((r) => `${r.units} × ${r.item_code}${r.state === "planned" && p.state !== "as-is" ? " to go in" : ""}`);
+  for (const a of p.loose) parts.push(`${a.units} × ${a.item_code} round the rest`);
+  return parts.length > 0 ? parts.join("; ") : "Empty";
 }
 
 /** The carton open on the bench, when its box has a size to fill (D198). A pallet or a product's own carton has none. */
@@ -313,57 +469,6 @@ export function shipLabel(a: AsIs): string {
   if (a.level === "carton") return `${a.count} own carton${s} of ${a.per}`;
   if (a.level === "inner") return `${a.count} inner pack${s} of ${a.per}`;
   return `${a.count} as ${a.count === 1 ? "it is" : "they are"}`;
-}
-
-function parcels(asIs: AsIs[]): string {
-  const n = asIs.reduce((t, a) => t + a.count, 0);
-  return `${n} parcel${n === 1 ? "" : "s"}`;
-}
-
-/**
- * What goes to the carrier as it is (D196): whole cartons, and whatever
- * somebody said travels in its own box. Each with the press that ships it,
- * the same as the line's.
- */
-function AsItIs({
-  plan,
-  pictures,
-  ship,
-  canShip,
-}: {
-  plan: ReturnType<typeof arrange>;
-  pictures: Map<Uuid, Picture | null>;
-  ship: (a: AsIs) => void;
-  canShip: (line: Uuid) => boolean;
-}) {
-  if (plan.asIs.length === 0) return null;
-  return (
-    <div className={s.asides}>
-      <span className={s.asidesTitle}>Ships as it is</span>
-      <ul className={s.asideList}>
-        {plan.asIs.map((a) => (
-          <li key={`${a.line}:${a.level}`} className={s.asideRow}>
-            <Thumb picture={pictures.get(a.item_id) ?? null} alt={a.item_code} />
-            <span className={s.asideWhat}>
-              <span className={s.code}>{a.item_code}</span>
-              <span className={s.note}>
-                {[
-                  `${a.count} parcel${a.count === 1 ? "" : "s"}`,
-                  a.size ? `${a.size.join(" × ")} mm` : "size not recorded",
-                  a.weight_g !== null ? `${kg(a.weight_g / a.count)} each` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </span>
-            <Button size="sm" icon={<Boxes />} disabled={!canShip(a.line)} onClick={() => ship(a)}>
-              {shipLabel(a)}
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 /** What the suggestion leaves out, and why: each with what to do about it. */

@@ -14477,3 +14477,33 @@ of its own.
 **Why.** A parcel that is not a box type read "Unstated" on the manifest and
 named nothing on the packing list, and a carrier was given no dimensions for
 it. They were known all along, as the item's.
+
+### D202: The bench shows the whole order, checked off as it goes
+
+*Adopted 2026-10-03. Amends D195, D196, D198.*
+
+**Decision.** The bench's packing plan opens on the **whole order**, with each
+box's layers one tab along:
+
+- **Every line**, with how much of it is in a carton and where the rest is
+  going: "Carton 1 · 8; small box, to go in · 4". A line ticks itself when all
+  it commits is in a carton, sealed or open. Nobody ticks it by hand.
+- **Every parcel** the order leaves as, with what is in it and what is to go
+  in, and its press: cartons already made (sealed or open), the boxes the
+  suggestion would start ("Start small box"), and what ships as it is ("Ship 3
+  as they are").
+- **A tally**: "21 of 47 units packed · 26 planned · everything accounted
+  for". Every unit of every line is in a carton, planned, listed as not
+  placeable, or picked and not in a carton yet. Anything else is "not
+  accounted for".
+- **In 3D**, all the parcels on one bench, in rows: each box with what goes in
+  it, each thing that ships as it is as itself with its photographs, and each
+  carton nobody is filling as a closed box with its number on it.
+
+The bench read sends each line's whole commitment (`committed`), which is what
+the tally counts against.
+
+**Why.** Once things that ship as they are came out of the boxes (D196), the
+bench showed a box for what was left and a list of the rest, and nothing
+showed the order whole. A packer checking that nothing is missing needs every
+unit and where it is, not only what goes into the next box.
