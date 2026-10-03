@@ -355,6 +355,8 @@ const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): It
   weight: "none",
   size: "none",
   demand: 0,
+  to_pack: 0,
+  to_pack_lines: 0,
   bin_code: null,
   bin_within_reach: null,
   reported_on_hand: null,
@@ -366,7 +368,7 @@ const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): It
 
 /** A page of the list: in stock and not, measured and not, a family's and its own. */
 export const ITEMS: ItemRow[] = [
-  ROW({ code: "SKU-3928", description: "Label roll, 100 × 150 mm", reported_on_hand: "140", reported_bins: 3, bin_code: "A-02-1", demand: 22 }),
+  ROW({ code: "SKU-3928", description: "Label roll, 100 × 150 mm", reported_on_hand: "140", reported_bins: 3, bin_code: "A-02-1", demand: 22, to_pack: 48, to_pack_lines: 3 }),
   ROW({
     item_id: BRUSH,
     code: "SKU-5120B",

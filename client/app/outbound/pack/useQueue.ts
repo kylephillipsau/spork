@@ -21,6 +21,9 @@ export interface QueueBench {
   term: string;
   type: (next: string) => void;
   search: () => Promise<void>;
+  /** Products still to pack whose each has no size, so the bench cannot
+   *  suggest how they go in (D197); null until read, or when it could not be. */
+  unsized: number | null;
 }
 
 /** The order the groups are drawn in. Not alphabetical, not the enum's: it is
@@ -57,6 +60,16 @@ export function useQueue(): QueueBench {
     }
   }, [term]);
 
+  // Asked once, and quietly: a count that cannot be read is no reason to
+  // stop anybody packing.
+  const [unsized, setUnsized] = useState<number | null>(null);
+  useEffect(() => {
+    void api
+      .items({ needs: "packing", limit: 1 })
+      .then((page) => live.current && setUnsized(page.total))
+      .catch(() => undefined);
+  }, [live]);
+
   useEffect(() => {
     void api
       .packingQueue("")
@@ -70,5 +83,5 @@ export function useQueue(): QueueBench {
       });
   }, []);
 
-  return { state, term, type: setTerm, search };
+  return { state, term, type: setTerm, search, unsized };
 }

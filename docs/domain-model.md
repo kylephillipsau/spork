@@ -14338,8 +14338,8 @@ starts a carton of it.
 
 **Why.** Chosen by eye, a box is too small often enough that a packer opens a
 second one. Many cartons and families are measured, but eaches mostly are
-not: on the first real data, none of the 232 open lines had an each size, and
-4 had a weight or "no size to measure" recorded at the each. So the bench says
+not: on the first real data, no order line on file had an each size, and 4
+had a weight or "no size to measure" recorded at the each. So the bench says
 what is missing and offers to measure it. Dividing a carton's size by its count would
 assume a carton with no air, dividers or inner packs in it, and the
 suggestion would then claim a fit nobody measured.
@@ -14383,3 +14383,25 @@ for what is left, as though starting fresh.
 comes in a box of its own and can go to the carrier as it is. The shovel box
 was the smallest box that took them, but nobody sends wipers in one. Neither
 fact could be read from anything recorded.
+
+### D197: What the pack bench cannot place is a worklist
+
+*Adopted 2026-10-03.*
+
+**Decision.** The items list can be narrowed to what **needs a size for
+packing** (`GET /items?needs=packing`) and ordered **most needed for packing
+first** (`order=packing`). An item needs one when it is still to pack on an
+open order and its each has no size recorded, its own or its family's, is not
+said to have none (D138), and does not ship as it is (D196). Each row says how
+much is still to pack and on how many orders. The packing queue says how many
+such products there are and links to the list.
+
+"Open" and "still to pack" are read as the packing queue reads them: a
+fulfilment that is not cancelled and not closed in the other system, and a
+line not yet picked here or boxed.
+
+**Why.** The bench's suggestion (D195) places only what has a size. On the
+first real data almost nothing still to pack had one, so nearly every
+suggestion was a list of things to measure. Measuring the products open orders
+are waiting on, most needed first, is the quickest way to make the
+suggestion useful.

@@ -377,7 +377,7 @@ export const FIXTURES: readonly Screen[] = [
       cartons: [],
     }),
   ),
-  app("f-queue", "/fixtures/queue", "Packing", "bench", { screen: "pack" }, () => <PackQueuePage bench={fixtureQueue(QUEUE)} />),
+  app("f-queue", "/fixtures/queue", "Packing", "bench", { screen: "pack" }, () => <PackQueuePage bench={fixtureQueue(QUEUE, "", 12)} />),
   app("f-queue-clear", "/fixtures/queue/clear", "Packing — nothing waiting", "bench", { screen: "pack" }, () => (
     <PackQueuePage bench={fixtureQueue(CLEAR)} />
   )),

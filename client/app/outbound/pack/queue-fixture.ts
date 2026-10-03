@@ -10,8 +10,8 @@ import type { QueueBench, QueueState } from "./useQueue";
  */
 const noop = async () => {};
 
-export function fixtureQueue(state: QueueState, term = ""): QueueBench {
-  return { state, term, type: () => {}, search: noop };
+export function fixtureQueue(state: QueueState, term = "", unsized: number | null = null): QueueBench {
+  return { state, term, type: () => {}, search: noop, unsized };
 }
 
 const job = (over: Partial<PackJob> & Pick<PackJob, "fulfilment_id" | "stage">): PackJob => ({

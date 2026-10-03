@@ -94,7 +94,12 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
               value={desk.asked.needs ? `needs:${desk.asked.needs}` : desk.asked.has ? `has:${desk.asked.has}` : "any"}
               onValueChange={(v) => {
                 const [side, what = ""] = v.split(":");
-                desk.narrow({ needs: (side === "needs" ? what : "") as Needs, has: (side === "has" ? what : "") as Has });
+                desk.narrow({
+                  needs: (side === "needs" ? what : "") as Needs,
+                  has: (side === "has" ? what : "") as Has,
+                  // The packing worklist reads best most needed first (D197).
+                  ...(what === "packing" && !desk.asked.order ? { order: "packing" as Order } : {}),
+                });
               }}
               options={[
                 { value: "any", label: "Whatever’s recorded" },
@@ -104,6 +109,7 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
                 { value: "needs:weighing", label: "Needs weighing" },
                 { value: "needs:measuring", label: "Needs measuring" },
                 { value: "needs:photo", label: "Needs a photo" },
+                { value: "needs:packing", label: "Needs a size for packing" },
               ]}
             />
           </div>
@@ -117,6 +123,7 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
                 ...(desk.asked.list ? [{ value: "list", label: "As on the list" }] : []),
                 { value: "code", label: "By code" },
                 { value: "demand", label: "Most ordered first" },
+                { value: "packing", label: "Most needed for packing first" },
                 { value: "walk", label: "In walking order" },
               ]}
             />
@@ -236,6 +243,11 @@ export function NewList({ desk, onClose }: { desk: ItemsDesk; onClose: () => voi
   );
 }
 
+/** "48 to pack on 3 orders": what open orders are waiting on (D197). */
+function toPack(i: ItemRow): string {
+  return `${i.to_pack.toLocaleString()} to pack on ${i.to_pack_lines === 1 ? "1 order" : `${i.to_pack_lines} orders`}`;
+}
+
 /** One mark for what is recorded: measured here, copied from a list, or not yet. */
 function Mark({ icon, what, state }: { icon: ReactNode; what: string; state: "measured" | "listed" | "none" }) {
   const said = state === "measured" ? `${what} recorded` : state === "listed" ? `${what} from a list only` : `No ${what.toLowerCase()} yet`;
@@ -264,6 +276,7 @@ const COLUMNS: Column<ItemRow>[] = [
       <span className={s.named}>
         <span className={s.code}>{i.code}</span>
         {i.description !== i.code && <span className={s.described}>{i.description}</span>}
+        {i.to_pack > 0 && <Faint>{toPack(i)}</Faint>}
       </span>
     ),
     grow: true,

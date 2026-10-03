@@ -101,6 +101,9 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   be one of an item as it is at any level (`package.own_item_id`,
   `own_level`), and the bench ships them with one press. The suggestion lists
   what ships as it is and boxes only the rest.
+- D197. Items can be narrowed to what needs a size for packing, most needed
+  first: still to pack on an open order, with no each size, not "no size",
+  and not shipping as it is. The packing queue links to it with a count.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.
@@ -124,9 +127,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 
 ## Next
 
-1. Run the full server suite on a fresh database.
-2. Restore a real backup into a scratch database with `spork-restore` and
-   compare row counts.
+1. Done 2026-10-03: the full server suite passed on a fresh database (142),
+   and a real backup was restored on the Mac (D194 came of it).
+2. Measure what the packing worklist lists (D197), and see the suggestion
+   on real orders.
 3. Reach on the Warehouse screen and rack face, and a forklift mark on the
    item list's bin.
 4. A completed sheet for a list: each item with its own and its carton's

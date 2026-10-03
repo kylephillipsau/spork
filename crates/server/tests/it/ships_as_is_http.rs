@@ -124,6 +124,19 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(status, 200, "{before}");
     assert_eq!(pack(&before, "each")["ships_as_is"], false, "the default for an each");
 
+    // ── and with no size it is on the packing worklist (D197) ───────────
+    let worklist = || {
+        test::TestRequest::get()
+            .uri(&format!("/items?needs=packing&order=packing&q={code}"))
+            .insert_header(auth.clone())
+    };
+    let (status, needed) = call(&app, worklist()).await;
+    assert_eq!(status, 200, "{needed}");
+    let row = needed["items"].as_array().unwrap().iter().find(|i| i["code"] == code.as_str()).cloned();
+    let row = row.unwrap_or_else(|| panic!("a roll with no size, still to pack: {needed}"));
+    assert_eq!(row["to_pack"], 3, "{row}");
+    assert_eq!(row["to_pack_lines"], 1, "{row}");
+
     // ── said: it ships as it is, and saying it again is the same act ────
     let said = Uuid::now_v7();
     let say = |event: Uuid, as_it_is: bool| {
@@ -141,6 +154,8 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(status, 204, "the same act again");
     let (_, after) = call(&app, bench()).await;
     assert_eq!(pack(&after, "each")["ships_as_is"], true, "{after}");
+    let (_, unneeded) = call(&app, worklist()).await;
+    assert_eq!(unneeded["total"], 0, "what ships as it is needs no size to be packed round: {unneeded}");
     let (status, levelless) = call(
         &app,
         test::TestRequest::post().uri("/shipping").insert_header(auth.clone()).set_json(json!({

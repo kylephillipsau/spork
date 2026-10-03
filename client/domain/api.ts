@@ -751,16 +751,17 @@ export const api = {
   items: (query: {
     q?: string;
     stock?: "here";
-    needs?: "weighing" | "measuring" | "photo";
+    needs?: "weighing" | "measuring" | "photo" | "packing";
     /** What has been done: measured, photographed, or both. */
     has?: "measured" | "photographed" | "both";
     /** Only the items on this list (D179). */
     list?: Uuid;
-    order?: "demand" | "walk" | "list";
+    order?: "demand" | "packing" | "walk" | "list";
     after?: string;
+    limit?: number;
   }) => {
     const p = new URLSearchParams();
-    for (const [k, v] of Object.entries(query)) if (v) p.set(k, v);
+    for (const [k, v] of Object.entries(query)) if (v) p.set(k, String(v));
     const qs = p.toString();
     return send<ItemsList>("GET", `/items${qs ? `?${qs}` : ""}`);
   },

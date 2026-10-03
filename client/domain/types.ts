@@ -1491,6 +1491,9 @@ export interface ItemRow {
   size: "measured" | "listed" | "none";
   /** Order lines naming it. */
   demand: number;
+  /** Units still to pack on open orders, and on how many lines (D197). */
+  to_pack: number;
+  to_pack_lines: number;
   /**
    * The bin to go to for it here: the one in reach of the floor holding the
    * most, or the biggest pile when none in reach holds any (D180). Spork's

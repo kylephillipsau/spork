@@ -385,7 +385,10 @@ pub struct ItemsQuery {
     pub stock: Option<String>,
     /// `weighing`: no weight measured here, whatever a list says.
     /// `measuring`: no size measured here. `photo`: no picture of its front,
-    /// its own or its family's.
+    /// its own or its family's. `packing`: still to pack on an open order, and
+    /// its each has no size recorded, its own or its family's, nor is said to
+    /// have none, nor ships as it is: what the pack bench's suggestion cannot
+    /// place (D195, D197).
     pub needs: Option<String>,
     /// The other way round: `measured`, a weight or a size measured here (or
     /// said to have none); `photographed`, a picture of it, its own or its
@@ -393,9 +396,10 @@ pub struct ItemsQuery {
     pub has: Option<String>,
     /// Only the items on this list (D179).
     pub list: Option<Uuid>,
-    /// `code` (the default), `demand` (most ordered first), `walk` (in the
-    /// order the bins are walked, by where most of it is) or `list` (as on the
-    /// list asked for, which is the order on its paper).
+    /// `code` (the default), `demand` (most ordered first), `packing` (on the
+    /// most open orders still to pack first, D197), `walk` (in the order the
+    /// bins are walked, by where most of it is) or `list` (as on the list asked
+    /// for, which is the order on its paper).
     pub order: Option<String>,
     /// Where the page before ended, as its `next` said: the last code in code
     /// order, or how many came before in the other two.
@@ -444,11 +448,31 @@ fn pile() -> String {
 /// join on `n`.
 const LISTED: &str = "LEFT JOIN item_list_entry le ON le.item_list_id = $11 AND le.item_id = n.id";
 
+/// What is still to pack of each item on an open order (D197): lines on a
+/// fulfilment that is not cancelled nor closed in the other system, less what
+/// is picked or in a carton, as the packing queue counts them. A `WITH` arm.
+const TO_PACK: &str = "to_pack AS (
+         SELECT ol.item_id, count(*)::bigint AS lines,
+                sum(fl.quantity - greatest(fl.picked_quantity, fl.packed_quantity))::bigint AS units
+           FROM fulfilment f
+           JOIN fulfilment_line fl ON fl.fulfilment_id = f.id
+           JOIN order_line ol ON ol.id = fl.order_line_id
+          WHERE f.state <> 'cancelled'
+            AND f.closed_elsewhere IS NULL
+            AND fl.quantity > greatest(fl.picked_quantity, fl.packed_quantity)
+          GROUP BY ol.item_id
+     )";
+
+/// Most needed at the pack bench first: on the most open orders, then the
+/// most units. A join on `n`.
+const PACKING: &str = "LEFT JOIN to_pack tp ON tp.item_id = n.id";
+
 /// How the list is ordered, and so how it pages.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Order {
     Code,
     Demand,
+    Packing,
     Walk,
     Listed,
 }
@@ -469,6 +493,9 @@ pub struct ItemRow {
     pub size: String,
     /// Order lines naming it: how much it matters to get right.
     pub demand: i64,
+    /// Units still to pack on open orders, and on how many lines (D197).
+    pub to_pack: i64,
+    pub to_pack_lines: i64,
     /// The bin to go to for it here: the one in reach of the floor holding
     /// the most of it, or the biggest pile when none in reach holds any
     /// (D180). This system's ledger first, then NetSuite's report.
@@ -523,16 +550,17 @@ pub async fn item_list(
         .flatten()
         .collect();
     let here = query.stock.as_deref() == Some("here");
-    let (weighing, measuring, photo) = match query.needs.as_deref() {
-        Some("weighing") => (true, false, false),
-        Some("measuring") => (false, true, false),
-        Some("photo") => (false, false, true),
+    let (weighing, measuring, photo, packing) = match query.needs.as_deref() {
+        Some("weighing") => (true, false, false, false),
+        Some("measuring") => (false, true, false, false),
+        Some("photo") => (false, false, true, false),
+        Some("packing") => (false, false, false, true),
         Some(other) => {
             return Err(ApiError::Rejected(format!(
-                "needs is weighing, measuring or photo, not {other}"
+                "needs is weighing, measuring, photo or packing, not {other}"
             )))
         }
-        None => (false, false, false),
+        None => (false, false, false, false),
     };
     let (has_measured, has_photo) = match query.has.as_deref() {
         Some("measured") => (true, false),
@@ -549,12 +577,13 @@ pub async fn item_list(
     let order = match query.order.as_deref() {
         None | Some("code") => Order::Code,
         Some("demand") => Order::Demand,
+        Some("packing") => Order::Packing,
         Some("walk") => Order::Walk,
         Some("list") if list.is_some() => Order::Listed,
         Some("list") => return Err(ApiError::Rejected("order=list needs a list".into())),
         Some(other) => {
             return Err(ApiError::Rejected(format!(
-                "order is code, demand, walk or list, not {other}"
+                "order is code, demand, packing, walk or list, not {other}"
             )))
         }
     };
@@ -587,6 +616,7 @@ pub async fn item_list(
                 let (sort_join, sort_by) = match order {
                     Order::Code => ("", "n.code"),
                     Order::Demand => (DEMAND, "dem.lines DESC, n.code"),
+                    Order::Packing => (PACKING, "tp.lines DESC NULLS LAST, tp.units DESC NULLS LAST, n.code"),
                     Order::Walk => (pile.as_str(), "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
                     Order::Listed => (LISTED, "le.position, n.code"),
                 };
@@ -605,8 +635,21 @@ pub async fn item_list(
                 };
                 let weighed = measured("'gross_weight'");
                 let sized = measured("'length', 'width', 'height'");
+                // Its each has all three lengths recorded, its own or its
+                // family's, or is said to have none (D138): the pack bench can
+                // place it, or knows to put it in loose (D197).
+                let each_sized = "EXISTS (SELECT 1 FROM observable o
+                                   JOIN observation_current oc ON oc.observable_id = o.id
+                                   JOIN metric m ON m.id = oc.metric_id
+                                  WHERE (o.item_id = c.id
+                                         OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
+                                    AND o.packaging_level = 'each'
+                                    AND m.code IN ('length', 'width', 'height')
+                                    AND (oc.value_numeric IS NOT NULL OR oc.absent_reason IS NOT NULL)
+                                 HAVING count(DISTINCT m.code) = 3)";
                 let sql = format!(
                     "WITH {picture},
+                     {TO_PACK},
                      candidates AS (
                          SELECT i.id, i.code, i.description, i.active, i.style_id
                            FROM item i
@@ -633,6 +676,11 @@ pub async fn item_list(
                             AND (NOT $12::bool OR {weighed} OR {sized})
                             AND (NOT $13::bool
                                  OR EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
+                            AND (NOT $14::bool
+                                 OR (EXISTS (SELECT 1 FROM to_pack tp WHERE tp.item_id = c.id)
+                                     AND NOT {each_sized}
+                                     AND NOT (SELECT s.as_it_is
+                                                FROM ships_as_is(c.id, NULL, NULL, NULL, 'each') s)))
                      ),
                      page AS (
                          SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
@@ -646,8 +694,9 @@ pub async fn item_list(
                             (SELECT count(*) FROM needed), dem.lines, pile.code,
                             (SELECT e.position FROM item_list_entry e
                               WHERE e.item_list_id = $11 AND e.item_id = n.id),
-                            pile.reach
+                            pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0)
                        FROM page n
+                       LEFT JOIN to_pack tpk ON tpk.item_id = n.id
                        LEFT JOIN item_style st ON st.id = n.style_id
                        LEFT JOIN picture pic ON pic.item_id = n.id
                        {DEMAND}
@@ -688,7 +737,7 @@ pub async fn item_list(
                         &sql,
                         &[
                             &like, &codes, &here, &site, &weighing, &measuring, &photo,
-                            &after_code, &(limit + 1), &offset, &list, &has_measured, &has_photo,
+                            &after_code, &(limit + 1), &offset, &list, &has_measured, &has_photo, &packing,
                         ],
                     )
                     .await?;
@@ -721,6 +770,8 @@ pub async fn item_list(
                         bin_code: r.get(14),
                         list_position: r.get(15),
                         bin_within_reach: r.get(16),
+                        to_pack: r.get(17),
+                        to_pack_lines: r.get(18),
                     })
                     .collect();
                 let next = match (more, order) {

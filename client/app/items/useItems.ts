@@ -26,10 +26,10 @@ import { codesFrom } from "./lists";
  */
 
 export type Stock = "" | "here";
-export type Needs = "" | "weighing" | "measuring" | "photo";
+export type Needs = "" | "weighing" | "measuring" | "photo" | "packing";
 /** What has been done, to look over: the other way round from `Needs`. */
 export type Has = "" | "measured" | "photographed" | "both";
-export type Order = "" | "demand" | "walk" | "list";
+export type Order = "" | "demand" | "packing" | "walk" | "list";
 
 export interface Asked {
   q: string;
@@ -68,9 +68,9 @@ export interface ItemsDesk {
   making: { busy: boolean; problem: string | null; dismiss: () => void };
 }
 
-const NEEDS: readonly Needs[] = ["weighing", "measuring", "photo"];
+const NEEDS: readonly Needs[] = ["weighing", "measuring", "photo", "packing"];
 const HAS: readonly Has[] = ["measured", "photographed", "both"];
-const ORDERS: readonly Order[] = ["demand", "walk", "list"];
+const ORDERS: readonly Order[] = ["demand", "packing", "walk", "list"];
 
 /** The question in a URL's query string, and back. */
 export function askedFrom(search: string): Asked & { item: string | null } {

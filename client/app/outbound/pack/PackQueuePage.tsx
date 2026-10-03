@@ -32,6 +32,14 @@ export function PackQueuePage({ bench, onOpen }: { bench: QueueBench; onOpen?: (
   return (
     <Page>
       <PageHeader title="Packing" description="Fulfilments ready to pack at this site." />
+      {/* The bench suggests how things go in only once they have a size (D195, D197). */}
+      {!!bench.unsized && (
+        <Alert tone="info">
+          {bench.unsized === 1 ? "1 product" : `${bench.unsized} products`} still to pack {bench.unsized === 1 ? "has" : "have"} no size,
+          so the bench can't suggest how {bench.unsized === 1 ? "it goes" : "they go"} in.{" "}
+          <Link href={href("/items?needs=packing&order=packing")}>Measure them, most needed first</Link>
+        </Alert>
+      )}
 
       <Card padded={false}>
         <Toolbar>

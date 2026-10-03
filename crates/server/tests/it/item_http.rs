@@ -211,6 +211,14 @@ async fn the_item_list_finds_narrows_and_pages() {
         everything["total"].as_i64().unwrap(),
         "has a picture and needs one split every item between them"
     );
+    // ── needs a size for packing, most needed first (D197) ──────────────
+    let (status, packing) = list("?needs=packing&order=packing&limit=200").await;
+    assert_eq!(status, 200, "{packing}");
+    let rows = packing["items"].as_array().unwrap();
+    assert!(rows.iter().all(|i| i["to_pack"].as_i64().unwrap() > 0), "only what is still to pack: {packing}");
+    let lines: Vec<i64> = rows.iter().map(|i| i["to_pack_lines"].as_i64().unwrap()).collect();
+    assert!(lines.windows(2).all(|w| w[0] >= w[1]), "on the most open orders first: {lines:?}");
+
     let (status, both) = list("?has=both&limit=200").await;
     assert_eq!(status, 200, "{both}");
     assert!(
