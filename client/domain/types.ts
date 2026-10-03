@@ -1715,3 +1715,26 @@ export interface DraftRequest {
   /** Racks with a face on each side, numbered round them. */
   two_sided: string[];
 }
+
+/** `GET /workspace/people`: one person of the workspace, current or past (D205). */
+export interface WorkspacePerson {
+  person_id: Uuid;
+  display_name: string;
+  email: string | null;
+  role: "administrator" | "operator";
+  joined_at: string;
+  /** When they stopped being a member; null while they are one. */
+  left_at: string | null;
+  /** Whether they can sign in with a password, and with how many passkeys. */
+  password: boolean;
+  passkeys: number;
+  /** The administrator looking at the list. */
+  you: boolean;
+}
+
+/** `POST /workspace/people`. */
+export interface PersonAdded {
+  person_id: Uuid;
+  /** They already signed in elsewhere, and keep that sign-in. */
+  existing: boolean;
+}

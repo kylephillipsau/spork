@@ -32,6 +32,7 @@ mod outbound_reads;
 mod own_carton_http;
 mod packaging_http;
 mod pack_walk_http;
+mod people_http;
 mod packing_list;
 mod passkeys_http;
 mod picking_http;

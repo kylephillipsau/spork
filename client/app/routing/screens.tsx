@@ -38,12 +38,14 @@ import { KeysPage } from "@app/account/KeysPage";
 import { useKeys } from "@app/account/useKeys";
 import { TokensPage } from "@app/admin/TokensPage";
 import { BackupPage } from "@app/admin/BackupPage";
+import { PeoplePage } from "@app/admin/PeoplePage";
 import { ImportPage } from "@app/admin/ImportPage";
 import { useImport } from "@app/admin/useImport";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { useWorkspace } from "@app/admin/useWorkspace";
 import { useTokens } from "@app/admin/useTokens";
 import { useBackup } from "@app/admin/useBackup";
+import { usePeople } from "@app/admin/usePeople";
 import { usePassword } from "@app/account/usePassword";
 
 import { SCREENS } from "./manifest";
@@ -240,6 +242,11 @@ function LiveTokens() {
   return <TokensPage bench={useTokens()} />;
 }
 
+/** The workspace's people (D205): an administrator's. */
+function LivePeople() {
+  return <PeoplePage bench={usePeople()} />;
+}
+
 /** The workspace's backup (D193): an administrator's. */
 function LiveBackup() {
   return <BackupPage bench={useBackup()} />;
@@ -339,6 +346,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   where: () => <LiveWhere />,
   account: () => <LivePassword />,
   tokens: () => <LiveTokens />,
+  people: () => <LivePeople />,
   backup: () => <LiveBackup />,
   workspace: () => <LiveWorkspace />,
   import: () => <LiveImport />,

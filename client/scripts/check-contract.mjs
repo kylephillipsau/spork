@@ -298,6 +298,9 @@ const PAIRS = [
   // written by the API rather than read from a screen module
   ["CarrierLine", ["CarrierLine"]],
   ["ConsignmentResponse", ["ConsignmentResponse"]],
+  // The workspace's people (D205).
+  ["WorkspacePerson", ["WorkspacePerson"]],
+  ["PersonAdded", ["PersonAdded"]],
 ];
 
 const problems = [];

@@ -14548,3 +14548,30 @@ them. And the walk read a cache that waits for the scheduler, so a line picked
 a moment ago came back on the next read. With devices about to be told of every
 pick as it happens (docs/picking-plan.md), the next read comes straight after
 the pick.
+
+### D205: An administrator adds the workspace's people, and each signs in as themselves
+
+*Adopted 2026-10-04, with no migration. Amends D192; narrows Q176.*
+
+**Decision.** Settings has a **People** page, for administrators only. An
+administrator adds a person with a name, an email, a role and a first password
+of at least twelve characters, which the person changes under Account. If the
+email already signs in to another workspace, the person keeps that sign-in and
+only joins this one. An administrator says what each member is, and takes a
+member out by setting `person_tenant.left_at`. That ends every session they
+hold here at once. What they recorded still names them, and adding the same
+email again brings them back. A workspace always keeps one administrator, and
+nobody takes themselves out. The roles in use are `administrator` and
+`operator`. An operator can do everything except Backup and People.
+
+**Why.** Until now a person came to exist only when a deployment was set up, so
+a workspace had one person and everybody else worked under that name. Picking
+in Spork (docs/picking-plan.md) assigns runs to pickers and records who picked
+what, which needs each picker to be somebody. Leaving rather than deleting
+keeps D11's promise that history names who did it. `session_resolve` and
+`role_in_tenant()` already read `left_at`, so nothing else had to change.
+Identity is read and written as the login role, as setup and sign-on do.
+
+**Not decided.** Finer roles, such as picker, packer or supervisor, and what
+each may not do, remain Q176's. Two words cover the first person who must not
+do something, which is an operator taking a backup.

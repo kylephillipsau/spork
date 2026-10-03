@@ -43,6 +43,7 @@ pub mod orders;
 pub mod prepack;
 pub mod packages;
 pub mod packaging;
+pub mod people;
 pub mod shipping;
 pub mod packing;
 pub mod passkeys;

@@ -144,7 +144,7 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - A backup taken before D194 has no catalogue. One with a measurement taken
   in a stated presentation is refused, naming the column. Take it again, or
   give the empty database the source's presentation ids before restoring.
-- No screen gives the administrator role to someone else (Q176).
+- People (D205): an administrator adds people with a first password, gives them a role and takes them out, which ends their sessions. Only two roles exist, administrator and operator. Finer roles are still Q176.
 - A non-box item can be photographed but not trimmed: its photo is used as
   taken. A white-background cutout is the planned next step for those.
 

@@ -22,6 +22,8 @@ import type {
   CaptureSubject,
   PackagingType,
   PackageTypeRow,
+  PersonAdded,
+  WorkspacePerson,
   BackupSummary,
   SameAsSaid,
   ItemView,
@@ -858,6 +860,20 @@ export const api = {
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),
+
+  /** The workspace's people, current first (D205). An administrator's. */
+  people: () => send<WorkspacePerson[]>("GET", "/workspace/people"),
+
+  /** Add a person, or bring back one who left (D205). */
+  addPerson: (input: { display_name: string; email: string; password: string; role: WorkspacePerson["role"] }) =>
+    send<PersonAdded>("POST", "/workspace/people", input),
+
+  /** Say what a member is (D205). The last administrator stays one. */
+  setPersonRole: (id: Uuid, role: WorkspacePerson["role"]) =>
+    send<void>("POST", `/workspace/people/${encodeURIComponent(id)}/role`, { role }),
+
+  /** Take somebody out of the workspace; their history stays theirs (D205). */
+  removePerson: (id: Uuid) => send<void>("POST", `/workspace/people/${encodeURIComponent(id)}/leave`, {}),
 
   /** The box presets, the workspace's own first. */
   packageTypes: () => send<PackageTypeRow[]>("GET", "/package-types"),

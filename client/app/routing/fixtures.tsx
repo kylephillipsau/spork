@@ -97,6 +97,8 @@ import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as I
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { BackupPage } from "@app/admin/BackupPage";
 import { BACKUP_READY, fixtureBackup } from "@app/admin/backup-fixture";
+import { PeoplePage } from "@app/admin/PeoplePage";
+import { PEOPLE_READY, fixturePeople } from "@app/admin/people-fixture";
 import { ItemPage } from "@app/items/ItemPage";
 import {
   BRUSH,
@@ -723,6 +725,11 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-workspace-failed", "/fixtures/workspace/failed", "Workspace — unreachable", "desk", { screen: "workspace" }, () => (
     <WorkspacePage bench={fixtureWorkspace(WS_FAILED)} />
+  )),
+  // The workspace's people, one of whom has left, and the line after an add (D205).
+  app("f-people", "/fixtures/people", "People", "desk", { screen: "people" }, () => <PeoplePage bench={fixturePeople(PEOPLE_READY)} />),
+  app("f-people-added", "/fixtures/people/added", "People — added", "desk", { screen: "people" }, () => (
+    <PeoplePage bench={fixturePeople(PEOPLE_READY, { said: "Sam Rivera can sign in now with that password, and change it under Account." })} />
   )),
   // A backup of the whole workspace, and the moment after it was asked for (D193).
   app("f-backup", "/fixtures/backup", "Backup", "desk", { screen: "backup" }, () => <BackupPage bench={fixtureBackup(BACKUP_READY)} />),

@@ -11,6 +11,7 @@ import {
   ArrowDownToLine,
   Boxes,
   DatabaseBackup,
+  Users,
   Building2,
   ClipboardList,
   Crop,
@@ -86,6 +87,7 @@ export const SETTINGS: NavGroup = {
     { id: "workspace", label: "Workspace", path: "/workspace", icon: Building2 },
     { id: "import", label: "Import", path: "/import", icon: Upload },
     { id: "tokens", label: "Import tokens", path: "/tokens", icon: KeyRound },
+    { id: "people", label: "People", path: "/people", icon: Users, administrators: true },
     { id: "backup", label: "Backup", path: "/backup", icon: DatabaseBackup, administrators: true },
   ],
 };
