@@ -9,6 +9,8 @@
 //! it is packed in is (D191): the newest saying wins, a variant takes its
 //! item's carton's and an item's carton its family's carton's. Unsaid, a
 //! carton does and anything else does not (`ships_as_is`, migration 113).
+//! Whether it must stay the way up it stands is said the same way (D200,
+//! `keeps_upright`, migration 114); unsaid, any way up will do.
 
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
@@ -21,15 +23,21 @@ use crate::routes::caller;
 use crate::tenancy::TenantScope;
 use crate::AppState;
 
+/// A subject, one arm of four, as `POST /packaging` takes it.
 #[derive(Deserialize, Debug)]
-pub struct SayShipsAsIsRequest {
-    /// The subject, one arm of four, as `POST /packaging` takes it.
+pub struct SubjectArms {
     pub item_id: Option<Uuid>,
     pub item_style_id: Option<Uuid>,
     pub lot_id: Option<Uuid>,
     pub item_part_id: Option<Uuid>,
     /// With an item or a family: `each`, `inner` or `carton`.
     pub packaging_level: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SayShipsAsIsRequest {
+    #[serde(flatten)]
+    pub subject: SubjectArms,
     /// It goes to the carrier as it is, rather than into a box.
     pub as_it_is: bool,
     pub client_event_id: Uuid,
@@ -43,14 +51,55 @@ pub async fn say_ships_as_is(
     state: web::Data<AppState>,
     body: web::Json<SayShipsAsIsRequest>,
 ) -> Result<HttpResponse, ApiError> {
-    let who = caller(&state, &req).await?;
-    let body = body.into_inner();
-    let arms = [body.item_id, body.item_style_id, body.lot_id, body.item_part_id];
+    let b = body.into_inner();
+    say(&state, &req, b.subject, Said::ShipsAsIs(b.as_it_is), b.client_event_id, b.occurred_at).await
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SayUprightRequest {
+    #[serde(flatten)]
+    pub subject: SubjectArms,
+    /// It stays the way up it stands: turned round, never onto its side (D200).
+    pub upright: bool,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Say whether a subject must stay the way up it stands (D200). Saying it
+/// again is the same act.
+#[post("/upright")]
+pub async fn say_upright(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<SayUprightRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let b = body.into_inner();
+    say(&state, &req, b.subject, Said::Upright(b.upright), b.client_event_id, b.occurred_at).await
+}
+
+/// A yes or no said of a subject, and the table its sayings are kept in.
+enum Said {
+    ShipsAsIs(bool),
+    Upright(bool),
+}
+
+/// One saying of a subject: checked as `POST /packaging` checks one, and
+/// written once however often it is sent.
+async fn say(
+    state: &web::Data<AppState>,
+    req: &HttpRequest,
+    subject: SubjectArms,
+    said: Said,
+    client_event_id: Uuid,
+    occurred_at: DateTime<Utc>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(state, req).await?;
+    let arms = [subject.item_id, subject.item_style_id, subject.lot_id, subject.item_part_id];
     if arms.iter().filter(|a| a.is_some()).count() != 1 {
         return Err(ApiError::Rejected("say it of one thing: an item, a family, a variant or a part".into()));
     }
-    let levelled = body.item_id.is_some() || body.item_style_id.is_some();
-    match body.packaging_level.as_deref() {
+    let levelled = subject.item_id.is_some() || subject.item_style_id.is_some();
+    match subject.packaging_level.as_deref() {
         Some("each" | "inner" | "carton") if levelled => {}
         None if !levelled => {}
         _ if levelled => return Err(ApiError::Rejected("an item or a family needs its level: each, inner or carton".into())),
@@ -58,10 +107,14 @@ pub async fn say_ships_as_is(
     }
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
-        client_event_id: body.client_event_id,
+        client_event_id,
         site_id: who.site_id,
         recorded_by_id: who.person_id,
-        submitted_at: body.occurred_at,
+        submitted_at: occurred_at,
+    };
+    let (table, column, value) = match said {
+        Said::ShipsAsIs(v) => ("subject_shipping", "as_it_is", v),
+        Said::Upright(v) => ("subject_upright", "upright", v),
     };
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     scope
@@ -73,7 +126,7 @@ pub async fn say_ships_as_is(
                              OR EXISTS (SELECT 1 FROM item_style WHERE id = $2)
                              OR EXISTS (SELECT 1 FROM lot WHERE id = $3)
                              OR EXISTS (SELECT 1 FROM item_part WHERE id = $4)",
-                        &[&body.item_id, &body.item_style_id, &body.lot_id, &body.item_part_id],
+                        &[&subject.item_id, &subject.item_style_id, &subject.lot_id, &subject.item_part_id],
                     )
                     .await?
                     .get::<_, bool>(0);
@@ -84,18 +137,20 @@ pub async fn say_ships_as_is(
                     return Ok(());
                 }
                 tx.execute(
-                    "INSERT INTO subject_shipping
-                         (tenant_id, item_id, item_style_id, lot_id, item_part_id, packaging_level,
-                          as_it_is, client_event_id, recorded_by_id)
-                     VALUES ($1, $2, $3, $4, $5, $6::text::packaging_level, $7, $8, $9)",
+                    &format!(
+                        "INSERT INTO {table}
+                             (tenant_id, item_id, item_style_id, lot_id, item_part_id, packaging_level,
+                              {column}, client_event_id, recorded_by_id)
+                         VALUES ($1, $2, $3, $4, $5, $6::text::packaging_level, $7, $8, $9)"
+                    ),
                     &[
                         &ev.tenant_id,
-                        &body.item_id,
-                        &body.item_style_id,
-                        &body.lot_id,
-                        &body.item_part_id,
-                        &body.packaging_level,
-                        &body.as_it_is,
+                        &subject.item_id,
+                        &subject.item_style_id,
+                        &subject.lot_id,
+                        &subject.item_part_id,
+                        &subject.packaging_level,
+                        &value,
                         &ev.client_event_id,
                         &ev.recorded_by_id,
                     ],

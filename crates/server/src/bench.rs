@@ -111,6 +111,9 @@ pub struct PackUnit {
     /// It goes to the carrier as it is rather than into a box (D196), said or
     /// by default: a carton does, an each or an inner pack does not.
     pub ships_as_is: bool,
+    /// It stays the way up it stands (D200): the arrangement turns it round,
+    /// never onto its side.
+    pub upright: bool,
     /// All three lengths, or nothing.
     pub size: Option<StatedSize>,
     /// Somebody said it has no size to measure (D138): a soft thing that goes
@@ -537,6 +540,7 @@ fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements
                 level: level.to_string(),
                 units,
                 ships_as_is: level == "carton",
+                upright: false,
                 size: m.and_then(size_of),
                 no_size: false,
                 gross_weight_g: m.and_then(|m| m.gross_weight_g),
@@ -610,24 +614,29 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
         .iter()
         .map(|r| (r.get(0), r.get(1)))
         .collect();
-    // Whether each level ships as it is (D196): said, inherited or the default.
-    let as_is: HashMap<(Uuid, String), bool> = tx
+    // Whether each level ships as it is (D196) and stays the way up it stands
+    // (D200): said, inherited or the default.
+    let handling: HashMap<(Uuid, String), (bool, bool)> = tx
         .query(
-            "SELECT i.id, l.level, s.as_it_is
+            "SELECT i.id, l.level, s.as_it_is, u.upright
                FROM unnest($1::uuid[]) AS i(id)
               CROSS JOIN unnest(ARRAY['each', 'inner', 'carton']) AS l(level)
-              CROSS JOIN LATERAL ships_as_is(i.id, NULL, NULL, NULL, l.level::packaging_level) s",
+              CROSS JOIN LATERAL ships_as_is(i.id, NULL, NULL, NULL, l.level::packaging_level) s
+              CROSS JOIN LATERAL keeps_upright(i.id, NULL, NULL, NULL, l.level::packaging_level) u",
             &[&ids],
         )
         .await?
         .iter()
-        .map(|r| ((r.get(0), r.get(1)), r.get(2)))
+        .map(|r| ((r.get(0), r.get(1)), (r.get(2), r.get(3))))
         .collect();
     for line in lines.iter_mut() {
         line.picture = pictured.get(&line.item_id).cloned();
         for p in line.packs.iter_mut() {
             let key = (line.item_id, p.level.clone());
-            p.ships_as_is = as_is.get(&key).copied().unwrap_or(p.ships_as_is);
+            if let Some((as_is, upright)) = handling.get(&key) {
+                p.ships_as_is = *as_is;
+                p.upright = *upright;
+            }
             p.faces = faces.remove(&key).unwrap_or_default();
             p.no_size = p.size.is_none() && sizeless.contains(&key);
         }

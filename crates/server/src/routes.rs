@@ -9389,6 +9389,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::packaging::packaging_types)
         .service(crate::packaging::say_packed_in)
         .service(crate::shipping::say_ships_as_is)
+        .service(crate::shipping::say_upright)
         .service(crate::shipping::suggest_box)
         .service(crate::shipping::box_weight)
         .service(crate::backup::backup_summary)

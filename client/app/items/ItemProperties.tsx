@@ -260,6 +260,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
             {packedInWords(subject, desk.packagingTypes)}
           </Fact>
           {subject.packaging_level && <Ships subject={subject} desk={desk} />}
+          {subject.packaging_level && <WayUp subject={subject} desk={desk} />}
           {carton && (
             <Fact label="Holds" always>
               {item.packing?.inners_per_carton != null ? holdsInWords(item.packing) : <Faint>{holdsInWords(item.packing)}</Faint>}
@@ -697,6 +698,33 @@ function Ships({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDes
         {subject.ships_as_is_source === "own" ? words : <Faint>{`${words}${whose}`}</Faint>}
         <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.shipAsIs(subject, !subject.ships_as_is)}>
           {subject.ships_as_is ? "Goes in a box" : "Ships as it is"}
+        </Button>
+      </span>
+    </Fact>
+  );
+}
+
+/**
+ * Whether it must stay the way up it stands (D200): a box of bottles, a carton
+ * printed "this way up". Unsaid, any way up will do, and the bench's
+ * suggestion lays it on its biggest side.
+ */
+function WayUp({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+  const words = subject.upright ? "This way up" : "Any way up";
+  const whose =
+    subject.upright_source === "style"
+      ? " (the family's)"
+      : subject.upright_source === "item"
+        ? " (the item's carton)"
+        : subject.upright_source === "default"
+          ? " unless said"
+          : "";
+  return (
+    <Fact label="Way up" always>
+      <span className={s.ships}>
+        {subject.upright_source === "own" ? words : <Faint>{`${words}${whose}`}</Faint>}
+        <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.keepUpright(subject, !subject.upright)}>
+          {subject.upright ? "Any way up" : "Keep this way up"}
         </Button>
       </span>
     </Fact>

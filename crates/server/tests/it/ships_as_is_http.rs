@@ -156,6 +156,36 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(pack(&after, "each")["ships_as_is"], true, "{after}");
     let (_, unneeded) = call(&app, worklist()).await;
     assert_eq!(unneeded["total"], 0, "what ships as it is needs no size to be packed round: {unneeded}");
+
+    // ── this way up, said the same way (D200) ───────────────────────────
+    assert_eq!(pack(&after, "each")["upright"], false, "any way up, unless said");
+    let (status, body) = call(
+        &app,
+        test::TestRequest::post().uri("/upright").insert_header(auth.clone()).set_json(json!({
+            "item_id": item,
+            "packaging_level": "each",
+            "upright": true,
+            "client_event_id": Uuid::now_v7(),
+            "occurred_at": "2026-10-03T09:02:00Z"
+        })),
+    )
+    .await;
+    assert_eq!(status, 204, "{body}");
+    let (_, stood) = call(&app, bench()).await;
+    assert_eq!(pack(&stood, "each")["upright"], true, "{stood}");
+    let (status, partless) = call(
+        &app,
+        test::TestRequest::post().uri("/upright").insert_header(auth.clone()).set_json(json!({
+            "item_id": item,
+            "lot_id": Uuid::now_v7(),
+            "packaging_level": "each",
+            "upright": true,
+            "client_event_id": Uuid::now_v7(),
+            "occurred_at": "2026-10-03T09:02:00Z"
+        })),
+    )
+    .await;
+    assert_eq!(status, 400, "said of one thing: {partless}");
     let (status, levelless) = call(
         &app,
         test::TestRequest::post().uri("/shipping").insert_header(auth.clone()).set_json(json!({

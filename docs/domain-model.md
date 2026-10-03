@@ -14442,3 +14442,21 @@ big for every box.
 **Why.** A carrier or a pair of arms has a limit, and a box that takes four
 rolls by size may be too heavy to lift with four in it. No limit is the
 default, as the user chose when the suggestion was first made (D195).
+
+### D200: A thing can say this way up
+
+*Adopted 2026-10-03, with migration 114. Amends D195.*
+
+**Decision.** A subject says whether it must stay the way up it stands
+(`subject_upright`, `POST /upright`), said and inherited as "ships as it is"
+is (D196). Unsaid, any way up will do. The item card shows it under "Way up",
+with one press to say the other. The suggestion turns a thing kept upright
+round, but never onto its side. When that means it no longer fits a box, a
+taller one is chosen.
+
+`POST /shipping` and `POST /upright` take the subject the same way and share
+one writer.
+
+**Why.** The suggestion lays everything on its biggest side (D195). That is
+the most stable way for most things, and wrong for a box of bottles or a
+carton printed "this way up".

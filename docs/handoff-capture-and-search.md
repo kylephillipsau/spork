@@ -109,6 +109,9 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   the next layer to put in. Client only (`arrange.ts` `fillOpen`).
 - D199. A box can say the most its goods may weigh (Workspace, Boxes, Max
   weight; empty is no limit). The suggestion fills a box no heavier.
+- D200, migration 114. A thing can say this way up (the item card's "Way
+  up"; unsaid, any way up). The suggestion turns it round, never onto its
+  side.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

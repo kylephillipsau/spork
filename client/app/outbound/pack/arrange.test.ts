@@ -17,6 +17,7 @@ function each(size: Dims | null, over: Partial<PackUnit> = {}): PackUnit {
     level: "each",
     units: 1,
     ships_as_is: false,
+    upright: false,
     size: size && { length_mm: size[0], width_mm: size[1], height_mm: size[2] },
     no_size: false,
     gross_weight_g: 100,
@@ -231,6 +232,7 @@ test("a thing goes in on its side when that is the only way it fits", () => {
     size: [100, 100, 300],
     weight_g: null,
     faces: {},
+    upright: false,
     index: 0,
   };
   const p = pack([320, 120, 110], [{ kind, count: 1 }]);
@@ -327,4 +329,19 @@ test("a thing heavier than every box's limit is said, like one too big", () => {
   const a = arrange([line("ANVIL", 1, [anvil])], [box("small", [400, 300, 190], true, 25000)]);
   assert.deepEqual(a.boxes, []);
   assert.deepEqual(a.oversize.map((o) => o.item_code), ["ANVIL"]);
+});
+
+test("a thing kept upright is turned round, never laid on its side (D200)", () => {
+  // A bottle 100 by 100 and 300 tall: laid down it goes in a box 120 high;
+  // kept upright it does not, and needs the taller box.
+  const bottle = (upright: boolean) => line("BTL", 1, [each([100, 100, 300], { upright })]);
+  const low = box("low", [320, 120, 120]);
+  const tall = box("tall", [320, 320, 320]);
+  const laid = arrange([bottle(false)], [low, tall]);
+  assert.equal(laid.boxes[0]!.preset.name, "low", "on its side, it fits the low box");
+  const stood = arrange([bottle(true)], [low, tall]);
+  assert.equal(stood.boxes[0]!.preset.name, "tall", "upright, only the tall box takes it");
+  const p = stood.boxes[0]!.layers[0]!.placements[0]!;
+  assert.equal(p.axes[2], 2, "its own height stays its height");
+  assert.equal(p.dims[2], 300);
 });

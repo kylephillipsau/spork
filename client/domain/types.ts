@@ -49,6 +49,8 @@ export interface PackUnit {
   units: number;
   /** It goes to the carrier as it is rather than into a box (D196). */
   ships_as_is: boolean;
+  /** It stays the way up it stands (D200): turned round, never onto its side. */
+  upright: boolean;
   size: StatedSize | null;
   /** Somebody said it has no size to measure (D138): it goes in round the rest. */
   no_size: boolean;
@@ -366,6 +368,10 @@ export interface CaptureSubject {
   ships_as_is: boolean;
   /** `own`, `item`, `style`, or `default` when nobody has said. */
   ships_as_is_source: string;
+  /** It stays the way up it stands: turned round, never onto its side (D200). */
+  upright: boolean;
+  /** Whose saying that is, in the same words. */
+  upright_source: string;
   /** Photographed side by side, cut to its faces and drawn: six-sided, or nothing said. */
   box_shaped: boolean;
   /** `own`, `style` or `mixed` — D108. A screen that cannot tell them apart

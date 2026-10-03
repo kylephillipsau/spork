@@ -144,6 +144,8 @@ export interface PropertiesDesk {
   packIn: (subject: CaptureSubject, code: string) => Promise<void>;
   /** Say whether it goes to the carrier as it is rather than into a box (D196). */
   shipAsIs: (subject: CaptureSubject, asItIs: boolean) => Promise<void>;
+  /** Say whether it must stay the way up it stands (D200). */
+  keepUpright: (subject: CaptureSubject, upright: boolean) => Promise<void>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -569,6 +571,13 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     shipAsIs: (subject, asItIs) =>
       press(`ships:${subjectKey(subject)}:${asItIs}`, async (act) => {
         await api.sayShipsAsIs(subject, asItIs, act);
+        if (!live.current) return;
+        await reload();
+      }),
+
+    keepUpright: (subject, upright) =>
+      press(`upright:${subjectKey(subject)}:${upright}`, async (act) => {
+        await api.sayUpright(subject, upright, act);
         if (!live.current) return;
         await reload();
       }),

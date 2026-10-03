@@ -842,6 +842,23 @@ export const api = {
       occurred_at: act.at,
     }),
 
+  /** Say whether a subject must stay the way up it stands (D200). */
+  sayUpright: (
+    subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
+    upright: boolean,
+    act: Act,
+  ) =>
+    send<void>("POST", "/upright", {
+      item_id: subject.item_id,
+      item_style_id: subject.item_style_id,
+      lot_id: subject.lot_id,
+      item_part_id: subject.item_part_id,
+      packaging_level: subject.item_id || subject.item_style_id ? subject.packaging_level : null,
+      upright,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
   /** The box presets, the workspace's own first. */
   packageTypes: () => send<PackageTypeRow[]>("GET", "/package-types"),
 

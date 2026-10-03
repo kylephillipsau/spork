@@ -39,6 +39,8 @@ export interface Kind {
   weight_g: number | null;
   /** Its sides, to draw it with. */
   faces: PackUnit["faces"];
+  /** It stays the way up it stands (D200): turned round, never onto its side. */
+  upright: boolean;
   /** Its line's place on the bench, for telling kinds apart by colour. */
   index: number;
 }
@@ -134,11 +136,12 @@ function turned(size: Dims, axes: Axes): Dims {
   return [size[axes[0]], size[axes[1]], size[axes[2]]];
 }
 
-/** Every distinct way up that fits in `room`. */
-function fitting(size: Dims, room: Dims): Way[] {
+/** Every distinct way up that fits in `room`; for a thing kept upright, only turned round (D200). */
+function fitting(size: Dims, room: Dims, upright = false): Way[] {
   const seen = new Set<string>();
   const out: Way[] = [];
   for (const axes of WAYS) {
+    if (upright && axes[2] !== 2) continue;
     const dims = turned(size, axes);
     const key = dims.join("x");
     if (seen.has(key)) continue;
@@ -154,10 +157,10 @@ function fitting(size: Dims, room: Dims): Way[] {
  * room: an apron 280 by 220 goes into a box 450 wide once lengthways and twice
  * turned.
  */
-function flattest(size: Dims, room: Dims): Way | null {
+function flattest(size: Dims, room: Dims, upright = false): Way | null {
   let best: Way | null = null;
   let bestTiles = 0;
-  for (const w of fitting(size, room)) {
+  for (const w of fitting(size, room, upright)) {
     const area = w.dims[0] * w.dims[1];
     const tiles = Math.floor(room[0] / w.dims[0]) * Math.floor(room[1] / w.dims[1]);
     const bestArea = best ? best.dims[0] * best.dims[1] : 0;
@@ -217,7 +220,7 @@ function fill(space: Space, left: Left[], out: Placement[], budget: Budget): voi
   if (l <= 0 || w <= 0 || h <= 0) return;
   for (const entry of left) {
     if (entry.count === 0 || !affords(budget, entry.kind)) continue;
-    const way = flattest(entry.kind.size, space.room);
+    const way = flattest(entry.kind.size, space.room, entry.kind.upright);
     if (!way) continue;
     entry.count -= 1;
     budget.used += entry.kind.weight_g ?? 0;
@@ -262,7 +265,7 @@ export function pack(size: Dims, pieces: Left[], maxWeight: number | null = null
     let start: { entry: Left; way: Way } | null = null;
     for (const entry of left) {
       if (entry.count === 0 || !affords(budget, entry.kind)) continue;
-      const way = flattest(entry.kind.size, [size[0], size[1], size[2] - z]);
+      const way = flattest(entry.kind.size, [size[0], size[1], size[2] - z], entry.kind.upright);
       if (way) {
         start = { entry, way };
         break;
@@ -308,6 +311,7 @@ function kinds(): KindOf {
         size,
         weight_g: unit.gross_weight_g,
         faces: unit.faces,
+        upright: unit.upright,
         index,
       };
       made.set(key, kind);
