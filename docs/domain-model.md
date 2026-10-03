@@ -14460,3 +14460,20 @@ one writer.
 **Why.** The suggestion lays everything on its biggest side (D195). That is
 the most stable way for most things, and wrong for a box of bottles or a
 carton printed "this way up".
+
+### D201: A parcel that is one of a product says so, with its size
+
+*Adopted 2026-10-03. Amends migration 98 and D196.*
+
+**Decision.** Despatch, the carrier's manifest lines and the printed packing
+list name a package by its box type, or, when it is one of a product as it is,
+by the product and which of it: "JWR-1002R as it is", "SLV-PE-BLU carton",
+"DGC-3010W-10 inner pack" (`packages::WHAT`). Where the parcel has no measured
+size of its own, the manifest and the packing list give the size its item is
+measured at, at that level, read from the item and never copied onto the
+parcel (`packages::own_size`). Each such product and level is a manifest line
+of its own.
+
+**Why.** A parcel that is not a box type read "Unstated" on the manifest and
+named nothing on the packing list, and a carrier was given no dimensions for
+it. They were known all along, as the item's.

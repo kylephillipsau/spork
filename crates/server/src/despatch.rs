@@ -188,18 +188,21 @@ pub async fn screen(
                                     coalesce(o.confirmation_number, o.external_ref, '—'),
                                     coalesce(pa.name, 'no customer named'),
                                     p.id, coalesce(p.sequence::text, '—'),
-                                    pt.name, p.gross_weight_g
+                                    {what}, p.gross_weight_g
                                FROM package p
                                JOIN fulfilment f ON f.id = p.fulfilment_id
                                JOIN \"order\" o ON o.id = f.order_id
                                LEFT JOIN party pa ON pa.id = o.customer_party_id
                                LEFT JOIN package_type pt ON pt.id = p.package_type_id
+                               {own_item}
                                LEFT JOIN consignment_package cp ON cp.package_id = p.id
                                {WINNING}
                               WHERE cp.consignment_id IS NULL
                                 AND w.kind = 'sealed'
                                 AND ($1::uuid IS NULL OR f.site_id = $1)
-                              ORDER BY f.reference NULLS LAST, f.id, p.sequence NULLS LAST"
+                              ORDER BY f.reference NULLS LAST, f.id, p.sequence NULLS LAST",
+                            what = crate::packages::WHAT,
+                            own_item = crate::packages::OWN_ITEM,
                         ),
                         &[&site_id],
                     )

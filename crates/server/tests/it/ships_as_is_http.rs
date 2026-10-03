@@ -57,7 +57,11 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
         return;
     };
     let state = web::Data::new(AppState { pool: pool(&u) });
-    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    // The packing list is a document, mounted beside the API rather than in it.
+    let app = test::init_service(
+        App::new().app_data(state).configure(routes::configure).configure(spork_server::web::configure),
+    )
+    .await;
     let session = common::bearer(&app).await;
     let auth = ("authorization", session.clone());
 
@@ -248,6 +252,33 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(p["own_level"], "each", "one of it as an each, not a carton");
     assert!(p["package_type"].is_null(), "not a box type");
     assert_eq!(p["sealed"], true);
+
+    // ── despatch and the packing list say what it is (D201) ─────────────
+    let named = format!("{code} as it is");
+    let site: Uuid = db
+        .query_one("SELECT site_id FROM fulfilment WHERE id = $1", &[&fulfilment])
+        .await
+        .expect("its site")
+        .get(0);
+    let (status, despatch) = call(
+        &app,
+        test::TestRequest::get().uri(&format!("/sites/{site}/despatch")).insert_header(auth.clone()),
+    )
+    .await;
+    assert_eq!(status, 200, "{despatch}");
+    let waiting = despatch.to_string();
+    assert!(waiting.contains(&named), "waiting for a carrier as {named}: {waiting}");
+    let page = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/print/packing-list/{parcel}"))
+            .insert_header(auth.clone())
+            .to_request(),
+    )
+    .await;
+    assert!(page.status().is_success());
+    let html = String::from_utf8(test::read_body(page).await.to_vec()).unwrap();
+    assert!(html.contains(&named), "the packing list names it: {html}");
 
     // ── a carton ships as it is unless said, once the case pack counts it ─
     let config: Uuid = db

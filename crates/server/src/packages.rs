@@ -557,3 +557,30 @@ mod contain_tests {
         assert!(!s.iter().any(contain_is_hard));
     }
 }
+
+/// What a package is, in words (migration 98, D196, D201): its box type's
+/// name, or the item it is one of and which of it, "JWR-1002R as it is".
+/// Needs `pt` joined on `p.package_type_id` and `oi` by [`OWN_ITEM`].
+pub const WHAT: &str = "coalesce(pt.name, oi.code || CASE p.own_level
+                            WHEN 'carton' THEN ' carton'
+                            WHEN 'inner' THEN ' inner pack'
+                            WHEN 'each' THEN ' as it is' END)";
+
+/// The join [`WHAT`] needs: the item a package is one of, as it is.
+pub const OWN_ITEM: &str = "LEFT JOIN item oi ON oi.id = p.own_item_id";
+
+/// What one of an item as it is measures, at its level, as the item's
+/// measurements say (D201): read, never copied onto the package (migration 98).
+/// All three lengths, or nothing.
+pub async fn own_size(
+    tx: &tokio_postgres::Transaction<'_>,
+    item: uuid::Uuid,
+    level: &str,
+) -> Result<Option<(i32, i32, i32)>, crate::error::ApiError> {
+    let whole = |v: Option<i64>| v.and_then(|v| i32::try_from(v).ok());
+    Ok(crate::routes::measurements_of(tx, item)
+        .await?
+        .into_iter()
+        .find(|m| m.packaging_level == level)
+        .and_then(|m| Some((whole(m.length_mm)?, whole(m.width_mm)?, whole(m.height_mm)?))))
+}

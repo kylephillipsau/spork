@@ -249,16 +249,21 @@ async fn carton_view(
                         // said, not what the catalogue says it should have been.
                         // Before this the sheet read "not measured" for a box
                         // whose size has been on file since migration 67.
-                        "SELECT coalesce(p.sequence::text, '—'), pt.name,
-                                p.sealed_at IS NOT NULL, p.gross_weight_g,
-                                coalesce(p.length_mm, pt.length_mm),
-                                coalesce(p.width_mm, pt.width_mm),
-                                coalesce(p.height_mm, pt.height_mm),
-                                f.reference
-                           FROM package p
-                           LEFT JOIN package_type pt ON pt.id = p.package_type_id
-                           LEFT JOIN fulfilment f ON f.id = p.fulfilment_id
-                          WHERE p.id = $1",
+                        &format!(
+                            "SELECT coalesce(p.sequence::text, '—'), {what},
+                                    p.sealed_at IS NOT NULL, p.gross_weight_g,
+                                    coalesce(p.length_mm, pt.length_mm),
+                                    coalesce(p.width_mm, pt.width_mm),
+                                    coalesce(p.height_mm, pt.height_mm),
+                                    f.reference, p.own_item_id, p.own_level::text
+                               FROM package p
+                               LEFT JOIN package_type pt ON pt.id = p.package_type_id
+                               {own_item}
+                               LEFT JOIN fulfilment f ON f.id = p.fulfilment_id
+                              WHERE p.id = $1",
+                            what = crate::packages::WHAT,
+                            own_item = crate::packages::OWN_ITEM,
+                        ),
                         &[&package_id],
                     )
                     .await?
@@ -316,6 +321,17 @@ async fn carton_view(
                     ));
                 }
 
+                // One of a product as it is prints the size its item is
+                // measured at, at that level, when this one was not (D201).
+                let mut size: (Option<i32>, Option<i32>, Option<i32>) = (head.get(4), head.get(5), head.get(6));
+                if let (Some(item), Some(level), (None, None, None)) =
+                    (head.get::<_, Option<Uuid>>(8), head.get::<_, Option<String>>(9), size)
+                {
+                    if let Some((l, w, h)) = crate::packages::own_size(tx, item, &level).await? {
+                        size = (Some(l), Some(w), Some(h));
+                    }
+                }
+
                 Ok(CartonView {
                     sequence: head.get(0),
                     package_type: head.get(1),
@@ -323,9 +339,9 @@ async fn carton_view(
                     order_reference: rows.first().and_then(|r| r.get(4)),
                     sealed: head.get(2),
                     gross_weight_g: head.get(3),
-                    length_mm: head.get(4),
-                    width_mm: head.get(5),
-                    height_mm: head.get(6),
+                    length_mm: size.0,
+                    width_mm: size.1,
+                    height_mm: size.2,
                     lines,
                     warnings,
                 })

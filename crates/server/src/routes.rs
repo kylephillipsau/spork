@@ -4947,29 +4947,39 @@ async fn consignment_view(
     // a person actually measured, and an unmeasured carton has no height to
     // claim. `uniform` is computed over the same coalesced values, so a line
     // that inherits its footprint and disagrees on nothing is still uniform.
+    //
+    // **One of a product as it is is its own line** (D201): "JWR-1002R as it
+    // is", with the size its item is measured at at that level, read from the
+    // item rather than copied onto the parcel, as the bench reads it.
     let rows = tx
         .query(
-            "SELECT pt.name, pt.carrier_package_code, count(*)::bigint,
-                    sum(p.gross_weight_g)::bigint,
-                    min(coalesce(p.length_mm, pt.length_mm)),
-                    min(coalesce(p.width_mm, pt.width_mm)),
-                    min(p.height_mm),
-                    count(DISTINCT (coalesce(p.length_mm, pt.length_mm),
-                                    coalesce(p.width_mm, pt.width_mm),
-                                    p.height_mm)) = 1
-               FROM consignment_package cp
-               JOIN package p ON p.id = cp.package_id
-               LEFT JOIN package_type pt ON pt.id = p.package_type_id
-              WHERE cp.consignment_id = $1
-              GROUP BY pt.name, pt.carrier_package_code
-              ORDER BY pt.name NULLS LAST",
+            &format!(
+                "SELECT {what}, pt.carrier_package_code, count(*)::bigint,
+                        sum(p.gross_weight_g)::bigint,
+                        min(coalesce(p.length_mm, pt.length_mm)),
+                        min(coalesce(p.width_mm, pt.width_mm)),
+                        min(p.height_mm),
+                        count(DISTINCT (coalesce(p.length_mm, pt.length_mm),
+                                        coalesce(p.width_mm, pt.width_mm),
+                                        p.height_mm)) = 1,
+                        p.own_item_id, p.own_level::text
+                   FROM consignment_package cp
+                   JOIN package p ON p.id = cp.package_id
+                   LEFT JOIN package_type pt ON pt.id = p.package_type_id
+                   {own_item}
+                  WHERE cp.consignment_id = $1
+                  GROUP BY pt.name, pt.carrier_package_code, oi.code, p.own_item_id, p.own_level
+                  ORDER BY 1 NULLS LAST",
+                what = crate::packages::WHAT,
+                own_item = crate::packages::OWN_ITEM,
+            ),
             &[&consignment_id],
         )
         .await?;
 
-    let carrier_lines: Vec<CarrierLine> = rows
-        .iter()
-        .map(|r| CarrierLine {
+    let mut carrier_lines: Vec<CarrierLine> = vec![];
+    for r in &rows {
+        let mut line = CarrierLine {
             package_type: r.get(0),
             carrier_package_code: r.get(1),
             package_count: r.get(2),
@@ -4978,8 +4988,17 @@ async fn consignment_view(
             width_mm: r.get(5),
             height_mm: r.get(6),
             uniform: r.get::<_, Option<bool>>(7).unwrap_or(true),
-        })
-        .collect();
+        };
+        let own: (Option<Uuid>, Option<String>) = (r.get(8), r.get(9));
+        if let (Some(item), Some(level)) = own {
+            if line.length_mm.is_none() && line.width_mm.is_none() && line.height_mm.is_none() {
+                if let Some((l, w, h)) = crate::packages::own_size(tx, item, &level).await? {
+                    (line.length_mm, line.width_mm, line.height_mm) = (Some(l), Some(w), Some(h));
+                }
+            }
+        }
+        carrier_lines.push(line);
+    }
 
     let mut warnings = warnings;
     for l in &carrier_lines {
