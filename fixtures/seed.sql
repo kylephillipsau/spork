@@ -228,9 +228,12 @@ INSERT INTO item_packing_config (id, tenant_id, item_id, units_per_inner,
     ('9ac40000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
      '17e10000-0000-0000-0000-000000000001', 10, 1, 8, 5, '2026-01-01');
 
+-- The platform's statuses are migration 115's since 2026-10-03; said here
+-- too, so a seed against an older schema still has them.
 INSERT INTO inventory_status (id, code, name, is_available_for_allocation) VALUES
     ('57a70000-0000-0000-0000-000000000001', 'available', 'Available', true),
-    ('57a70000-0000-0000-0000-000000000002', 'quarantine', 'Quarantine', false);
+    ('57a70000-0000-0000-0000-000000000002', 'quarantine', 'Quarantine', false)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO party (id, tenant_id, name, code, party_class_id) VALUES
     ('9a247000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',

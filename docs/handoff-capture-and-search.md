@@ -114,6 +114,14 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   side.
 - D201. Despatch, the carrier manifest and the packing list name a parcel
   that is one of a product ("JWR-1002R as it is") and give its item's size.
+- D202. The bench's packing plan opens on the whole order: every line,
+  ticked itself once it is all in cartons; every parcel, packed or planned,
+  with its press; a tally of every unit; and all parcels side by side in 3D
+  (`order.ts`, tested in `order.test.ts`).
+- Migration 115. The platform's stock statuses ("available", "quarantine")
+  were only ever inserted by `fixtures/seed.sql`, so on a database built by
+  migrations alone every handover into a carton failed. They are a migration
+  now, with the seed's fixed ids.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.
