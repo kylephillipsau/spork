@@ -14507,3 +14507,25 @@ the tally counts against.
 bench showed a box for what was left and a list of the rest, and nothing
 showed the order whole. A packer checking that nothing is missing needs every
 unit and where it is, not only what goes into the next box.
+
+### D203: A claim's hold on a bin is reduced by what has been picked from it
+
+*Adopted 2026-10-04, with migration 116. Amends D12 and J3.*
+
+**Decision.** A stock cell's `allocated_quantity` is what its active claims
+still hold of it. For each line with active claims on the cell, that is what
+the line claimed less what its picks have taken out of that cell, net of
+corrections, and never below nothing. A pick with no claim behind it lets go
+of nothing. One view, `stock_claim_hold`, states it: the stock fold writes it,
+and J3 checks the column against the same view.
+
+**Why.** A claim was meant to move through `picking`, `picked` and `packed`,
+following the goods, but nothing ever advanced it, and the progress a person
+reads is folded from movements instead (D99, D100). So a claim went on holding
+its whole quantity against the bin its goods had left. In the test database a
+bin holding 37 showed 50 claimed and 13 fewer than nothing available. With
+picking moving into Spork (docs/picking-plan.md), every picked claim would have
+done the same. Moving claims onto the goods' new cell at each pick would need a
+stock rebuild on every pick, which D107 rules out, or a projection writing
+intentions. A fold reduced by the movements that are already there needs
+neither.

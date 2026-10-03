@@ -106,7 +106,7 @@ pub fn spec(id: Id) -> Invariant {
             statement: "stock.weight_g = the same fold over catch_weight_g",
             check: Check::Run(checks::j2_stock_weight_is_the_fold) },
         J3 => Invariant { id, owners: "D12 narrowed, Q91", asserts_absence: false,
-            statement: "stock.allocated_quantity = active cell-bound allocations only; never a reference test",
+            statement: "stock.allocated_quantity = what active cell-bound claims still hold, less what was picked from the cell for their line; never a reference test",
             check: Check::Run(checks::j3_allocated_quantity_is_the_fold) },
         J4 => Invariant { id, owners: "D24", asserts_absence: false,
             statement: "expected_supply.quantity_allocated = active allocations against it. J3's fold on the supply side of the same allocation",
@@ -459,17 +459,18 @@ pub mod checks {
     /// J3 carries a warning in the register worth repeating: it is a quantity
     /// fold and must never be used as a reference test, because terminal
     /// allocations still hold a stock_id and contribute nothing to it.
+    ///
+    /// Since D203 (migration 116) a claim's hold is reduced by what was picked
+    /// from the cell for its line, and `stock_claim_hold` states it once: the
+    /// fold writes it and this reads the same view, so the two cannot drift.
     pub fn j3_allocated_quantity_is_the_fold(
         c: &mut Client,
     ) -> Result<(usize, Vec<Finding>), postgres::Error> {
         let rows = c.query(
-            "SELECT s.id::text, s.allocated_quantity, coalesce(a.q, 0)
+            "SELECT s.id::text, s.allocated_quantity, coalesce(h.held, 0)
                FROM stock s
-               LEFT JOIN (SELECT stock_id, sum(quantity)::bigint AS q
-                            FROM stock_allocation
-                           WHERE state IN ('allocated','picking','picked','packed')
-                           GROUP BY stock_id) a ON a.stock_id = s.id
-              WHERE s.allocated_quantity <> coalesce(a.q, 0)",
+               LEFT JOIN stock_claim_hold h ON h.stock_id = s.id
+              WHERE s.allocated_quantity <> coalesce(h.held, 0)",
             &[],
         )?;
         let total = c.query_one("SELECT count(*) FROM stock", &[])?;

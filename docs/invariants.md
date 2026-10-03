@@ -144,7 +144,7 @@ examined nothing.
 |---|---|---|---|
 | J1 | `stock.quantity` = the signed two-sided fold of `stock_movement` over the cell key | D5, D12, D24 | |
 | J2 | `stock.weight_g` = the same fold over `catch_weight_g` | D20 | |
-| J3 | `stock.allocated_quantity` = active cell-bound allocations only, enumerating `{allocated, picking, picked, packed}`. **It is a quantity fold and must never be used as a reference test**: terminal allocations hold `stock_id` and contribute nothing to it | D12 narrowed, Q91 | |
+| J3 | `stock.allocated_quantity` = what active cell-bound allocations, enumerating `{allocated, picking, picked, packed}`, still hold of the cell: per line, its claims less what its picks took out of that cell net of corrections, never below nothing (`stock_claim_hold`). **It is a quantity fold and must never be used as a reference test**: terminal allocations hold `stock_id` and contribute nothing to it | D12 narrowed, Q91, D203 | |
 | J4 | `expected_supply.quantity_allocated` = active allocations against it. **J3's fold on the supply side of the same allocation**: an allocation names a stock cell or an expected supply and never both, so J3 and J4 partition one table between them, on the same state set because a despatched or released allocation has stopped claiming whichever side it claimed from | D24 | |
 | J5 | `stock.resolved_location_id` = holder location, or the holder package's | D24 | |
 | J6 | `package.parent`, `location`, `resolved_location`, `status`, `depth`, **`sscc`, `barcode` and `identifier_kind`** = the fold of `package_event` in `(occurred_at, recorded_at, id)` order; replay in **any** arrival order is identical | D24, Q90 | |

@@ -137,6 +137,13 @@ async fn a_trolley_pick_lands_at_the_station_and_is_picked_exactly_once() {
 
     fold(&db).await;
     let (covered_before, picked_before, _) = progress(&db, line_id).await;
+    let shelf_now = || async {
+        db.query_one("SELECT quantity, allocated_quantity FROM stock WHERE id = $1", &[&shelf])
+            .await
+            .map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1)))
+            .expect("the shelf's cell")
+    };
+    let (shelf_held, shelf_claimed) = shelf_now().await;
 
     common::ok_json(
         &app,
@@ -182,6 +189,16 @@ async fn a_trolley_pick_lands_at_the_station_and_is_picked_exactly_once() {
     let (_, picked_walk, packed_walk) = progress(&db, line_id).await;
     assert_eq!(picked_walk, picked_before + 1, "the walk did not count as picked");
     assert_eq!(packed_walk, 0, "goods at the packing station are not packed");
+
+    // **The claim lets go of what was picked (D203).** One unit claimed and
+    // one taken: the shelf holds one fewer, and the claim holds none of it,
+    // so what is free there is what was free before less the unit that left.
+    let (held, claimed) = shelf_now().await;
+    assert_eq!(held, shelf_held - 1, "the unit left the shelf");
+    assert_eq!(
+        claimed, shelf_claimed,
+        "the claim went on holding the unit it picked, against a shelf it had left"
+    );
 
     // ── leg two: the packer puts it in the box ──────────────────────────
     let station_cell: Uuid = db
