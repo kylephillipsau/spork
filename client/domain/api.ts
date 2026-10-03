@@ -67,6 +67,7 @@ import type {
   Uuid,
 } from "./types";
 import { asWebp } from "./webp";
+import { transient } from "./outbox";
 
 /**
  * The JSON API, as the client sees it.
@@ -1160,6 +1161,12 @@ export const api = {
    * The allocation's `id` comes off the same act as the event, so a second
    * press behind a lost response replays rather than minting a second claim —
    * Q174, and the reason `pickInto` mints its allocation id the same way.
+   *
+   * **`pickAnyway`, for a pick sent from the outbox (D207).** By then the goods
+   * have been in the tote for as long as the device was out of reach, and the
+   * line may have been covered meanwhile. A refused claim does not unpick them,
+   * so the pick is recorded regardless and J56 says so if it went past what
+   * was covered. Pressed at the shelf, a refused claim still stops the press.
    */
   async pick(input: {
     line: Uuid;
@@ -1168,14 +1175,19 @@ export const api = {
     quantity: number;
     claim: number;
     act: Act;
+    pickAnyway?: boolean;
   }): Promise<RecordPickResponse> {
     if (input.claim > 0) {
-      await send<unknown>("POST", "/allocations", {
-        id: input.act.id("allocation"),
-        fulfilment_line_id: input.line,
-        stock_id: input.stock,
-        quantity: input.claim,
-      });
+      try {
+        await send<unknown>("POST", "/allocations", {
+          id: input.act.id("allocation"),
+          fulfilment_line_id: input.line,
+          stock_id: input.stock,
+          quantity: input.claim,
+        });
+      } catch (error) {
+        if (!input.pickAnyway || transient(error)) throw error;
+      }
     }
     return send<RecordPickResponse>("POST", "/picks", {
       from_stock_id: input.stock,

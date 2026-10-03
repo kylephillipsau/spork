@@ -406,6 +406,23 @@ export const FIXTURES: readonly Screen[] = [
     const line = pickLine(2);
     return picking(fixturePicking(PICKING_FIXTURE, { destination: AT_THE_STATION, ...(line ? { confirmed: line, quantity: "40" } : {}) }));
   }),
+  // A dead spot (D207): the last pick is kept on the device, two are waiting,
+  // one the server refused when it went, and a colleague's are left behind.
+  app("f-picking-offline", "/fixtures/picking/offline", "Picking — no connection", "floor", { screen: "picking" }, () =>
+    picking(
+      fixturePicking(PICKING_FIXTURE, {
+        destination: AT_THE_STATION,
+        took: { code: "STY-7720-12", quantity: 2, warnings: [], held: true },
+        outbox: {
+          waiting: 2,
+          refused: [{ key: "r1", code: "GLOVE-M", quantity: 3, where: "PACK-1", reason: "That order was cancelled." }],
+          others: [{ name: "Sam Rivera", count: 1 }],
+          send: () => {},
+          dismiss: () => {},
+        },
+      }),
+    ),
+  ),
   app("f-picking-refused", "/fixtures/picking/refused", "Picking — refused", "floor", { screen: "picking" }, () =>
     picking(fixturePicking(PICKING_FIXTURE, { destination: AT_THE_STATION, problem: "GLOVE-L is not on this walk." })),
   ),

@@ -100,3 +100,45 @@ export function merge(current: PickListScreen, fresh: PickListScreen): PickListS
   });
   return { ...fresh, lines };
 }
+
+/** A pick kept on the device and not yet sent (D207), as the walk counts it. */
+export interface Waiting {
+  line: Uuid;
+  quantity: number;
+  claim: number;
+}
+
+/**
+ * The walk as the picker has left it: what the server said, less what this
+ * device has picked and not yet been able to send (D207).
+ *
+ * **A view over the read, never written into it.** The goods are in the tote,
+ * so the row shows them taken, and a picker isn't sent back to the shelf for
+ * them. But the server hasn't heard yet, and the next read says so; laying
+ * this over each read, rather than folding it in once, is what stops that read
+ * putting the row back.
+ */
+export function overlay(screen: PickListScreen, waiting: readonly Waiting[]): PickListScreen {
+  if (waiting.length === 0) return screen;
+  const by = new Map<Uuid, { quantity: number; claim: number }>();
+  for (const w of waiting) {
+    const sum = by.get(w.line) ?? { quantity: 0, claim: 0 };
+    by.set(w.line, { quantity: sum.quantity + w.quantity, claim: sum.claim + w.claim });
+  }
+  const lines = screen.lines.flatMap((line) => {
+    const held = by.get(line.fulfilment_line_id);
+    if (!held) return [line];
+    const remaining = line.remaining - held.quantity;
+    if (remaining <= 0) return [];
+    return [
+      {
+        ...line,
+        picked: line.picked + held.quantity,
+        covered: line.covered + held.claim,
+        remaining,
+        available: line.available === null ? null : Math.max(0, line.available - held.quantity),
+      },
+    ];
+  });
+  return { ...screen, lines };
+}

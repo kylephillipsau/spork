@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { claimFor, fold, merge, offered } from "./walk.ts";
+import { claimFor, fold, merge, offered, overlay } from "./walk.ts";
 import type { PickLine, PickListScreen } from "@domain/types";
 
 /**
@@ -131,4 +131,29 @@ test("a row somebody else finished leaves, and a new one goes where the walk put
   assert.deepEqual(ids(merged), ["A:5", "N:4", "C:2", "Z:1"]);
   const first = merge(walk(["B", 3]), walk(["N", 1], ["M", 1], ["B", 3]));
   assert.deepEqual(ids(first), ["N:1", "M:1", "B:3"], "new rows ahead of everything stay in their own order");
+});
+
+test("a pick waiting on the device shows as taken, and the read underneath is untouched", () => {
+  const read = walk(["A", 5], ["B", 3]);
+  const shown = overlay(read, [
+    { line: "A", quantity: 2, claim: 2 },
+    { line: "B", quantity: 3, claim: 0 },
+  ]);
+  assert.deepEqual(ids(shown), ["A:3"], "B is all in the tote, so it leaves the walk");
+  const a = shown.lines[0];
+  assert.equal(a?.picked, 2);
+  assert.equal(a?.covered, 2);
+  assert.equal(a?.available, 8, "the bin is two lighter");
+  assert.deepEqual(ids(read), ["A:5", "B:3"], "what the server said is kept as it said it");
+  assert.equal(overlay(read, []), read, "nothing waiting is the read itself");
+});
+
+test("two picks waiting on one line count together", () => {
+  assert.deepEqual(
+    ids(overlay(walk(["A", 5]), [
+      { line: "A", quantity: 1, claim: 0 },
+      { line: "A", quantity: 2, claim: 0 },
+    ])),
+    ["A:2"],
+  );
 });

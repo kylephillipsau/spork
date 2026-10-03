@@ -380,8 +380,8 @@ channel exist to draw.
   wrong route. Apply the real layout and walk it once, with a handheld, to
   check access points.
 - **Wifi dead spots.** Picking is the workflow most exposed (floor-devices.md).
-  Unsent acts are held in memory and a reload loses them (`acts.ts`). The
-  durable outbox in D170 has to exist before picking is moved (Question 5).
+  Picks are now kept on the device until the server has them (D207), so a dead
+  spot or a reload no longer loses one. Other acts are still held in memory.
 - **NetSuite has to hear what happened.** Today it is where picking happens.
   Moving picking means Spork's results must reach it (Question 1), and that path
   is still open.
@@ -482,7 +482,7 @@ raising it is adopted.
 - **Question 4. Any standing preferences for zones?** For example, does one person
   usually work the forklift? The planner assumes no fixed zones (Proposal F).
 - **Question 5. Is the durable outbox a prerequisite for picking going live?**
-  Recommended yes, given the dead spots.
+  Yes, and it is built for picks (D207).
 - **Q29, revisited.** One forklift is a resource the planner hands out. Is
   contention for it real enough to model now? Deferred until pallet runs
   exist.

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { ApiError, api, reason } from "@domain/api";
-import type { PickLine, PickListScreen, Uuid } from "@domain/types";
+import { transient } from "@domain/outbox";
+import type { PickLine, PickListScreen, RecordPickResponse, Uuid } from "@domain/types";
 import { useChanges } from "@app/changes";
-import { claimFor, fold, merge, offered } from "./walk";
-import { useSite } from "@app/session/SessionContext";
+import { picks, usePickOutbox, type HeldPick } from "@app/outbox";
+import { claimFor, fold, merge, offered, overlay } from "./walk";
+import { useSession, useSite } from "@app/session/SessionContext";
 
 /**
  * The pick walk, as logic.
@@ -75,8 +77,21 @@ export interface PickBench {
 
   /** Record it. Refuses until a destination and a line are both named. */
   take: () => Promise<void>;
-  /** What the last pick did, for the dock to say so. */
-  took: { code: string; quantity: number; warnings: string[] } | null;
+  /**
+   * What the last pick did, for the dock to say so. `held` when it couldn't
+   * be sent and is kept on the device instead (D207).
+   */
+  took: { code: string; quantity: number; warnings: string[]; held?: boolean } | null;
+
+  /** Picks kept on this device until they can be sent (D207). */
+  outbox: {
+    waiting: number;
+    refused: { key: string; code: string; quantity: number; where: string; reason: string }[];
+    /** Somebody else's, waiting for them to sign in on this device. */
+    others: { name: string; count: number }[];
+    send: () => void;
+    dismiss: (key: string) => void;
+  };
 
   /** Fetch again. A walk list goes stale as other people pick. */
   refresh: () => Promise<void>;
@@ -92,6 +107,17 @@ export function usePicking(): PickBench {
   const [took, setTook] = useState<PickBench["took"]>(null);
 
   const live = useLive();
+
+  // Whose picks these are: a pick kept on the device is sent only as the
+  // person, workspace and site that made it (D207).
+  const session = useSession();
+  const who = session.kind === "signed-in" && session.who.site_id ? session.who : null;
+  const owner = who ? `${who.person_id}:${who.tenant_id}:${who.site_id}` : null;
+  const outbox = usePickOutbox(owner, (entry, reply) => {
+    // The row takes the server's figures before the kept pick stops counting,
+    // so it doesn't flash back to what it was.
+    if (live.current) setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: landed(s.screen, entry.body.line, reply) } : s));
+  });
 
   // **No re-read after a pick**, and this is the screen the rule was written
   // for: a pick changes what is left on the line it served, and refetching
@@ -131,13 +157,27 @@ export function usePicking(): PickBench {
     );
   });
 
-  const lines = status.kind === "ready" ? status.screen.lines : [];
+  // What the server said, less what this device picked and hasn't sent.
+  const shown = useMemo<PickStatus>(
+    () =>
+      status.kind === "ready"
+        ? {
+            kind: "ready",
+            screen: overlay(
+              status.screen,
+              outbox.waiting.map((e) => ({ line: e.body.line, quantity: e.body.quantity, claim: e.body.claim })),
+            ),
+          }
+        : status,
+    [status, outbox.waiting],
+  );
+  const lines = shown.kind === "ready" ? shown.screen.lines : [];
 
   // The row about to be picked moves with the walk: fresh figures if somebody
   // else took some of it, and released, with a word, if they took the rest.
   useEffect(() => {
-    if (!confirmed || status.kind !== "ready") return;
-    const now = status.screen.lines.find((l) => l.fulfilment_line_id === confirmed.fulfilment_line_id);
+    if (!confirmed || shown.kind !== "ready") return;
+    const now = shown.screen.lines.find((l) => l.fulfilment_line_id === confirmed.fulfilment_line_id);
     if (!now) {
       setConfirmed(null);
       say(`Somebody else has picked the rest of ${confirmed.item_code}.`);
@@ -146,7 +186,7 @@ export function usePicking(): PickBench {
       // What the picker typed stands, unless it is now more than is left.
       setQuantity((typed) => (Number.parseInt(typed, 10) > now.remaining ? String(offered(now)) : typed));
     }
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = useCallback((line: PickLine) => {
     setConfirmed(line);
@@ -155,7 +195,7 @@ export function usePicking(): PickBench {
   }, []);
 
   return {
-    status,
+    status: shown,
     busy,
     problem,
     dismiss: () => {
@@ -264,26 +304,69 @@ export function usePicking(): PickBench {
           );
         }
 
-        const answer = await api.pick({
+        // **Kept on the device before it is sent** (D207). A dead spot, a
+        // reload or a flat battery between here and the server's answer no
+        // longer loses the record of goods already in the tote.
+        const body: HeldPick = {
           line: confirmed.fulfilment_line_id,
           stock: confirmed.stock_id,
           to: { kind: destination.kind, id: destination.id },
           quantity: asked,
           claim: claimFor(confirmed, asked),
-          act,
-        });
-        if (!live.current) return;
+          ids: { event: act.id("event"), allocation: act.id("allocation") },
+          at: act.at,
+          code: confirmed.item_code,
+          where: destination.code,
+        };
+        const key = body.ids.event;
+        if (owner && who) picks.put({ key, owner, ownerName: who.display_name, body });
+
+        let answer: RecordPickResponse;
+        try {
+          answer = await api.pick({ ...body, act });
+        } catch (error) {
+          // No answer: it stays kept, the walk counts it, and it goes when
+          // the connection does. An answer is the server's, as before.
+          if (owner && transient(error)) {
+            if (!live.current) return;
+            setTook({ code: body.code, quantity: asked, warnings: [], held: true });
+            setConfirmed(null);
+            setQuantity("");
+            setScan((c) => ({ typed: "", refocus: c.refocus + 1 }));
+            return;
+          }
+          picks.drop(key);
+          throw error;
+        }
 
         // **Patched, not re-read.** The response carries the live fold for the
         // line just served, so the row is corrected from what happened rather
         // than from a second query — and the walk keeps its order and its
         // position under somebody standing in an aisle.
-        setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: fold(s.screen, confirmed.fulfilment_line_id, answer.ledger.picked_quantity, answer.ledger.covered_quantity) } : s));
+        if (live.current) setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: landed(s.screen, body.line, answer) } : s));
+        picks.drop(key);
+        if (!live.current) return;
         setTook({ code: confirmed.item_code, quantity: asked, warnings: answer.warnings });
         setConfirmed(null);
         setQuantity("");
         setScan((c) => ({ typed: "", refocus: c.refocus + 1 }));
+        // It got through, so anything kept from before may too.
+        void outbox.send();
       }),
+
+    outbox: {
+      waiting: outbox.waiting.length,
+      refused: outbox.refused.map((e) => ({
+        key: e.key,
+        code: e.body.code,
+        quantity: e.body.quantity,
+        where: e.body.where,
+        reason: e.refused ?? "",
+      })),
+      others: outbox.others,
+      send: () => void outbox.send(),
+      dismiss: outbox.dismiss,
+    },
 
     took,
     refresh: async () => {
@@ -292,6 +375,11 @@ export function usePicking(): PickBench {
       await load();
     },
   };
+}
+
+/** A pick's reply laid onto the line it served. */
+function landed(screen: PickListScreen, line: Uuid, reply: RecordPickResponse): PickListScreen {
+  return fold(screen, line, reply.ledger.picked_quantity, reply.ledger.covered_quantity);
 }
 
 /**

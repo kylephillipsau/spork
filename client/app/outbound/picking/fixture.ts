@@ -124,6 +124,7 @@ export function fixturePicking(
     release: () => {},
     take: async () => {},
     took: null,
+    outbox: { waiting: 0, refused: [], others: [], send: () => {}, dismiss: () => {} },
     refresh: async () => {},
     ...over,
   };

@@ -40,3 +40,17 @@
 .quantity {
   width: calc(var(--ui-space-16) * 2);
 }
+
+.outboxLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+
+.waitingFor {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}

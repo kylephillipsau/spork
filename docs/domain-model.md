@@ -14609,3 +14609,46 @@ bearer token through the platform's own HTTP client.
 
 **Not decided.** Events that say what happened (a task claimed, a run
 started, a picker's position) come with runs, Proposal G's remainder.
+
+### D207: A pick is kept on the device until the server has it
+
+*Adopted 2026-10-04, with no migration. Builds D170's durable outbox, for
+picks only; answers docs/picking-plan.md's Question 5.*
+
+**Decision.** When a picker presses Take, the pick is written to the
+device's storage before it is sent. It carries the ids the act minted and the
+moment it was pressed, and names the person, workspace and site whose session
+made it. What happens next depends on the answer:
+
+- **It lands.** The row takes the server's figures and the pick leaves the
+  device.
+- **No answer** (no connection, a server error, or a session that has
+  lapsed). The pick stays. The walk counts it as taken, so nobody is sent back
+  to the shelf for it, and the picker is told it is saved. It is sent again,
+  oldest first, when the device comes back online, when the live channel
+  (D206) hears anything, and every fifteen seconds while one waits.
+- **The server refuses it.** At the shelf, the press shows why, as before.
+  A kept pick refused later is set aside with the reason until the picker
+  dismisses it, and doesn't hold up the picks behind it.
+
+A kept pick is sent only under its own owner's session. On a shared handheld,
+somebody else's waiting picks are shown and wait for them.
+
+A kept pick whose claim is refused when it is finally sent, because the line
+was covered meanwhile, is recorded anyway. The goods have been in the tote
+all along, and a refused claim doesn't unpick them. If that takes the line
+past what was covered, J56 raises it as a finding. At the shelf, a refused
+claim still stops the press.
+
+**Why.** Picking is the workflow most exposed to wifi dead spots
+(floor-devices.md), and the acts in flight lived in the screen's memory, so a
+reload or a flat battery lost the record of goods already picked. D5 already
+makes sending again safe: the same ids are the same act, and the server
+answers a replay with what it recorded. So the outbox only has to keep the act
+and try again. The walk lays kept picks over each read rather than folding
+them in once, so a fresh read can't put a row back that the picker has
+emptied.
+
+**Not decided.** Other acts (packing, receiving, counting) still live in
+memory. They join when their screens move onto handhelds in dead spots.
+Storage is the browser's own, falling back to memory where that is blocked.

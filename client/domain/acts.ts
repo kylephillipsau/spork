@@ -150,9 +150,9 @@ export function partOf(act: Act, part: string): Act {
  *
  * Held per screen rather than globally, which is the honest boundary: an
  * operator who navigates away is not retrying that press. **A reload loses
- * them**, and that is a real limit rather than a bug — surviving one means
- * persisting acts to storage, which is a larger question than this and belongs
- * with D5's offline story rather than tucked in here.
+ * them**, except a pick's: picks are kept on the device before they are sent,
+ * and sent again until the server has them (`outbox.ts`, D207). Other acts
+ * still live only here.
  */
 export function pressing(mint: () => Act = () => anAct()): Pressing {
   const held = new Map<string, Act>();

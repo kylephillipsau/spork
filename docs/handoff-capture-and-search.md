@@ -132,6 +132,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   is recorded or an order moves at their site (`live.rs`,
   `client/domain/changes.ts`, `useChanges`). The walk merges the fresh read
   in place (`merge` in `walk.ts`). `/live` was already the liveness probe.
+- D207. A pick is kept on the device (`localStorage`, `spork.outbox.picks`)
+  before it is sent, and sent again until the server has it (`domain/outbox.ts`,
+  `app/outbox.ts`). The walk counts kept picks as taken (`overlay` in
+  `walk.ts`). Picks only; other acts still live in the screen's memory.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

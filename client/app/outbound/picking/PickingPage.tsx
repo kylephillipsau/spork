@@ -69,13 +69,15 @@ export function PickingPage({ bench }: { bench: PickBench }) {
         </Alert>
       )}
       {bench.took && (
-        <Alert tone="success" onDismiss={bench.dismiss}>
+        <Alert tone={bench.took.held ? "warning" : "success"} onDismiss={bench.dismiss}>
           {`${bench.took.quantity} × ${bench.took.code} onto ${bench.destination?.code ?? "it"}.`}
+          {bench.took.held && " No connection, so it's saved on this device and sent when there is one."}
           {bench.took.warnings.map((w) => (
             <div key={w}>{w}</div>
           ))}
         </Alert>
       )}
+      <Outbox outbox={bench.outbox} />
 
       <Card title="To pick" count={lines.length} padded={false}>
         {lines.length === 0 ? (
@@ -250,5 +252,41 @@ export function PickingDock({ bench }: { bench: PickBench }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Picks kept on this device until they can be sent (D207): how many are
+ * waiting, any the server refused when they went, and anybody else's left on a
+ * shared handheld.
+ */
+function Outbox({ outbox }: { outbox: PickBench["outbox"] }) {
+  return (
+    <>
+      {outbox.waiting > 0 && (
+        <Alert tone="warning">
+          <span className={s.outboxLine}>
+            <span>
+              {outbox.waiting === 1 ? "1 pick is" : `${outbox.waiting} picks are`} saved on this device, and will be sent when
+              there's a connection.
+            </span>
+            <Button onClick={outbox.send}>
+              Send now
+            </Button>
+          </span>
+        </Alert>
+      )}
+      {outbox.refused.map((r) => (
+        <Alert key={r.key} tone="danger" onDismiss={() => outbox.dismiss(r.key)}>
+          {`Not recorded: ${r.quantity} × ${r.code} onto ${r.where}. ${r.reason}`}
+        </Alert>
+      ))}
+      {outbox.others.map((o) => (
+        <p key={o.name} className={s.waitingFor}>
+          {o.count === 1 ? "1 pick" : `${o.count} picks`} by {o.name} {o.count === 1 ? "is" : "are"} waiting for them to sign in on this
+          device.
+        </p>
+      ))}
+    </>
   );
 }
