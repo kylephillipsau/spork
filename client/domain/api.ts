@@ -845,6 +845,10 @@ export const api = {
   /** The box presets, the workspace's own first. */
   packageTypes: () => send<PackageTypeRow[]>("GET", "/package-types"),
 
+  /** Say the most a box's goods may weigh, in grams, or null for no limit (D199). */
+  boxWeight: (id: Uuid, grams: number | null) =>
+    send<void>("POST", `/package-types/${encodeURIComponent(id)}/max-weight`, { max_payload_g: grams }),
+
   /** Say whether the pack bench's suggestion may choose a box (D196). */
   suggestBox: (id: Uuid, suggested: boolean) => send<void>("POST", `/package-types/${encodeURIComponent(id)}/suggested`, { suggested }),
 

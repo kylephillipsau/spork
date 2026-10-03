@@ -44,8 +44,14 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
   };
 }
 
-function box(name: string, [l, w, h]: Dims | [number, number, number], suggested = true): Preset {
-  return { id: `9a7e0000-0000-0000-0000-${name.padStart(12, "0").slice(-12)}`, name, size: { length_mm: l, width_mm: w, height_mm: h }, suggested };
+function box(name: string, [l, w, h]: Dims | [number, number, number], suggested = true, max_payload_g: number | null = null): Preset {
+  return {
+    id: `9a7e0000-0000-0000-0000-${name.padStart(12, "0").slice(-12)}`,
+    name,
+    size: { length_mm: l, width_mm: w, height_mm: h },
+    suggested,
+    max_payload_g,
+  };
 }
 
 const SMALL = box("small", [400, 300, 190]);
@@ -210,7 +216,7 @@ test("a thing too big for every box is said, and nothing else is lost", () => {
 });
 
 test("a preset with no size is never suggested", () => {
-  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true }]);
+  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null }]);
   assert.deepEqual(a.boxes, []);
   assert.deepEqual(a.oversize.map((o) => o.item_code), ["APR"]);
 });
@@ -253,7 +259,7 @@ test("as many pieces as it will arrange go in without running out of stack", () 
 
 /** The small box, open on the bench with these in it. */
 function opened(contents: { item_id: string; quantity: number }[]): OpenCarton {
-  return { id: "ca470000-0000-0000-0000-000000000009", sequence: "2", name: "small", size: SMALL.size!, contents };
+  return { id: "ca470000-0000-0000-0000-000000000009", sequence: "2", name: "small", size: SMALL.size!, max_payload_g: null, contents };
 }
 
 /** Where everything is, and whether it is in already, in the order the layers go in. */
@@ -300,4 +306,25 @@ test("what does not fit the open carton goes in the next box, and what is in it 
   const after = a.boxes.slice(1).flatMap((b) => b.layers.flatMap((l) => l.placements));
   assert.equal(after.length, 6, "the six left, in a box of their own");
   assert.ok(after.every((p) => !p.packed));
+});
+
+test("a box with a weight limit takes no more than it, and the rest goes in another (D199)", () => {
+  // Four 6 kg rolls fit one long box by size, in a row; at 20 kg a box, three go in it.
+  const roll = each([300, 300, 300], { gross_weight_g: 6000 });
+  const a = arrange([line("ROLL", 4, [roll])], [box("long", [1200, 300, 300], true, 20000)]);
+  assert.deepEqual(
+    a.boxes.map((b) => b.layers.flatMap((l) => l.placements).length),
+    [3, 1],
+  );
+  assert.ok(a.boxes.every((b) => b.weight_g <= 20000));
+
+  // With no limit, one box.
+  assert.equal(arrange([line("ROLL", 4, [roll])], [box("long", [1200, 300, 300])]).boxes.length, 1);
+});
+
+test("a thing heavier than every box's limit is said, like one too big", () => {
+  const anvil = each([100, 100, 100], { gross_weight_g: 30000 });
+  const a = arrange([line("ANVIL", 1, [anvil])], [box("small", [400, 300, 190], true, 25000)]);
+  assert.deepEqual(a.boxes, []);
+  assert.deepEqual(a.oversize.map((o) => o.item_code), ["ANVIL"]);
 });

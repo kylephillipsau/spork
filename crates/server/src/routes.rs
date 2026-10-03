@@ -9390,6 +9390,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::packaging::say_packed_in)
         .service(crate::shipping::say_ships_as_is)
         .service(crate::shipping::suggest_box)
+        .service(crate::shipping::box_weight)
         .service(crate::backup::backup_summary)
         .service(crate::backup::download_backup)
         .service(crate::search::global_search)

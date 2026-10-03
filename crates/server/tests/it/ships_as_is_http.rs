@@ -300,4 +300,24 @@ async fn a_box_can_be_left_out_of_the_suggestion() {
     assert_eq!(status, 204);
     let (_, back) = call(&app, types()).await;
     assert_eq!(large(&back)["suggested"], true, "and back in");
+
+    // ── a box's weight limit (D199) ──────────────────────────────────────
+    let weigh = |id: &str, grams: Value| {
+        test::TestRequest::post()
+            .uri(&format!("/package-types/{id}/max-weight"))
+            .insert_header(auth.clone())
+            .set_json(json!({ "max_payload_g": grams }))
+    };
+    let (status, body) = call(&app, weigh(LARGE_BOX, json!(25000))).await;
+    assert_eq!(status, 204, "{body}");
+    let (_, limited) = call(&app, types()).await;
+    assert_eq!(large(&limited)["max_payload_g"], 25000);
+    let (status, _) = call(&app, weigh(LARGE_BOX, json!(0))).await;
+    assert_eq!(status, 400, "a limit of nothing is not a limit");
+    let (status, _) = call(&app, weigh(PALLET, json!(25000))).await;
+    assert_eq!(status, 404, "nor is the platform's pallet the workspace's to limit");
+    let (status, _) = call(&app, weigh(LARGE_BOX, Value::Null)).await;
+    assert_eq!(status, 204);
+    let (_, unlimited) = call(&app, types()).await;
+    assert!(large(&unlimited)["max_payload_g"].is_null(), "and none again");
 }

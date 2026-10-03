@@ -261,10 +261,10 @@ export const PACK_FIXTURE: BenchScreen = {
     },
   ],
   presets: [
-    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 }, suggested: true },
-    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true },
-    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true },
-    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true },
+    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 }, suggested: true, max_payload_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true, max_payload_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true, max_payload_g: null },
   ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };

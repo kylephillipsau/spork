@@ -62,7 +62,7 @@ export const BOXES: PackageTypeRow[] = [
   box("Extra Small Box", "CTN", [320, 230, 160]),
   box("Small Box", "CTN", [390, 310, 300]),
   box("Medium Box", "CTN", [450, 340, 410]),
-  box("Large Box", "CTN", [660, 440, 460]),
+  { ...box("Large Box", "CTN", [660, 440, 460]), max_payload_g: 25000 },
   box("Shovel Box", "CTN", [1400, 340, 400], false),
   box("Satchel", null, null),
   box("Pallet", "PAL", [1200, 1200, 1300]),
@@ -78,5 +78,6 @@ export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
     setOwner: noop,
     boxes: state.kind === "ready" ? BOXES : null,
     suggest: noop,
+    boxWeight: noop,
   };
 }

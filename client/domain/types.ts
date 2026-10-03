@@ -93,6 +93,8 @@ export interface Preset {
   size: StatedSize | null;
   /** The suggestion may choose it (D196). Any box can still be chosen by hand. */
   suggested: boolean;
+  /** The most the goods in it may weigh, when the workspace says (D199). */
+  max_payload_g: number | null;
 }
 
 /** `GET /package-types`: a box preset as Workspace lists it. */

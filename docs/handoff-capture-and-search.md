@@ -107,6 +107,8 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - D198. With a carton open, the suggestion fills it first: what is in it
   and what is left arranged together, what is in shown as done, the plan on
   the next layer to put in. Client only (`arrange.ts` `fillOpen`).
+- D199. A box can say the most its goods may weigh (Workspace, Boxes, Max
+  weight; empty is no limit). The suggestion fills a box no heavier.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

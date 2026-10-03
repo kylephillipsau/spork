@@ -14424,3 +14424,21 @@ product's own carton, is not filled this way.
 the suggestion read only what was left and proposed a new box for it, while
 the carton being filled still had room. Arranging what is in it plus what is
 left gives the same set every time, so the plan does not move as things go in.
+
+### D199: A box can say the most its goods may weigh
+
+*Adopted 2026-10-03.*
+
+**Decision.** A box preset's `max_payload_g`, a column since migration 9 that
+nothing set, can now be set in Workspace's box list as a weight in kilograms
+(`POST /package-types/{id}/max-weight`). It is empty unless somebody fills it
+in, and empty means no limit. The suggestion fills a box only up to it,
+counting what the record says each thing weighs, and puts the rest in the next
+box. That includes the open carton (D198). A thing with no recorded weight
+counts as nothing toward the limit, and the box says how many such pieces it
+holds. A thing heavier than every box's limit is listed with the things too
+big for every box.
+
+**Why.** A carrier or a pair of arms has a limit, and a box that takes four
+rolls by size may be too heavy to lift with four in it. No limit is the
+default, as the user chose when the suggestion was first made (D195).

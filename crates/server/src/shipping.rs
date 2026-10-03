@@ -109,6 +109,48 @@ pub async fn say_ships_as_is(
 }
 
 #[derive(Deserialize, Debug)]
+pub struct BoxWeightRequest {
+    /// The most the goods in it may weigh, in grams; null for no limit.
+    pub max_payload_g: Option<i64>,
+}
+
+/// Say the most a box's goods may weigh, or that there is no limit (D199).
+/// The suggestion fills a box no heavier. The workspace's own boxes only, as
+/// with [`suggest_box`].
+#[post("/package-types/{id}/max-weight")]
+pub async fn box_weight(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<BoxWeightRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let id = path.into_inner();
+    let grams = body.max_payload_g;
+    if grams.is_some_and(|g| g <= 0) {
+        return Err(ApiError::Rejected("a box's limit is more than nothing; leave it empty for none".into()));
+    }
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let changed = tx
+                    .execute(
+                        "UPDATE package_type SET max_payload_g = $2 WHERE id = $1 AND tenant_id IS NOT NULL",
+                        &[&id, &grams],
+                    )
+                    .await?;
+                if changed == 0 {
+                    return Err(ApiError::NotFound);
+                }
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[derive(Deserialize, Debug)]
 pub struct SuggestBoxRequest {
     /// Whether the bench's suggestion may choose this box.
     pub suggested: bool,

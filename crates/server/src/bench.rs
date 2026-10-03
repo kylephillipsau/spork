@@ -189,6 +189,8 @@ pub struct Preset {
     /// The suggestion may choose it (D196). A shovel box is the smallest box
     /// three rolls fit in, and nobody sends rolls in one.
     pub suggested: bool,
+    /// The most the goods in it may weigh, when the workspace says (D199).
+    pub max_payload_g: Option<i64>,
 }
 
 /// The preset's answer to how big a carton is, when it has one.
@@ -677,7 +679,7 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                         "SELECT id, name,
                                 dimensions_fixed AND coalesce(carrier_package_code, '')
                                     NOT IN ('PAL', 'SKI', 'SKD'),
-                                length_mm, width_mm, height_mm, suggested
+                                length_mm, width_mm, height_mm, suggested, max_payload_g
                            FROM package_type
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
@@ -698,6 +700,7 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                             _ => None,
                         },
                         suggested: r.get(6),
+                        max_payload_g: r.get(7),
                     })
                     .collect::<Vec<_>>())
             })

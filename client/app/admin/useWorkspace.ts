@@ -27,6 +27,8 @@ export interface WorkspaceBench {
   boxes: PackageTypeRow[] | null;
   /** Say whether the pack bench's suggestion may choose a box (D196). */
   suggest: (boxId: string, suggested: boolean) => Promise<void>;
+  /** Say the most a box's goods may weigh, in grams, or null for no limit (D199). */
+  boxWeight: (boxId: string, grams: number | null) => Promise<void>;
 }
 
 export function useWorkspace(): WorkspaceBench {
@@ -85,5 +87,10 @@ export function useWorkspace(): WorkspaceBench {
     [change],
   );
 
-  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner, boxes, suggest };
+  const boxWeight = useCallback(
+    (boxId: string, grams: number | null) => change(() => api.boxWeight(boxId, grams), "Could not change that box's weight limit."),
+    [change],
+  );
+
+  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner, boxes, suggest, boxWeight };
 }

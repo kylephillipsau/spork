@@ -197,17 +197,32 @@ interface Space {
   room: Dims;
 }
 
+/**
+ * What a box's goods may weigh, and what they weigh so far (D199). A thing with
+ * no recorded weight weighs nothing here: the limit is the record's, and the
+ * box says how many pieces it could not count.
+ */
+interface Budget {
+  limit: number | null;
+  used: number;
+}
+
+function affords(budget: Budget, kind: Kind): boolean {
+  return budget.limit === null || budget.used + (kind.weight_g ?? 0) <= budget.limit;
+}
+
 /** Put the biggest thing that fits into the corner of `space`, then fill round and on top of it. */
-function fill(space: Space, left: Left[], out: Placement[]): void {
+function fill(space: Space, left: Left[], out: Placement[], budget: Budget): void {
   const [l, w, h] = space.room;
   if (l <= 0 || w <= 0 || h <= 0) return;
   for (const entry of left) {
-    if (entry.count === 0) continue;
+    if (entry.count === 0 || !affords(budget, entry.kind)) continue;
     const way = flattest(entry.kind.size, space.room);
     if (!way) continue;
     entry.count -= 1;
+    budget.used += entry.kind.weight_g ?? 0;
     out.push({ kind: entry.kind, x: space.x, y: space.y, z: space.z, dims: way.dims, axes: way.axes });
-    round(space, way.dims, left, out);
+    round(space, way.dims, left, out, budget);
     return;
   }
 }
@@ -217,31 +232,36 @@ function fill(space: Space, left: Left[], out: Placement[]): void {
  * corner: on top of it, up to the space's height, then the floor beside it,
  * cut so that the bigger of the two pieces of floor stays whole.
  */
-function round(space: Space, placed: Dims, left: Left[], out: Placement[]): void {
+function round(space: Space, placed: Dims, left: Left[], out: Placement[], budget: Budget): void {
   const [l, w, h] = space.room;
   const [pl, pw, ph] = placed;
-  if (h > ph) fill({ x: space.x, y: space.y, z: space.z + ph, room: [pl, pw, h - ph] }, left, out);
+  if (h > ph) fill({ x: space.x, y: space.y, z: space.z + ph, room: [pl, pw, h - ph] }, left, out, budget);
   const beside = l - pl;
   const before = w - pw;
   if (beside * w >= before * l) {
-    fill({ x: space.x + pl, y: space.y, z: space.z, room: [beside, w, h] }, left, out);
-    fill({ x: space.x, y: space.y + pw, z: space.z, room: [pl, before, h] }, left, out);
+    fill({ x: space.x + pl, y: space.y, z: space.z, room: [beside, w, h] }, left, out, budget);
+    fill({ x: space.x, y: space.y + pw, z: space.z, room: [pl, before, h] }, left, out, budget);
   } else {
-    fill({ x: space.x, y: space.y + pw, z: space.z, room: [l, before, h] }, left, out);
-    fill({ x: space.x + pl, y: space.y, z: space.z, room: [beside, pw, h] }, left, out);
+    fill({ x: space.x, y: space.y + pw, z: space.z, room: [l, before, h] }, left, out, budget);
+    fill({ x: space.x + pl, y: space.y, z: space.z, room: [beside, pw, h] }, left, out, budget);
   }
 }
 
-/** Pack `left` into a box of `size`, layer on layer. What does not go in stays in `left`. */
-export function pack(size: Dims, pieces: Left[]): { layers: Layer[]; left: Left[] } {
+/**
+ * Pack `left` into a box of `size`, layer on layer, its goods weighing no more
+ * than `maxWeight` when the box has one (D199). What does not go in stays in
+ * `left`.
+ */
+export function pack(size: Dims, pieces: Left[], maxWeight: number | null = null): { layers: Layer[]; left: Left[] } {
   const left = sorted(pieces.map((p) => ({ ...p })));
   const layers: Layer[] = [];
+  const budget: Budget = { limit: maxWeight, used: 0 };
   let z = 0;
   for (;;) {
     // A layer starts with the biggest thing that still lies in the height left.
     let start: { entry: Left; way: Way } | null = null;
     for (const entry of left) {
-      if (entry.count === 0) continue;
+      if (entry.count === 0 || !affords(budget, entry.kind)) continue;
       const way = flattest(entry.kind.size, [size[0], size[1], size[2] - z]);
       if (way) {
         start = { entry, way };
@@ -252,7 +272,8 @@ export function pack(size: Dims, pieces: Left[]): { layers: Layer[]; left: Left[
     const height = start.way.dims[2];
     const placements: Placement[] = [{ kind: start.entry.kind, x: 0, y: 0, z, dims: start.way.dims, axes: start.way.axes }];
     start.entry.count -= 1;
-    round({ x: 0, y: 0, z, room: [size[0], size[1], height] }, start.way.dims, left, placements);
+    budget.used += start.entry.kind.weight_g ?? 0;
+    round({ x: 0, y: 0, z, room: [size[0], size[1], height] }, start.way.dims, left, placements, budget);
     layers.push({ z, height, placements });
     z += height;
   }
@@ -362,6 +383,8 @@ export interface OpenCarton {
   /** Its box's name. */
   name: string;
   size: StatedSize;
+  /** The most its goods may weigh, when its box says (D199). */
+  max_payload_g: number | null;
   contents: { item_id: Uuid; quantity: number }[];
 }
 
@@ -410,7 +433,7 @@ export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton 
     let chosen: { box: Preset & { size: StatedSize }; layers: Layer[]; left: Left[] } | null = null;
     for (const box of boxes) {
       if (volume(dims(box.size)) < total) continue;
-      const p = pack(dims(box.size), rest);
+      const p = pack(dims(box.size), rest, box.max_payload_g);
       if (p.left.length === 0) {
         chosen = { box, ...p };
         break;
@@ -419,7 +442,7 @@ export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton 
     if (!chosen) {
       let most = 0;
       for (const box of boxes) {
-        const p = pack(dims(box.size), rest);
+        const p = pack(dims(box.size), rest, box.max_payload_g);
         const took = total - bulk(p.left);
         if (took > most) {
           most = took;
@@ -488,6 +511,7 @@ function fillOpen(
   const packed = pack(
     [open.size.length_mm, open.size.width_mm, open.size.height_mm],
     [...together].map(([kind, count]) => ({ kind, count })),
+    open.max_payload_g,
   );
   const toMark = new Map(already.pieces.map((p) => [p.kind, p.count]));
   for (const layer of packed.layers) {
@@ -501,7 +525,7 @@ function fillOpen(
   const rest = packed.left
     .map((e) => ({ kind: e.kind, count: Math.min(e.count, stillToPack.get(e.kind) ?? 0) }))
     .filter((e) => e.count > 0);
-  const preset = { id: open.id, name: open.name, size: open.size, suggested: true };
+  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g };
   return {
     plan: { ...plan(preset, packed.layers), carton: { id: open.id, sequence: open.sequence } },
     rest,

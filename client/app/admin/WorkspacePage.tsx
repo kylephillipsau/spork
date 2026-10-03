@@ -149,6 +149,12 @@ function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBenc
       sort: (b) => (b.length_mm ?? 0) * (b.width_mm ?? 0) * (b.height_mm ?? 0),
     },
     {
+      key: "weight",
+      header: "Max weight",
+      cell: (b) => (fits(b) ? <BoxWeight box={b} bench={bench} /> : <Faint>—</Faint>),
+      width: "150px",
+    },
+    {
       key: "suggest",
       header: "Suggested",
       cell: (b) =>
@@ -169,11 +175,45 @@ function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBenc
     <Card
       title="Boxes"
       count={own.length}
-      description="The boxes you pack into. The pack bench suggests the smallest ticked box that takes everything; any box can still be chosen by hand."
+      description="The boxes you pack into. The pack bench suggests the smallest ticked box that takes everything, no heavier than its max weight; any box can still be chosen by hand."
       padded={false}
     >
       <DataTable aria-label="Boxes" columns={columns} rows={own} rowKey={(b) => b.id} empty={<EmptyState title="No boxes yet" description="Boxes arrive with the packaging presets import." />} />
     </Card>
+  );
+}
+
+/**
+ * A box's weight limit, in kilograms as a scale reads, saved on Enter or on
+ * leaving the field (D199). Empty is no limit.
+ */
+function BoxWeight({ box, bench }: { box: PackageTypeRow; bench: WorkspaceBench }) {
+  const said = box.max_payload_g === null ? "" : String(box.max_payload_g / 1000);
+  const [typed, setTyped] = useState(said);
+  const save = () => {
+    const t = typed.trim();
+    if (t === said) return;
+    const kg = Number(t);
+    if (t !== "" && !(kg > 0)) {
+      setTyped(said);
+      return;
+    }
+    void bench.boxWeight(box.id, t === "" ? null : Math.round(kg * 1000));
+  };
+  return (
+    <TextField
+      aria-label={`Max weight of ${box.name}`}
+      inputMode="decimal"
+      placeholder="No limit"
+      trailing="kg"
+      value={typed}
+      disabled={bench.busy}
+      onChange={(e) => setTyped(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") save();
+      }}
+    />
   );
 }
 

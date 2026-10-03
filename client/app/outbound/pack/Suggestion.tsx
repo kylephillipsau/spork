@@ -201,6 +201,7 @@ function openOf(screen: BenchScreen, id: Uuid | null): OpenCarton | null {
     sequence: c.sequence,
     name: c.package_type,
     size: c.stated_size,
+    max_payload_g: preset.max_payload_g,
     contents: c.contents.map((r) => ({ item_id: r.item_id, quantity: r.quantity })),
   };
 }
