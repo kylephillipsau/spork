@@ -103,6 +103,10 @@ async fn main() -> std::io::Result<()> {
 
     let state = web::Data::new(AppState { pool });
 
+    // One connection LISTENs for changes and tells the devices (D206).
+    let live = web::Data::new(spork_server::live::Live::listening(url.clone()));
+    let stopping = live.clone();
+
     // **Setup's token, reconciled against the database before anything listens**
     // (D142). An empty deployment gets one minted and logged; a deployment that
     // has somebody in it gets any leftover token deleted, which is what stops a
@@ -118,6 +122,7 @@ async fn main() -> std::io::Result<()> {
     let server = HttpServer::new(move || {
         let app = App::new()
             .app_data(state.clone())
+            .app_data(live.clone())
             .configure(routes::mount);
         // Registered here rather than in `routes::mount` so the suite is
         // untouched: `test::init_service` builds its `App` from `configure`,
@@ -148,6 +153,8 @@ async fn main() -> std::io::Result<()> {
             return;
         }
         spork_server::health::begin_shutdown();
+        // Live streams last minutes; they end now rather than hold the drain.
+        stopping.send(spork_server::live::Change::Closing);
         tracing::info!("draining: readiness now reports 503");
 
         // **Shorter than Docker's grace period, deliberately.** Compose sends

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { ApiError, api, reason } from "@domain/api";
 import type { PickLine, PickListScreen, Uuid } from "@domain/types";
-import { claimFor, fold, offered } from "./walk";
+import { useChanges } from "@app/changes";
+import { claimFor, fold, merge, offered } from "./walk";
 import { useSite } from "@app/session/SessionContext";
 
 /**
@@ -115,7 +116,37 @@ export function usePicking(): PickBench {
     void load();
   }, [load]);
 
+  // **Somebody else picked** (D206). Read again and lay it over the walk on
+  // screen rather than replacing it, so every row stays where the picker saw
+  // it. A failed read here says nothing: the next change, or Refresh, tries
+  // again, and a banner for a background read is noise in an aisle.
+  useChanges(() => {
+    if (!site) return;
+    void api.picking(site).then(
+      (fresh) => {
+        if (!live.current) return;
+        setStatus((s) => ({ kind: "ready", screen: s.kind === "ready" ? merge(s.screen, fresh) : fresh }));
+      },
+      () => undefined,
+    );
+  });
+
   const lines = status.kind === "ready" ? status.screen.lines : [];
+
+  // The row about to be picked moves with the walk: fresh figures if somebody
+  // else took some of it, and released, with a word, if they took the rest.
+  useEffect(() => {
+    if (!confirmed || status.kind !== "ready") return;
+    const now = status.screen.lines.find((l) => l.fulfilment_line_id === confirmed.fulfilment_line_id);
+    if (!now) {
+      setConfirmed(null);
+      say(`Somebody else has picked the rest of ${confirmed.item_code}.`);
+    } else if (now !== confirmed) {
+      setConfirmed(now);
+      // What the picker typed stands, unless it is now more than is left.
+      setQuantity((typed) => (Number.parseInt(typed, 10) > now.remaining ? String(offered(now)) : typed));
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = useCallback((line: PickLine) => {
     setConfirmed(line);

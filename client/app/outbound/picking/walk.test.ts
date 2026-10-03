@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { claimFor, fold, offered } from "./walk.ts";
+import { claimFor, fold, merge, offered } from "./walk.ts";
 import type { PickLine, PickListScreen } from "@domain/types";
 
 /**
@@ -108,4 +108,27 @@ test("lines the pick did not serve are untouched", () => {
   const other = line({ fulfilment_line_id: "b", remaining: 5, picked: 1, covered: 2 });
   const after = fold(screen([other]), "a", 99, 99);
   assert.deepEqual(after.lines[0], other);
+});
+
+/** A walk of named rows, for the merge. */
+function walk(...rows: [string, number][]): PickListScreen {
+  return {
+    site: "5170",
+    lines: rows.map(([id, remaining]) => line({ fulfilment_line_id: id, item_code: id, remaining })),
+  };
+}
+const ids = (screen: PickListScreen) => screen.lines.map((l) => `${l.fulfilment_line_id}:${l.remaining}`);
+
+test("a fresh read keeps every row where the picker last saw it", () => {
+  // The server would now order B before A, say because a bin changed. The
+  // picker standing at A still sees A first.
+  const merged = merge(walk(["A", 5], ["B", 3], ["C", 2]), walk(["B", 1], ["A", 5], ["C", 2]));
+  assert.deepEqual(ids(merged), ["A:5", "B:1", "C:2"], "B takes its fresh figure in its old place");
+});
+
+test("a row somebody else finished leaves, and a new one goes where the walk puts it", () => {
+  const merged = merge(walk(["A", 5], ["B", 3], ["C", 2]), walk(["A", 5], ["N", 4], ["C", 2], ["Z", 1]));
+  assert.deepEqual(ids(merged), ["A:5", "N:4", "C:2", "Z:1"]);
+  const first = merge(walk(["B", 3]), walk(["N", 1], ["M", 1], ["B", 3]));
+  assert.deepEqual(ids(first), ["N:1", "M:1", "B:3"], "new rows ahead of everything stay in their own order");
 });

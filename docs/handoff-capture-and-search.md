@@ -127,6 +127,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   reads fewer than nothing available.
 - D204, migration 117. The walk and its badge read what is left to pick live
   (`line_to_pick`), and leave out what NetSuite reports picked.
+- D205. People, under Settings, for administrators (`people.rs`).
+- D206, migration 118. Devices hear `changed` on `GET /changes` when an act
+  is recorded or an order moves at their site (`live.rs`,
+  `client/domain/changes.ts`, `useChanges`). The walk merges the fresh read
+  in place (`merge` in `walk.ts`). `/live` was already the liveness probe.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

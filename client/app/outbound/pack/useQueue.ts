@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLive } from "@app/acting";
+import { useChanges } from "@app/changes";
 import { api, reason } from "@domain/api";
 import type { PackJob, Stage } from "@domain/types";
 
@@ -44,9 +45,12 @@ export function useQueue(): QueueBench {
   const [state, setState] = useState<QueueState>({ kind: "loading" });
 
   const live = useLive();
+  /** What the list on screen answers, which is not what is typed until Search. */
+  const asked = useRef("");
 
   const search = useCallback(async () => {
     setState({ kind: "loading" });
+    asked.current = term;
     try {
       const jobs = await api.packingQueue(term);
       if (live.current) setState({ kind: "ready", jobs });
@@ -82,6 +86,15 @@ export function useQueue(): QueueBench {
         });
       });
   }, []);
+
+  // An order picked and ready, or packed by somebody else, moves on the queue
+  // as it happens (D206): the same question again, without the loading state.
+  useChanges(() => {
+    void api.packingQueue(asked.current).then(
+      (jobs) => live.current && setState({ kind: "ready", jobs }),
+      () => undefined,
+    );
+  });
 
   return { state, term, type: setTerm, search, unsized };
 }

@@ -35,6 +35,9 @@ serde_json = "1"
 uuid = { version = "1", features = ["serde", "v7", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
+# The live channel (D206): a notification stream becomes a response stream.
+# Already in the tree under actix; named here because the server uses it.
+futures-util = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 spork-policy = { workspace = true }

@@ -70,3 +70,33 @@ export function fold(
   });
   return { ...screen, lines };
 }
+
+/**
+ * A fresh read laid over the walk somebody is standing in (D206).
+ *
+ * When somebody else picks, the device hears it and reads the list again. Laid
+ * down as read, that would be the refetch `fold` exists to avoid, so it is laid
+ * over what is on screen instead. A row still on the walk keeps its place and
+ * takes the fresh figures. A row somebody else finished leaves. A new row, an
+ * order that has just arrived, goes in after the row it follows in the fresh
+ * read, which is where the walk would have put it.
+ */
+export function merge(current: PickListScreen, fresh: PickListScreen): PickListScreen {
+  const now = new Map(fresh.lines.map((line) => [line.fulfilment_line_id, line]));
+  const lines = current.lines.flatMap((line) => {
+    const next = now.get(line.fulfilment_line_id);
+    return next ? [next] : [];
+  });
+  const shown = new Set(lines.map((line) => line.fulfilment_line_id));
+  fresh.lines.forEach((line, at) => {
+    if (shown.has(line.fulfilment_line_id)) return;
+    let after = -1;
+    for (let back = at - 1; back >= 0 && after < 0; back -= 1) {
+      const before = fresh.lines[back];
+      if (before) after = lines.findIndex((l) => l.fulfilment_line_id === before.fulfilment_line_id);
+    }
+    lines.splice(after + 1, 0, line);
+    shown.add(line.fulfilment_line_id);
+  });
+  return { ...fresh, lines };
+}

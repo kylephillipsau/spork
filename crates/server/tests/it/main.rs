@@ -25,6 +25,7 @@ mod happy_path;
 mod import_over_http;
 mod item_http;
 mod ledger_http;
+mod live_http;
 mod locator;
 mod observations;
 mod order_search;

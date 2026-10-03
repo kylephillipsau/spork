@@ -34,6 +34,7 @@ pub mod images;
 pub mod importing;
 pub mod items;
 pub mod layout;
+pub mod live;
 pub mod lists;
 pub mod ledger_views;
 pub mod locator;

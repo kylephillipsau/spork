@@ -14575,3 +14575,37 @@ Identity is read and written as the login role, as setup and sign-on do.
 **Not decided.** Finer roles, such as picker, packer or supervisor, and what
 each may not do, remain Q176's. Two words cover the first person who must not
 do something, which is an operator taking a backup.
+
+### D206: Devices are told when something changes at their site
+
+*Adopted 2026-10-04, with migration 118. Builds D17's real-time channel; the
+first part of docs/picking-plan.md's Proposal G.*
+
+**Decision.** Triggers on `client_event` and `fulfilment` NOTIFY
+`spork_live` with a tenant and a site whenever an act is recorded or an order
+arrives or moves on. The server holds one connection that LISTENs and passes
+each one to the devices signed on at that site over `GET /changes`, a
+server-sent event stream. A device that hears `changed` reads again what it
+is showing: the picking walk, the pack bench, the pack queue and the badges.
+The walk lays the fresh read over the rows on screen, so nothing moves under
+a picker. A row somebody else finished leaves, and a row being picked takes
+the fresh figures or is released with a word.
+
+The message says where, never what. So nothing is replayed and there are no
+event ids. A device that was away reads once when it is back, because every
+read is live. The same holds when it wakes, comes back online, or the
+server's listener reconnects. A stream ends after five minutes and the device
+opens another, which is when its session is checked again. A device that
+can't hold a stream open is told every twenty seconds instead.
+
+**Why.** Picking with several people (docs/picking-plan.md) needs each
+device to see the others' picks within a second, or two people walk to the
+same shelf. NOTIFY waits for commit, so a device is never told before the
+change can be read, and a rolled-back act tells nobody. Saying where rather
+than what keeps every read behind the endpoints and their scoping, and keeps
+the stream from being a second, partial copy of the data. The stream is read
+with `fetch` rather than `EventSource`, because a handheld's session is a
+bearer token through the platform's own HTTP client.
+
+**Not decided.** Events that say what happened (a task claimed, a run
+started, a picker's position) come with runs, Proposal G's remainder.

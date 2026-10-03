@@ -9407,6 +9407,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::set_family_picture)
         .service(crate::packaging::packaging_types)
         .service(crate::packaging::say_packed_in)
+        .service(crate::live::stream)
         .service(crate::people::list_people)
         .service(crate::people::add_person)
         .service(crate::people::set_role)

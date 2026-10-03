@@ -200,6 +200,20 @@ export function useTransport(next: Transport): void {
 export const imageUrl = (digest: string): string => `${transport.base}/images/${digest}`;
 
 /**
+ * The live channel (D206): a stream that says when to read again, read by
+ * `domain/changes.ts`. Not `send`, which waits for a body that never ends.
+ */
+export function openChanges(signal: AbortSignal): Promise<Response> {
+  return transport.fetch(`${transport.base}/changes`, {
+    method: "GET",
+    credentials: transport.credentials,
+    headers: { ...transport.headers(), accept: "text/event-stream" },
+    cache: "no-store",
+    signal,
+  });
+}
+
+/**
  * What to do when the server says nobody is signed in.
  *
  * **One seam, registered once by the session provider.** A session expiring

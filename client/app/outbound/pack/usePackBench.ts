@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
+import { useChanges } from "@app/changes";
 import { partOf } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
 import type { BenchScreen, Uuid } from "@domain/types";
@@ -87,6 +88,11 @@ export function usePackBench(fulfilment: Uuid): PackBench {
     setStatus({ kind: "loading" });
     void reload();
   }, [reload]);
+
+  // A pick for this order landing at the bench, or a carton sealed at the
+  // next one, read as it happens (D206). The bench re-reads after its own acts
+  // already, so this is the same read for somebody else's.
+  useChanges(() => void reload());
 
   /**
    * The acts this screen has begun and not yet landed.

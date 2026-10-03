@@ -294,17 +294,21 @@ heuristic problem, not an optimisation service.
 
 ### Proposal G: Each site has a live channel
 
-*Proposed, not adopted. Builds D17's "real-time channel".*
+*The channel is adopted as D206. The kinds of event and claims are still
+proposed. Builds D17's "real-time channel".*
 
 **Decision.**
-- **The channel.** `GET /sites/{id}/live` is a server-sent event stream fed
-  by Postgres `LISTEN/NOTIFY` from the writes. It carries:
+- **The channel (D206).** `GET /changes` is a server-sent event stream for the
+  device's own site, fed by Postgres `LISTEN/NOTIFY` from triggers on the
+  writes. Today it says only that something changed there, and the device
+  reads again what it shows. With runs (step 4) it will also carry:
   - a task claimed or finished;
   - a run started or dropped;
   - a picker's last scan, which is their position;
   - an order ready to pack.
-- **Reconnecting.** A device picks up from the last event it saw. Polling is
-  the fallback.
+- **Reconnecting.** A device that was away reads once when it is back,
+  because every read is live. So there are no event ids to pick up from.
+  Polling is the fallback when a stream can't be held open.
 - **Claims.** A claim is first-claim-wins and the loser is told at once
   (D17). It is a courtesy, not a guarantee: two picks of one task are still
   facts, and the double pick is a finding (D8).

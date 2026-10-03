@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLive } from "@app/acting";
+import { useChanges } from "@app/changes";
 import { api } from "@domain/api";
 import type { WorkWaiting } from "@domain/types";
 import type { Badge as BadgeKey } from "./nav";
@@ -11,9 +12,11 @@ import type { Badge as BadgeKey } from "./nav";
  * rail and the number on `/` cannot disagree. Two endpoints would be two
  * computations of one fact.
  *
- * Refreshed on navigation rather than polled. A badge that updates on its own
- * timer is a badge that changes while somebody is looking at the row it labels;
- * arriving at a screen is the moment its count is worth being right.
+ * Refreshed on navigation and when the work changes, never on a timer. A
+ * badge that updates on its own clock is a badge that changes while somebody
+ * is looking at the row it labels for no reason they can see; arriving at a
+ * screen is the moment its count is worth being right. A pick or an order
+ * arriving (D206) is a reason: the count changes because the work did.
  *
  * **The screen, not the path**, and the difference arrived with
  * `/findings/:finding`. Choosing a row on the findings queue is a navigation
@@ -49,6 +52,8 @@ export function useWork(
   useEffect(() => {
     if (!fixed) void read();
   }, [read, screen, fixed]);
+
+  useChanges(() => void read(), !fixed);
 
   return fixed ?? counts;
 }
