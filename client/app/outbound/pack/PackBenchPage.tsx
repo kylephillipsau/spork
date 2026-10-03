@@ -28,7 +28,8 @@ import { Thumb } from "@app/common/Thumb";
 import { kg } from "@app/common/format";
 import { ItemCode, ItemDrawer } from "@app/items/ItemProperties";
 
-import { Suggestion } from "./Suggestion";
+import { piecesOf, type AsIs } from "./arrange";
+import { Suggestion, shipLabel } from "./Suggestion";
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
 
@@ -83,20 +84,23 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
     const n = Number.parseInt(draft(l).qty, 10);
     if (canHand(l) && n > 0) void bench.handOver({ line: l.line_id, quantity: n });
   };
-  // Whole cartons of a line, shipped as they came (migration 98): from the bin
-  // chosen when this site holds the stock, else handed over.
-  const wholeCartons = (l: BenchLine) => (l.own_carton ? Math.floor(Math.max(0, l.remaining) / l.own_carton.units) : 0);
-  const canShipOwn = (l: BenchLine) =>
-    wholeCartons(l) > 0 && !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere);
-  const shipOwn = (l: BenchLine) => {
-    const own = l.own_carton;
-    if (!own || !canShipOwn(l)) return;
+  // What of a line ships as it is (migration 98, D196): whole cartons, and
+  // inner packs or eaches somebody said travel on their own. The same reading
+  // the suggestion makes, so the line and the suggestion offer the same thing.
+  // From the bin chosen when this site holds the stock, else handed over.
+  const asIs = piecesOf(screen.lines).asIs;
+  const canShip = (l: BenchLine) => !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere);
+  const ship = (a: AsIs) => {
+    const l = screen.lines.find((x) => x.line_id === a.line);
+    if (!l || !canShip(l)) return;
     const stock = l.cells.length > 0 ? draft(l).cell : undefined;
-    void bench.shipOwnCartons({
+    void bench.shipAsIs({
       line: l.line_id,
-      config: own.item_packing_config_id,
-      units: own.units,
-      cartons: wholeCartons(l),
+      item: l.item_id,
+      level: a.level,
+      config: l.own_carton?.item_packing_config_id ?? null,
+      units: a.per,
+      count: a.count,
       ...(stock ? { stock } : {}),
     });
   };
@@ -158,17 +162,20 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       cell: (l) => (
         <div className={s.actions}>
           {addForm(l)}
-          {l.own_carton && wholeCartons(l) > 0 && (
-            <Button
-              size="sm"
-              icon={<Boxes />}
-              disabled={!canShipOwn(l)}
-              onClick={() => shipOwn(l)}
-              title={describeOwn(l.own_carton)}
-            >
-              {shipLabel(wholeCartons(l), l.own_carton.units)}
-            </Button>
-          )}
+          {asIs
+            .filter((a) => a.line === l.line_id)
+            .map((a) => (
+              <Button
+                key={a.level}
+                size="sm"
+                icon={<Boxes />}
+                disabled={!canShip(l)}
+                onClick={() => ship(a)}
+                title={a.level === "carton" && l.own_carton ? describeOwn(l.own_carton) : a.size ? `${a.size.join(" × ")} mm` : "size not recorded"}
+              >
+                {shipLabel(a)}
+              </Button>
+            ))}
         </div>
       ),
       align: "right",
@@ -265,7 +272,10 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
         </Card>
 
         <div className={s.cartons}>
-          <Suggestion screen={screen} bench={bench} look={setLooking} />
+          <Suggestion screen={screen} bench={bench} look={setLooking} ship={ship} canShip={(line) => {
+            const l = screen.lines.find((x) => x.line_id === line);
+            return !!l && canShip(l);
+          }} />
           <NewCarton screen={screen} bench={bench} />
           {screen.cartons.map((c) => (
             <Carton key={c.id} carton={c} bench={bench} look={setLooking} pictures={pictures} />
@@ -370,7 +380,11 @@ function Carton({
         <span className={s.cartonTitle}>
           Carton {carton.sequence}
           {carton.package_type && <Badge>{carton.package_type}</Badge>}
-          {carton.own_carton_of && <Badge>{carton.own_carton_of} carton</Badge>}
+          {carton.own_carton_of && (
+            <Badge>
+              {carton.own_carton_of} {carton.own_level === "each" ? "as it is" : carton.own_level === "inner" ? "inner pack" : "carton"}
+            </Badge>
+          )}
           {carton.sealed ? (
             <Badge tone="success" dot>
               Sealed
@@ -465,11 +479,6 @@ function Carton({
       )}
     </Card>
   );
-}
-
-/** "2 own cartons of 6": what the press will do, in words short enough for the column. */
-function shipLabel(cartons: number, units: number): string {
-  return `${cartons} own carton${cartons === 1 ? "" : "s"} of ${units}`;
 }
 
 /** What one of its cartons measures and weighs by the record, and whose figures. */

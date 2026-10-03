@@ -43,6 +43,8 @@ const subject = (over: Partial<CaptureSubject>): CaptureSubject => ({
   dimensions_absent: false,
   packed_in: null,
   packed_in_source: null,
+  ships_as_is: false,
+  ships_as_is_source: "default",
   box_shaped: true,
   source: null,
   style_code: null,

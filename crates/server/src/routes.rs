@@ -1598,9 +1598,16 @@ pub struct CreatePackageRequest {
     pub sequence: Option<i32>,
     pub package_type_id: Option<Uuid>,
     /// One carton of this case pack: the product's own carton rather than a box
-    /// type (migration 98). Not both.
+    /// type (migration 98). Not both. With `own_level: inner`, one inner pack.
     #[serde(default)]
     pub item_packing_config_id: Option<Uuid>,
+    /// One of this item as it is, rather than a box type (D196): what has no
+    /// case pack to name it by, such as a roll in its own box.
+    #[serde(default)]
+    pub own_item_id: Option<Uuid>,
+    /// Which of it: `each`, `inner` or `carton`. A case pack alone means a carton.
+    #[serde(default)]
+    pub own_level: Option<String>,
     /// Where the package comes into existence (D97: created asserts placement).
     pub location_id: Uuid,
     pub barcode: Option<String>,
@@ -1682,32 +1689,55 @@ pub async fn create_package(
                     .iter()
                     .map(|p| p.to_string())
                     .collect::<Vec<_>>();
-                // **A product's own carton is a carton of something on the order.**
-                // A case pack for an item the fulfilment does not carry is a
-                // mistake the bench cannot make and a caller can.
-                if let Some(config) = body.item_packing_config_id {
+                // **One of a product as it is, is one of something on the order**
+                // (migration 98, D196). A case pack or an item the fulfilment
+                // does not carry is a mistake the bench cannot make and a
+                // caller can.
+                let mut own: Option<(Uuid, String)> = None;
+                if body.item_packing_config_id.is_some() || body.own_item_id.is_some() {
                     if body.package_type_id.is_some() {
                         problems.push(
-                            "a package is a box type or a product's own carton, not both".into(),
+                            "a package is a box type or one of a product as it is, not both".into(),
                         );
                     }
-                    let on_order: Option<bool> = tx
-                        .query_opt(
-                            "SELECT $2::uuid IS NULL OR EXISTS (
-                                     SELECT 1 FROM fulfilment_line fl
-                                       JOIN order_line ol ON ol.id = fl.order_line_id
-                                      WHERE fl.fulfilment_id = $2 AND ol.item_id = c.item_id)
-                               FROM item_packing_config c WHERE c.id = $1",
-                            &[&config, &body.fulfilment_id],
-                        )
-                        .await?
-                        .map(|r| r.get(0));
-                    match on_order {
-                        None => problems.push("no such case pack".into()),
-                        Some(false) => problems.push(
-                            "that case pack is for an item this fulfilment does not carry".into(),
-                        ),
-                        Some(true) => {}
+                    let level = body.own_level.clone().unwrap_or_else(|| "carton".into());
+                    if !matches!(level.as_str(), "each" | "inner" | "carton") {
+                        problems.push("own_level is each, inner or carton".into());
+                    }
+                    if body.item_packing_config_id.is_some() && level == "each" {
+                        problems.push("an each has no case pack: name the item instead".into());
+                    }
+                    let item: Option<Uuid> = match body.item_packing_config_id {
+                        Some(config) => tx
+                            .query_opt("SELECT item_id FROM item_packing_config WHERE id = $1", &[&config])
+                            .await?
+                            .map(|r| r.get(0)),
+                        None => body.own_item_id,
+                    };
+                    match (item, body.own_item_id) {
+                        (None, _) => problems.push("no such case pack".into()),
+                        (Some(a), Some(b)) if a != b => {
+                            problems.push("that case pack is for another item".into())
+                        }
+                        (Some(item), _) => {
+                            let on_order: bool = tx
+                                .query_one(
+                                    "SELECT $2::uuid IS NULL OR EXISTS (
+                                             SELECT 1 FROM fulfilment_line fl
+                                               JOIN order_line ol ON ol.id = fl.order_line_id
+                                              WHERE fl.fulfilment_id = $2 AND ol.item_id = $1)",
+                                    &[&item, &body.fulfilment_id],
+                                )
+                                .await?
+                                .get(0);
+                            if on_order {
+                                own = Some((item, level));
+                            } else {
+                                problems.push(
+                                    "that is an item this fulfilment does not carry".into(),
+                                );
+                            }
+                        }
                     }
                 }
                 if !problems.is_empty() {
@@ -1745,8 +1775,8 @@ pub async fn create_package(
                 tx.execute(
                     "INSERT INTO package (
                          id, tenant_id, fulfilment_id, package_type_id, sequence,
-                         item_packing_config_id)
-                     VALUES ($1, $2, $3, $4, $5, $6)",
+                         item_packing_config_id, own_item_id, own_level)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::packaging_level)",
                     &[
                         &package_id,
                         &tenant,
@@ -1754,6 +1784,8 @@ pub async fn create_package(
                         &body.package_type_id,
                         &body.sequence,
                         &body.item_packing_config_id,
+                        &own.as_ref().map(|o| o.0),
+                        &own.as_ref().map(|o| o.1.clone()),
                     ],
                 )
                 .await?;
@@ -7235,6 +7267,9 @@ pub struct PackageTypeRow {
     pub max_payload_g: Option<i64>,
     /// True for a preset this tenant owns, false for one the platform ships.
     pub tenant_owned: bool,
+    /// The pack bench's suggestion may choose it (D196). Any box can still be
+    /// chosen by hand.
+    pub suggested: bool,
 }
 
 /// The packaging presets, shipped and tenant-owned together.
@@ -7423,7 +7458,7 @@ pub async fn package_types(
                     .query(
                         "SELECT id, name, carrier_package_code, dimensions_fixed,
                                 length_mm, width_mm, height_mm, tare_weight_g,
-                                reusable, max_payload_g, tenant_id IS NOT NULL
+                                reusable, max_payload_g, tenant_id IS NOT NULL, suggested
                            FROM package_type
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
@@ -7444,6 +7479,7 @@ pub async fn package_types(
                         reusable: r.get(8),
                         max_payload_g: r.get(9),
                         tenant_owned: r.get(10),
+                        suggested: r.get(11),
                     })
                     .collect::<Vec<_>>())
             })
@@ -9352,6 +9388,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::set_family_picture)
         .service(crate::packaging::packaging_types)
         .service(crate::packaging::say_packed_in)
+        .service(crate::shipping::say_ships_as_is)
+        .service(crate::shipping::suggest_box)
         .service(crate::backup::backup_summary)
         .service(crate::backup::download_backup)
         .service(crate::search::global_search)

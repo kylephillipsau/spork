@@ -175,6 +175,13 @@ pub struct CaptureSubject {
     /// Whose saying that is: `own`, `item` (a variant's item's carton) or
     /// `style` (its family's carton).
     pub packed_in_source: Option<String>,
+    /// It goes to the carrier as it is rather than into a box (D196): said of
+    /// it, inherited as `packed_in` is, or the default, which is that a carton
+    /// does and an each or an inner pack does not.
+    pub ships_as_is: bool,
+    /// Whose saying that is: `own`, `item`, `style`, or `default` when nobody
+    /// has said.
+    pub ships_as_is_source: String,
     /// Photographed side by side, cut to its faces and drawn as a box: a
     /// six-sided type, or nothing said, and not declared without a size.
     pub box_shaped: bool,
@@ -491,6 +498,8 @@ async fn classified_subjects(
                 dimensions_absent,
                 packed_in: None,
                 packed_in_source: None,
+                ships_as_is: false,
+                ships_as_is_source: "default".into(),
                 box_shaped: !dimensions_absent,
                 source: r.get(9),
                 style_code: r.get(10),
@@ -611,6 +620,8 @@ pub async fn subjects_for_item(
                 dimensions_absent: false,
                 packed_in: None,
                 packed_in_source: None,
+                ships_as_is: false,
+                ships_as_is_source: "default".into(),
                 box_shaped: true,
                 source: None,
                 style_code: None,
@@ -694,6 +705,15 @@ async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubjec
             s.packed_in_source = r.get(1);
             s.box_shaped = !s.dimensions_absent && r.get::<_, bool>(2);
         }
+        // Always a row: the default when nobody has said (D196).
+        let ships = tx
+            .query_one(
+                "SELECT as_it_is, source FROM ships_as_is($1, $2, $3, $4, $5::text::packaging_level)",
+                &[&s.item_id, &s.item_style_id, &s.lot_id, &s.item_part_id, &s.packaging_level],
+            )
+            .await?;
+        s.ships_as_is = ships.get(0);
+        s.ships_as_is_source = ships.get(1);
     }
     Ok(())
 }
@@ -821,6 +841,8 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         dimensions_absent,
         packed_in: None,
         packed_in_source: None,
+        ships_as_is: false,
+        ships_as_is_source: "default".into(),
         box_shaped: !dimensions_absent,
         source: method.as_ref().map(|_| "own".to_string()),
         style_code: None,

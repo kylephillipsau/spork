@@ -95,6 +95,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   bench read now carries each line's `picture` and `packs` (an each and an
   inner, with sizes and cut sides) and each preset's `size`. An each with no
   size is listed with Measure, not guessed at.
+- D196, migration 113. A box says whether the suggestion may choose it
+  (Workspace, Boxes). A thing says whether it ships as it is (the item card's
+  "Ships"; unsaid, a carton does and an each or inner does not). A package can
+  be one of an item as it is at any level (`package.own_item_id`,
+  `own_level`), and the bench ships them with one press. The suggestion lists
+  what ships as it is and boxes only the rest.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

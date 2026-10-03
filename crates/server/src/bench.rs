@@ -88,9 +88,10 @@ pub struct BenchLine {
     /// What to look for (D141): its box drawn, or its front, its own before
     /// its family's, and saying whose.
     pub picture: Option<Picture>,
-    /// One of it as it goes into a box, at each level it can be packed at,
-    /// for the suggested arrangement (D195). An each, and an inner pack when
-    /// the case pack says how many are in one.
+    /// One of it at each level it can leave at, for the suggested arrangement
+    /// (D195): an each; an inner pack and a carton when the case pack says
+    /// how many are in one. Whether each ships as it is (D196) says whether it
+    /// goes into a box at all.
     pub packs: Vec<PackUnit>,
 }
 
@@ -102,10 +103,14 @@ pub struct BenchLine {
 /// arrangement and listed, so the packer can measure it there and then.
 #[derive(Serialize)]
 pub struct PackUnit {
-    /// `each` or `inner`.
+    /// `each`, `inner` or `carton`.
     pub level: String,
-    /// Eaches in one of it: one, or the units per inner of the case pack in force.
+    /// Eaches in one of it: one, or what the case pack in force puts in an
+    /// inner pack or a carton.
     pub units: i64,
+    /// It goes to the carrier as it is rather than into a box (D196), said or
+    /// by default: a carton does, an each or an inner pack does not.
+    pub ships_as_is: bool,
     /// All three lengths, or nothing.
     pub size: Option<StatedSize>,
     /// Somebody said it has no size to measure (D138): a soft thing that goes
@@ -181,6 +186,9 @@ pub struct Preset {
     /// none here, fixed or not: it carries cartons rather than holding goods,
     /// and fitted against, the biggest "box" would always be a pallet.
     pub size: Option<StatedSize>,
+    /// The suggestion may choose it (D196). A shovel box is the smallest box
+    /// three rolls fit in, and nobody sends rolls in one.
+    pub suggested: bool,
 }
 
 /// The preset's answer to how big a carton is, when it has one.
@@ -201,9 +209,11 @@ pub struct CartonSummary {
     pub id: Uuid,
     pub sequence: String,
     pub package_type: Option<String>,
-    /// The item, when this is one carton of it rather than a box type
-    /// (migration 98).
+    /// The item, when this is one of it as it is rather than a box type
+    /// (migration 98, D196).
     pub own_carton_of: Option<String>,
+    /// Which of it: `carton`, `inner` or `each` (D196).
+    pub own_level: Option<String>,
     /// A product's own carton's weight by the record, when there is one. Listed,
     /// never weighed here: see [`OwnCarton::listed_weight_g`].
     pub listed_weight_g: Option<i64>,
@@ -507,28 +517,29 @@ fn own_carton(
     })
 }
 
-/// One of it as an each, and as an inner pack when the case pack counts one
-/// (D195). A level with nothing recorded is left out: the arrangement lists
-/// the item as not measured rather than placing a guess. Its sides and whether
-/// it has no size are filled in by [`looks`], for every line at once.
+/// One of it at each level it can leave at (D195, D196): an each always; an
+/// inner pack when the case pack puts more than one in it; a carton when the
+/// case pack counts one. Each with what is recorded at that level, and
+/// nothing guessed: the arrangement lists a level with no size as not
+/// measured. Its sides, whether it has no size, and whether it ships as it is
+/// are filled in by [`looks`], for every line at once.
 fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements]) -> Vec<PackUnit> {
     let per_inner = case.and_then(|c| c.per_inner).map(i64::from).filter(|n| *n > 0);
-    measured
-        .iter()
-        .filter_map(|m| {
-            let units = match m.packaging_level.as_str() {
-                "each" => 1,
-                "inner" => per_inner?,
-                _ => return None,
-            };
+    let per_carton = case.and_then(|c| Some(i64::from(c.per_inner?) * i64::from(c.inners?))).filter(|n| *n > 0);
+    [("each", Some(1)), ("inner", per_inner.filter(|n| *n > 1)), ("carton", per_carton)]
+        .into_iter()
+        .filter_map(|(level, units)| {
+            let units = units?;
+            let m = measured.iter().find(|m| m.packaging_level == level);
             Some(PackUnit {
-                level: m.packaging_level.clone(),
+                level: level.to_string(),
                 units,
-                size: size_of(m),
+                ships_as_is: level == "carton",
+                size: m.and_then(size_of),
                 no_size: false,
-                gross_weight_g: m.gross_weight_g,
-                source: m.source.clone(),
-                style_code: m.style_code.clone(),
+                gross_weight_g: m.and_then(|m| m.gross_weight_g),
+                source: m.map(|m| m.source.clone()).unwrap_or_else(|| "own".into()),
+                style_code: m.and_then(|m| m.style_code.clone()),
                 faces: BTreeMap::new(),
             })
         })
@@ -597,10 +608,24 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
         .iter()
         .map(|r| (r.get(0), r.get(1)))
         .collect();
+    // Whether each level ships as it is (D196): said, inherited or the default.
+    let as_is: HashMap<(Uuid, String), bool> = tx
+        .query(
+            "SELECT i.id, l.level, s.as_it_is
+               FROM unnest($1::uuid[]) AS i(id)
+              CROSS JOIN unnest(ARRAY['each', 'inner', 'carton']) AS l(level)
+              CROSS JOIN LATERAL ships_as_is(i.id, NULL, NULL, NULL, l.level::packaging_level) s",
+            &[&ids],
+        )
+        .await?
+        .iter()
+        .map(|r| ((r.get(0), r.get(1)), r.get(2)))
+        .collect();
     for line in lines.iter_mut() {
         line.picture = pictured.get(&line.item_id).cloned();
         for p in line.packs.iter_mut() {
             let key = (line.item_id, p.level.clone());
+            p.ships_as_is = as_is.get(&key).copied().unwrap_or(p.ships_as_is);
             p.faces = faces.remove(&key).unwrap_or_default();
             p.no_size = p.size.is_none() && sizeless.contains(&key);
         }
@@ -652,7 +677,7 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                         "SELECT id, name,
                                 dimensions_fixed AND coalesce(carrier_package_code, '')
                                     NOT IN ('PAL', 'SKI', 'SKD'),
-                                length_mm, width_mm, height_mm
+                                length_mm, width_mm, height_mm, suggested
                            FROM package_type
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
@@ -672,6 +697,7 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                             }),
                             _ => None,
                         },
+                        suggested: r.get(6),
                     })
                     .collect::<Vec<_>>())
             })
@@ -709,11 +735,11 @@ pub async fn cartons_on(
                         "SELECT p.id, coalesce(p.sequence::text, '—'), pt.name,
                                 w.kind = 'sealed', p.gross_weight_g, p.height_mm,
                                 pt.dimensions_fixed, pt.length_mm, pt.width_mm,
-                                pt.height_mm, pt.tare_weight_g, own.item_id, own_item.code
+                                pt.height_mm, pt.tare_weight_g, p.own_item_id, own_item.code,
+                                p.own_level::text
                            FROM package p
                            LEFT JOIN package_type pt ON pt.id = p.package_type_id
-                           LEFT JOIN item_packing_config own ON own.id = p.item_packing_config_id
-                           LEFT JOIN item own_item ON own_item.id = own.item_id
+                           LEFT JOIN item own_item ON own_item.id = p.own_item_id
                            LEFT JOIN LATERAL (
                                SELECT e.kind FROM package_event e
                                 WHERE e.package_id = p.id
@@ -773,21 +799,24 @@ pub async fn cartons_on(
                             .map(|c| (c.get::<_, Uuid>(4), c.get::<_, i64>(3)))
                             .collect(),
                     });
-                    // A product's own carton states the size its item's carton
-                    // is recorded at, read here rather than copied onto it.
+                    // One of a product as it is states the size its item is
+                    // recorded at, at that level, read here rather than copied
+                    // onto it (D196).
                     let own_item: Option<Uuid> = r.get(11);
-                    let own_figures = match own_item {
-                        Some(item) => crate::routes::measurements_of(tx, item)
+                    let own_level: Option<String> = r.get(13);
+                    let own_figures = match (own_item, own_level.as_deref()) {
+                        (Some(item), Some(level)) => crate::routes::measurements_of(tx, item)
                             .await?
                             .into_iter()
-                            .find(|m| m.packaging_level == "carton"),
-                        None => None,
+                            .find(|m| m.packaging_level == level),
+                        _ => None,
                     };
                     out.push(CartonSummary {
                         id,
                         sequence: r.get(1),
                         package_type: r.get(2),
                         own_carton_of: r.get(12),
+                        own_level,
                         listed_weight_g: own_figures.as_ref().and_then(|m| m.gross_weight_g),
                         sealed: r.get::<_, Option<bool>>(3).unwrap_or(false),
                         gross_weight_g: r.get(4),

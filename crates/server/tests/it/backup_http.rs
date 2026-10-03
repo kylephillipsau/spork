@@ -134,7 +134,18 @@ async fn a_backup_is_an_administrators_and_restores_exactly() {
         "the backup's summary",
     )
     .await;
-    assert!(summary["schema"].as_str().unwrap().contains("administers"), "{summary}");
+    // The newest migration this database has, whichever that is: the backup
+    // is only restorable at it.
+    let newest: String = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT max(name) FROM schema_migration", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(summary["schema"], newest.as_str(), "{summary}");
     let session: Value = common::ok_json(
         &app,
         test::TestRequest::get().uri("/sessions/current").insert_header(auth.clone()).to_request(),

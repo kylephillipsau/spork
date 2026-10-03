@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, PackageOpen, Ruler } from "lucide-react";
+import { Boxes, ChevronLeft, ChevronRight, PackageOpen, Ruler } from "lucide-react";
 
 import { Badge, Button, Card, Skeleton, Tabs, Toolbar, Spacer } from "@ui/index";
 import { imageUrl } from "@domain/api";
@@ -7,7 +7,7 @@ import type { BenchScreen, Picture, Uuid } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { kg } from "@app/common/format";
 
-import { arrange, contentsOf, type Aside, type BoxPlan, type Layer } from "./arrange";
+import { arrange, contentsOf, type Aside, type AsIs, type BoxPlan, type Layer } from "./arrange";
 import { tone } from "./tones";
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
@@ -20,14 +20,28 @@ const PackView = lazy(() => import("./PackView"));
  * recorded: what has no size is listed with a way to measure it, and the
  * suggestion is made again when the drawer closes.
  */
-export function Suggestion({ screen, bench, look }: { screen: BenchScreen; bench: PackBench; look: (itemId: Uuid) => void }) {
+export function Suggestion({
+  screen,
+  bench,
+  look,
+  ship,
+  canShip,
+}: {
+  screen: BenchScreen;
+  bench: PackBench;
+  look: (itemId: Uuid) => void;
+  /** Ship these as they are, as the line's own button would (D196). */
+  ship: (a: AsIs) => void;
+  canShip: (line: Uuid) => boolean;
+}) {
   const plan = useMemo(() => arrange(screen.lines, screen.presets), [screen.lines, screen.presets]);
   const pictures = useMemo(() => new Map(screen.lines.map((l) => [l.item_id, l.picture])), [screen.lines]);
   const [which, setWhich] = useState(0);
   const [step, setStep] = useState(0);
   const [view, setView] = useState<"plan" | "3d">("plan");
 
-  const anything = plan.boxes.length + plan.unmeasured.length + plan.oversize.length + plan.loose.length > 0 || plan.tooMany;
+  const anything =
+    plan.boxes.length + plan.asIs.length + plan.unmeasured.length + plan.oversize.length + plan.loose.length > 0 || plan.tooMany;
   if (!anything) return null;
 
   const box: BoxPlan | undefined = plan.boxes[Math.min(which, plan.boxes.length - 1)];
@@ -41,7 +55,9 @@ export function Suggestion({ screen, bench, look }: { screen: BenchScreen; bench
   return (
     <Card
       title="Suggested packing"
-      description={box ? describe(box) : "Nothing here can be arranged yet."}
+      description={
+        box ? describe(box) : plan.asIs.length > 0 && plan.unmeasured.length === 0 ? "Everything left ships as it is." : "Nothing here can be arranged yet."
+      }
       actions={
         box && (
           <Tabs
@@ -125,11 +141,15 @@ export function Suggestion({ screen, bench, look }: { screen: BenchScreen; bench
         </div>
       )}
 
+      <AsItIs plan={plan} pictures={pictures} ship={ship} canShip={canShip} />
       <Asides plan={plan} pictures={pictures} look={look} />
 
       {box && (
         <Toolbar placement="bottom">
-          <span className={s.note}>{plan.boxes.length > 1 ? `${plan.boxes.length} boxes for what is left` : "One box for what is left"}</span>
+          <span className={s.note}>
+            {plan.boxes.length > 1 ? `${plan.boxes.length} boxes for what is left` : "One box for what is left"}
+            {plan.asIs.length > 0 ? `, and ${parcels(plan.asIs)} as ${plan.asIs.reduce((t, a) => t + a.count, 0) === 1 ? "it is" : "they are"}` : ""}
+          </span>
           <Spacer />
           {/* Secondary: Start carton below is the bench's one primary act. */}
           <Button
@@ -232,6 +252,65 @@ function LayerPlan({ box, layer, below, pictures }: { box: BoxPlan; layer: Layer
   );
 }
 
+/** "2 own cartons of 6", "3 inner packs of 24", "3 as they are": what the press will do, short enough for a column. */
+export function shipLabel(a: AsIs): string {
+  const s = a.count === 1 ? "" : "s";
+  if (a.level === "carton") return `${a.count} own carton${s} of ${a.per}`;
+  if (a.level === "inner") return `${a.count} inner pack${s} of ${a.per}`;
+  return `${a.count} as ${a.count === 1 ? "it is" : "they are"}`;
+}
+
+function parcels(asIs: AsIs[]): string {
+  const n = asIs.reduce((t, a) => t + a.count, 0);
+  return `${n} parcel${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * What goes to the carrier as it is (D196): whole cartons, and whatever
+ * somebody said travels in its own box. Each with the press that ships it,
+ * the same as the line's.
+ */
+function AsItIs({
+  plan,
+  pictures,
+  ship,
+  canShip,
+}: {
+  plan: ReturnType<typeof arrange>;
+  pictures: Map<Uuid, Picture | null>;
+  ship: (a: AsIs) => void;
+  canShip: (line: Uuid) => boolean;
+}) {
+  if (plan.asIs.length === 0) return null;
+  return (
+    <div className={s.asides}>
+      <span className={s.asidesTitle}>Ships as it is</span>
+      <ul className={s.asideList}>
+        {plan.asIs.map((a) => (
+          <li key={`${a.line}:${a.level}`} className={s.asideRow}>
+            <Thumb picture={pictures.get(a.item_id) ?? null} alt={a.item_code} />
+            <span className={s.asideWhat}>
+              <span className={s.code}>{a.item_code}</span>
+              <span className={s.note}>
+                {[
+                  `${a.count} parcel${a.count === 1 ? "" : "s"}`,
+                  a.size ? `${a.size.join(" × ")} mm` : "size not recorded",
+                  a.weight_g !== null ? `${kg(a.weight_g / a.count)} each` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </span>
+            <Button size="sm" icon={<Boxes />} disabled={!canShip(a.line)} onClick={() => ship(a)}>
+              {shipLabel(a)}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** What the suggestion leaves out, and why: each with what to do about it. */
 function Asides({ plan, pictures, look }: { plan: ReturnType<typeof arrange>; pictures: Map<Uuid, Picture | null>; look: (itemId: Uuid) => void }) {
   if (plan.tooMany) {
@@ -250,11 +329,6 @@ function Asides({ plan, pictures, look }: { plan: ReturnType<typeof arrange>; pi
     })),
     ...plan.oversize.map((a) => ({ key: `o${a.line}`, aside: a, why: <Badge tone="danger">Too big for every box</Badge> })),
     ...plan.loose.map((a) => ({ key: `l${a.line}`, aside: a, why: <Badge>No size to measure</Badge> })),
-    ...plan.own.map((a) => ({
-      key: `c${a.line}`,
-      aside: a,
-      why: <Badge tone="info">{`${a.cartons} own carton${a.cartons === 1 ? "" : "s"}`}</Badge>,
-    })),
   ];
   if (rows.length === 0) return null;
   return (

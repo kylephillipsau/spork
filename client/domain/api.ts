@@ -21,6 +21,7 @@ import type {
   LotAdded,
   CaptureSubject,
   PackagingType,
+  PackageTypeRow,
   BackupSummary,
   SameAsSaid,
   ItemView,
@@ -309,15 +310,18 @@ export const api = {
     }),
 
   /**
-   * One carton of an item, as it came: a package that is the product's own
-   * carton rather than a box type (migration 98). Made where the site packs,
-   * like any carton.
+   * One of an item as it is, at a level (migration 98, D196): a product's own
+   * carton, an inner pack, or a roll in its own box. Made where the site
+   * packs, like any carton. The case pack goes with an inner or a carton,
+   * which is where the count in it comes from; an each has none.
    */
-  startOwnCarton: (input: { fulfilment: Uuid; config: Uuid; dock: Uuid; act: Act }) =>
+  startAsIs: (input: { fulfilment: Uuid; item: Uuid; level: "each" | "inner" | "carton"; config: Uuid | null; dock: Uuid; act: Act }) =>
     send<unknown>("POST", "/packages", {
       id: input.act.id("package"),
       fulfilment_id: input.fulfilment,
-      item_packing_config_id: input.config,
+      own_item_id: input.item,
+      own_level: input.level,
+      ...(input.config ? { item_packing_config_id: input.config } : {}),
       location_id: input.dock,
       client_event_id: input.act.id("event"),
       occurred_at: input.act.at,
@@ -819,6 +823,29 @@ export const api = {
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),
+
+  /** Say whether a subject ships as it is rather than in a box (D196). */
+  sayShipsAsIs: (
+    subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
+    asItIs: boolean,
+    act: Act,
+  ) =>
+    send<void>("POST", "/shipping", {
+      item_id: subject.item_id,
+      item_style_id: subject.item_style_id,
+      lot_id: subject.lot_id,
+      item_part_id: subject.item_part_id,
+      packaging_level: subject.item_id || subject.item_style_id ? subject.packaging_level : null,
+      as_it_is: asItIs,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
+  /** The box presets, the workspace's own first. */
+  packageTypes: () => send<PackageTypeRow[]>("GET", "/package-types"),
+
+  /** Say whether the pack bench's suggestion may choose a box (D196). */
+  suggestBox: (id: Uuid, suggested: boolean) => send<void>("POST", `/package-types/${encodeURIComponent(id)}/suggested`, { suggested }),
 
   /** Bins, items and orders matching what was typed, best first (D189). */
   search: (q: string) => send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}`),

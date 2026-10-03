@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLive } from "@app/acting";
 import { api, reason } from "@domain/api";
-import type { Workspace } from "@domain/types";
+import type { PackageTypeRow, Workspace } from "@domain/types";
 
 /**
  * The organisation and its warehouses, and the two things a site says about
@@ -23,6 +23,10 @@ export interface WorkspaceBench {
   dismiss: () => void;
   setPackLocation: (siteId: string, code: string) => Promise<void>;
   setOwner: (siteId: string) => Promise<void>;
+  /** The box presets, the workspace's own first; null until read. */
+  boxes: PackageTypeRow[] | null;
+  /** Say whether the pack bench's suggestion may choose a box (D196). */
+  suggest: (boxId: string, suggested: boolean) => Promise<void>;
 }
 
 export function useWorkspace(): WorkspaceBench {
@@ -32,10 +36,15 @@ export function useWorkspace(): WorkspaceBench {
 
   const live = useLive();
 
+  const [boxes, setBoxes] = useState<PackageTypeRow[] | null>(null);
+
   const read = useCallback(async () => {
     try {
-      const workspace = await api.workspace();
-      if (live.current) setState({ kind: "ready", workspace });
+      const [workspace, presets] = await Promise.all([api.workspace(), api.packageTypes()]);
+      if (live.current) {
+        setState({ kind: "ready", workspace });
+        setBoxes(presets);
+      }
     } catch (error) {
       const message = reason(error, "The server could not be reached.");
       if (live.current) setState({ kind: "failed", message });
@@ -71,5 +80,10 @@ export function useWorkspace(): WorkspaceBench {
     [change],
   );
 
-  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner };
+  const suggest = useCallback(
+    (boxId: string, suggested: boolean) => change(() => api.suggestBox(boxId, suggested), "Could not change whether that box is suggested."),
+    [change],
+  );
+
+  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner, boxes, suggest };
 }

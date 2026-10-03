@@ -147,6 +147,7 @@ const PAIRS = [
   ["Cell", ["Cell"]],
   ["BenchLine", ["BenchLine"]],
   ["PackUnit", ["PackUnit"]],
+  ["PackageTypeRow", ["PackageTypeRow"]],
   ["PickedElsewhere", ["PickedElsewhere"]],
   ["Preset", ["Preset"]],
   ["StatedSize", ["StatedSize"]],

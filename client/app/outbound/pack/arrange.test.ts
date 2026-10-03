@@ -16,6 +16,7 @@ function each(size: Dims | null, over: Partial<PackUnit> = {}): PackUnit {
   return {
     level: "each",
     units: 1,
+    ships_as_is: false,
     size: size && { length_mm: size[0], width_mm: size[1], height_mm: size[2] },
     no_size: false,
     gross_weight_g: 100,
@@ -43,8 +44,8 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
   };
 }
 
-function box(name: string, [l, w, h]: Dims | [number, number, number]): Preset {
-  return { id: `9a7e0000-0000-0000-0000-${name.padStart(12, "0").slice(-12)}`, name, size: { length_mm: l, width_mm: w, height_mm: h } };
+function box(name: string, [l, w, h]: Dims | [number, number, number], suggested = true): Preset {
+  return { id: `9a7e0000-0000-0000-0000-${name.padStart(12, "0").slice(-12)}`, name, size: { length_mm: l, width_mm: w, height_mm: h }, suggested };
 }
 
 const SMALL = box("small", [400, 300, 190]);
@@ -136,19 +137,9 @@ test("a mixed order never overlaps or leaves the box", () => {
 
 test("whole cartons ship as they are; inner packs while the count fills one; eaches after", () => {
   const inner: PackUnit = { ...each([200, 100, 100]), level: "inner", units: 10 };
-  const l = line("GLV", 125, [each([100, 50, 20]), inner], {
-    own_carton: {
-      item_packing_config_id: "9ac40000-0000-0000-0000-000000000001",
-      units: 50,
-      size: null,
-      listed_weight_g: null,
-      method: null,
-      source: null,
-      style_code: null,
-    },
-  });
-  const { pieces, own } = piecesOf([l]);
-  assert.deepEqual(own.map((o) => [o.cartons, o.units]), [[2, 100]]);
+  const carton: PackUnit = { ...each(null), level: "carton", units: 50, ships_as_is: true };
+  const { pieces, asIs } = piecesOf([line("GLV", 125, [each([100, 50, 20]), inner, carton])]);
+  assert.deepEqual(asIs.map((o) => [o.level, o.count, o.units]), [["carton", 2, 100]]);
   assert.deepEqual(
     pieces.map((p) => [p.kind.level, p.count]),
     [
@@ -156,6 +147,43 @@ test("whole cartons ship as they are; inner packs while the count fills one; eac
       ["each", 5],
     ],
   );
+});
+
+test("an each that ships as it is goes on its own, and only the rest is boxed (D196)", () => {
+  // Three rolls in their own boxes, and gloves in inner packs: the rolls go
+  // to the carrier as they are, and the box is chosen for the gloves alone.
+  const roll = each([350, 350, 320], { ships_as_is: true, gross_weight_g: 5338 });
+  const glove: PackUnit = { ...each([260, 125, 110], { gross_weight_g: 838 }), level: "inner", units: 24 };
+  const a = arrange([line("JWR", 3, [roll]), line("DGC", 48, [each(null, { no_size: true }), glove])], [SMALL, MEDIUM, LARGE]);
+  assert.deepEqual(a.asIs.map((x) => [x.item_code, x.level, x.count, x.weight_g]), [["JWR", "each", 3, 3 * 5338]]);
+  assert.equal(a.boxes.length, 1);
+  assert.equal(a.boxes[0]!.preset.name, "small");
+  assert.ok(a.boxes[0]!.layers.flatMap((l) => l.placements).every((p) => p.kind.item_code === "DGC"));
+});
+
+test("a carton somebody said goes in a box is boxed, by its size", () => {
+  const carton: PackUnit = { ...each([300, 200, 150]), level: "carton", units: 6, ships_as_is: false };
+  const a = arrange([line("BRM", 12, [each([300, 50, 50]), carton])], [SMALL, MEDIUM, LARGE]);
+  assert.deepEqual(a.asIs, []);
+  assert.deepEqual(
+    a.boxes.flatMap((b) => b.layers.flatMap((l) => l.placements)).map((p) => p.kind.level),
+    ["carton", "carton"],
+  );
+});
+
+test("a box the workspace does not suggest is never chosen, however well it fits (D196)", () => {
+  const shovel = box("shovel", [1400, 340, 400], false);
+  const a = arrange([line("ROLL", 3, [each([350, 350, 320])])], [shovel, LARGE, box("xl", [860, 560, 460])]);
+  assert.ok(a.boxes.every((b) => b.preset.name !== "shovel"), a.boxes.map((b) => b.preset.name).join());
+});
+
+test("loose things count toward the weight of the box they go round", () => {
+  const a = arrange(
+    [line("APR", 1, [each([280, 220, 30], { gross_weight_g: 180 })]), line("GLOVE", 4, [each(null, { no_size: true, gross_weight_g: 28 })]), line("CLOTH", 2, [each(null, { no_size: true, gross_weight_g: null })])],
+    [SMALL],
+  );
+  assert.equal(a.boxes[0]!.weight_g, 180 + 4 * 28);
+  assert.equal(a.boxes[0]!.unweighed, 2, "the two cloths, which have no weight");
 });
 
 test("an each with no size is listed, not guessed; one with no size to measure goes in round the rest", () => {
@@ -182,7 +210,7 @@ test("a thing too big for every box is said, and nothing else is lost", () => {
 });
 
 test("a preset with no size is never suggested", () => {
-  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null }]);
+  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true }]);
   assert.deepEqual(a.boxes, []);
   assert.deepEqual(a.oversize.map((o) => o.item_code), ["APR"]);
 });

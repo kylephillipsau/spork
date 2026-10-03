@@ -142,6 +142,8 @@ export interface PropertiesDesk {
   packagingTypes: PackagingType[];
   /** Say what a subject is packed in, as a GS1 packaging type code. */
   packIn: (subject: CaptureSubject, code: string) => Promise<void>;
+  /** Say whether it goes to the carrier as it is rather than into a box (D196). */
+  shipAsIs: (subject: CaptureSubject, asItIs: boolean) => Promise<void>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -560,6 +562,13 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     packIn: (subject, code) =>
       press(`packed:${subjectKey(subject)}:${code}`, async (act) => {
         await api.sayPackedIn(subject, code, act);
+        if (!live.current) return;
+        await reload();
+      }),
+
+    shipAsIs: (subject, asItIs) =>
+      press(`ships:${subjectKey(subject)}:${asItIs}`, async (act) => {
+        await api.sayShipsAsIs(subject, asItIs, act);
         if (!live.current) return;
         await reload();
       }),

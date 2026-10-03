@@ -1,4 +1,4 @@
-import type { Workspace } from "@domain/types";
+import type { PackageTypeRow, Workspace } from "@domain/types";
 import type { WorkspaceBench, WorkspaceState } from "./useWorkspace";
 
 /** The workspace as a deployment looks after a bin import. */
@@ -42,6 +42,41 @@ export const FAILED: WorkspaceState = {
 
 const noop = async () => {};
 
+/** Boxes as a prepack import leaves them: a shovel box is one nobody wants suggested (D196). */
+const box = (name: string, code: string | null, size: [number, number, number] | null, suggested = true): PackageTypeRow => ({
+  id: `9a7e0000-0000-0000-0000-${name.replace(/[^a-z]/gi, "").padEnd(12, "0").slice(0, 12).toLowerCase().replace(/[^0-9a-f]/g, "0")}`,
+  name,
+  carrier_package_code: code,
+  dimensions_fixed: size !== null,
+  length_mm: size?.[0] ?? null,
+  width_mm: size?.[1] ?? null,
+  height_mm: size?.[2] ?? null,
+  tare_weight_g: null,
+  reusable: false,
+  max_payload_g: null,
+  tenant_owned: true,
+  suggested,
+});
+
+export const BOXES: PackageTypeRow[] = [
+  box("Extra Small Box", "CTN", [320, 230, 160]),
+  box("Small Box", "CTN", [390, 310, 300]),
+  box("Medium Box", "CTN", [450, 340, 410]),
+  box("Large Box", "CTN", [660, 440, 460]),
+  box("Shovel Box", "CTN", [1400, 340, 400], false),
+  box("Satchel", null, null),
+  box("Pallet", "PAL", [1200, 1200, 1300]),
+];
+
 export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
-  return { state, busy: false, problem: null, dismiss: () => {}, setPackLocation: noop, setOwner: noop };
+  return {
+    state,
+    busy: false,
+    problem: null,
+    dismiss: () => {},
+    setPackLocation: noop,
+    setOwner: noop,
+    boxes: state.kind === "ready" ? BOXES : null,
+    suggest: noop,
+  };
 }

@@ -91,3 +91,13 @@
   white-space: nowrap;
   user-select: all;
 }
+
+/* Said to a screen reader, not shown: the row already names the box. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

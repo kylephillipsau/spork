@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   DataTable,
   EmptyState,
   Fact,
@@ -16,7 +17,7 @@ import {
   TextField,
   type Column,
 } from "@ui/index";
-import type { Organisation, WorkspaceSite } from "@domain/types";
+import type { Organisation, PackageTypeRow, WorkspaceSite } from "@domain/types";
 import { Faint, Progress, shortDate } from "@app/common/cells";
 
 import type { WorkspaceBench } from "./useWorkspace";
@@ -54,6 +55,7 @@ export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
       </Card>
 
       {ws && here && <Packing site={here} organisation={ws.organisation} bench={bench} />}
+      {ws && bench.boxes && <Boxes boxes={bench.boxes} bench={bench} />}
 
       <Card title="Warehouses" padded={false}>
         <DataTable
@@ -125,6 +127,52 @@ function Packing({ site, organisation, bench }: { site: WorkspaceSite; organisat
           </div>
         )}
       </div>
+    </Card>
+  );
+}
+
+/**
+ * The boxes this workspace packs into, and which the pack bench may suggest
+ * (D196). Every box can still be chosen by hand; a shovel box is the kind the
+ * suggestion should leave alone. Only a box with a fixed size can be
+ * suggested, and a pallet or a skid never is: it carries cartons.
+ */
+function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBench }) {
+  const own = boxes.filter((b) => b.tenant_owned);
+  const fits = (b: PackageTypeRow) => b.dimensions_fixed && !["PAL", "SKI", "SKD"].includes(b.carrier_package_code ?? "");
+  const columns: Column<PackageTypeRow>[] = [
+    { key: "name", header: "Box", cell: (b) => <strong>{b.name}</strong>, sort: (b) => b.name },
+    {
+      key: "size",
+      header: "Inside (L × W × H)",
+      cell: (b) => (b.length_mm && b.width_mm && b.height_mm ? `${b.length_mm} × ${b.width_mm} × ${b.height_mm} mm` : <Faint>No fixed size</Faint>),
+      sort: (b) => (b.length_mm ?? 0) * (b.width_mm ?? 0) * (b.height_mm ?? 0),
+    },
+    {
+      key: "suggest",
+      header: "Suggested",
+      cell: (b) =>
+        fits(b) ? (
+          <Checkbox
+            label={<span className={s.srOnly}>Suggest {b.name}</span>}
+            checked={b.suggested}
+            disabled={bench.busy}
+            onCheckedChange={(on) => void bench.suggest(b.id, on)}
+          />
+        ) : (
+          <Faint>{b.dimensions_fixed ? "Carries cartons" : "No fixed size"}</Faint>
+        ),
+      width: "160px",
+    },
+  ];
+  return (
+    <Card
+      title="Boxes"
+      count={own.length}
+      description="The boxes you pack into. The pack bench suggests the smallest ticked box that takes everything; any box can still be chosen by hand."
+      padded={false}
+    >
+      <DataTable aria-label="Boxes" columns={columns} rows={own} rowKey={(b) => b.id} empty={<EmptyState title="No boxes yet" description="Boxes arrive with the packaging presets import." />} />
     </Card>
   );
 }

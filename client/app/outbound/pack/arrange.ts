@@ -6,9 +6,10 @@ import type { BenchLine, PackUnit, Preset, StatedSize, Uuid } from "@domain/type
  *
  * **A suggestion made from what is recorded.** An each with no size is listed,
  * not guessed at from its carton, so the packer can measure it at the bench and
- * the suggestion is made again. Whole cartons of a line ship as they are
- * (migration 98) and are left out. A thing with no size to measure (D138) goes
- * in round the rest.
+ * the suggestion is made again. What ships as it is (D196), a carton unless
+ * somebody said otherwise, or a roll in its own box once somebody says so,
+ * goes to the carrier on its own and is left out of the boxes. A thing with no
+ * size to measure (D138) goes in round the rest.
  *
  * **Layers, because a packer builds one.** Each layer starts with the biggest
  * thing that still fits, laid on its biggest side, and is filled round it and on
@@ -65,6 +66,18 @@ export interface Aside {
   item_id: Uuid;
   item_code: string;
   units: number;
+  /** What they weigh together by the record, or null when any has no weight. */
+  weight_g: number | null;
+}
+
+/** Things that go to the carrier as they are (D196): so many of one level of a line's item. */
+export interface AsIs extends Aside {
+  level: PackUnit["level"];
+  /** How many parcels: one each. */
+  count: number;
+  /** Eaches in one of them. */
+  per: number;
+  size: Dims | null;
 }
 
 export interface BoxPlan {
@@ -74,15 +87,16 @@ export interface BoxPlan {
   loose: Aside[];
   /** The share of the box's inside the placed goods take up. */
   fill: number;
-  /** What the goods in it weigh by the record, and how many pieces have no weight. */
+  /** What the goods in it weigh by the record, loose things included, and how
+   *  many pieces or loose units have no weight. */
   weight_g: number;
   unweighed: number;
 }
 
 export interface Arrangement {
   boxes: BoxPlan[];
-  /** Whole cartons of a line, which ship as they are. */
-  own: (Aside & { cartons: number })[];
+  /** What goes to the carrier as it is, parcel by parcel (D196). */
+  asIs: AsIs[];
   /** No size recorded at the level they would go in at: measure, then it is placed. */
   unmeasured: Aside[];
   /** Bigger than every box, in any way up. */
@@ -251,23 +265,32 @@ function measured(p: PackUnit | undefined): Dims | null {
 }
 
 /**
- * What each line's units go in as: whole cartons that ship as they are, inner
- * packs while the count fills one, then eaches.
+ * What each line's units go as, biggest first: cartons while the count fills
+ * one, then inner packs, then eaches. A level that ships as it is (D196) goes
+ * on its own; one that does not goes into a box when its size is recorded, and
+ * otherwise its units are taken a level down. Eaches with no size are listed
+ * as not measured, or go in loose when they have none to measure.
  */
 export function piecesOf(lines: BenchLine[]): {
   pieces: Left[];
-  own: Arrangement["own"];
+  asIs: AsIs[];
   loose: Aside[];
   unmeasured: Aside[];
 } {
   const pieces: Left[] = [];
-  const own: Arrangement["own"] = [];
+  const asIs: AsIs[] = [];
   const loose: Aside[] = [];
   const unmeasured: Aside[] = [];
   lines.forEach((line, index) => {
     let units = Math.max(0, line.remaining);
     if (units === 0) return;
-    const aside = (n: number): Aside => ({ line: line.line_id, item_id: line.item_id, item_code: line.item_code, units: n });
+    const aside = (n: number, unit?: PackUnit): Aside => ({
+      line: line.line_id,
+      item_id: line.item_id,
+      item_code: line.item_code,
+      units: n,
+      weight_g: unit?.gross_weight_g != null ? (unit.gross_weight_g * n) / unit.units : null,
+    });
     const kind = (unit: PackUnit, size: Dims): Kind => ({
       line: line.line_id,
       item_id: line.item_id,
@@ -280,27 +303,22 @@ export function piecesOf(lines: BenchLine[]): {
       index,
     });
 
-    const carton = line.own_carton?.units ?? 0;
-    if (carton > 0 && units >= carton) {
-      const cartons = Math.floor(units / carton);
-      own.push({ ...aside(cartons * carton), cartons });
-      units -= cartons * carton;
+    for (const level of ["carton", "inner", "each"] as const) {
+      const unit = line.packs.find((p) => p.level === level);
+      if (!unit || unit.units <= 0 || units < unit.units) continue;
+      const size = measured(unit);
+      if (level !== "each" && !unit.ships_as_is && !size) continue;
+      const count = Math.floor(units / unit.units);
+      if (unit.ships_as_is) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size });
+      else if (size) pieces.push({ kind: kind(unit, size), count });
+      else if (unit.no_size) loose.push(aside(count, unit));
+      else unmeasured.push(aside(count));
+      units -= count * unit.units;
     }
-    const inner = line.packs.find((p) => p.level === "inner");
-    const innerSize = measured(inner);
-    if (inner && innerSize && inner.units > 1 && units >= inner.units) {
-      const count = Math.floor(units / inner.units);
-      pieces.push({ kind: kind(inner, innerSize), count });
-      units -= count * inner.units;
-    }
-    if (units === 0) return;
-    const each = line.packs.find((p) => p.level === "each");
-    const eachSize = measured(each);
-    if (each && eachSize) pieces.push({ kind: kind(each, eachSize), count: units });
-    else if (each?.no_size) loose.push(aside(units));
-    else unmeasured.push(aside(units));
+    // Nothing recorded of its each at all: it is not measured.
+    if (units > 0) unmeasured.push(aside(units));
   });
-  return { pieces, own, loose, unmeasured };
+  return { pieces, asIs, loose, unmeasured };
 }
 
 function plan(preset: Preset & { size: StatedSize }, layers: Layer[]): BoxPlan {
@@ -325,11 +343,12 @@ function bulk(left: Left[]): number {
  * take as much), and again for the rest.
  */
 export function arrange(lines: BenchLine[], presets: Preset[]): Arrangement {
-  const { pieces, own, loose, unmeasured } = piecesOf(lines);
+  const { pieces, asIs, loose, unmeasured } = piecesOf(lines);
+  // Only the boxes the workspace lets it choose (D196).
   const boxes = presets
-    .filter((p): p is Preset & { size: StatedSize } => p.size !== null)
+    .filter((p): p is Preset & { size: StatedSize } => p.size !== null && p.suggested)
     .sort((a, b) => volume(dims(a.size)) - volume(dims(b.size)));
-  const none: Arrangement = { boxes: [], own, unmeasured, oversize: [], loose, tooMany: false };
+  const none: Arrangement = { boxes: [], asIs, unmeasured, oversize: [], loose, tooMany: false };
   if (pieces.reduce((t, p) => t + p.count, 0) > MOST_PIECES) return { ...none, tooMany: true };
 
   const plans: BoxPlan[] = [];
@@ -363,12 +382,19 @@ export function arrange(lines: BenchLine[], presets: Preset[]): Arrangement {
 
   // Loose things go round the goods in the box with the most room to spare.
   const roomiest = plans.reduce<BoxPlan | null>((best, p) => (!best || p.fill < best.fill ? p : best), null);
-  if (roomiest) roomiest.loose = loose;
+  if (roomiest) {
+    roomiest.loose = loose;
+    for (const a of loose) {
+      if (a.weight_g === null) roomiest.unweighed += a.units;
+      else roomiest.weight_g += a.weight_g;
+    }
+  }
   const oversize = rest.map((e) => ({
     line: e.kind.line,
     item_id: e.kind.item_id,
     item_code: e.kind.item_code,
     units: e.count * e.kind.units,
+    weight_g: e.kind.weight_g === null ? null : e.kind.weight_g * e.count,
   }));
   return { ...none, boxes: plans, oversize, loose: roomiest ? [] : loose };
 }

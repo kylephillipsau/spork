@@ -14347,3 +14347,39 @@ suggestion would then claim a fit nobody measured.
 **Not yet.** A weight limit per box. Keeping a thing upright: everything lies
 on its biggest side. A carton already open is not counted: the suggestion is
 for what is left, as though starting fresh.
+
+### D196: A thing can ship as it is, and a box says whether to suggest it
+
+*Adopted 2026-10-03, with migration 113. Amends D195.*
+
+**Decision.**
+- **A box says whether the suggestion may choose it** (`package_type.suggested`,
+  on unless said). Workspace lists the workspace's boxes with a tick for each
+  (`POST /package-types/{id}/suggested`). Every box can still be chosen by
+  hand. Pallets and skids are never suggested.
+- **A subject says whether it ships as it is**, rather than going into a box
+  (`subject_shipping`, `POST /shipping`). It is said of a capture subject as
+  "packed in" is (D191): the newest saying wins, a variant takes its item's
+  carton's, and an item's carton takes its family's carton's. When nobody has
+  said, a carton ships as it is and an each or an inner pack does not
+  (`ships_as_is()`). It is its own fact rather than a reading of the packaging
+  type, because a retail box (`BX`) is not always fit to travel alone and a case
+  (`CS`) can still go into a bigger box. The item card shows it under "Ships",
+  with one press to say the other.
+- **A package can be one of an item as it is, at any level**
+  (`package.own_item_id`, `own_level`). A carton or an inner pack keeps its case
+  pack alongside, which is where the count in it comes from; an each has none.
+  Existing own cartons became one of their item as a carton. The bench's
+  "own cartons" press became "ship as they are" at any level: one package
+  each, made, filled and sealed.
+- **The suggestion** takes each line biggest first: cartons while the count
+  fills one, then inner packs, then eaches. A level that ships as it is goes to
+  the carrier on its own and is listed with its press. A level that does not
+  is boxed if its size is recorded; otherwise its units are taken a level
+  down. Only suggested boxes are chosen. Things with no size to measure count
+  toward the weight of the box they go round.
+
+**Why.** The suggestion put three rolls of wipers into a shovel box. Each roll
+comes in a box of its own and can go to the carrier as it is. The shovel box
+was the smallest box that took them, but nobody sends wipers in one. Neither
+fact could be read from anything recorded.

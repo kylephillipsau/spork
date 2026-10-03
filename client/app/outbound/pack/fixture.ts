@@ -73,6 +73,7 @@ export const PACK_FIXTURE: BenchScreen = {
           level: "each",
           units: 1,
           size: { length_mm: 280, width_mm: 220, height_mm: 30 },
+          ships_as_is: false,
           no_size: false,
           gross_weight_g: 180,
           source: "own",
@@ -103,7 +104,20 @@ export const PACK_FIXTURE: BenchScreen = {
       remaining: 20,
       cells: [],
       picture: null,
-      packs: [],
+      // Ten to a carton, and a carton ships as it is unless somebody says not (D196).
+      packs: [
+        {
+          level: "carton",
+          units: 10,
+          ships_as_is: true,
+          size: { length_mm: 420, width_mm: 310, height_mm: 260 },
+          no_size: false,
+          gross_weight_g: 3600,
+          source: "style",
+          style_code: "SLV-PE",
+          faces: {},
+        },
+      ],
       // **Thirty picked, ten already shipped in their own carton.** Ten to a
       // carton, so the other twenty are two more cartons as they came, which is
       // the press the fixture exists to show (migration 98).
@@ -131,6 +145,7 @@ export const PACK_FIXTURE: BenchScreen = {
       sequence: "1",
       package_type: "small box",
       own_carton_of: null,
+      own_level: null,
       listed_weight_g: null,
       sealed: true,
       gross_weight_g: 4200,
@@ -163,6 +178,7 @@ export const PACK_FIXTURE: BenchScreen = {
       sequence: "2",
       package_type: "PALLET",
       own_carton_of: null,
+      own_level: null,
       listed_weight_g: null,
       sealed: false,
       gross_weight_g: null,
@@ -206,6 +222,7 @@ export const PACK_FIXTURE: BenchScreen = {
       sequence: "3",
       package_type: "SKID",
       own_carton_of: null,
+      own_level: null,
       listed_weight_g: null,
       sealed: false,
       gross_weight_g: null,
@@ -224,6 +241,7 @@ export const PACK_FIXTURE: BenchScreen = {
       sequence: "4",
       package_type: null,
       own_carton_of: "SLV-PE-BLU",
+      own_level: "carton",
       listed_weight_g: 3600,
       sealed: true,
       gross_weight_g: null,
@@ -243,10 +261,10 @@ export const PACK_FIXTURE: BenchScreen = {
     },
   ],
   presets: [
-    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 } },
-    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 } },
-    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null },
-    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 }, suggested: true },
+    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true },
+    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true },
+    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true },
   ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };

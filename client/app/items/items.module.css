@@ -505,3 +505,11 @@
   justify-content: space-between;
   gap: var(--ui-space-2);
 }
+
+/* Whether it ships as it is (D196): the answer, then the press that changes it. */
+.ships {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}

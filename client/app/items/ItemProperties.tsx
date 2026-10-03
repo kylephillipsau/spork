@@ -259,6 +259,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           <Fact label="Packed in" always>
             {packedInWords(subject, desk.packagingTypes)}
           </Fact>
+          {subject.packaging_level && <Ships subject={subject} desk={desk} />}
           {carton && (
             <Fact label="Holds" always>
               {item.packing?.inners_per_carton != null ? holdsInWords(item.packing) : <Faint>{holdsInWords(item.packing)}</Faint>}
@@ -672,6 +673,34 @@ function packedInWords(subject: CaptureSubject, types: PackagingType[]): ReactNo
   if (subject.packed_in_source === "style") return `${name} (the family's)`;
   if (subject.packed_in_source === "item") return `${name} (the item's carton)`;
   return name;
+}
+
+/**
+ * Whether it goes to the carrier as it is or into a box (D196), whose saying
+ * that is, and one press to say the other. Unsaid, a carton ships as it is and
+ * an each or an inner pack goes into a box; a roll in its own box is the kind
+ * of thing somebody says otherwise about.
+ */
+function Ships({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+  const words = subject.ships_as_is ? "As it is" : "In a box";
+  const whose =
+    subject.ships_as_is_source === "style"
+      ? " (the family's)"
+      : subject.ships_as_is_source === "item"
+        ? " (the item's carton)"
+        : subject.ships_as_is_source === "default"
+          ? " unless said"
+          : "";
+  return (
+    <Fact label="Ships" always>
+      <span className={s.ships}>
+        {subject.ships_as_is_source === "own" ? words : <Faint>{`${words}${whose}`}</Faint>}
+        <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.shipAsIs(subject, !subject.ships_as_is)}>
+          {subject.ships_as_is ? "Goes in a box" : "Ships as it is"}
+        </Button>
+      </span>
+    </Fact>
+  );
 }
 
 /**

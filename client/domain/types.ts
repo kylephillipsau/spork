@@ -37,16 +37,18 @@ export interface BenchLine {
   own_carton: OwnCarton | null;
   /** What to look for (D141): its box drawn, or its front, saying whose. */
   picture: Picture | null;
-  /** One of it as it goes into a box, as an each and as an inner pack, for the
-   *  suggested arrangement (D195). A level nothing is recorded at is absent. */
+  /** One of it at each level it can leave at (D195): an each; an inner pack and
+   *  a carton when the case pack counts them. Whether each ships as it is (D196). */
   packs: PackUnit[];
 }
 
 /** One of an item at a packaging level, as a suggested arrangement places it (D195). */
 export interface PackUnit {
-  level: "each" | "inner";
+  level: "each" | "inner" | "carton";
   /** Eaches in one of it. */
   units: number;
+  /** It goes to the carrier as it is rather than into a box (D196). */
+  ships_as_is: boolean;
   size: StatedSize | null;
   /** Somebody said it has no size to measure (D138): it goes in round the rest. */
   no_size: boolean;
@@ -89,6 +91,25 @@ export interface Preset {
   name: string;
   /** The box's inside, when it claims a fixed size: what an arrangement fits against (D195). */
   size: StatedSize | null;
+  /** The suggestion may choose it (D196). Any box can still be chosen by hand. */
+  suggested: boolean;
+}
+
+/** `GET /package-types`: a box preset as Workspace lists it. */
+export interface PackageTypeRow {
+  id: Uuid;
+  name: string;
+  carrier_package_code: string | null;
+  dimensions_fixed: boolean;
+  length_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  tare_weight_g: number | null;
+  reusable: boolean;
+  max_payload_g: number | null;
+  tenant_owned: boolean;
+  /** The pack bench's suggestion may choose it (D196). */
+  suggested: boolean;
 }
 
 /** A box states its size; a pallet's height is the stack and only the
@@ -143,8 +164,10 @@ export interface CartonSummary {
   id: Uuid;
   sequence: string;
   package_type: string | null;
-  /** The item, when this is one carton of it rather than a box type (migration 98). */
+  /** The item, when this is one of it as it is rather than a box type (migration 98, D196). */
   own_carton_of: string | null;
+  /** Which of it: `carton`, `inner` or `each` (D196). */
+  own_level: "each" | "inner" | "carton" | null;
   /** A product's own carton's weight by the record. Listed, never weighed here. */
   listed_weight_g: number | null;
   sealed: boolean;
@@ -337,6 +360,10 @@ export interface CaptureSubject {
   packed_in: string | null;
   /** Whose saying that is: `own`, `item` (a variant's item's carton) or `style` (its family's carton). */
   packed_in_source: string | null;
+  /** It goes to the carrier as it is rather than into a box (D196). */
+  ships_as_is: boolean;
+  /** `own`, `item`, `style`, or `default` when nobody has said. */
+  ships_as_is_source: string;
   /** Photographed side by side, cut to its faces and drawn: six-sided, or nothing said. */
   box_shaped: boolean;
   /** `own`, `style` or `mixed` — D108. A screen that cannot tell them apart
