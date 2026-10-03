@@ -4,7 +4,7 @@ import { ApiError, api, reason } from "@domain/api";
 import { transient } from "@domain/outbox";
 import type { PickLine, PickListScreen, RecordPickResponse, Uuid } from "@domain/types";
 import { useChanges } from "@app/changes";
-import { picks, usePickOutbox, type HeldPick } from "@app/outbox";
+import { picks, pressing, usePickOutbox, type HeldPick } from "@app/outbox";
 import { claimFor, fold, merge, offered, overlay } from "./walk";
 import { useSession, useSite } from "@app/session/SessionContext";
 
@@ -322,6 +322,7 @@ export function usePicking(): PickBench {
         if (owner && who) picks.put({ key, owner, ownerName: who.display_name, body });
 
         let answer: RecordPickResponse;
+        pressing.add(key);
         try {
           answer = await api.pick({ ...body, act });
         } catch (error) {
@@ -337,6 +338,8 @@ export function usePicking(): PickBench {
           }
           picks.drop(key);
           throw error;
+        } finally {
+          pressing.delete(key);
         }
 
         // **Patched, not re-read.** The response carries the live fold for the

@@ -138,14 +138,24 @@ export class Outbox<T> {
    * it won't be either. `sent` hears each reply before its act is dropped, so a
    * screen can show what the server recorded without a gap.
    *
+   * `busy` names acts a screen is sending itself right now. They are left to
+   * it, so its answer is the only one: a press shows the server's refusal,
+   * and the same act sent from here at the same moment must not record
+   * what the press was told was refused.
+   *
    * Returns how many of this owner's are still waiting.
    */
-  async drain<R>(owner: string, send: (body: T) => Promise<R>, sent?: (entry: Held<T>, reply: R) => void): Promise<number> {
+  async drain<R>(
+    owner: string,
+    send: (body: T) => Promise<R>,
+    sent?: (entry: Held<T>, reply: R) => void,
+    busy?: (key: string) => boolean,
+  ): Promise<number> {
     if (!this.sending) {
       this.sending = true;
       try {
         for (const entry of this.list()) {
-          if (entry.owner !== owner || entry.refused !== undefined) continue;
+          if (entry.owner !== owner || entry.refused !== undefined || busy?.(entry.key)) continue;
           // Sent or dropped elsewhere while this one was on its way.
           if (!this.list().some((e) => e.key === entry.key && e.refused === undefined)) continue;
           try {

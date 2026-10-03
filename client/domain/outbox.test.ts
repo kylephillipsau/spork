@@ -87,6 +87,16 @@ test("somebody else's acts wait for them", async () => {
   assert.deepEqual(box.list().map((e) => e.key), ["p1"], "Priya's is still kept");
 });
 
+test("an act a screen is sending itself is left to it, and still waits", async () => {
+  const box = new Outbox<{ n: number }>(memory());
+  box.put(held("p1"));
+  box.put(held("p2"));
+  const sent: number[] = [];
+  const left = await box.drain(SAM, async (body) => sent.push(body.n), undefined, (key) => key === "p1");
+  assert.deepEqual(sent, [2], "only the one nobody else is sending");
+  assert.equal(left, 1, "p1 is still waiting, for the press to settle");
+});
+
 test("a lapsed session or a server error is worth trying again; a refusal is not", () => {
   for (const error of [unreachable(), answered(401), answered(408), answered(429), answered(500), answered(503)]) {
     assert.ok(transient(error), String((error as { status?: number }).status ?? "no answer"));

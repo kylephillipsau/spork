@@ -34,6 +34,14 @@ const NAME = "spork.outbox.picks";
 
 export const picks = new Outbox<HeldPick>(deviceStore(NAME));
 
+/**
+ * Picks a press is sending right now. The outbox leaves them to it, so a
+ * refused claim at the shelf stops the pick, as D207 says, rather than being
+ * recorded anyway by a send from here at the same moment. In memory only: after
+ * a reload nothing is being pressed, and a kept pick is sent as usual.
+ */
+export const pressing = new Set<string>();
+
 // Another tab on this device sent or kept one.
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
@@ -96,7 +104,12 @@ export function usePickOutbox(
 
   const send = useCallback(async () => {
     if (!owner) return;
-    await picks.drain(owner, sendPick, (entry, reply) => latest.current(entry, reply));
+    await picks.drain(
+      owner,
+      sendPick,
+      (entry, reply) => latest.current(entry, reply),
+      (key) => pressing.has(key),
+    );
   }, [owner]);
 
   const view = useMemo(() => {
