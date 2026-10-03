@@ -122,6 +122,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   were only ever inserted by `fixtures/seed.sql`, so on a database built by
   migrations alone every handover into a carton failed. They are a migration
   now, with the seed's fixed ids.
+- D203, migration 116. A claim's hold on a bin is reduced by what has been
+  picked from it (`stock_claim_hold`, J3 amended); a picked bin no longer
+  reads fewer than nothing available.
+- D204, migration 117. The walk and its badge read what is left to pick live
+  (`line_to_pick`), and leave out what NetSuite reports picked.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

@@ -90,6 +90,21 @@ async fn goods_picked_elsewhere_arrive_where_they_are_put() {
     // A line of a fixture fulfilment that nobody reported picked.
     let unreported: Uuid = "f11e0000-0000-0000-0000-000000000001".parse().unwrap();
 
+    // ── what NetSuite picked is not on Spork's walk (migration 117) ─────
+    let walk: Value = common::ok_json(
+        &app,
+        test::TestRequest::get()
+            .uri("/sites/a5170000-0000-0000-0000-000000000001/picking")
+            .insert_header(("authorization", session.clone()))
+            .to_request(),
+        "GET /sites/{id}/picking",
+    )
+    .await;
+    assert!(
+        !walk["lines"].as_array().unwrap().iter().any(|l| l["fulfilment_line_id"] == line.to_string()),
+        "a line picked in NetSuite was on the walk, for somebody to pick again: {walk}"
+    );
+
     let hand = |line: Uuid, qty: i64, event: Uuid| {
         test::TestRequest::post()
             .uri("/handovers")

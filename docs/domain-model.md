@@ -14529,3 +14529,22 @@ done the same. Moving claims onto the goods' new cell at each pick would need a
 stock rebuild on every pick, which D107 rules out, or a projection writing
 intentions. A fold reduced by the movements that are already there needs
 neither.
+
+### D204: What is left to pick is read live, and what another system picked is not picked again
+
+*Adopted 2026-10-04, with migration 117. Amends D141 and D172.*
+
+**Decision.** The picking walk and its badge read what is left to pick from
+`line_to_pick(site)`: for each open line, what it commits less what was picked
+here out of storage (D166, net of corrections) and less what another system
+reports picked (each external line's newest report, D172). It is never below
+nothing. Both the walk and the badge read it live from the ledger, not from
+`fulfilment_line.picked_quantity`.
+
+**Why.** A line NetSuite had picked stayed on the walk, so somebody could be
+sent to a shelf for goods already on their way to the bench: D172 reports those
+picks rather than moving them, so the cached picked quantity never counted
+them. And the walk read a cache that waits for the scheduler, so a line picked
+a moment ago came back on the next read. With devices about to be told of every
+pick as it happens (docs/picking-plan.md), the next read comes straight after
+the pick.

@@ -58,10 +58,12 @@ pub struct PickLine {
     /// bin nobody has placed on the route.
     pub pick_sequence: Option<i32>,
     pub lot_code: Option<String>,
-    /// Still to pick on this line, in base units.
+    /// Still to pick on this line here, in base units: what it commits less
+    /// what was picked here and what another system reports picked, read live
+    /// (`line_to_pick`, migration 117).
     pub remaining: i64,
-    /// Already picked, folded. With `covered` this is what tells the screen how
-    /// much of what it is about to pick still needs claiming.
+    /// Picked here out of storage, read live. With `covered` this is what tells
+    /// the screen how much of what it is about to pick still needs claiming.
     pub picked: i64,
     /// **How much of this line is spoken for**, over every covering state
     /// (`allocating::COVERING`, J31) and every cell — not just `cell`.
@@ -151,8 +153,8 @@ static LINES: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             cell.location_code,
             cell.pick_sequence,
             cell.lot_code,
-            (fl.quantity - fl.picked_quantity)::bigint,
-            fl.picked_quantity::bigint,
+            tp.to_pick,
+            tp.picked,
             coalesce((SELECT sum(sa.quantity)::bigint
                         FROM stock_allocation sa
                        WHERE sa.fulfilment_line_id = fl.id
@@ -163,6 +165,9 @@ static LINES: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             p.digest,
             p.source
        FROM fulfilment_line fl
+       -- What is left to pick here, live (migration 117): picked here out of
+       -- storage and reported picked elsewhere, so neither comes back.
+       JOIN line_to_pick($1) tp ON tp.fulfilment_line_id = fl.id
        JOIN fulfilment f ON f.id = fl.fulfilment_id
        JOIN order_line ol ON ol.id = fl.order_line_id
        JOIN \"order\" o ON o.id = f.order_id
@@ -192,10 +197,7 @@ static LINES: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
                       s.id
              LIMIT 1
        ) cell ON true
-      WHERE f.site_id = $1
-        AND f.state <> 'cancelled'
-        AND f.closed_elsewhere IS NULL
-        AND fl.picked_quantity < fl.quantity
+      WHERE tp.to_pick > 0
       ORDER BY cell.pick_sequence NULLS LAST, i.code, fl.id
       LIMIT $2",
         picture = pictures::PICTURE_CTE

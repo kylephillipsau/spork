@@ -144,6 +144,25 @@ async fn a_trolley_pick_lands_at_the_station_and_is_picked_exactly_once() {
             .expect("the shelf's cell")
     };
     let (shelf_held, shelf_claimed) = shelf_now().await;
+    let walk_left = || async {
+        let walk: Value = common::ok_json(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/sites/{SITE}/picking"))
+                .insert_header(("authorization", bearer.clone()))
+                .to_request(),
+            "GET /sites/{id}/picking",
+        )
+        .await;
+        walk["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["fulfilment_line_id"] == line_id.to_string())
+            .map(|l| l["remaining"].as_i64().unwrap())
+            .unwrap_or(0)
+    };
+    let left_before = walk_left().await;
 
     common::ok_json(
         &app,
@@ -184,6 +203,11 @@ async fn a_trolley_pick_lands_at_the_station_and_is_picked_exactly_once() {
         .expect("the movement");
     assert_eq!(to_loc, Some(Uuid::parse_str(STATION).unwrap()));
     assert_eq!(to_pkg, None, "a pick to a location named a package as well");
+
+    // **The walk reads it live (migration 117).** Before the fold runs, the
+    // walk already counts the unit picked: a line read back from a cache would
+    // ask for it again.
+    assert_eq!(walk_left().await, left_before - 1, "the unit just picked is still on the walk");
 
     fold(&db).await;
     let (_, picked_walk, packed_walk) = progress(&db, line_id).await;

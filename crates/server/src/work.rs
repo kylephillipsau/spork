@@ -86,19 +86,14 @@ pub async fn waiting(
                 Ok(tx
                     .query_one(
                         &format!("SELECT
-                           (SELECT count(*) FROM fulfilment f
-                             WHERE f.site_id = $1
-                               AND f.state <> 'cancelled'
-                               AND f.closed_elsewhere IS NULL
-                               AND EXISTS (SELECT 1 FROM fulfilment_line fl
-                                            WHERE fl.fulfilment_id = f.id
-                                              AND fl.picked_quantity < fl.quantity)),
-                           (SELECT count(*) FROM fulfilment_line fl
-                              JOIN fulfilment f ON f.id = fl.fulfilment_id
-                             WHERE f.site_id = $1
-                               AND f.state <> 'cancelled'
-                               AND f.closed_elsewhere IS NULL
-                               AND fl.picked_quantity < fl.quantity),
+                           -- What is left to pick, as the walk reads it
+                           -- (migration 117): live, and not what was picked
+                           -- elsewhere.
+                           (SELECT count(DISTINCT fl.fulfilment_id)
+                              FROM line_to_pick($1) tp
+                              JOIN fulfilment_line fl ON fl.id = tp.fulfilment_line_id
+                             WHERE tp.to_pick > 0),
+                           (SELECT count(*) FROM line_to_pick($1) tp WHERE tp.to_pick > 0),
                            -- Sealed and on no consignment: the despatch bench's
                            -- own definition of a carton waiting.
                            (SELECT count(*) FROM package p
