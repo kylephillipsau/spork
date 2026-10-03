@@ -27,12 +27,15 @@ import { codesFrom } from "./lists";
 
 export type Stock = "" | "here";
 export type Needs = "" | "weighing" | "measuring" | "photo";
+/** What has been done, to look over: the other way round from `Needs`. */
+export type Has = "" | "measured" | "photographed" | "both";
 export type Order = "" | "demand" | "walk" | "list";
 
 export interface Asked {
   q: string;
   stock: Stock;
   needs: Needs;
+  has: Has;
   /** A list of items to work through, by id; "" for none (D179). */
   list: string;
   order: Order;
@@ -66,18 +69,21 @@ export interface ItemsDesk {
 }
 
 const NEEDS: readonly Needs[] = ["weighing", "measuring", "photo"];
+const HAS: readonly Has[] = ["measured", "photographed", "both"];
 const ORDERS: readonly Order[] = ["demand", "walk", "list"];
 
 /** The question in a URL's query string, and back. */
 export function askedFrom(search: string): Asked & { item: string | null } {
   const p = new URLSearchParams(search);
   const needs = p.get("needs") as Needs;
+  const has = p.get("has") as Has;
   const order = p.get("order") as Order;
   const list = p.get("list") ?? "";
   return {
     q: p.get("q") ?? "",
     stock: p.get("stock") === "here" ? "here" : "",
     needs: NEEDS.includes(needs) ? needs : "",
+    has: HAS.includes(has) ? has : "",
     list,
     // A list's own order needs the list.
     order: ORDERS.includes(order) && (order !== "list" || list) ? order : "",
@@ -89,6 +95,7 @@ function queryOf(a: Asked): {
   q?: string;
   stock?: "here";
   needs?: Exclude<Needs, "">;
+  has?: Exclude<Has, "">;
   list?: string;
   order?: Exclude<Order, "">;
 } {
@@ -96,6 +103,7 @@ function queryOf(a: Asked): {
     ...(a.q.trim() ? { q: a.q.trim() } : {}),
     ...(a.stock ? { stock: a.stock } : {}),
     ...(a.needs ? { needs: a.needs } : {}),
+    ...(a.has ? { has: a.has } : {}),
     ...(a.list ? { list: a.list } : {}),
     ...(a.order ? { order: a.order } : {}),
   };
@@ -114,6 +122,7 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
     q: initial.q,
     stock: initial.stock,
     needs: initial.needs,
+    has: initial.has,
     list: initial.list,
     order: initial.order,
   });
@@ -194,7 +203,7 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
       if (!list || !live.current) return false;
       await readLists();
       setChosen(null);
-      setAsked((a) => ({ ...a, q: "", stock: "", needs: "", list: list.item_list_id, order: "list" }));
+      setAsked((a) => ({ ...a, q: "", stock: "", needs: "", has: "", list: list.item_list_id, order: "list" }));
       setTyped("");
       return true;
     },

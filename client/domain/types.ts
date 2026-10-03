@@ -35,6 +35,27 @@ export interface BenchLine {
   /** Present when a carton of this item has a known count, so whole cartons can
    *  ship as they are (migration 98). */
   own_carton: OwnCarton | null;
+  /** What to look for (D141): its box drawn, or its front, saying whose. */
+  picture: Picture | null;
+  /** One of it as it goes into a box, as an each and as an inner pack, for the
+   *  suggested arrangement (D195). A level nothing is recorded at is absent. */
+  packs: PackUnit[];
+}
+
+/** One of an item at a packaging level, as a suggested arrangement places it (D195). */
+export interface PackUnit {
+  level: "each" | "inner";
+  /** Eaches in one of it. */
+  units: number;
+  size: StatedSize | null;
+  /** Somebody said it has no size to measure (D138): it goes in round the rest. */
+  no_size: boolean;
+  gross_weight_g: number | null;
+  /** `own`, `style` or `mixed` (D108). */
+  source: string;
+  style_code: string | null;
+  /** Its sides cut from photographs (D176), by face, to draw it with. */
+  faces: Partial<Record<"front" | "back" | "left" | "right" | "top" | "bottom", string>>;
 }
 
 /** The product's own carton: how many are in one, and what one measures by the record. */
@@ -66,6 +87,8 @@ export interface PickedElsewhere {
 export interface Preset {
   id: Uuid;
   name: string;
+  /** The box's inside, when it claims a fixed size: what an arrangement fits against (D195). */
+  size: StatedSize | null;
 }
 
 /** A box states its size; a pallet's height is the stack and only the

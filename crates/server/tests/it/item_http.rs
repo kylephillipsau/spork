@@ -179,6 +179,45 @@ async fn the_item_list_finds_narrows_and_pages() {
     let (status, _) = list("?needs=photo").await;
     assert_eq!(status, 200);
 
+    // ── has: what has been done, the other way round from needs ─────────
+    let (status, _) = list("?has=everything").await;
+    assert_eq!(status, 400, "a filter that is not one is refused, not ignored");
+    let (status, measured) = list("?has=measured&limit=200").await;
+    assert_eq!(status, 200, "{measured}");
+    assert!(
+        measured["items"].as_array().unwrap().iter().all(|i| i["weight"] == "measured" || i["size"] == "measured"),
+        "measured lists only what has a weight or a size measured: {measured}"
+    );
+    let (_, everything) = list("?limit=1").await;
+    let (_, unweighed_all) = list("?needs=weighing&limit=1").await;
+    let (_, unsized_all) = list("?needs=measuring&limit=1").await;
+    assert!(
+        measured["total"].as_i64().unwrap() >= everything["total"].as_i64().unwrap() - unweighed_all["total"].as_i64().unwrap(),
+        "everything weighed is in it"
+    );
+    assert!(
+        measured["total"].as_i64().unwrap() >= everything["total"].as_i64().unwrap() - unsized_all["total"].as_i64().unwrap(),
+        "and everything sized"
+    );
+    let (status, photographed) = list("?has=photographed&limit=200").await;
+    assert_eq!(status, 200, "{photographed}");
+    assert!(
+        photographed["items"].as_array().unwrap().iter().all(|i| i["picture"].is_object()),
+        "photographed lists only what has a picture: {photographed}"
+    );
+    let (_, unpictured) = list("?needs=photo&limit=1").await;
+    assert_eq!(
+        photographed["total"].as_i64().unwrap() + unpictured["total"].as_i64().unwrap(),
+        everything["total"].as_i64().unwrap(),
+        "has a picture and needs one split every item between them"
+    );
+    let (status, both) = list("?has=both&limit=200").await;
+    assert_eq!(status, 200, "{both}");
+    assert!(
+        both["items"].as_array().unwrap().iter().all(|i| i["picture"].is_object() && (i["weight"] == "measured" || i["size"] == "measured")),
+        "both is both: {both}"
+    );
+
     // ── ordered by how much it is ordered, or the way the bins are walked ─
     let (status, _) = list("?order=size").await;
     assert_eq!(status, 400, "an order that is not one is refused");

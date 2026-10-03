@@ -87,6 +87,18 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   their key and repoints what named them, and a reference to nothing refuses
   the restore.
 
+**Packing**
+- D195. The pack bench shows each line's picture, and each carton row's. Above
+  the cartons it suggests a box for what is left and how it goes in, layer by
+  layer: a plan from above (`Suggestion.tsx`) or 3D (`pack3d.ts`, its own
+  chunk). The arrangement is `arrange.ts`, tested in `arrange.test.ts`. The
+  bench read now carries each line's `picture` and `packs` (an each and an
+  inner, with sizes and cut sides) and each preset's `size`. An each with no
+  size is listed with Measure, not guessed at.
+- Items can be narrowed to what has been done as well as what needs doing:
+  Measured, Photographed, or both (`GET /items?has=`), the other way round
+  from `needs`, family figures and pictures counting as they do there.
+
 ## Known limits
 
 - Firefox finds faces about 13 times slower than Chrome or Edge: 78 s against

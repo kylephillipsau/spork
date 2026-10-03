@@ -27,7 +27,7 @@ import { Faint } from "@app/common/cells";
 
 import { ItemDrawer } from "./ItemProperties";
 import type { PropertiesDesk } from "./useItemProperties";
-import type { ItemsDesk, Needs, Order, Stock } from "./useItems";
+import type { Has, ItemsDesk, Needs, Order, Stock } from "./useItems";
 import s from "./items.module.css";
 
 /**
@@ -46,7 +46,7 @@ import s from "./items.module.css";
 export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: PropertiesDesk | undefined }) {
   const st = desk.state;
   const ready = st.kind === "ready" ? st : null;
-  const narrowed = desk.asked.q.trim() || desk.asked.stock || desk.asked.needs || desk.asked.list;
+  const narrowed = desk.asked.q.trim() || desk.asked.stock || desk.asked.needs || desk.asked.has || desk.asked.list;
   const [making, setMaking] = useState(false);
   const rows = ready?.items ?? [];
   const at = rows.findIndex((r) => r.item_id === desk.chosen);
@@ -86,16 +86,24 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
             ]}
           />
           <div className={s.needs}>
+            {/* What still needs doing, or what has been done to look it over:
+                one question at a time, so choosing one clears the other. */}
             <Select
-              aria-label="Needs"
+              aria-label="Recorded"
               size="sm"
-              value={desk.asked.needs || "any"}
-              onValueChange={(v) => desk.narrow({ needs: (v === "any" ? "" : v) as Needs })}
+              value={desk.asked.needs ? `needs:${desk.asked.needs}` : desk.asked.has ? `has:${desk.asked.has}` : "any"}
+              onValueChange={(v) => {
+                const [side, what = ""] = v.split(":");
+                desk.narrow({ needs: (side === "needs" ? what : "") as Needs, has: (side === "has" ? what : "") as Has });
+              }}
               options={[
                 { value: "any", label: "Whatever’s recorded" },
-                { value: "weighing", label: "Needs weighing" },
-                { value: "measuring", label: "Needs measuring" },
-                { value: "photo", label: "Needs a photo" },
+                { value: "has:measured", label: "Measured" },
+                { value: "has:photographed", label: "Photographed" },
+                { value: "has:both", label: "Measured and photographed" },
+                { value: "needs:weighing", label: "Needs weighing" },
+                { value: "needs:measuring", label: "Needs measuring" },
+                { value: "needs:photo", label: "Needs a photo" },
               ]}
             />
           </div>

@@ -387,6 +387,10 @@ pub struct ItemsQuery {
     /// `measuring`: no size measured here. `photo`: no picture of its front,
     /// its own or its family's.
     pub needs: Option<String>,
+    /// The other way round: `measured`, a weight or a size measured here (or
+    /// said to have none); `photographed`, a picture of it, its own or its
+    /// family's; `both`, the two together. What has been done, to look over.
+    pub has: Option<String>,
     /// Only the items on this list (D179).
     pub list: Option<Uuid>,
     /// `code` (the default), `demand` (most ordered first), `walk` (in the
@@ -530,6 +534,17 @@ pub async fn item_list(
         }
         None => (false, false, false),
     };
+    let (has_measured, has_photo) = match query.has.as_deref() {
+        Some("measured") => (true, false),
+        Some("photographed") => (false, true),
+        Some("both") => (true, true),
+        Some(other) => {
+            return Err(ApiError::Rejected(format!(
+                "has is measured, photographed or both, not {other}"
+            )))
+        }
+        None => (false, false),
+    };
     let list = query.list;
     let order = match query.order.as_deref() {
         None | Some("code") => Order::Code,
@@ -615,6 +630,9 @@ pub async fn item_list(
                             AND (NOT $6::bool OR NOT {sized})
                             AND (NOT $7::bool
                                  OR NOT EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
+                            AND (NOT $12::bool OR {weighed} OR {sized})
+                            AND (NOT $13::bool
+                                 OR EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
                      ),
                      page AS (
                          SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
@@ -670,7 +688,7 @@ pub async fn item_list(
                         &sql,
                         &[
                             &like, &codes, &here, &site, &weighing, &measuring, &photo,
-                            &after_code, &(limit + 1), &offset, &list,
+                            &after_code, &(limit + 1), &offset, &list, &has_measured, &has_photo,
                         ],
                     )
                     .await?;

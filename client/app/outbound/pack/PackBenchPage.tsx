@@ -20,13 +20,15 @@ import {
   Toolbar,
   type Column,
 } from "@ui/index";
-import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OwnCarton, PackedRow, StatedSize } from "@domain/types";
+import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OwnCarton, PackedRow, Picture, StatedSize, Uuid } from "@domain/types";
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { Faint } from "@app/common/cells";
+import { Thumb } from "@app/common/Thumb";
 import { kg } from "@app/common/format";
 import { ItemCode, ItemDrawer } from "@app/items/ItemProperties";
 
+import { Suggestion } from "./Suggestion";
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
 
@@ -64,6 +66,8 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
   }
 
   const screen = st.screen;
+  // Every item in a carton came from one of these lines.
+  const pictures = new Map(screen.lines.map((l) => [l.item_id, l.picture]));
   const left = screen.lines.reduce((t, l) => t + Math.max(0, l.remaining), 0);
   const draft = (l: BenchLine): Draft => drafts[l.line_id] ?? { cell: l.cells[0]?.stock_id ?? "", qty: String(l.remaining) };
   const change = (l: BenchLine, next: Partial<Draft>) => setDrafts((d) => ({ ...d, [l.line_id]: { ...draft(l), ...next } }));
@@ -107,11 +111,14 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       key: "item",
       header: "Item",
       cell: (l) => (
-        <span className={l.remaining === 0 ? s.done : undefined}>
-          <ItemCode code={l.item_code} onOpen={() => setLooking(l.item_id)} />
-          {/* An item made from a code alone has the code as its description;
-              saying it twice is noise. */}
-          {l.description && l.description !== l.item_code && <span className={s.desc}>{l.description}</span>}
+        <span className={s.itemCell}>
+          <Thumb picture={l.picture} alt={l.description ?? l.item_code} />
+          <span className={l.remaining === 0 ? `${s.itemText} ${s.done}` : s.itemText}>
+            <ItemCode code={l.item_code} onOpen={() => setLooking(l.item_id)} />
+            {/* An item made from a code alone has the code as its description;
+                saying it twice is noise. */}
+            {l.description && l.description !== l.item_code && <span className={s.desc}>{l.description}</span>}
+          </span>
         </span>
       ),
       grow: true,
@@ -258,13 +265,21 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
         </Card>
 
         <div className={s.cartons}>
+          <Suggestion screen={screen} bench={bench} look={setLooking} />
           <NewCarton screen={screen} bench={bench} />
           {screen.cartons.map((c) => (
-            <Carton key={c.id} carton={c} bench={bench} look={setLooking} />
+            <Carton key={c.id} carton={c} bench={bench} look={setLooking} pictures={pictures} />
           ))}
         </div>
       </div>
-      <ItemDrawer itemId={looking} onClose={() => setLooking(null)} />
+      {/* Read again on closing: a size recorded in it changes the suggestion. */}
+      <ItemDrawer
+        itemId={looking}
+        onClose={() => {
+          setLooking(null);
+          bench.refresh();
+        }}
+      />
     </Page>
   );
 }
@@ -302,7 +317,17 @@ function NewCarton({ screen, bench }: { screen: BenchScreen; bench: PackBench })
   );
 }
 
-function Carton({ carton, bench, look }: { carton: CartonSummary; bench: PackBench; look: (itemId: string) => void }) {
+function Carton({
+  carton,
+  bench,
+  look,
+  pictures,
+}: {
+  carton: CartonSummary;
+  bench: PackBench;
+  look: (itemId: string) => void;
+  pictures: Map<Uuid, Picture | null>;
+}) {
   const stated = carton.stated_size?.height_mm ?? null;
   const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : (carton.gross_weight_g / 1000).toFixed(3));
   const [height, setHeight] = useState(String(carton.height_mm ?? stated ?? ""));
@@ -311,7 +336,17 @@ function Carton({ carton, bench, look }: { carton: CartonSummary; bench: PackBen
   const footprint = carton.stated_size ? `${carton.stated_size.length_mm} × ${carton.stated_size.width_mm} mm` : null;
 
   const contentColumns: Column<PackedRow>[] = [
-    { key: "item", header: "Item", cell: (r) => <ItemCode code={r.item_code} onOpen={() => look(r.item_id)} />, grow: true },
+    {
+      key: "item",
+      header: "Item",
+      cell: (r) => (
+        <span className={s.itemCell}>
+          <Thumb picture={pictures.get(r.item_id) ?? null} alt={r.description ?? r.item_code} />
+          <ItemCode code={r.item_code} onOpen={() => look(r.item_id)} />
+        </span>
+      ),
+      grow: true,
+    },
     { key: "lot", header: "Lot", cell: (r) => r.lot_code ?? <Faint>—</Faint>, mono: true, width: "110px" },
     { key: "units", header: "Units", cell: (r) => r.quantity, align: "right", width: "70px" },
   ];

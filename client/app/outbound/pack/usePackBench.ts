@@ -34,6 +34,9 @@ export interface PackBench {
   /** What went wrong, in the sentence the handler wrote. */
   problem: string | null;
   dismiss: () => void;
+  /** Read the bench again: something it shows changed elsewhere, such as a size
+   *  recorded in the item drawer, which the suggested arrangement is made from. */
+  refresh: () => void;
   startCarton: (preset: Uuid) => Promise<void>;
   addToCarton: (input: { line: Uuid; stock: Uuid; quantity: number }) => Promise<void>;
   /** Goods picked elsewhere: into the open carton, else to the staging spot. */
@@ -105,6 +108,7 @@ export function usePackBench(fulfilment: Uuid): PackBench {
     busy,
     problem,
     dismiss,
+    refresh: () => void reload(),
 
     startCarton: (preset) =>
       press(`carton:${preset}`, async (act) => {

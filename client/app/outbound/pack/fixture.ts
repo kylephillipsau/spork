@@ -28,6 +28,8 @@ export const PACK_FIXTURE: BenchScreen = {
       remaining: 0,
       elsewhere: null,
       own_carton: null,
+      picture: null,
+      packs: [],
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000001",
@@ -45,6 +47,8 @@ export const PACK_FIXTURE: BenchScreen = {
       remaining: 0,
       elsewhere: null,
       own_carton: null,
+      picture: null,
+      packs: [],
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000002",
@@ -59,9 +63,23 @@ export const PACK_FIXTURE: BenchScreen = {
       item_id: "01990000-0000-7000-8000-00000000a003",
       item_code: "APR-PE-CLR-L",
       description: "Apron, polythene, clear, large",
-      remaining: 1,
+      remaining: 6,
       elsewhere: null,
       own_carton: null,
+      picture: null,
+      // Measured as an each, so the suggestion has something to arrange.
+      packs: [
+        {
+          level: "each",
+          units: 1,
+          size: { length_mm: 280, width_mm: 220, height_mm: 30 },
+          no_size: false,
+          gross_weight_g: 180,
+          source: "own",
+          style_code: null,
+          faces: {},
+        },
+      ],
       cells: [
         {
           stock_id: "570c0000-0000-0000-0000-000000000003",
@@ -84,6 +102,8 @@ export const PACK_FIXTURE: BenchScreen = {
       description: "Oversleeve, polythene, blue",
       remaining: 20,
       cells: [],
+      picture: null,
+      packs: [],
       // **Thirty picked, ten already shipped in their own carton.** Ten to a
       // carton, so the other twenty are two more cartons as they came, which is
       // the press the fixture exists to show (migration 98).
@@ -223,10 +243,10 @@ export const PACK_FIXTURE: BenchScreen = {
     },
   ],
   presets: [
-    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box" },
-    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box" },
-    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET" },
-    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID" },
+    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 } },
+    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 } },
+    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null },
   ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };

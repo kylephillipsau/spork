@@ -748,6 +748,8 @@ export const api = {
     q?: string;
     stock?: "here";
     needs?: "weighing" | "measuring" | "photo";
+    /** What has been done: measured, photographed, or both. */
+    has?: "measured" | "photographed" | "both";
     /** Only the items on this list (D179). */
     list?: Uuid;
     order?: "demand" | "walk" | "list";

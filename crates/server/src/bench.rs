@@ -16,6 +16,8 @@
 //! So `web/` and `routes.rs` both call in here, and neither holds SQL of its
 //! own for the bench. Nothing in this module writes.
 
+use std::collections::{BTreeMap, HashMap};
+
 use actix_web::web;
 use serde::Serialize;
 use uuid::Uuid;
@@ -23,6 +25,7 @@ use uuid::Uuid;
 use crate::auth::Caller;
 use crate::baseline::{self, Grams};
 use crate::error::ApiError;
+use crate::pictures::{self, Picture};
 use crate::tenancy::TenantScope;
 use crate::AppState;
 
@@ -82,6 +85,38 @@ pub struct BenchLine {
     /// Present when a carton of this item has a known count, so whole cartons
     /// of it can ship as they are (migration 98).
     pub own_carton: Option<OwnCarton>,
+    /// What to look for (D141): its box drawn, or its front, its own before
+    /// its family's, and saying whose.
+    pub picture: Option<Picture>,
+    /// One of it as it goes into a box, at each level it can be packed at,
+    /// for the suggested arrangement (D195). An each, and an inner pack when
+    /// the case pack says how many are in one.
+    pub packs: Vec<PackUnit>,
+}
+
+/// One of an item at a packaging level, as a suggested arrangement places it
+/// (D195): what it measures, what it weighs, and its sides to draw it with.
+///
+/// **What is recorded, and nothing guessed.** An each with no size is not
+/// given its carton's size divided by the count: it is left out of the
+/// arrangement and listed, so the packer can measure it there and then.
+#[derive(Serialize)]
+pub struct PackUnit {
+    /// `each` or `inner`.
+    pub level: String,
+    /// Eaches in one of it: one, or the units per inner of the case pack in force.
+    pub units: i64,
+    /// All three lengths, or nothing.
+    pub size: Option<StatedSize>,
+    /// Somebody said it has no size to measure (D138): a soft thing that goes
+    /// in round the rest rather than taking a place of its own.
+    pub no_size: bool,
+    pub gross_weight_g: Option<i64>,
+    /// `own`, `style` or `mixed` (D108): a family's figure says it is one.
+    pub source: String,
+    pub style_code: Option<String>,
+    /// Its sides cut from photographs (D176), by face, to draw it with.
+    pub faces: BTreeMap<String, String>,
 }
 
 /// The product's own carton, as its case pack and its carton's measurements say.
@@ -141,6 +176,11 @@ pub struct Cell {
 pub struct Preset {
     pub id: Uuid,
     pub name: String,
+    /// The box's inside, when it claims a fixed size and states all three: what
+    /// a suggested arrangement fits goods into (D195). A pallet or a skid has
+    /// none here, fixed or not: it carries cartons rather than holding goods,
+    /// and fitted against, the biggest "box" would always be a pallet.
+    pub size: Option<StatedSize>,
 }
 
 /// The preset's answer to how big a carton is, when it has one.
@@ -373,10 +413,13 @@ pub async fn bench_view(
                             document: r.get(2),
                             picked_by: r.get(3),
                         });
-                    let own_carton = own_carton(tx, item_id).await?;
+                    let measured = crate::routes::measurements_of(tx, item_id).await?;
+                    let case = case_pack(tx, item_id).await?;
                     out.push(BenchLine {
                         elsewhere,
-                        own_carton,
+                        own_carton: own_carton(case.as_ref(), &measured),
+                        picture: None,
+                        packs: packs_of(case.as_ref(), &measured),
                         line_id: l.get(0),
                         item_id,
                         item_code: l.get(1),
@@ -394,6 +437,7 @@ pub async fn bench_view(
                     });
                 }
 
+                looks(tx, &mut out).await?;
                 Ok(Bench {
                     reference: head.get(0),
                     order_reference: head.get(4),
@@ -409,16 +453,19 @@ pub async fn bench_view(
         .await
 }
 
-/// A carton of this item, when its case pack in force says how many are in one.
-///
-/// The newest case pack by `effective_from`, the rule `receiving` reads it by,
-/// and the carton's figures from [`crate::routes::measurements_of`], so the
-/// bench and the item page cannot disagree about what a carton measures.
-async fn own_carton(
+/// The case pack in force: the newest by `effective_from`, the rule
+/// `receiving` reads it by. Its id, units per inner and inners per carton.
+struct CasePack {
+    id: Uuid,
+    per_inner: Option<i32>,
+    inners: Option<i32>,
+}
+
+async fn case_pack(
     tx: &tokio_postgres::Transaction<'_>,
     item_id: Uuid,
-) -> Result<Option<OwnCarton>, ApiError> {
-    let Some(c) = tx
+) -> Result<Option<CasePack>, ApiError> {
+    Ok(tx
         .query_opt(
             "SELECT id, units_per_inner, inners_per_carton
                FROM item_packing_config
@@ -428,30 +475,137 @@ async fn own_carton(
             &[&item_id],
         )
         .await?
-    else {
-        return Ok(None);
-    };
-    let (Some(per_inner), Some(inners)) = (c.get::<_, Option<i32>>(1), c.get::<_, Option<i32>>(2))
-    else {
-        return Ok(None);
-    };
-    let units = i64::from(per_inner) * i64::from(inners);
+        .map(|c| CasePack {
+            id: c.get(0),
+            per_inner: c.get(1),
+            inners: c.get(2),
+        }))
+}
+
+/// A carton of this item, when its case pack in force says how many are in one.
+///
+/// The carton's figures are [`crate::routes::measurements_of`]'s, so the bench
+/// and the item page cannot disagree about what a carton measures.
+fn own_carton(
+    case: Option<&CasePack>,
+    measured: &[crate::routes::ItemMeasurements],
+) -> Option<OwnCarton> {
+    let c = case?;
+    let units = i64::from(c.per_inner?) * i64::from(c.inners?);
     if units <= 0 {
-        return Ok(None);
+        return None;
     }
-    let carton = crate::routes::measurements_of(tx, item_id)
-        .await?
-        .into_iter()
-        .find(|m| m.packaging_level == "carton");
-    Ok(Some(OwnCarton {
-        item_packing_config_id: c.get(0),
+    let carton = measured.iter().find(|m| m.packaging_level == "carton");
+    Some(OwnCarton {
+        item_packing_config_id: c.id,
         units,
-        size: carton.as_ref().and_then(size_of),
-        listed_weight_g: carton.as_ref().and_then(|m| m.gross_weight_g),
-        method: carton.as_ref().and_then(|m| m.method.clone()),
-        source: carton.as_ref().map(|m| m.source.clone()),
-        style_code: carton.and_then(|m| m.style_code),
-    }))
+        size: carton.and_then(size_of),
+        listed_weight_g: carton.and_then(|m| m.gross_weight_g),
+        method: carton.and_then(|m| m.method.clone()),
+        source: carton.map(|m| m.source.clone()),
+        style_code: carton.and_then(|m| m.style_code.clone()),
+    })
+}
+
+/// One of it as an each, and as an inner pack when the case pack counts one
+/// (D195). A level with nothing recorded is left out: the arrangement lists
+/// the item as not measured rather than placing a guess. Its sides and whether
+/// it has no size are filled in by [`looks`], for every line at once.
+fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements]) -> Vec<PackUnit> {
+    let per_inner = case.and_then(|c| c.per_inner).map(i64::from).filter(|n| *n > 0);
+    measured
+        .iter()
+        .filter_map(|m| {
+            let units = match m.packaging_level.as_str() {
+                "each" => 1,
+                "inner" => per_inner?,
+                _ => return None,
+            };
+            Some(PackUnit {
+                level: m.packaging_level.clone(),
+                units,
+                size: size_of(m),
+                no_size: false,
+                gross_weight_g: m.gross_weight_g,
+                source: m.source.clone(),
+                style_code: m.style_code.clone(),
+                faces: BTreeMap::new(),
+            })
+        })
+        .collect()
+}
+
+/// Each line's picture, and its eaches' and inners' sides and whether they
+/// have no size, in three reads for the whole screen rather than three a line.
+async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) -> Result<(), ApiError> {
+    let ids: Vec<Uuid> = lines.iter().map(|l| l.item_id).collect();
+    let pictured: HashMap<Uuid, Picture> = tx
+        .query(
+            &format!(
+                "WITH {} SELECT item_id, digest, source FROM picture WHERE item_id = ANY($1)",
+                pictures::PICTURE_CTE
+            ),
+            &[&ids],
+        )
+        .await?
+        .iter()
+        .filter_map(|r| pictures::from_row(r.get(1), r.get(2)).map(|p| (r.get(0), p)))
+        .collect();
+    // The newest cut of each side of its own each or inner (D176), not one
+    // moved to another subject. Only cut faces: an uncut photo is the bench
+    // behind the box as much as the box.
+    let mut faces: HashMap<(Uuid, String), BTreeMap<String, String>> = HashMap::new();
+    for r in tx
+        .query(
+            "SELECT DISTINCT ON (o.item_id, o.packaging_level, oi.face)
+                    o.item_id, o.packaging_level::text, oi.face, x.digest
+               FROM observable o
+               JOIN observation_event e ON e.observable_id = o.id
+               JOIN observation_image oi ON oi.observation_event_id = e.id
+               JOIN LATERAL (
+                    SELECT c.digest FROM observation_image_cut c
+                     WHERE c.observation_image_id = oi.id
+                     ORDER BY c.recorded_at DESC, c.id DESC
+                     LIMIT 1) x ON true
+              WHERE o.item_id = ANY($1)
+                AND o.packaging_level IN ('each', 'inner')
+                AND oi.face IN ('front', 'back', 'left', 'right', 'top', 'bottom')
+                AND NOT EXISTS (SELECT 1 FROM observation_image_move mv
+                                 WHERE mv.observation_image_id = oi.id)
+              ORDER BY o.item_id, o.packaging_level, oi.face, oi.captured_at DESC, oi.id DESC",
+            &[&ids],
+        )
+        .await?
+    {
+        faces.entry((r.get(0), r.get(1))).or_default().insert(r.get(2), r.get(3));
+    }
+    // "It has no size to measure" is all three lengths absent (D138), the
+    // reading `capture` gives it.
+    let sizeless: Vec<(Uuid, String)> = tx
+        .query(
+            "SELECT o.item_id, o.packaging_level::text
+               FROM observable o
+               JOIN observation_current oc ON oc.observable_id = o.id
+               JOIN metric m ON m.id = oc.metric_id
+              WHERE o.item_id = ANY($1) AND o.packaging_level IN ('each', 'inner')
+                AND m.code IN ('length', 'width', 'height')
+              GROUP BY o.item_id, o.packaging_level
+             HAVING count(*) FILTER (WHERE oc.absent_reason IS NOT NULL) = 3",
+            &[&ids],
+        )
+        .await?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
+    for line in lines.iter_mut() {
+        line.picture = pictured.get(&line.item_id).cloned();
+        for p in line.packs.iter_mut() {
+            let key = (line.item_id, p.level.clone());
+            p.faces = faces.remove(&key).unwrap_or_default();
+            p.no_size = p.size.is_none() && sizeless.contains(&key);
+        }
+    }
+    Ok(())
 }
 
 /// All three lengths, or nothing: two of three is not a carton's size.
@@ -495,7 +649,11 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
             Box::pin(async move {
                 let rows = tx
                     .query(
-                        "SELECT id, name FROM package_type
+                        "SELECT id, name,
+                                dimensions_fixed AND coalesce(carrier_package_code, '')
+                                    NOT IN ('PAL', 'SKI', 'SKD'),
+                                length_mm, width_mm, height_mm
+                           FROM package_type
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
                         &[],
@@ -506,6 +664,14 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                     .map(|r| Preset {
                         id: r.get(0),
                         name: r.get(1),
+                        size: match (r.get::<_, bool>(2), r.get(3), r.get(4), r.get(5)) {
+                            (true, Some(l), Some(w), Some(h)) => Some(StatedSize {
+                                length_mm: l,
+                                width_mm: w,
+                                height_mm: h,
+                            }),
+                            _ => None,
+                        },
                     })
                     .collect::<Vec<_>>())
             })

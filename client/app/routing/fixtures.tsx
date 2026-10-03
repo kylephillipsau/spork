@@ -264,6 +264,7 @@ function packBench(screen: BenchScreen = PACK_FIXTURE) {
         busy: false,
         problem: null,
         dismiss: () => {},
+        refresh: () => {},
         startCarton: noop,
         addToCarton: noop,
         handOver: noop,

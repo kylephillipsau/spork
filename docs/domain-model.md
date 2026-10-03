@@ -14306,3 +14306,44 @@ database other ids for those rows before restoring.
 A backup taken before this has no catalogue. It still restores when nothing in
 it names a catalogue row by a drawn id. If something does, such as a
 measurement taken "as supplied", the restore refuses and names the column.
+
+### D195: The pack bench suggests a box, and shows how it goes in
+
+*Adopted 2026-10-03.*
+
+**Decision.** Each line on the pack bench shows its picture, the one the
+picking walk shows (D141), and so does each row of a carton. Above the cartons
+the bench suggests a box for what is left to pack and how it goes in, layer by
+layer from the bottom. It shows this as a plan from above with each thing's
+picture, or in 3D with each thing made of its cut sides (D176). "Start <box>"
+starts a carton of it.
+
+- **What goes in.** A line's whole cartons ship as they are (migration 98) and
+  are left out. Then come inner packs, while the count fills one, if the inner
+  is measured and the case pack says how many are in one. Eaches come last.
+- **What a thing measures is what is recorded** at that level
+  (`measurements_of`, its own before its family's). An each with no size is
+  listed with Measure, which opens its drawer, and the suggestion is made
+  again when the drawer closes. Nothing is worked out from a carton's size
+  divided by its count. A thing with no size to measure (D138) goes in round
+  the rest of the roomiest box.
+- **Which box.** Only presets with a fixed size are candidates. Pallets and
+  skids are left out, because they carry cartons rather than hold goods. The
+  bench suggests the smallest box that takes everything. When no box does, it
+  takes the box that holds the most, then does the same for the rest.
+- **How it goes in.** Each layer starts with the biggest thing that still
+  fits. It lies on its biggest side, turned whichever way more of it fit
+  across. The floor round it, and the space on top of shorter things in the
+  layer, are filled largest first. There is no weight limit.
+
+**Why.** Chosen by eye, a box is too small often enough that a packer opens a
+second one. Many cartons and families are measured, but eaches mostly are
+not: on the first real data, none of the 232 open lines had an each size, and
+4 had a weight or "no size to measure" recorded at the each. So the bench says
+what is missing and offers to measure it. Dividing a carton's size by its count would
+assume a carton with no air, dividers or inner packs in it, and the
+suggestion would then claim a fit nobody measured.
+
+**Not yet.** A weight limit per box. Keeping a thing upright: everything lies
+on its biggest side. A carton already open is not counted: the suggestion is
+for what is left, as though starting fresh.

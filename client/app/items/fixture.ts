@@ -395,7 +395,7 @@ export function fixtureItems(
   chosen: string | null = null,
   over: Partial<ItemsDesk> = {},
 ): ItemsDesk {
-  const a = { q: "", stock: "", needs: "", list: "", order: "", ...asked } as Asked;
+  const a = { q: "", stock: "", needs: "", has: "", list: "", order: "", ...asked } as Asked;
   return {
     state,
     asked: a,

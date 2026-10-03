@@ -104,3 +104,176 @@
   align-items: flex-end;
   gap: var(--ui-space-1-5);
 }
+
+/* ---- what a line is: its picture, then its code ---- */
+.itemCell {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  min-width: 0;
+}
+.itemText {
+  min-width: 0;
+}
+.code {
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-sm);
+}
+
+/* ---- the suggested packing (D195) ---- */
+.suggestTabs {
+  padding: var(--ui-space-3) var(--ui-space-4) 0;
+}
+.suggestBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4);
+}
+.layerPlan {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+}
+.planBox {
+  fill: var(--ui-surface-sunken);
+  stroke: var(--ui-border-strong);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.planBelow {
+  fill: none;
+  stroke: var(--ui-border);
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+.planThing rect {
+  fill: var(--ui-accent-soft);
+  stroke: var(--ui-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.planThing[data-tone="info"] rect {
+  fill: var(--ui-info-soft);
+  stroke: var(--ui-info);
+}
+.planThing[data-tone="success"] rect {
+  fill: var(--ui-success-soft);
+  stroke: var(--ui-success);
+}
+.planThing[data-tone="warning"] rect {
+  fill: var(--ui-warning-soft);
+  stroke: var(--ui-warning);
+}
+.planThing[data-tone="danger"] rect {
+  fill: var(--ui-danger-soft);
+  stroke: var(--ui-danger);
+}
+/* On top of something else in the same layer: drawn over it, dashed. */
+.planThing[data-on-top] rect {
+  stroke-dasharray: 5 3;
+}
+.planThing text {
+  fill: var(--ui-text);
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--ui-surface);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+.view3d {
+  height: 300px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-sunken);
+  cursor: grab;
+  touch-action: none;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+}
+.stepName {
+  text-align: center;
+  font-weight: 600;
+}
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-space-2);
+  width: 100%;
+  padding: var(--ui-space-1-5) var(--ui-space-2);
+  border: 0;
+  border-radius: var(--ui-radius);
+  background: none;
+  color: var(--ui-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.step:hover {
+  background: var(--ui-surface-sunken);
+}
+.step[aria-current] {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-soft-fg);
+}
+.stepNumber {
+  flex: none;
+  min-width: 1.5em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+.stepWhat {
+  min-width: 0;
+  font-family: var(--ui-font-mono);
+}
+.aside {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+.asides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.asidesTitle {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.asideList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.asideRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+}
+.asideWhat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}

@@ -146,6 +146,7 @@ const rs = new Map(RS.flatMap((f) => [...structs(readFileSync(f, "utf8"))]));
 const PAIRS = [
   ["Cell", ["Cell"]],
   ["BenchLine", ["BenchLine"]],
+  ["PackUnit", ["PackUnit"]],
   ["PickedElsewhere", ["PickedElsewhere"]],
   ["Preset", ["Preset"]],
   ["StatedSize", ["StatedSize"]],
