@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { MOST_PIECES, arrange, contentsOf, pack, piecesOf, type Dims, type Kind, type Placement } from "./arrange.ts";
+import { MOST_PIECES, arrange, contentsOf, pack, piecesOf, type Dims, type Kind, type OpenCarton, type Placement } from "./arrange.ts";
 import type { BenchLine, PackUnit, Preset } from "@domain/types";
 
 /**
@@ -249,4 +249,55 @@ test("as many pieces as it will arrange go in without running out of stack", () 
     MOST_PIECES,
   );
   assert.equal(arrange([line("DICE", MOST_PIECES + 1, [each([20, 20, 20])])], [box("dice", [400, 300, 100])]).tooMany, true);
+});
+
+/** The small box, open on the bench with these in it. */
+function opened(contents: { item_id: string; quantity: number }[]): OpenCarton {
+  return { id: "ca470000-0000-0000-0000-000000000009", sequence: "2", name: "small", size: SMALL.size!, contents };
+}
+
+/** Where everything is, and whether it is in already, in the order the layers go in. */
+function where(a: ReturnType<typeof arrange>) {
+  return a.boxes[0]!.layers.flatMap((l) => l.placements.map((p) => [p.kind.item_code, p.x, p.y, p.z, !!p.packed]));
+}
+
+test("filling the open carton, the plan stays the same as things go in (D198)", () => {
+  const tray = line("TRAY", 1, [each([380, 280, 60])]);
+  const cups = line("CUP", 8, [each([90, 90, 40])]);
+  const start = arrange([tray, cups], [SMALL, MEDIUM], opened([]));
+  assert.equal(start.boxes[0]!.carton?.sequence, "2", "the open carton first");
+  assert.ok(where(start).every(([, , , , packed]) => !packed), "nothing in it yet");
+
+  // The tray goes in, then three cups: what is left shrinks, the plan does not move.
+  const later = arrange(
+    [{ ...tray, remaining: 0 }, { ...cups, remaining: 5 }],
+    [SMALL, MEDIUM],
+    opened([
+      { item_id: tray.item_id, quantity: 1 },
+      { item_id: cups.item_id, quantity: 3 },
+    ]),
+  );
+  assert.deepEqual(
+    where(later).map(([code, x, y, z]) => [code, x, y, z]),
+    where(start).map(([code, x, y, z]) => [code, x, y, z]),
+    "the same places",
+  );
+  assert.deepEqual(
+    where(later).filter(([, , , , packed]) => packed).map(([code]) => code),
+    ["TRAY", "CUP", "CUP", "CUP"],
+    "the first of each, in the order the layers go in, are in",
+  );
+  assert.equal(later.boxes.length, 1, "and no second box for what still fits");
+});
+
+test("what does not fit the open carton goes in the next box, and what is in it never does (D198)", () => {
+  const apron = line("APR", 10, [each([280, 220, 30])]);
+  const a = arrange([apron], [SMALL, MEDIUM], opened([{ item_id: apron.item_id, quantity: 2 }]));
+  // Six aprons fit the small box: two are in, four more go in, and of the ten
+  // still to pack, six are left.
+  assert.equal(a.boxes[0]!.layers.flatMap((l) => l.placements).length, 6);
+  assert.equal(a.boxes[0]!.layers.flatMap((l) => l.placements).filter((p) => p.packed).length, 2);
+  const after = a.boxes.slice(1).flatMap((b) => b.layers.flatMap((l) => l.placements));
+  assert.equal(after.length, 6, "the six left, in a box of their own");
+  assert.ok(after.every((p) => !p.packed));
 });

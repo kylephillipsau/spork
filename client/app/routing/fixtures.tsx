@@ -30,7 +30,7 @@ import { Dashboard } from "@app/home/Dashboard";
 import { DASHBOARD, DASHBOARD_NO_SITE, DASHBOARD_QUIET } from "@app/home/dashboard-fixture";
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
-import { PACK_FIXTURE } from "@app/outbound/pack/fixture";
+import { PACK_FILLING, PACK_FIXTURE } from "@app/outbound/pack/fixture";
 import { PackQueuePage } from "@app/outbound/pack/PackQueuePage";
 import { CLEAR, QUEUE, fixtureQueue } from "@app/outbound/pack/queue-fixture";
 
@@ -368,6 +368,10 @@ export const FIXTURES: readonly Screen[] = [
   app("f-pack", "/fixtures/pack", "Pack order", "bench", { screen: "pack-one" }, () => packBench()),
   // A site that has not said where it packs or whose stock it holds (migration
   // 97): the bench says so before anybody tries to start a carton.
+  // A small box open with two aprons in it: the suggestion fills it first (D198).
+  app("f-pack-filling", "/fixtures/pack/filling", "Pack order — filling a carton", "bench", { screen: "pack-one" }, () =>
+    packBench(PACK_FILLING),
+  ),
   app("f-pack-unready", "/fixtures/pack/unready", "Pack order — site not set up", "bench", { screen: "pack-one" }, () =>
     packBench({
       ...PACK_FIXTURE,

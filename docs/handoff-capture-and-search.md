@@ -104,6 +104,9 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - D197. Items can be narrowed to what needs a size for packing, most needed
   first: still to pack on an open order, with no each size, not "no size",
   and not shipping as it is. The packing queue links to it with a count.
+- D198. With a carton open, the suggestion fills it first: what is in it
+  and what is left arranged together, what is in shown as done, the plan on
+  the next layer to put in. Client only (`arrange.ts` `fillOpen`).
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

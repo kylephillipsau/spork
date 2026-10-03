@@ -55,6 +55,8 @@ export class PackScene {
   private readonly root = new Group();
   private readonly lineMaterial = new LineBasicMaterial();
   private readonly boxMaterial = new LineBasicMaterial();
+  /** Outlines what is still to put into the carton being filled (D198). */
+  private readonly toAddMaterial = new LineBasicMaterial();
   private outline: LineSegments | null = null;
   private dressed = new Map<Kind, Dressed>();
   private textures: Texture[] = [];
@@ -62,6 +64,7 @@ export class PackScene {
   private size: Dims = [1, 1, 1];
   private layers: Layer[] = [];
   private shown = Infinity;
+  private filling = false;
   private painting = 0;
 
   constructor(
@@ -84,6 +87,7 @@ export class PackScene {
 
   /** Draw this box and what goes in it. */
   set(size: Dims, layers: Layer[]): void {
+    this.filling = layers.some((l) => l.placements.some((p) => p.packed !== undefined));
     this.size = size;
     this.layers = layers;
     this.build();
@@ -100,6 +104,7 @@ export class PackScene {
     this.clear();
     this.lineMaterial.dispose();
     this.boxMaterial.dispose();
+    this.toAddMaterial.dispose();
     this.stage.dispose();
   }
 
@@ -126,6 +131,7 @@ export class PackScene {
     const scale = 2 / Math.max(L, W, H);
     this.lineMaterial.color.copy(this.stage.token("--ui-border-strong"));
     this.boxMaterial.color.copy(this.stage.token("--ui-text-muted"));
+    this.toAddMaterial.color.copy(this.stage.token("--ui-accent"));
 
     const box = new BoxGeometry(L * scale, H * scale, W * scale);
     this.outline = new LineSegments(new EdgesGeometry(box), this.boxMaterial);
@@ -137,7 +143,7 @@ export class PackScene {
       for (const p of layer.placements) {
         const d = this.dress(p.kind, scale, painting);
         const mesh = new Mesh(d.geometry, d.materials);
-        const edges = new LineSegments(d.edges, this.lineMaterial);
+        const edges = new LineSegments(d.edges, this.filling && !p.packed ? this.toAddMaterial : this.lineMaterial);
         for (const o of [mesh, edges]) {
           o.quaternion.setFromRotationMatrix(rotation(p));
           o.position.set((p.x + p.dims[0] / 2 - L / 2) * scale, (p.z + p.dims[2] / 2 - H / 2) * scale, (p.y + p.dims[1] / 2 - W / 2) * scale);

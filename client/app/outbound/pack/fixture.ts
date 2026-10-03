@@ -268,3 +268,39 @@ export const PACK_FIXTURE: BenchScreen = {
   ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };
+
+/**
+ * The same job with a small box open and two aprons in it (D198): the
+ * suggestion fills this carton first, the two shown as in, the plan on the
+ * next layer with something to put in.
+ */
+export const PACK_FILLING: BenchScreen = {
+  ...PACK_FIXTURE,
+  lines: PACK_FIXTURE.lines.map((l) => (l.item_code === "APR-PE-CLR-L" ? { ...l, remaining: 4 } : l)),
+  cartons: [
+    PACK_FIXTURE.cartons[0]!,
+    {
+      id: "ca470000-0000-0000-0000-000000000005",
+      sequence: "2",
+      package_type: "small box",
+      own_carton_of: null,
+      own_level: null,
+      listed_weight_g: null,
+      sealed: false,
+      gross_weight_g: null,
+      height_mm: null,
+      stated_size: { length_mm: 400, width_mm: 300, height_mm: 190 },
+      expected: null,
+      contents: [
+        {
+          item_id: "01990000-0000-7000-8000-00000000a003",
+          item_code: "APR-PE-CLR-L",
+          description: "Apron, polythene, clear, large",
+          lot_code: null,
+          quantity: 2,
+          picks: [["3f0e0000-0000-0000-0000-000000000005", 2]],
+        },
+      ],
+    },
+  ],
+};

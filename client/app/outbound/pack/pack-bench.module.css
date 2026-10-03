@@ -277,3 +277,12 @@
   flex-direction: column;
   min-width: 0;
 }
+
+/* Filling the open carton (D198): what is in already is done, and faint. */
+.planThing[data-packed] {
+  opacity: 0.45;
+}
+.step[data-done] .stepWhat {
+  color: var(--ui-text-faint);
+  text-decoration: line-through;
+}

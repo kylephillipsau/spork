@@ -52,6 +52,9 @@ export interface Placement {
   /** Its extent along the box's length, width and height, as placed. */
   dims: Dims;
   axes: Axes;
+  /** Filling the open carton (D198): whether it is in already, the first of each
+   *  kind in the order the layers go in. Absent in a box not yet started. */
+  packed?: boolean;
 }
 
 export interface Layer {
@@ -82,6 +85,8 @@ export interface AsIs extends Aside {
 
 export interface BoxPlan {
   preset: Preset & { size: StatedSize };
+  /** The carton open on the bench, when this is the plan for filling it. */
+  carton?: { id: Uuid; sequence: string };
   layers: Layer[];
   /** Things with no size to measure, put in round the rest of this box. */
   loose: Aside[];
@@ -264,6 +269,76 @@ function measured(p: PackUnit | undefined): Dims | null {
   return d.every((n) => n > 0) ? d : null;
 }
 
+/** One kind per line and level, so the same thing in the open carton and still to pack is one kind. */
+type KindOf = (line: BenchLine, index: number, unit: PackUnit, size: Dims) => Kind;
+
+function kinds(): KindOf {
+  const made = new Map<string, Kind>();
+  return (line, index, unit, size) => {
+    const key = `${line.line_id}:${unit.level}`;
+    let kind = made.get(key);
+    if (!kind) {
+      kind = {
+        line: line.line_id,
+        item_id: line.item_id,
+        item_code: line.item_code,
+        level: unit.level,
+        units: unit.units,
+        size,
+        weight_g: unit.gross_weight_g,
+        faces: unit.faces,
+        index,
+      };
+      made.set(key, kind);
+    }
+    return kind;
+  };
+}
+
+/**
+ * Units of each line, as what they go as: cartons while the count fills one,
+ * then inner packs, then eaches. Outside a box, a level that ships as it is
+ * (D196) goes on its own; in one, nothing does.
+ */
+function split(
+  lines: BenchLine[],
+  unitsOf: (line: BenchLine) => number,
+  inBox: boolean,
+  kindOf: KindOf,
+): { pieces: Left[]; asIs: AsIs[]; loose: Aside[]; unmeasured: Aside[] } {
+  const pieces: Left[] = [];
+  const asIs: AsIs[] = [];
+  const loose: Aside[] = [];
+  const unmeasured: Aside[] = [];
+  lines.forEach((line, index) => {
+    let units = Math.max(0, unitsOf(line));
+    if (units === 0) return;
+    const aside = (n: number, unit?: PackUnit): Aside => ({
+      line: line.line_id,
+      item_id: line.item_id,
+      item_code: line.item_code,
+      units: n,
+      weight_g: unit?.gross_weight_g != null ? (unit.gross_weight_g * n) / unit.units : null,
+    });
+    for (const level of ["carton", "inner", "each"] as const) {
+      const unit = line.packs.find((p) => p.level === level);
+      if (!unit || unit.units <= 0 || units < unit.units) continue;
+      const size = measured(unit);
+      const alone = unit.ships_as_is && !inBox;
+      if (level !== "each" && !alone && !size) continue;
+      const count = Math.floor(units / unit.units);
+      if (alone) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size });
+      else if (size) pieces.push({ kind: kindOf(line, index, unit, size), count });
+      else if (unit.no_size) loose.push(aside(count, unit));
+      else unmeasured.push(aside(count));
+      units -= count * unit.units;
+    }
+    // Nothing recorded of its each at all: it is not measured.
+    if (units > 0) unmeasured.push(aside(units));
+  });
+  return { pieces, asIs, loose, unmeasured };
+}
+
 /**
  * What each line's units go as, biggest first: cartons while the count fills
  * one, then inner packs, then eaches. A level that ships as it is (D196) goes
@@ -277,48 +352,17 @@ export function piecesOf(lines: BenchLine[]): {
   loose: Aside[];
   unmeasured: Aside[];
 } {
-  const pieces: Left[] = [];
-  const asIs: AsIs[] = [];
-  const loose: Aside[] = [];
-  const unmeasured: Aside[] = [];
-  lines.forEach((line, index) => {
-    let units = Math.max(0, line.remaining);
-    if (units === 0) return;
-    const aside = (n: number, unit?: PackUnit): Aside => ({
-      line: line.line_id,
-      item_id: line.item_id,
-      item_code: line.item_code,
-      units: n,
-      weight_g: unit?.gross_weight_g != null ? (unit.gross_weight_g * n) / unit.units : null,
-    });
-    const kind = (unit: PackUnit, size: Dims): Kind => ({
-      line: line.line_id,
-      item_id: line.item_id,
-      item_code: line.item_code,
-      level: unit.level,
-      units: unit.units,
-      size,
-      weight_g: unit.gross_weight_g,
-      faces: unit.faces,
-      index,
-    });
+  return split(lines, (l) => l.remaining, false, kinds());
+}
 
-    for (const level of ["carton", "inner", "each"] as const) {
-      const unit = line.packs.find((p) => p.level === level);
-      if (!unit || unit.units <= 0 || units < unit.units) continue;
-      const size = measured(unit);
-      if (level !== "each" && !unit.ships_as_is && !size) continue;
-      const count = Math.floor(units / unit.units);
-      if (unit.ships_as_is) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size });
-      else if (size) pieces.push({ kind: kind(unit, size), count });
-      else if (unit.no_size) loose.push(aside(count, unit));
-      else unmeasured.push(aside(count));
-      units -= count * unit.units;
-    }
-    // Nothing recorded of its each at all: it is not measured.
-    if (units > 0) unmeasured.push(aside(units));
-  });
-  return { pieces, asIs, loose, unmeasured };
+/** The carton open on the bench: its box, and what is in it already. */
+export interface OpenCarton {
+  id: Uuid;
+  sequence: string;
+  /** Its box's name. */
+  name: string;
+  size: StatedSize;
+  contents: { item_id: Uuid; quantity: number }[];
 }
 
 function plan(preset: Preset & { size: StatedSize }, layers: Layer[]): BoxPlan {
@@ -342,8 +386,9 @@ function bulk(left: Left[]): number {
  * all, or, when none does, the box that takes the most (the smaller of two that
  * take as much), and again for the rest.
  */
-export function arrange(lines: BenchLine[], presets: Preset[]): Arrangement {
-  const { pieces, asIs, loose, unmeasured } = piecesOf(lines);
+export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton | null = null): Arrangement {
+  const kindOf = kinds();
+  const { pieces, asIs, loose, unmeasured } = split(lines, (l) => l.remaining, false, kindOf);
   // Only the boxes the workspace lets it choose (D196).
   const boxes = presets
     .filter((p): p is Preset & { size: StatedSize } => p.size !== null && p.suggested)
@@ -353,6 +398,13 @@ export function arrange(lines: BenchLine[], presets: Preset[]): Arrangement {
 
   const plans: BoxPlan[] = [];
   let rest = pieces;
+  const extraLoose: Aside[] = [];
+  if (open) {
+    const filled = fillOpen(open, lines, pieces, kindOf);
+    plans.push(filled.plan);
+    extraLoose.push(...filled.loose);
+    rest = filled.rest;
+  }
   while (rest.length > 0 && plans.length < 50) {
     const total = bulk(rest);
     let chosen: { box: Preset & { size: StatedSize }; layers: Layer[]; left: Left[] } | null = null;
@@ -380,10 +432,19 @@ export function arrange(lines: BenchLine[], presets: Preset[]): Arrangement {
     rest = chosen.left;
   }
 
-  // Loose things go round the goods in the box with the most room to spare.
+  // Loose things go round the goods in the box with the most room to spare;
+  // what is loose in the open carton already is in it.
   const roomiest = plans.reduce<BoxPlan | null>((best, p) => (!best || p.fill < best.fill ? p : best), null);
+  const first = plans[0];
+  if (first?.carton) {
+    first.loose = extraLoose;
+    for (const a of extraLoose) {
+      if (a.weight_g === null) first.unweighed += a.units;
+      else first.weight_g += a.weight_g;
+    }
+  }
   if (roomiest) {
-    roomiest.loose = loose;
+    roomiest.loose = [...roomiest.loose, ...loose];
     for (const a of loose) {
       if (a.weight_g === null) roomiest.unweighed += a.units;
       else roomiest.weight_g += a.weight_g;
@@ -399,13 +460,63 @@ export function arrange(lines: BenchLine[], presets: Preset[]): Arrangement {
   return { ...none, boxes: plans, oversize, loose: roomiest ? [] : loose };
 }
 
+/**
+ * The open carton, filled (D198): what is in it and what is still to pack,
+ * arranged together, the first of each kind in the order the layers go in
+ * marked as in already. What is in it plus what is left is what there was, so
+ * a packer following the layers sees the same plan after every press. What
+ * does not fit is left for the next box; what is in it is never.
+ */
+function fillOpen(
+  open: OpenCarton,
+  lines: BenchLine[],
+  remaining: Left[],
+  kindOf: KindOf,
+): { plan: BoxPlan; rest: Left[]; loose: Aside[] } {
+  const inCarton = new Map<Uuid, number>();
+  for (const c of open.contents) inCarton.set(c.item_id, (inCarton.get(c.item_id) ?? 0) + c.quantity);
+  // A product on two lines is counted against the first.
+  const seen = new Set<Uuid>();
+  const unitsIn = (l: BenchLine) => {
+    if (seen.has(l.item_id)) return 0;
+    seen.add(l.item_id);
+    return inCarton.get(l.item_id) ?? 0;
+  };
+  const already = split(lines, unitsIn, true, kindOf);
+  const together = new Map<Kind, number>();
+  for (const p of [...already.pieces, ...remaining]) together.set(p.kind, (together.get(p.kind) ?? 0) + p.count);
+  const packed = pack(
+    [open.size.length_mm, open.size.width_mm, open.size.height_mm],
+    [...together].map(([kind, count]) => ({ kind, count })),
+  );
+  const toMark = new Map(already.pieces.map((p) => [p.kind, p.count]));
+  for (const layer of packed.layers) {
+    for (const p of layer.placements) {
+      const n = toMark.get(p.kind) ?? 0;
+      p.packed = n > 0;
+      if (n > 0) toMark.set(p.kind, n - 1);
+    }
+  }
+  const stillToPack = new Map(remaining.map((p) => [p.kind, p.count]));
+  const rest = packed.left
+    .map((e) => ({ kind: e.kind, count: Math.min(e.count, stillToPack.get(e.kind) ?? 0) }))
+    .filter((e) => e.count > 0);
+  const preset = { id: open.id, name: open.name, size: open.size, suggested: true };
+  return {
+    plan: { ...plan(preset, packed.layers), carton: { id: open.id, sequence: open.sequence } },
+    rest,
+    loose: [...already.loose, ...already.unmeasured],
+  };
+}
+
 /** What a layer holds, by kind, in the order they first appear in it. */
-export function contentsOf(layer: Layer): { kind: Kind; count: number; stacked: number }[] {
-  const out = new Map<Kind, { kind: Kind; count: number; stacked: number }>();
+export function contentsOf(layer: Layer): { kind: Kind; count: number; stacked: number; packed: number }[] {
+  const out = new Map<Kind, { kind: Kind; count: number; stacked: number; packed: number }>();
   for (const p of layer.placements) {
-    const row = out.get(p.kind) ?? { kind: p.kind, count: 0, stacked: 0 };
+    const row = out.get(p.kind) ?? { kind: p.kind, count: 0, stacked: 0, packed: 0 };
     row.count += 1;
     if (p.z > layer.z) row.stacked += 1;
+    if (p.packed) row.packed += 1;
     out.set(p.kind, row);
   }
   return [...out.values()];

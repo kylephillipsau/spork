@@ -14405,3 +14405,22 @@ first real data almost nothing still to pack had one, so nearly every
 suggestion was a list of things to measure. Measuring the products open orders
 are waiting on, most needed first, is the quickest way to make the
 suggestion useful.
+
+### D198: The suggestion fills the open carton first
+
+*Adopted 2026-10-03. Amends D195.*
+
+**Decision.** When a carton is open on the bench and its box has a size, the
+suggestion's first box is that carton. What is in it and what is still to pack
+are arranged together, and the first of each kind in the order the layers go
+in are shown as in already: crossed out in the steps, faint in the plan from
+above, and outlined plainly in 3D while what is still to add is outlined in
+the accent colour. The plan opens on the next layer with something to put in,
+and moves on after each press. What does not fit goes to the next box, as
+before. What is in the carton is never suggested anywhere else. A pallet, or a
+product's own carton, is not filled this way.
+
+**Why.** Once a packer started the suggested box and put the first things in,
+the suggestion read only what was left and proposed a new box for it, while
+the carton being filled still had room. Arranging what is in it plus what is
+left gives the same set every time, so the plan does not move as things go in.
