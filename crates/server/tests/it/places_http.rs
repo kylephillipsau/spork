@@ -323,6 +323,26 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     assert_eq!(status, 200, "none of it in reach");
     assert_eq!(pick_from(&app).await, ("LT-03-2".into(), Value::Bool(false)), "none in reach: the biggest pile, said so");
 
+    // ── the bin map: every placed bin at once, with its cell and its counts (D208)
+    let (status, map) = call(&app, test::TestRequest::get().uri("/layout/bins").insert_header(auth.clone())).await;
+    assert_eq!(status, 200, "{map}");
+    let drawn = map["bins"].as_array().unwrap();
+    let lw4 = drawn.iter().find(|b| b["code"] == "LW-04-1").expect("a bin on the back of a rack");
+    assert_eq!(
+        (lw4["side"].as_i64(), lw4["bay"].as_i64(), lw4["level"].as_i64()),
+        (Some(2), Some(1), Some(1)),
+        "behind LW-01, in column 1: {lw4}"
+    );
+    let floor = drawn.iter().find(|b| b["code"] == "LT-03-1").unwrap();
+    assert_eq!(floor["reported_items"], 1, "{floor}");
+    assert_eq!(floor["reported_on_hand"], 5.0, "{floor}");
+    assert_eq!(floor["within_reach"], false, "none of the rack is in reach now: {floor}");
+    assert!(drawn.iter().all(|b| b["code"] != "LT-FLOOR"), "a bin in no cell is not drawn");
+    assert!(map["unplaced"].as_i64().unwrap() >= 1, "and is counted instead: {}", map["unplaced"]);
+    let (_, laid) = call(&app, test::TestRequest::get().uri("/layout").insert_header(auth.clone())).await;
+    let lw_place = laid["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack LW").unwrap();
+    assert_eq!(lw_place["positions"], serde_json::json!([1]), "one bin to a bay on its one level: {lw_place}");
+
     // ── what is not there says so ────────────────────────────────────────
     let (status, _) = call(
         &app,

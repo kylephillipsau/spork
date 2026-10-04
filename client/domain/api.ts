@@ -33,6 +33,8 @@ import type {
   DraftReport,
   DraftRequest,
   LayoutView,
+  MapBins,
+  ReachSaid,
   PlaceView,
   ChooseSiteRequest,
   CurrentSession,
@@ -920,6 +922,13 @@ export const api = {
 
   /** The layout of the site the session is working at. */
   layout: () => send<LayoutView>("GET", "/layout"),
+
+  /** Every bin in a cell at the site, for the bin map (D208). */
+  mapBins: () => send<MapBins>("GET", "/layout/bins"),
+
+  /** Say how many of a rack's levels can be reached from the floor (D180). */
+  setReach: (placeId: Uuid, levels: number) =>
+    send<ReachSaid>("POST", `/places/${encodeURIComponent(placeId)}/reach`, { levels }),
 
   /**
    * Draft the layout from the bin list. **A dry run unless `apply`**, like the

@@ -1,0 +1,293 @@
+/* The bin map (D208): the site fills the space, with the search, the layer
+   and its legend laid over it, and the chosen bin's card beside it. */
+
+.map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: var(--ui-space-4);
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .map {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.stage {
+  position: relative;
+  height: clamp(26rem, 72vh, 60rem);
+  min-width: 0;
+}
+
+/* Framed, because turned or zoomed in the site runs off its edges. */
+.canvas {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-sunken);
+}
+/* Out of the flow, so the canvas never sizes the pane that sizes it. */
+.canvas canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--ui-space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+  text-align: center;
+}
+
+.tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: var(--ui-space-0-5) var(--ui-space-2);
+  border-radius: var(--ui-radius-full);
+  background: var(--ui-tooltip-bg);
+  color: var(--ui-tooltip-fg);
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tools {
+  position: absolute;
+  top: var(--ui-space-3);
+  right: var(--ui-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-0-5);
+  padding: var(--ui-space-0-5);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+/* ── the search, laid over the top left ───────────────────────────── */
+
+.finder {
+  position: absolute;
+  top: var(--ui-space-3);
+  left: var(--ui-space-3);
+  width: min(20rem, calc(100% - var(--ui-space-16)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  box-shadow: var(--ui-shadow-sm);
+  border-radius: var(--ui-radius);
+}
+
+.found {
+  margin: 0;
+  padding: var(--ui-space-1);
+  list-style: none;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.foundItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  width: 100%;
+  padding: var(--ui-space-1-5) var(--ui-space-2);
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: none;
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.foundItem:hover,
+.foundItem:focus-visible {
+  background: var(--ui-surface-hover);
+}
+
+.foundWhere {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+.foundNone {
+  padding: var(--ui-space-1-5) var(--ui-space-2);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+.code {
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+}
+
+/* ── the layer and its legend, laid over the bottom left ──────────── */
+
+.legend {
+  position: absolute;
+  left: var(--ui-space-3);
+  bottom: var(--ui-space-3);
+  max-width: calc(100% - var(--ui-space-6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2) var(--ui-space-3) var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1-5) var(--ui-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ui-text-sm);
+}
+.keys li {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1-5);
+}
+
+.swatch {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+}
+
+.source {
+  margin: 0;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-xs);
+}
+
+/* ── the chosen bin ──────────────────────────────────────────────── */
+
+.side {
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+}
+
+.cardTitle,
+.cardCode {
+  margin: 0;
+  font-size: var(--ui-text-lg);
+  font-weight: 600;
+}
+.cardCode {
+  font-family: var(--ui-font-mono);
+}
+
+.cardSection {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.muted {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.items li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+
+.qty {
+  font-variant-numeric: tabular-nums;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--ui-space-1) var(--ui-space-3);
+  margin: 0;
+  font-size: var(--ui-text-sm);
+}
+.facts dt {
+  color: var(--ui-text-muted);
+}
+.facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.reach {
+  padding-top: var(--ui-space-3);
+  border-top: 1px solid var(--ui-border);
+}
+
+.open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  align-self: flex-start;
+}
+.open svg {
+  width: 1em;
+  height: 1em;
+}
+
+.unplaced {
+  margin: var(--ui-space-3) 0 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}

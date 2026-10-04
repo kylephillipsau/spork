@@ -298,6 +298,10 @@ const PAIRS = [
   // written by the API rather than read from a screen module
   ["CarrierLine", ["CarrierLine"]],
   ["ConsignmentResponse", ["ConsignmentResponse"]],
+  // The bin map (D208), and reach set from it.
+  ["MapBin", ["MapBin"]],
+  ["MapBins", ["MapBins"]],
+  ["ReachSaid", ["ReachSaid"]],
   // The workspace's people (D205).
   ["WorkspacePerson", ["WorkspacePerson"]],
   ["PersonAdded", ["PersonAdded"]],

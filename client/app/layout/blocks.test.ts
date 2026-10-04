@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { FLOOR_LIFT, gridLines, sceneOf } from "./blocks.ts";
-import type { LayoutPlace, PlanShape } from "@domain/types";
+import { CELL_FILL, cellsOf, FLOOR_LIFT, gridLines, sceneOf } from "./blocks.ts";
+import type { MapBin, LayoutPlace, PlanShape } from "@domain/types";
 
 /**
  * The 3D view's reading of a plan: blocks where the plan has solid places,
@@ -34,6 +34,7 @@ const place = (place_id: string, bays: number, levels: number, rows = 1): Layout
   bays,
   levels,
   rows,
+  positions: Array<number>(levels).fill(1),
   sides: 1,
   reach_levels: 1,
   pattern: null,
@@ -196,4 +197,69 @@ test("the grid comes from the site's list, and only for a rectangle", () => {
     scene.blocks.map((b) => b.grid.length > 0),
     [true, false, false],
   );
+});
+
+/** A bin in a cell, holding nothing. */
+const binAt = (place_id: string, side: number, bay: number, level: number, position = 1, row = 1): MapBin => ({
+  location_id: `${place_id}-${side}-${bay}-${level}-${position}`,
+  code: `${place_id}-${bay}-${level}`,
+  place_id,
+  side,
+  bay,
+  level,
+  row,
+  position,
+  within_reach: level === 1,
+  reported_items: 0,
+  reported_on_hand: 0,
+  held: 0,
+});
+
+const near = (actual: number[], expected: number[], what: string) =>
+  actual.forEach((n, i) => assert.ok(Math.abs(n - expected[i]!) < 1e-9, `${what}: ${actual} against ${expected}`));
+
+test("a bin is a box in its bay and level, facing the aisle in front", () => {
+  const rack = { ...place("r", 4, 2), solid: true };
+  const [cell] = cellsOf([shape({ place_id: "r", solid: true, corners: rect(0, 0, 4, 1), height: 2 })], [rack], [binAt("r", 1, 2, 2)]);
+  assert.ok(cell);
+  near(cell.centre, [1.5, 0.5, 1.5], "the middle of bay 2, level 2");
+  near(cell.size, [CELL_FILL, CELL_FILL, CELL_FILL], "a cell, a little smaller");
+  near(cell.facing, [0, -1], "out of the front");
+  assert.equal(cell.angle, 0);
+});
+
+test("the back of a two-sided rack is the same column, on the far half, facing the other aisle", () => {
+  const rack = { ...place("e", 18, 4), sides: 2 };
+  const plan = [shape({ place_id: "e", solid: true, corners: rect(0, 0, 18, 2), height: 4 })];
+  const [front, back] = cellsOf(plan, [rack], [binAt("e", 1, 1, 1), binAt("e", 2, 1, 1)]);
+  near(front!.centre, [0.5, 0.5, 0.5], "the front of column 1");
+  near(back!.centre, [0.5, 1.5, 0.5], "behind it");
+  near(back!.facing, [0, 1], "out of the back");
+});
+
+test("bins sharing a bay split it, and the back's first is at its left as the back is faced", () => {
+  const rack = { ...place("d", 1, 2), sides: 2, positions: [2, 1] };
+  const plan = [shape({ place_id: "d", solid: true, corners: rect(0, 0, 1, 2), height: 2 })];
+  const cells = cellsOf(plan, [rack], [binAt("d", 1, 1, 1, 1), binAt("d", 1, 1, 1, 2), binAt("d", 1, 1, 2, 1), binAt("d", 2, 1, 1, 1)]);
+  assert.deepEqual(
+    cells.map((c) => c.centre[0]),
+    [0.25, 0.75, 0.5, 0.75],
+    "two halves at level 1, the whole bay at level 2, and the back's first at the far end",
+  );
+  near([cells[0]!.size[0]], [0.5 * CELL_FILL], "half a bay long");
+});
+
+test("a turned rack turns its cells with it", () => {
+  // A quarter turn: the front runs up the plan, and faces +x.
+  const corners: [number, number][] = [[0, 0], [0, 4], [-1, 4], [-1, 0]];
+  const [cell] = cellsOf([shape({ place_id: "t", solid: true, corners, height: 1 })], [place("t", 4, 1)], [binAt("t", 1, 1, 1)]);
+  near(cell!.centre, [-0.5, 0.5, 0.5], "bay 1, a cell in from the face");
+  near([cell!.angle], [Math.PI / 2], "running up the plan");
+  near(cell!.facing, [1, 0], "out of the front");
+});
+
+test("a bin outside its grid, or in a place not on the plan, is left out", () => {
+  const rack = place("r", 4, 2);
+  const plan = [shape({ place_id: "r", solid: true, corners: rect(0, 0, 4, 1), height: 2 })];
+  assert.equal(cellsOf(plan, [rack], [binAt("r", 1, 5, 1), binAt("r", 2, 1, 1), binAt("r", 1, 1, 3), binAt("gone", 1, 1, 1)]).length, 0);
 });

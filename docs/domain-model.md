@@ -14652,3 +14652,41 @@ emptied.
 **Not decided.** Other acts (packing, receiving, counting) still live in
 memory. They join when their screens move onto handhelds in dead spots.
 Storage is the browser's own, falling back to memory where that is blocked.
+
+### D208: The bin map shows every bin in its cell, and search flies to one
+
+*Adopted 2026-10-04, with no migration. The first part of
+docs/picking-plan.md's Proposal I; extends D173's 3D view.*
+
+**Decision.** Inventory › Bin map draws the site in 3D with every bin in a
+cell as a box on its rack. Its bay runs along the rack, its level up from the
+floor, and its row back from the face it is on. Bins sharing a bay split it,
+and the back of a two-sided rack is the same column on the far half. The map
+reads every placed bin in one call (`GET /layout/bins`), and the racks step
+back to their outlines so the bins are what is seen.
+
+- **Layers.** The map colours bins by one layer at a time:
+  - **What's here:** how many items NetSuite's last count put on the shelf,
+    or Spork's ledger when the report is silent.
+  - **Reach:** whether the bin can be reached from the floor (D180).
+- **Finding a bin.** A search finds a bin by its code, ignoring case and
+  dashes, and flies the view to its face from the aisle it opens onto.
+- **Choosing a bin.** Click a bin, or search for one, to choose it. Its rack
+  stays solid while every other rack fades, so a rack across a narrow aisle
+  never hides it. Its card says what NetSuite counted there, what Spork's
+  ledger holds, and whether it is in reach, and links to its rack face.
+- **Setting reach.** The card is also where a rack's reach is set, one rack
+  at a time.
+- **Bins not on the layout.** A bin in no cell isn't drawn, and the map says
+  how many there are.
+
+**Why.** Routes need the real layout, and walking the floor with the map is
+how the layout gets checked, so the map comes before routes. The two layers
+are the two with data behind them: NetSuite's picks don't say which bin they
+came from, so a pick-frequency layer waits for Spork's own picks. Reach
+differs by rack (the user, 2026-10-04), and the map is where a rack is
+already chosen.
+
+**Not decided.** The real positions of the racks. The user will share a floor
+plan, and a plan editor follows. The scale (`site.cell_mm`, Proposal B) waits
+for the user's measurement of a bay.

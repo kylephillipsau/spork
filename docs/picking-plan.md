@@ -337,7 +337,8 @@ Consolidation is the same question across runs.
 
 ### Proposal I: The map shows bins, stock, routes and people
 
-*Proposed, not adopted. Extends D173's 3D view.*
+*The bins, two layers and search are adopted as D208. Routes, people and
+replay are still proposed. Extends D173's 3D view.*
 
 **Decision.**
 - **On the 3D map:**

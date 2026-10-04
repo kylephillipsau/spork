@@ -9397,6 +9397,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::picking::record::record_pick)
         .service(crate::handover::record_handover)
         .service(crate::places::bin_list)
+        .service(crate::places::map_bins)
         .service(crate::places::bin_page)
         .service(crate::places::place_page)
         .service(crate::items::item_list)

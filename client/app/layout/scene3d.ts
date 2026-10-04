@@ -1,31 +1,36 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  Color,
   EdgesGeometry,
   ExtrudeGeometry,
   Float32BufferAttribute,
   Group,
+  InstancedMesh,
   Line,
   LineBasicMaterial,
   LineDashedMaterial,
   LineLoop,
   LineSegments,
   MOUSE,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
+  Quaternion,
   Raycaster,
   Shape,
   ShapeGeometry,
   Vector2,
   Vector3,
-  type Color,
   type Object3D,
 } from "three";
 
 import { Stage, type Pose } from "@app/common/stage3d";
 
-import type { Block, Point3, Scene3D } from "./blocks";
+import type { BinCell, Block, Point3, Scene3D } from "./blocks";
+import { MIX, toneOf, type Layer, type Tone } from "./layers";
 
 /**
  * The site in 3D, drawn by three.js (D173). Turned, moved and zoomed; nothing
@@ -51,7 +56,17 @@ export interface SceneEvents {
   hover: (placeId: string | null) => void;
   /** A frame was drawn: anything pinned to a point in the scene should follow. */
   drawn: () => void;
+  /** A bin was clicked, or the empty floor was, which chooses none (D208). */
+  chooseBin?: ((locationId: string | null) => void) | undefined;
+  /** The pointer is over a bin, or over none. */
+  hoverBin?: ((locationId: string | null) => void) | undefined;
 }
+
+/** How far above level a flight to a bin looks from, and how far round from straight on. */
+const FLY_ELEVATION = (24 * Math.PI) / 180;
+const FLY_ASIDE = (16 * Math.PI) / 180;
+/** How much of the site, in cells either side of the bin, a flight ends showing. */
+const FLY_SPAN = 6;
 
 /** Which way the view looks at first: from the front left, above. */
 const AZIMUTH = (-28 * Math.PI) / 180;
@@ -143,7 +158,28 @@ export class SiteScene {
     chosenLine: new LineBasicMaterial(),
     chosenGrid: new LineBasicMaterial({ transparent: true, opacity: 0.45 }),
     hover: new LineBasicMaterial(),
+    bin: new MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+    ghost: new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.13, depthWrite: false }),
   };
+
+  // ── the bins (D208) ──────────────────────────────────────────────────
+  private cells: BinCell[] = [];
+  private binIndex = new Map<string, BinCell>();
+  /** Places whose bins are drawn: their block steps back to an outline. */
+  private withBins = new Set<string>();
+  /**
+   * The bins as drawn: one solid group, and, while a bin is chosen, a faint
+   * one of every other rack's, so the racks across the aisle don't hide it.
+   */
+  private groups: { mesh: InstancedMesh; cells: BinCell[] }[] = [];
+  /** The place whose bins are in front, while a bin is chosen there. */
+  private focus: string | null = null;
+  private layer: Layer = "stock";
+  private chosenBin: string | null = null;
+  private hoveredBin: string | null = null;
+  private tones = {} as Record<Tone, Color>;
+  private readonly chosenMark = new LineSegments(new EdgesGeometry(new BoxGeometry(1, 1, 1)), this.materials.chosenLine);
+  private readonly hoverMark = new LineSegments(new EdgesGeometry(new BoxGeometry(1, 1, 1)), this.materials.hover);
 
   constructor(
     private readonly host: HTMLElement,
@@ -168,6 +204,9 @@ export class SiteScene {
     this.palette = readPalette(this.stage);
     this.paint();
     this.stage.scene.add(this.world);
+    this.chosenMark.visible = this.hoverMark.visible = false;
+    this.chosenMark.renderOrder = this.hoverMark.renderOrder = 2;
+    this.stage.scene.add(this.chosenMark, this.hoverMark);
 
     const controls = this.stage.controls;
     // A drag with the middle or right button, or with Ctrl or ⌘ held, moves
@@ -207,6 +246,93 @@ export class SiteScene {
     this.fit(first, true);
   }
 
+  /**
+   * Draw these bins in their cells (D208), replacing any drawn before. The
+   * racks they sit on step back to their outlines, so the bins are what is seen.
+   */
+  setBins(cells: BinCell[]): void {
+    this.cells = cells;
+    this.binIndex = new Map(cells.map((c) => [c.bin.location_id, c]));
+    this.withBins = new Set(cells.map((c) => c.bin.place_id));
+    this.focus = this.chosenBin ? (this.binIndex.get(this.chosenBin)?.bin.place_id ?? null) : null;
+    this.build();
+    this.style();
+    this.mark();
+    this.stage.invalidate();
+  }
+
+  /** The groups for the bins and the focus as they are. */
+  private build(): void {
+    this.dropGroups();
+    const solid = this.focus ? this.cells.filter((c) => c.bin.place_id === this.focus) : this.cells;
+    const faint = this.focus ? this.cells.filter((c) => c.bin.place_id !== this.focus) : [];
+    for (const [cells, material] of [
+      [solid, this.materials.bin],
+      [faint, this.materials.ghost],
+    ] as const) {
+      if (cells.length === 0) continue;
+      const box = new BoxGeometry(1, 1, 1);
+      shadeFaces(box);
+      const mesh = new InstancedMesh(box, material, cells.length);
+      const m = new Matrix4();
+      cells.forEach((c, i) => mesh.setMatrixAt(i, cellMatrix(c, 1, m)));
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      // The faint ones after the solid, so they are laid over it, not under.
+      mesh.renderOrder = material === this.materials.ghost ? 1 : 0;
+      this.groups.push({ mesh, cells });
+      this.world.add(mesh);
+    }
+    this.colourBins();
+  }
+
+  /** Colour the bins by this layer. */
+  setLayer(layer: Layer): void {
+    if (layer === this.layer) return;
+    this.layer = layer;
+    this.colourBins();
+    this.stage.invalidate();
+  }
+
+  /** Mark this bin as the chosen one, or none. */
+  chooseBin(locationId: string | null): void {
+    if (locationId === this.chosenBin) return;
+    this.chosenBin = locationId;
+    const focus = locationId ? (this.binIndex.get(locationId)?.bin.place_id ?? null) : null;
+    if (focus !== this.focus) {
+      this.focus = focus;
+      this.build();
+    } else {
+      this.colourBins();
+    }
+    this.mark();
+    this.stage.invalidate();
+  }
+
+  /**
+   * Fly to a bin: face it from the aisle it opens onto, a little above and a
+   * little to one side, close enough to read the bins around it.
+   */
+  flyTo(locationId: string): void {
+    const cell = this.binIndex.get(locationId);
+    if (!cell) return;
+    const target = new Vector3(cell.centre[0], cell.centre[2], -cell.centre[1]);
+    const [fx, fy] = cell.facing;
+    const side = Math.atan2(-fy, fx) + FLY_ASIDE;
+    const dir = new Vector3(Math.cos(side) * Math.cos(FLY_ELEVATION), Math.sin(FLY_ELEVATION), Math.sin(side) * Math.cos(FLY_ELEVATION));
+    const { min, max } = this.site;
+    const reach = Math.max(1, Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]));
+    const controls = this.stage.controls;
+    const zoom = Math.min(controls.maxZoom, Math.max(controls.minZoom, this.fitted / FLY_SPAN));
+    this.stage.animate({ position: target.clone().addScaledVector(dir, reach * 2), target, zoom }, 700);
+  }
+
+  /** The top of a bin's cell, for a label pinned to it. */
+  binTop(locationId: string): Point3 | null {
+    const cell = this.binIndex.get(locationId);
+    return cell ? [cell.centre[0], cell.centre[1], cell.centre[2] + cell.size[2] / 2] : null;
+  }
+
   /** Mark this place as the chosen one, or none. */
   choose(placeId: string | null): void {
     if (placeId === this.chosen) return;
@@ -243,6 +369,8 @@ export class SiteScene {
     canvas.removeEventListener("pointermove", this.onMove);
     canvas.removeEventListener("pointerleave", this.onLeave);
     this.clear();
+    this.dropGroups();
+    for (const mark of [this.chosenMark, this.hoverMark]) mark.geometry.dispose();
     for (const m of Object.values(this.materials)) m.dispose();
     this.stage.dispose();
   }
@@ -300,6 +428,10 @@ export class SiteScene {
       const hovered = d.block.place_id === this.hovered && d.block.target;
       const solid = d.block.solid && d.block.height > 0;
       d.body.material = chosen ? (solid ? m.chosenSolid : m.chosenFloor) : solid ? m.solid : d.block.nesting === 0 ? m.outer : m.floor;
+      // A place whose bins are drawn is seen as its bins and its outline.
+      const binned = this.withBins.has(d.block.place_id);
+      d.body.visible = !binned;
+      if (d.grid) d.grid.visible = !binned;
       d.outline.material = chosen ? m.chosenLine : hovered ? m.hover : solid ? m.line : d.block.nesting === 0 ? m.outerLine : m.floorLine;
       if (d.grid) d.grid.material = chosen ? m.chosenGrid : m.grid;
       // The chosen place is drawn last, so its outline is never under a
@@ -323,6 +455,48 @@ export class SiteScene {
     m.chosenLine.color.copy(p.chosenLine);
     m.chosenGrid.color.copy(p.chosenGrid);
     m.hover.color.copy(p.hover);
+    const surface = this.stage.token("--ui-surface");
+    for (const [tone, { token, share }] of Object.entries(MIX) as [Tone, { token: string; share: number }][]) {
+      this.tones[tone] = mix(surface, this.stage.token(token), share);
+    }
+    this.colourBins();
+  }
+
+  /** Each bin in its layer's tone, and the chosen one in the accent. */
+  private colourBins(): void {
+    const c = new Color();
+    for (const { mesh, cells } of this.groups) {
+      cells.forEach((cell, i) => {
+        c.copy(cell.bin.location_id === this.chosenBin ? this.palette.chosen : this.tones[toneOf(cell.bin, this.layer)]);
+        mesh.setColorAt(i, c);
+      });
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+  }
+
+  /** The outlines round the chosen bin and the one under the pointer. */
+  private mark(): void {
+    for (const [mark, id] of [
+      [this.chosenMark, this.chosenBin],
+      [this.hoverMark, this.hoveredBin === this.chosenBin ? null : this.hoveredBin],
+    ] as const) {
+      const cell = id === null ? undefined : this.binIndex.get(id);
+      mark.visible = !!cell;
+      if (cell) {
+        cellMatrix(cell, 1.12, mark.matrix);
+        mark.matrixAutoUpdate = false;
+        mark.matrixWorldNeedsUpdate = true;
+      }
+    }
+  }
+
+  private dropGroups(): void {
+    for (const { mesh } of this.groups) {
+      this.world.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.dispose();
+    }
+    this.groups = [];
   }
 
   private clear(): void {
@@ -332,6 +506,7 @@ export class SiteScene {
       d.grid?.geometry.dispose();
     }
     this.world.clear();
+    for (const { mesh } of this.groups) this.world.add(mesh);
     this.drawn = [];
   }
 
@@ -396,13 +571,31 @@ export class SiteScene {
 
   // ── the pointer ────────────────────────────────────────────────────────
 
-  private placeAt(e: PointerEvent): string | null {
+  private aim(e: PointerEvent): void {
     const rect = this.stage.canvas.getBoundingClientRect();
     const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.stage.camera);
-    const targets: Object3D[] = this.drawn.filter((d) => d.block.target).map((d) => d.body);
+  }
+
+  private placeAt(e: PointerEvent): string | null {
+    this.aim(e);
+    const targets: Object3D[] = this.drawn.filter((d) => d.block.target && d.body.visible).map((d) => d.body);
     const [hit] = this.raycaster.intersectObjects(targets, false);
     return (hit?.object.userData.placeId as string | undefined) ?? null;
+  }
+
+  /** The bin under the pointer, when bins are drawn. */
+  private binAt(e: PointerEvent): string | null {
+    if (this.groups.length === 0) return null;
+    this.aim(e);
+    // The solid group first: a faint bin in front doesn't take the pointer
+    // from the rack in focus behind it.
+    for (const { mesh, cells } of this.groups) {
+      const [hit] = this.raycaster.intersectObject(mesh, false);
+      const cell = hit?.instanceId === undefined ? undefined : cells[hit.instanceId];
+      if (cell) return cell.bin.location_id;
+    }
+    return null;
   }
 
   private readonly onDown = (e: PointerEvent): void => {
@@ -421,22 +614,37 @@ export class SiteScene {
     // Only the main button chooses; the others move the view.
     if (e.button !== 0) return;
     if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5 || performance.now() - p.at > 600) return;
+    if (this.events.chooseBin) {
+      this.events.chooseBin(this.binAt(e));
+      return;
+    }
     const id = this.placeAt(e);
     if (id) this.events.choose(id);
   };
 
   private readonly onMove = (e: PointerEvent): void => {
     if (e.buttons !== 0) return;
-    const id = this.placeAt(e);
+    const bin = this.binAt(e);
+    this.hoverOnBin(bin);
+    const id = bin ? null : this.placeAt(e);
     this.hover(id);
     // Holding the key that moves the view says so before the drag starts.
-    this.stage.canvas.style.cursor = e.ctrlKey || e.metaKey || e.shiftKey ? "move" : id ? "pointer" : "";
+    this.stage.canvas.style.cursor = e.ctrlKey || e.metaKey || e.shiftKey ? "move" : bin || id ? "pointer" : "";
   };
 
   private readonly onLeave = (): void => {
     this.stage.canvas.style.cursor = "";
     this.hover(null);
+    this.hoverOnBin(null);
   };
+
+  private hoverOnBin(id: string | null): void {
+    if (id === this.hoveredBin) return;
+    this.hoveredBin = id;
+    this.mark();
+    this.stage.invalidate();
+    this.events.hoverBin?.(id);
+  }
 
   private hover(id: string | null): void {
     if (id === this.hovered) return;
@@ -460,3 +668,19 @@ function shadeFaces(g: BufferGeometry): void {
   g.setAttribute("color", new BufferAttribute(shades, 3));
 }
 
+
+/** A cell's box as a matrix, grown by `grow` (an outline sits just outside it). */
+function cellMatrix(c: BinCell, grow: number, out: Matrix4): Matrix4 {
+  return out.compose(
+    new Vector3(c.centre[0], c.centre[2], -c.centre[1]),
+    new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), c.angle),
+    new Vector3(c.size[0] * grow, c.size[2] * grow, c.size[1] * grow),
+  );
+}
+
+/** `share` of `token` mixed into `surface`, as CSS `color-mix` in sRGB does it. */
+function mix(surface: Color, token: Color, share: number): Color {
+  const a = surface.clone().convertLinearToSRGB();
+  const b = token.clone().convertLinearToSRGB();
+  return a.lerp(b, share).convertSRGBToLinear();
+}

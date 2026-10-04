@@ -136,6 +136,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   before it is sent, and sent again until the server has it (`domain/outbox.ts`,
   `app/outbox.ts`). The walk counts kept picks as taken (`overlay` in
   `walk.ts`). Picks only; other acts still live in the screen's memory.
+- D208. Inventory › Bin map (`/map`): every placed bin as a box in its cell
+  (`cellsOf` in `blocks.ts`, `GET /layout/bins`), coloured by what's here or by
+  reach (`layers.ts`). A search flies to a bin's face, and the chosen bin's rack
+  stays solid while the rest fade. The card sets the rack's reach.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

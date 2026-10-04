@@ -435,6 +435,9 @@ pub struct LayoutPlace {
     pub rows: i32,
     /// 1, or 2 for a rack with a face on each side.
     pub sides: i32,
+    /// How many bins share a bay at each level, lowest first: where the map
+    /// splits a bay (D208).
+    pub positions: Vec<i32>,
     pub pattern: Option<String>,
     /// How many of its levels, from the floor up, can be reached without a
     /// forklift (D180).
@@ -554,6 +557,7 @@ pub async fn site_layout(
                         levels: p.grid.levels,
                         rows: p.grid.rows,
                         sides: p.grid.sides,
+                        positions: (1..=p.grid.levels).map(|l| p.grid.positions_at(l)).collect(),
                         pattern: p.pattern,
                         reach_levels: p.reach_levels,
                     })
@@ -760,6 +764,111 @@ pub async fn bin_list(
                     })
                     .collect();
                 Ok(BinsList { bins, total })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
+// ---------------------------------------------------------------------------
+// The bin map
+// ---------------------------------------------------------------------------
+
+/// One bin as the map draws it: its cell, and enough to colour it (D208).
+#[derive(Serialize, Debug)]
+pub struct MapBin {
+    pub location_id: Uuid,
+    pub code: String,
+    pub place_id: Uuid,
+    pub side: i32,
+    pub bay: i32,
+    pub level: i32,
+    pub row: i32,
+    pub position: i32,
+    /// Whether it can be reached from the floor, without a forklift (D180).
+    pub within_reach: bool,
+    /// How many items NetSuite's last inventory balance put on this shelf,
+    /// and how many units of them in all.
+    pub reported_items: i64,
+    pub reported_on_hand: f64,
+    /// What this system's own ledger holds here.
+    pub held: i64,
+}
+
+#[derive(Serialize, Debug)]
+pub struct MapBins {
+    pub bins: Vec<MapBin>,
+    /// Active bins in no cell, which the map cannot draw.
+    pub unplaced: i64,
+}
+
+/// Every bin in a cell at the caller's site, at once (D208).
+///
+/// The map draws the whole site, so it reads every placed bin in one call,
+/// a couple of thousand small rows, where the list pages them. What is on a
+/// shelf is summed rather than listed: the map colours by it, and the bin
+/// chosen on it is read on its own.
+#[get("/layout/bins")]
+pub async fn map_bins(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let site = working_site(who.site_id)?;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let sql = format!(
+                    "SELECT l.id, l.code, l.place_id,
+                            coalesce(l.slot_side, 1)::int, l.slot_bay, l.slot_level, l.slot_row, l.slot_position,
+                            {reach},
+                            coalesce(rep.items, 0), coalesce(rep.units, 0)::float8,
+                            coalesce(held.q, 0)::bigint
+                       FROM location l
+                       -- The report and the ledger, each totalled once for the
+                       -- site rather than looked up bin by bin.
+                       LEFT JOIN (
+                           SELECT rs.location_id, count(*) AS items, sum(rs.on_hand) AS units
+                             FROM reported_stock rs
+                            WHERE rs.site_id = $1 AND rs.location_id IS NOT NULL
+                            GROUP BY rs.location_id
+                       ) rep ON rep.location_id = l.id
+                       LEFT JOIN (
+                           SELECT s.holder_location_id, sum(s.quantity) AS q
+                             FROM stock s
+                            WHERE s.holder_location_id IS NOT NULL AND s.quantity > 0
+                            GROUP BY s.holder_location_id
+                       ) held ON held.holder_location_id = l.id
+                      WHERE l.site_id = $1 AND l.active
+                        AND l.place_id IS NOT NULL AND l.slot_bay IS NOT NULL
+                      ORDER BY l.code",
+                    reach = within_reach("l")
+                );
+                let rows = tx.query(&sql, &[&site]).await?;
+                let bins = rows
+                    .iter()
+                    .map(|r| MapBin {
+                        location_id: r.get(0),
+                        code: r.get(1),
+                        place_id: r.get(2),
+                        side: r.get(3),
+                        bay: r.get(4),
+                        level: r.get(5),
+                        row: r.get(6),
+                        position: r.get(7),
+                        within_reach: r.get(8),
+                        reported_items: r.get(9),
+                        reported_on_hand: r.get(10),
+                        held: r.get(11),
+                    })
+                    .collect();
+                let unplaced: i64 = tx
+                    .query_one(
+                        "SELECT count(*) FROM location
+                          WHERE site_id = $1 AND active AND (place_id IS NULL OR slot_bay IS NULL)",
+                        &[&site],
+                    )
+                    .await?
+                    .get(0);
+                Ok(MapBins { bins, unplaced })
             })
         })
         .await?;

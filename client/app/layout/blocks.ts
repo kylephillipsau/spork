@@ -1,4 +1,4 @@
-import type { LayoutPlace, PlanShape } from "@domain/types";
+import type { LayoutPlace, MapBin, PlanShape } from "@domain/types";
 
 /**
  * The site in three dimensions, as plain numbers (D173): what the 3D pane
@@ -171,4 +171,92 @@ function lerp(p: Point, q: Point, t: number): Point {
 
 function finite(n: number): number {
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * A bin as a box in its cell on its rack (D208): the map's unit.
+ *
+ * The cell is cut from its place's box the way the rack is built: its bay along
+ * the front, its level up, its row back from the face it is on, and its place
+ * along the bay when several bins share one. A rack with two sides is two
+ * faces back to back, so the back's rows are counted in from the back.
+ */
+export interface BinCell {
+  bin: MapBin;
+  /** The middle of the cell, on the site. */
+  centre: Point3;
+  /** How long it runs along the rack, how deep, and how tall. */
+  size: Point3;
+  /** Which way the rack runs, in radians from the site's x axis. */
+  angle: number;
+  /** Which way the face it is on looks, out into the aisle, as a unit vector. */
+  facing: Point;
+}
+
+/** How much of a cell its box fills, so neighbours read as separate bins. */
+export const CELL_FILL = 0.86;
+
+/**
+ * Every bin's cell, from the plan's footprints and each place's grid. A bin
+ * whose place has no rectangle on the plan, or whose cell is outside its grid,
+ * is left out rather than drawn somewhere wrong.
+ */
+export function cellsOf(plan: PlanShape[], places: LayoutPlace[], bins: MapBin[]): BinCell[] {
+  const shapes = new Map(plan.map((s) => [s.place_id, s]));
+  const grids = new Map(places.map((p) => [p.place_id, p]));
+  const out: BinCell[] = [];
+  for (const bin of bins) {
+    const shape = shapes.get(bin.place_id);
+    const grid = grids.get(bin.place_id);
+    if (!shape || !grid || shape.corners.length !== 4) continue;
+    const cell = cellBox(shape, grid, bin);
+    if (cell) out.push(cell);
+  }
+  return out;
+}
+
+function cellBox(shape: PlanShape, grid: LayoutPlace, bin: MapBin): BinCell | null {
+  const [a, b, , d] = shape.corners as [Point, Point, Point, Point];
+  const sides = Math.max(1, grid.sides);
+  const across = grid.positions[bin.level - 1] ?? 1;
+  const inside =
+    bin.side >= 1 && bin.side <= sides &&
+    bin.bay >= 1 && bin.bay <= grid.bays &&
+    bin.level >= 1 && bin.level <= grid.levels &&
+    bin.row >= 1 && bin.row <= grid.rows &&
+    bin.position >= 1 && bin.position <= across;
+  if (!inside) return null;
+
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const depth = Math.hypot(d[0] - a[0], d[1] - a[1]);
+  if (length === 0 || depth === 0) return null;
+  const u: Point = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+  const v: Point = [(d[0] - a[0]) / depth, (d[1] - a[1]) / depth];
+
+  // Along: the bay, then its share of it. On the back, the first position is
+  // the left one as the back is faced, which is the far end of the bay.
+  const bay = length / grid.bays;
+  const share = bay / across;
+  const nth = bin.side === 2 ? across - bin.position : bin.position - 1;
+  const along = (bin.bay - 1) * bay + nth * share + share / 2;
+
+  // Back: the front's rows from the front, the back's from the back.
+  const slabs = sides * grid.rows;
+  const slab = depth / slabs;
+  const index = bin.side === 2 ? slabs - bin.row : bin.row - 1;
+  const back = index * slab + slab / 2;
+
+  // Up: a solid place's levels share its height; a floor's cells lie on it.
+  const solid = shape.solid && shape.height > 0;
+  const level = solid ? shape.height / grid.levels : Math.min(share, slab) * 0.3;
+  const up = solid ? shape.z + (bin.level - 1) * level + level / 2 : shape.z + level / 2;
+
+  const facing: Point = bin.side === 2 ? v : [-v[0], -v[1]];
+  return {
+    bin,
+    centre: [a[0] + u[0] * along + v[0] * back, a[1] + u[1] * along + v[1] * back, up],
+    size: [share * CELL_FILL, slab * CELL_FILL, level * CELL_FILL],
+    angle: Math.atan2(u[1], u[0]),
+    facing,
+  };
 }

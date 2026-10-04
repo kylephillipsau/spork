@@ -64,6 +64,8 @@ import { BinPage, PlacePage } from "@app/layout/PlacePage";
 import { WarehousePage } from "@app/layout/WarehousePage";
 import { useBin, usePlace } from "@app/layout/usePlace";
 import { chosenFrom, useWarehouse } from "@app/layout/useWarehouse";
+import { MapPage } from "@app/layout/MapPage";
+import { mapFrom, useMap } from "@app/layout/useMap";
 import { ItemPage } from "@app/items/ItemPage";
 import { useItemProperties } from "@app/items/useItemProperties";
 import { ItemsPage } from "@app/items/ItemsPage";
@@ -308,6 +310,11 @@ function LiveWarehouse() {
   return <WarehousePage desk={useWarehouse(chosenFrom(window.location.search))} />;
 }
 
+/** The bin map (D208): every bin where it sits. */
+function LiveMap() {
+  return <MapPage desk={useMap(mapFrom(window.location.search))} />;
+}
+
 /** The dashboard (D171): counts, the packing queue, findings and orders. */
 function LiveHome() {
   const { session } = useSessionBench();
@@ -341,6 +348,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   item: (params) => <LiveItem item={params["item"] ?? ""} />,
   photos: () => <LivePhotos />,
   warehouse: () => <LiveWarehouse />,
+  map: () => <LiveMap />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,
   where: () => <LiveWhere />,

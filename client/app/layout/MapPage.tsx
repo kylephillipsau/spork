@@ -1,0 +1,217 @@
+import { Suspense, lazy, useMemo, useState } from "react";
+import { ArrowRight } from "lucide-react";
+
+import { Alert, Badge, Link, Page, PageHeader, SearchField, Select, Skeleton, Tabs } from "@ui/index";
+import { href } from "@app/routing/location";
+import type { MapBin } from "@domain/types";
+
+import { findBins, LAYERS, LEGEND, swatch, type Layer } from "./layers";
+import type { MapDesk } from "./useMap";
+import s from "./map.module.css";
+
+const Map3D = lazy(() => import("./Map3D"));
+
+/**
+ * The bin map (D208): every bin on the site where it sits, coloured by what is
+ * on it or by whether it can be reached from the floor. Search for a bin and
+ * the view flies to its face; click one and its card says what is in it. The
+ * card is also where a rack's reach is set, a rack at a time.
+ */
+export function MapPage({ desk }: { desk: MapDesk }) {
+  const [typed, setTyped] = useState("");
+  const site = desk.read.kind === "ready" ? desk.read.value : null;
+  const found = useMemo(() => (site ? findBins(site.bins.bins, typed) : []), [site, typed]);
+  const go = (bin: MapBin) => {
+    desk.find(bin);
+    setTyped("");
+  };
+
+  return (
+    <Page>
+      <PageHeader title="Bin map" description="Every bin where it sits, coloured by what's on it." />
+      {desk.read.kind === "failed" && <Alert tone="danger">{desk.read.message}</Alert>}
+
+      <div className={s.map}>
+        <section className={s.stage} aria-label="The site">
+          {site ? (
+            <Suspense fallback={<div className={s.canvas} />}>
+              <Map3D
+                plan={site.layout.plan}
+                places={site.layout.places}
+                bins={site.bins.bins}
+                layer={desk.layer}
+                chosen={desk.chosen?.location_id ?? null}
+                choose={desk.choose}
+                flight={desk.flight}
+              />
+            </Suspense>
+          ) : (
+            <div className={s.canvas}>
+              <Skeleton width="40%" />
+            </div>
+          )}
+
+          <div className={s.finder}>
+            <form
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (found[0]) go(found[0]);
+              }}
+            >
+              <SearchField
+                aria-label="Find a bin"
+                placeholder="Find a bin"
+                autoComplete="off"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                disabled={!site}
+              />
+            </form>
+            {typed.trim() !== "" && site && (
+              <ul className={s.found} aria-label="Bins found">
+                {found.length === 0 ? (
+                  <li className={s.foundNone}>No bin on the map is called that.</li>
+                ) : (
+                  found.map((bin) => (
+                    <li key={bin.location_id}>
+                      <button type="button" className={s.foundItem} onClick={() => go(bin)}>
+                        <span className={s.code}>{bin.code}</span>
+                        <span className={s.foundWhere}>{site.layout.places.find((p) => p.place_id === bin.place_id)?.name}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
+
+          <div className={s.legend} aria-label="What the colours mean">
+            <Tabs
+              aria-label="Colour by"
+              value={desk.layer}
+              onValueChange={(v) => desk.setLayer(v as Layer)}
+              items={LAYERS.map((l) => ({ value: l.id, label: l.label }))}
+            />
+            <ul className={s.keys}>
+              {LEGEND[desk.layer].map((k) => (
+                <li key={k.tone}>
+                  <span className={s.swatch} style={{ background: swatch(k.tone) }} aria-hidden />
+                  {k.label}
+                </li>
+              ))}
+            </ul>
+            {desk.layer === "stock" && <p className={s.source}>From NetSuite's last count, and Spork's own records.</p>}
+          </div>
+        </section>
+
+        <aside className={s.side}>
+          <Chosen desk={desk} />
+        </aside>
+      </div>
+
+      {site && site.bins.unplaced > 0 && (
+        <p className={s.unplaced}>
+          {site.bins.unplaced === 1 ? "1 bin isn't" : `${site.bins.unplaced.toLocaleString()} bins aren't`} on the layout, so the map
+          can't show {site.bins.unplaced === 1 ? "it" : "them"}. <Link href={href("/warehouse?place=unplaced")}>See which</Link>
+        </p>
+      )}
+    </Page>
+  );
+}
+
+/** The chosen bin's card, or what to do when none is. */
+function Chosen({ desk }: { desk: MapDesk }) {
+  const bin = desk.chosen;
+  const site = desk.read.kind === "ready" ? desk.read.value : null;
+  if (!bin) {
+    const bins = site?.bins.bins ?? [];
+    const stocked = bins.filter((b) => b.reported_items > 0 || b.held > 0).length;
+    return (
+      <div className={s.card}>
+        <h2 className={s.cardTitle}>Find a bin</h2>
+        <p className={s.muted}>Search for one, or click one on the map. Drag to turn the view, and scroll to zoom.</p>
+        {site && (
+          <dl className={s.facts}>
+            <dt>On the map</dt>
+            <dd>{bins.length.toLocaleString()} bins</dd>
+            <dt>With stock</dt>
+            <dd>{stocked.toLocaleString()}</dd>
+          </dl>
+        )}
+      </div>
+    );
+  }
+
+  const place = desk.place;
+  const detail = desk.detail.kind === "ready" ? desk.detail.value : null;
+  const shown = detail?.reported ?? [];
+  const more = (detail?.reported_items ?? bin.reported_items) - shown.length;
+  const levels = place?.levels ?? 0;
+  const reach = [
+    { value: "0", label: "None of it" },
+    ...Array.from({ length: levels }, (_, i) => ({
+      value: String(i + 1),
+      label: i === 0 ? "Level 1" : i + 1 === levels ? "All of it" : `Levels 1 to ${i + 1}`,
+    })),
+  ];
+
+  return (
+    <div className={s.card}>
+      <div className={s.cardHead}>
+        <h2 className={s.cardCode}>{bin.code}</h2>
+        <Badge tone={bin.within_reach ? "success" : "warning"}>{bin.within_reach ? "From the floor" : "Ladder or forklift"}</Badge>
+      </div>
+      <p className={s.muted}>
+        {place?.name}
+        {detail?.whereabouts ? `, ${detail.whereabouts}` : ""}
+      </p>
+
+      <h3 className={s.cardSection}>NetSuite's last count</h3>
+      {desk.detail.kind === "loading" ? (
+        <Skeleton width="70%" />
+      ) : desk.detail.kind === "failed" ? (
+        <p className={s.muted}>{desk.detail.message}</p>
+      ) : shown.length === 0 ? (
+        <p className={s.muted}>Nothing on this shelf.</p>
+      ) : (
+        <ul className={s.items}>
+          {shown.map((r) => (
+            <li key={r.item_id}>
+              <Link href={href(`/items/${r.item_id}`)} className={s.code}>
+                {r.item_code}
+              </Link>
+              <span className={s.qty}>{Number(r.on_hand).toLocaleString()}</span>
+            </li>
+          ))}
+          {more > 0 && <li className={s.muted}>and {more} more</li>}
+        </ul>
+      )}
+      <dl className={s.facts}>
+        <dt>Spork's records</dt>
+        <dd>{bin.held > 0 ? `${bin.held.toLocaleString()} units` : "Nothing yet"}</dd>
+      </dl>
+
+      {place && (
+        <div className={s.reach}>
+          <Select
+            label={`Reached from the floor on ${place.name}`}
+            value={String(place.reach_levels)}
+            options={reach}
+            disabled={desk.busy}
+            onValueChange={(v) => void desk.setReach(Number(v))}
+          />
+        </div>
+      )}
+      {desk.problem && (
+        <Alert tone="danger" onDismiss={desk.dismiss}>
+          {desk.problem}
+        </Alert>
+      )}
+
+      <Link href={href(`/bins/${bin.location_id}`)} className={s.open}>
+        Open the rack face <ArrowRight aria-hidden />
+      </Link>
+    </div>
+  );
+}

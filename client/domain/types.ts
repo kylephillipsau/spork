@@ -1618,6 +1618,8 @@ export interface LayoutPlace {
   rows: number;
   /** 1, or 2 for a rack with a face on each side. */
   sides: number;
+  /** How many bins share a bay at each level, lowest first (D208). */
+  positions: number[];
   pattern: string | null;
   /** How many of its levels, from the floor up, can be reached without a forklift (D180). */
   reach_levels: number;
@@ -1737,4 +1739,39 @@ export interface PersonAdded {
   person_id: Uuid;
   /** They already signed in elsewhere, and keep that sign-in. */
   existing: boolean;
+}
+
+/** `GET /layout/bins`: one bin as the map draws it (D208). */
+export interface MapBin {
+  location_id: Uuid;
+  code: string;
+  place_id: Uuid;
+  /** 1 for the front, 2 for the back of a rack with two sides. */
+  side: number;
+  /** The column from the front's left, the level up from the floor, the row back from its face, and its place along the bay. */
+  bay: number;
+  level: number;
+  row: number;
+  position: number;
+  /** Reached from the floor, without a forklift or a ladder (D180). */
+  within_reach: boolean;
+  /** What NetSuite's last inventory balance put on this shelf: how many items, and how many units of them. */
+  reported_items: number;
+  reported_on_hand: number;
+  /** What Spork's own ledger holds here. */
+  held: number;
+}
+
+/** `GET /layout/bins`: every bin in a cell at the site. */
+export interface MapBins {
+  bins: MapBin[];
+  /** Active bins in no cell, which the map cannot draw. */
+  unplaced: number;
+}
+
+/** `POST /places/{id}/reach`: what a place says of reach, after saying it (D180). */
+export interface ReachSaid {
+  place_id: Uuid;
+  reach_levels: number;
+  levels: number;
 }

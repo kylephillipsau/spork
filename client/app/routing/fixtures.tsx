@@ -95,6 +95,8 @@ import { FAILED as TOKENS_FAILED, MINTED, NONE as TOKENS_NONE, READY as TOKENS_R
 import { ImportPage } from "@app/admin/ImportPage";
 import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
+import { MapPage } from "@app/layout/MapPage";
+import { fixtureMap, fixtureMapChosen } from "@app/layout/map-fixture";
 import { BackupPage } from "@app/admin/BackupPage";
 import { BACKUP_READY, fixtureBackup } from "@app/admin/backup-fixture";
 import { PeoplePage } from "@app/admin/PeoplePage";
@@ -622,6 +624,12 @@ export const FIXTURES: readonly Screen[] = [
   // "rack" left out, three racks with two sides), a rack chosen with its
   // bins, the tray of bins no pattern fits, a search across the site, and a
   // big site just after its first draft was applied.
+  // The bin map (D208): the site, a bin chosen with its card, and the reach layer.
+  app("f-map", "/fixtures/map", "Bin map", "desk", { screen: "map" }, () => <MapPage desk={fixtureMap()} />),
+  app("f-map-chosen", "/fixtures/map/chosen", "Bin map — a bin chosen", "desk", { screen: "map" }, () => <MapPage desk={fixtureMapChosen()} />),
+  app("f-map-reach", "/fixtures/map/reach", "Bin map — reach", "desk", { screen: "map" }, () => (
+    <MapPage desk={fixtureMapChosen({ layer: "reach" })} />
+  )),
   app("f-warehouse-none", "/fixtures/warehouse/none", "Warehouse — none yet", "desk", { screen: "warehouse" }, () => (
     <WarehousePage desk={fixtureWarehouse(NO_LAYOUT)} />
   )),
