@@ -14835,7 +14835,79 @@ what the route saves.
 
 **Not decided.** Which bin a line is taken from is still the ledger's
 earliest cell (Proposal F). At Melbourne, Spork's ledger holds no stock in
-bins yet, only NetSuite's last count does. So the real walk has no bins to
-route until it does, or until the walk may route to where NetSuite last
-counted an item. That is a decision for moving picking into Spork
-(Proposal A).
+bins, only NetSuite's count does. D212 settles the direction: NetSuite keeps
+the shelves, so the walk will route to the bins NetSuite's balance names. That
+is not built yet, so the real walk has no bins to route until it is.
+
+### D212: NetSuite keeps the shelves; Spork keeps the floor's work
+
+*Adopted 2026-10-05, with no migration. Amends docs/picking-plan.md's
+Proposal A and D211; extends migration 86 and D172.*
+
+**Decision.** Each fact has one keeper, and NetSuite is staying (the user,
+2026-10-04).
+
+- **NetSuite keeps the shelves.** How much of each item is in each bin is
+  NetSuite's to say. Spork keeps no competing copy of shelf stock, so it needs
+  no opening balance and no stocktake. NetSuite's balance stays in
+  `reported_stock` as a report (migration 86), never in the ledger.
+- **Spork keeps the floor's work and what is in hand.** Picks, totes, cartons,
+  packing and despatch. Spork's ledger starts when goods leave a shelf in a
+  picker's hands, as it starts today when NetSuite's picks are handed over at
+  the bench (D172).
+- **Spork keeps what it measures.** The layout, the bin map, items'
+  dimensions, weights and photos.
+
+So a worker who changes stock in NetSuite (a transfer between bins, a count
+adjustment, a receipt) is not in conflict with Spork. Spork has no copy of its
+own to correct; it reads NetSuite's new balance and takes it as the latest
+word. What needs care is Spork acting on an older picture in between:
+
+1. **Fresh.** The Bridge reads NetSuite's inventory balance on a timer, every
+   five minutes by default, and loads it as the same feed the manual import
+   used (`netsuite-inventory-balance`). Its first load replaces the manual
+   snapshot on purpose: they are one feed delivered two ways. An identical
+   balance is stored once and still reloaded, so its age stays true; a
+   changed one is stored as a new arrival and, recording an act, tells open
+   devices to read again (D206).
+2. **Its age shown.** A number from NetSuite says how old it is wherever it
+   is shown: "NetSuite's count, 4 min ago".
+3. **The shelf breaks ties.** A picker who finds a different quantity records
+   it as a count (D8). That is evidence, never a silent overwrite.
+4. **A difference is a finding, fixed in NetSuite.** What the picker saw and
+   what NetSuite says go to a person with both sides' evidence. NetSuite keeps
+   the shelves, so the fix is made there.
+
+**Levels, not deltas.** NetSuite's state is held as levels as at a moment, as
+D172 holds its picks, so a missed or late load heals at the next.
+
+**Why.** Two keepers of one fact is the failure. A ledger seeded from
+NetSuite once would be wrong within the day while NetSuite still receives,
+moves and adjusts in the same bins. With NetSuite staying, one keeper of shelf
+stock is NetSuite. What Spork adds is the floor: where things are on it,
+the best way to walk it, and the work done there.
+
+**What it changes.**
+- The picking walk routes to the bins NetSuite's balance names, not to cells
+  in Spork's ledger (D211's open paragraph). Not built yet.
+- A pick in Spork records the goods going from the bin NetSuite names into a
+  tote or onto a pallet, naming the bin. That is custody beginning, not a
+  shelf balance falling. Not built yet.
+- **NetSuite must hear what Spork did**, or its shelf balances drift. That
+  write-back is the critical path for picking in Spork (the plan's
+  Question 1). A write-back that fails is held and sent again (D207), and what
+  NetSuite hasn't yet heard stays visible.
+
+**Not decided.**
+- The write-back's route: the Bridge writing from a signed-in browser, or a
+  NetSuite integration (a RESTlet with token-based authentication) the server
+  calls directly. The second needs NetSuite administration.
+- Who fixes a difference in NetSuite: the picker, a supervisor, or Spork
+  writing back an adjustment.
+- The refresh interval. Five minutes is a default until the user says.
+- Whether receiving and put-away at Melbourne stay in NetSuite. If they do,
+  they reach Spork through the balance; nothing else is needed.
+
+Known cost: a changed balance is a new stored arrival, roughly 200 kB, which
+is tens of megabytes a day if NetSuite changes between every load. Pruning old
+arrivals of this feed is for later.

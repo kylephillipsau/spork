@@ -850,6 +850,9 @@ pub struct MapBins {
     pub bins: Vec<MapBin>,
     /// Active bins in no cell, which the map cannot draw.
     pub unplaced: i64,
+    /// When NetSuite's count was taken, the newest at the site: the age of
+    /// what the map colours by (D212).
+    pub reported_as_at: Option<DateTime<Utc>>,
 }
 
 /// Every bin in a cell at the caller's site, at once (D208).
@@ -918,7 +921,11 @@ pub async fn map_bins(req: HttpRequest, state: web::Data<AppState>) -> Result<Ht
                     )
                     .await?
                     .get(0);
-                Ok(MapBins { bins, unplaced })
+                let reported_as_at: Option<DateTime<Utc>> = tx
+                    .query_one("SELECT max(as_at) FROM reported_stock WHERE site_id = $1", &[&site])
+                    .await?
+                    .get(0);
+                Ok(MapBins { bins, unplaced, reported_as_at })
             })
         })
         .await?;

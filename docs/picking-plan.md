@@ -149,11 +149,17 @@ planner's suggestions, never by hand-editing a route.
 
 ### Proposal A: Picking moves into Spork at Melbourne
 
-*Proposed, not adopted.*
+*Proposed, not adopted. Its stock model is D212: NetSuite keeps the shelves.*
 
 **Decision.** Pickers at Melbourne pick in Spork, not in NetSuite's handheld.
-NetSuite still sends the orders and still learns what was packed and shipped
-(Question 1).
+NetSuite still sends the orders and still learns what was picked, packed and
+shipped (Question 1).
+
+- **Stock (D212).** NetSuite keeps how much is in each bin; the Bridge keeps
+  Spork's copy of its balance minutes old. The walk routes to the bins it
+  names. A pick in Spork is custody beginning (the goods into a tote, naming
+  the bin), and NetSuite is told, so its balance falls there. No opening
+  balance or stocktake.
 
 - **People.** Each picker is a person in Spork and signs in as themselves.
   Today only first-time setup creates a person, so adding people to a
@@ -387,7 +393,7 @@ channel exist to draw.
   spot or a reload no longer loses one. Other acts are still held in memory.
 - **NetSuite has to hear what happened.** Today it is where picking happens.
   Moving picking means Spork's results must reach it (Question 1), and that path
-  is still open.
+  is still open. Under D212 it is what keeps NetSuite's shelves true.
 - **Pickers trusting it.** The first runs should show the walk saved
   against the typed sequence, so trust is earned rather than assumed.
 
@@ -477,7 +483,9 @@ raising it is adopted.
   any fulfilment exists, from the sales orders (the `import_orders` loader
   reads that export already). The results then go back by the packer
   marking them in NetSuite, or by the bridge writing them back. This needs a
-  business answer before step 4.
+  business answer before step 4. **D212 makes it the critical path:** NetSuite
+  keeps the shelves, so it has to hear every pick Spork records. The route,
+  the Bridge or a RESTlet with token-based authentication, is still open.
 - **Question 2. How long is a layout cell at Melbourne?** One measurement, taken
   with the real layout: a bay's width and an aisle's width.
 - **Question 3. The trolleys and totes.** How many totes fit a trolley, and what

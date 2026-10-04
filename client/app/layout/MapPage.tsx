@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 
 import { Alert, Badge, Checkbox, Link, Page, PageHeader, SearchField, Select, Skeleton, Tabs } from "@ui/index";
 import { href } from "@app/routing/location";
+import { ago } from "@app/common/cells";
 import type { MapBin, WalkRoute } from "@domain/types";
 
 import { findBins, LAYERS, LEGEND, swatch, type Layer } from "./layers";
@@ -102,7 +103,7 @@ export function MapPage({ desk }: { desk: MapDesk }) {
                 </li>
               ))}
             </ul>
-            {desk.layer === "stock" && <p className={s.source}>From NetSuite's last count, and Spork's own records.</p>}
+            {desk.layer === "stock" && <p className={s.source}>{countSentence(site?.bins.reported_as_at ?? null)}</p>}
             <div className={s.walk}>
               <Checkbox checked={desk.showWalk} onCheckedChange={(v) => desk.setShowWalk(v === true)} label="Today's walk" />
               {desk.showWalk && <span className={s.source}>{walkSentence(desk.walk)}</span>}
@@ -172,7 +173,7 @@ function Chosen({ desk }: { desk: MapDesk }) {
         {detail?.whereabouts ? `, ${detail.whereabouts}` : ""}
       </p>
 
-      <h3 className={s.cardSection}>NetSuite's last count</h3>
+      <h3 className={s.cardSection}>{site?.bins.reported_as_at ? `NetSuite's count, ${ago(site.bins.reported_as_at)} ago` : "NetSuite's count"}</h3>
       {desk.detail.kind === "loading" ? (
         <Skeleton width="70%" />
       ) : desk.detail.kind === "failed" ? (
@@ -231,4 +232,13 @@ function walkSentence(walk: MapDesk["walk"]): string {
   const off = route.off_route > 0 ? `, and ${route.off_route} off the layout` : "";
   if (!route.cell_mm) return `${stops}${off}.`;
   return `${stops}, ${Math.round((route.walked * route.cell_mm) / 1000)} m${off}.`;
+}
+
+/**
+ * Where the colours come from, and how old they are (D212): a number from
+ * another system says how old it is, or it is read as current forever.
+ */
+function countSentence(asAt: string | null): string {
+  if (!asAt) return "From Spork's own records: NetSuite's count hasn't been loaded.";
+  return `From NetSuite's count ${ago(asAt)} ago, and Spork's own records.`;
 }

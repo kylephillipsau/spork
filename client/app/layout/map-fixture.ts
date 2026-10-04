@@ -40,7 +40,8 @@ function binsOf(): MapBin[] {
   return out;
 }
 
-const BINS: MapBins = { bins: binsOf(), unplaced: 42 };
+// NetSuite's count from a few minutes ago, as the Bridge keeps it (D212).
+const BINS: MapBins = { bins: binsOf(), unplaced: 42, reported_as_at: new Date(Date.now() - 4 * 60_000).toISOString() };
 
 export const MAP_SITE: MapSite = { layout: DRAFTED_SITE, bins: BINS };
 

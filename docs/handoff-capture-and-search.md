@@ -158,6 +158,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   from the tray can go on the plan as a spot (`spots`). At Melbourne the
   ledger holds no stock in bins, so the real walk has nothing to route yet;
   see D211's last paragraph.
+- D212. NetSuite keeps the shelves; Spork keeps the floor's work and what is
+  in hand. The Bridge (0.5.0, in `warehouse-scripts`) loads NetSuite's
+  inventory balance every five minutes into the same feed as the manual
+  import, and the bin map says how old it is (`MapBins.reported_as_at`).
+  Next: the walk routing to NetSuite's bins, a pick into custody, and the
+  write-back to NetSuite.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

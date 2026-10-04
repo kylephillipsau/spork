@@ -1809,6 +1809,8 @@ export interface MapBins {
   bins: MapBin[];
   /** Active bins in no cell, which the map cannot draw. */
   unplaced: number;
+  /** When NetSuite's count was taken, the newest at the site (D212). */
+  reported_as_at: string | null;
 }
 
 /** `POST /places/{id}/reach`: what a place says of reach, after saying it (D180). */
