@@ -146,6 +146,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   layout's `version` (`POST /layout/edit`). Each change is kept in
   `place_change`. Grids are not editable. The arithmetic is `edit.ts`, tested
   against the server's composition.
+- D210, migration 120. `site.cell_mm`, set once (`POST /layout/scale`); the
+  editor's "Measure in metres" sets 1000. Then: size racks from a bay width,
+  side depth and level height; set chosen racks out in a row; type a place's
+  room to its neighbour or the wall. There's no floor plan to copy, so the
+  user is measuring the floor.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.
@@ -177,5 +182,7 @@ Each item is one decision in [domain-model.md](./domain-model.md).
    item list's bin.
 4. A completed sheet for a list: each item with its own and its carton's
    figures, as CSV.
-5. Apply the real layout, so A to D can say which levels are reachable.
+5. Measure the floor and build it in Edit layout (D210): building size,
+   each rack make, row starts and aisles, and which aisle each rack's 01
+   faces. Then set each rack's reach on the bin map.
 6. Cut a non-box item's photo out onto white at the computer.

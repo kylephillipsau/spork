@@ -1,10 +1,33 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Maximize, Minus, Plus, Redo2, RotateCcw, RotateCw, Rotate3d, Save, Trash2, Undo2 } from "lucide-react";
 
-import { Alert, Button, Card, IconButton, Page, PageHeader, Select, Skeleton, TextField } from "@ui/index";
+import { Alert, Button, Card, Checkbox, IconButton, Page, PageHeader, Select, Skeleton, TextField } from "@ui/index";
 import type { Frame, LayoutPlace, PlanShape, Uuid } from "@domain/types";
 
-import { moved, PRESETS, shown, SITE, stepOf, stored, turned, unitOf, type Draft, type PlaceBox, type Point } from "./edit";
+import {
+  at,
+  boundsOf,
+  byName,
+  cleared,
+  clearances,
+  inRow,
+  makeOf,
+  moved,
+  PRESETS,
+  sameMake,
+  shown,
+  SITE,
+  sizedFrom,
+  stepOf,
+  stored,
+  turned,
+  unitOf,
+  type Clearance,
+  type Draft,
+  type PlaceBox,
+  type Point,
+  type RowWay,
+} from "./edit";
 import type { PlanDesk } from "./usePlanEditor";
 import s from "./plan-editor.module.css";
 
@@ -110,7 +133,7 @@ function gridsOf(places: LayoutPlace[], drafts: Draft[]): LayoutPlace[] {
 // ── the plan ────────────────────────────────────────────────────────────
 
 type Gesture =
-  | { kind: "drag"; id: Uuid; from: Point; box: PlaceBox; parent: Frame; begun: boolean }
+  | { kind: "drag"; on: Uuid; from: Point; starts: { id: Uuid; box: PlaceBox; parent: Frame }[]; begun: boolean }
   | { kind: "pan"; from: { x: number; y: number }; view: View; moved: boolean; on: Uuid | null };
 
 /** What the plan shows, in its own units: the site's, with y turned up. */
@@ -131,6 +154,7 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
   const [view, setView] = useState<View>(() => fit(desk.plan));
   const frames = useMemo(() => new Map(desk.plan.map((sh) => [sh.place_id, sh.frame])), [desk.plan]);
   const chosen = desk.selected?.place_id ?? null;
+  const chosenIds = new Set(desk.chosen.map((c) => c.place_id));
   const outermost = desk.plan.find((sh) => sh.nesting === 0)?.place_id ?? null;
 
   /** Where a pointer is, in site cells. */
@@ -163,9 +187,21 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
     const target = (e.target as Element).closest("[data-place]")?.getAttribute("data-place") ?? null;
     const d = target && target !== outermost ? desk.drafts.find((x) => x.place_id === target) : undefined;
     svg.current?.setPointerCapture(e.pointerId);
-    if (d) {
-      desk.select(d.place_id);
-      gesture.current = { kind: "drag", id: d.place_id, from: site(e), box: d.box, parent: parentOf(d), begun: false };
+    if (d && e.shiftKey) {
+      // Shift adds to the choice, or takes away from it, and moves nothing.
+      desk.select(d.place_id, true);
+      gesture.current = null;
+    } else if (d) {
+      // A place already among several chosen moves them all.
+      const group = desk.chosen.length > 1 && desk.chosen.some((c) => c.place_id === d.place_id) ? desk.chosen : [d];
+      if (group.length === 1) desk.select(d.place_id);
+      gesture.current = {
+        kind: "drag",
+        on: d.place_id,
+        from: site(e),
+        starts: group.map((x) => ({ id: x.place_id, box: x.box, parent: parentOf(x) })),
+        begun: false,
+      };
     } else {
       gesture.current = { kind: "pan", from: { x: e.clientX, y: e.clientY }, view, moved: false, on: target };
     }
@@ -176,13 +212,16 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
     if (!g) return;
     if (g.kind === "drag") {
       const [x, y] = site(e);
-      const box = moved(g.box, g.parent, x - g.from[0], y - g.from[1], stepOf(desk.cellMm, e.shiftKey));
-      if (!g.begun && box.x === g.box.x && box.y === g.box.y) return;
+      const step = stepOf(desk.cellMm, e.shiftKey);
+      const boxes = new Map(g.starts.map((s0) => [s0.id, moved(s0.box, s0.parent, x - g.from[0], y - g.from[1], step)]));
+      const first = g.starts[0];
+      const now = first && boxes.get(first.id);
+      if (!g.begun && first && now && now.x === first.box.x && now.y === first.box.y) return;
       if (!g.begun) {
         desk.begin();
         g.begun = true;
       }
-      desk.drag(g.id, box);
+      desk.drag(boxes);
     } else {
       const el = svg.current;
       if (!el) return;
@@ -196,8 +235,10 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
   const up = () => {
     const g = gesture.current;
     gesture.current = null;
-    // A click on the floor chooses it, or nothing.
+    // A click on the floor chooses it, or nothing; a click on one of several
+    // chosen, without a drag, chooses just that one.
     if (g?.kind === "pan" && !g.moved) desk.select(g.on);
+    if (g?.kind === "drag" && !g.begun && g.starts.length > 1) desk.select(g.on);
   };
 
   const key = (e: KeyboardEvent<SVGSVGElement>) => {
@@ -208,16 +249,19 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
       else desk.undo();
       return;
     }
-    if (!d) return;
+    const all = desk.chosen.filter((x) => x.parent_id !== null);
+    if (all.length === 0) return;
     const step = stepOf(desk.cellMm, e.shiftKey);
     const nudge: Record<string, Point> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
     const by = nudge[e.key];
     if (by) {
       e.preventDefault();
-      desk.change(d.place_id, (x) => ({ ...x, box: moved(x.box, parentOf(x), by[0], by[1], step) }));
+      desk.place(new Map(all.map((x) => [x.place_id, moved(x.box, parentOf(x), by[0], by[1], step)])));
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
-      desk.change(d.place_id, (x) => ({ ...x, box: turned(x.box, e.shiftKey ? 90 : -90) }));
+      desk.place(new Map(all.map((x) => [x.place_id, turned(x.box, e.shiftKey ? 90 : -90)])));
+    } else if (!d) {
+      if (e.key === "Escape") desk.select(null);
     } else if ((e.key === "Delete" || e.key === "Backspace") && d.bins === 0 && d.parent_id !== null) {
       e.preventDefault();
       desk.remove(d.place_id);
@@ -229,6 +273,9 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
   // Outermost first, so what is inside is drawn over it, and the chosen last.
   const drawn = [...desk.plan].sort((a, b) => Number(a.place_id === chosen) - Number(b.place_id === chosen) || a.nesting - b.nesting);
   const picked = desk.plan.find((sh) => sh.place_id === chosen && sh.nesting > 0);
+  // How much of the site a screen pixel is, so marks keep their size on screen.
+  // The plan keeps its shape, so whichever way it is tighter sets the scale.
+  const px = Math.max(view.w / (svg.current?.clientWidth || 800), view.h / (svg.current?.clientHeight || 600));
   const grid = fit(desk.plan);
 
   return (
@@ -262,7 +309,7 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
               s.shape,
               sh.nesting === 0 ? s.outer : sh.solid ? s.solid : s.floor,
               sh.nesting > 0 && s.movable,
-              sh.place_id === chosen && s.chosen,
+              chosenIds.has(sh.place_id) && s.chosen,
             ]
               .filter(Boolean)
               .join(" ")}
@@ -290,7 +337,10 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
               </text>
             );
           })}
-        {picked && picked.corners.length === 4 && <Front shape={picked} sides={desk.selected?.sides ?? 1} />}
+        {picked && picked.corners.length === 4 && <Front shape={picked} sides={desk.selected?.sides ?? 1} px={px} />}
+        {desk.selected && desk.selected.parent_id && (
+          <Gaps d={desk.selected} gaps={clearances(desk.drafts, desk.selected)} parent={parentOf(desk.selected)} cellMm={desk.cellMm} px={px} />
+        )}
       </svg>
       <div className={s.tools}>
         <IconButton size="sm" label="Zoom in" icon={<Plus />} onClick={() => setView((v) => zoomed(v, 1 / 1.4))} />
@@ -305,13 +355,13 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
  * Which side of the chosen place is its front: the face its first bins open
  * onto, and what turning it changes. A rack with two sides says so of its back.
  */
-function Front({ shape, sides }: { shape: PlanShape; sides: number }) {
+function Front({ shape, sides, px }: { shape: PlanShape; sides: number; px: number }) {
   const [a, b, c, d] = shape.corners as [Point, Point, Point, Point];
   const out = unit([a[0] - d[0], a[1] - d[1]]);
   const label = (p: Point, q: Point, normal: Point, text: string) => {
-    const m: Point = [(p[0] + q[0]) / 2 + normal[0] * 1.1, (p[1] + q[1]) / 2 + normal[1] * 1.1];
+    const m: Point = [(p[0] + q[0]) / 2 + normal[0] * 14 * px, (p[1] + q[1]) / 2 + normal[1] * 14 * px];
     return (
-      <text x={m[0]} y={-m[1]} fontSize={0.8} className={s.side} textAnchor="middle" dominantBaseline="central">
+      <text x={m[0]} y={-m[1]} fontSize={11 * px} className={s.side} textAnchor="middle" dominantBaseline="central">
         {text}
       </text>
     );
@@ -329,6 +379,40 @@ function Front({ shape, sides }: { shape: PlanShape; sides: number }) {
 function upright(turn: number): number {
   const t = ((turn % 180) + 180) % 180;
   return t > 90 ? 180 - t : -t;
+}
+
+/**
+ * The room round the chosen place, drawn the way a tape would be held: to the
+ * nearest neighbour across each gap, or to the wall. The same numbers are in
+ * the panel beside the plan, to type over.
+ */
+function Gaps({ d, gaps, parent, cellMm, px }: { d: Draft; gaps: Clearance[]; parent: Frame; cellMm: number | null; px: number }) {
+  const b = boundsOf(d);
+  const [mx, my] = [(b.left + b.right) / 2, (b.front + b.back) / 2];
+  return (
+    <g pointerEvents="none">
+      {gaps
+        .filter((g) => g.gap > 1e-6)
+        .map((g) => {
+          const [u1, v1, u2, v2] =
+            g.side === "left" ? [b.left, my, b.left - g.gap, my]
+            : g.side === "right" ? [b.right, my, b.right + g.gap, my]
+            : g.side === "front" ? [mx, b.front, mx, b.front - g.gap]
+            : [mx, b.back, mx, b.back + g.gap];
+          const [x1, y1] = at(parent, u1, v1);
+          const [x2, y2] = at(parent, u2, v2);
+          const [lx, ly] = [(x1 + x2) / 2, (y1 + y2) / 2];
+          return (
+            <g key={g.side}>
+              <line x1={x1} y1={-y1} x2={x2} y2={-y2} className={s.gap} vectorEffect="non-scaling-stroke" />
+              <text x={lx} y={-ly} fontSize={12 * px} strokeWidth={3 * px} className={s.gapLabel} textAnchor="middle" dominantBaseline="central">
+                {`${shown(g.gap, cellMm)} ${unitOf(cellMm) === "m" ? "m" : ""}`.trim()}
+              </text>
+            </g>
+          );
+        })}
+    </g>
+  );
 }
 
 function zoomed(v: View, k: number, px = v.x + v.w / 2, py = v.y + v.h / 2): View {
@@ -355,15 +439,17 @@ function unit([x, y]: Point): Point {
 
 // ── the numbers ─────────────────────────────────────────────────────────
 
-/** The chosen place's name, kind and box, or what can be added. */
+/** The chosen place, several chosen together, or what can be added. */
 function Inspector({ desk }: { desk: PlanDesk }) {
-  const d = desk.selected;
+  if (desk.chosen.length > 1) return <Several desk={desk} />;
+  if (desk.selected) return <One desk={desk} d={desk.selected} />;
   const outer = desk.drafts.find((x) => x.parent_id === null) ?? null;
-  if (!d) {
-    // A new place goes in the middle of the outermost place.
-    const where: Point = outer ? [Math.round(outer.box.length / 2), Math.round(outer.box.depth / 2)] : [0, 0];
-    return (
-      <Card title="Add to the plan" description="Choose a place on the plan to move, turn or resize it, or add one here.">
+  // A new place goes in the middle of the outermost place.
+  const where: Point = outer ? [Math.round(outer.box.length / 2), Math.round(outer.box.depth / 2)] : [0, 0];
+  const racks = desk.drafts.filter((d) => d.solid && d.bays > 1);
+  return (
+    <Card title="Add to the plan" description="Choose a place on the plan to move, turn or measure it; Shift-click to choose more than one. Or add one here.">
+      <div className={s.fields}>
         <div className={s.presets}>
           {PRESETS.map((p) => (
             <Button key={p.id} icon={<Plus />} onClick={() => desk.add(p, where)}>
@@ -371,17 +457,26 @@ function Inspector({ desk }: { desk: PlanDesk }) {
             </Button>
           ))}
         </div>
-      </Card>
-    );
-  }
+        {racks.length > 1 && (
+          <div className={s.remove}>
+            <Button onClick={() => desk.selectAll(racks.sort(byName).map((r) => r.place_id))}>Choose every rack ({racks.length})</Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
 
+/** One place: its name, what it is, where it stands, the room round it, and its size. */
+function One({ desk, d }: { desk: PlanDesk; d: Draft }) {
   const parent = desk.drafts.find((x) => x.place_id === d.parent_id);
   const mm = desk.cellMm;
   const unit = unitOf(mm);
   const set = (field: keyof PlaceBox) => (value: number) =>
     desk.change(d.place_id, (x) => ({ ...x, box: { ...x.box, [field]: stored(value, mm) } }));
   const step = mm ? 0.01 : 0.5;
-  const rack = d.sides === 2 || d.bins > 0;
+  const rack = d.solid && d.bays > 1;
+  const gaps = d.parent_id ? clearances(desk.drafts, d) : [];
 
   return (
     <Card
@@ -409,11 +504,29 @@ function Inspector({ desk }: { desk: PlanDesk }) {
           <NumberField label={parent ? "From its left" : "Across"} unit={unit} value={shown(d.box.x, mm)} step={step} onCommit={set("x")} />
           <NumberField label={parent ? "From its front" : "Up the plan"} unit={unit} value={shown(d.box.y, mm)} step={step} onCommit={set("y")} />
         </div>
+        {gaps.length > 0 && (
+          <fieldset className={s.group}>
+            <legend className={s.legend}>Room round it</legend>
+            <div className={s.pair}>
+              {gaps.map((g) => (
+                <NumberField
+                  key={g.side}
+                  label={`${SIDE_WORD[g.side]}, to ${g.to ?? "the wall"}`}
+                  unit={unit}
+                  value={shown(g.gap, mm)}
+                  step={step}
+                  onCommit={(v) => desk.change(d.place_id, (x) => ({ ...x, box: cleared(x.box, g.side, g.gap, stored(v, mm)) }))}
+                />
+              ))}
+            </div>
+          </fieldset>
+        )}
         <div className={s.trio}>
           <NumberField label="Length" unit={unit} value={shown(d.box.length, mm)} step={step} min={0.01} disabled={!!d.outline} onCommit={set("length")} />
           <NumberField label="Depth" unit={unit} value={shown(d.box.depth, mm)} step={step} min={0.01} disabled={!!d.outline} onCommit={set("depth")} />
           <NumberField label="Height" unit={unit} value={shown(d.box.height, mm)} step={step} min={0.01} onCommit={set("height")} />
         </div>
+        {rack && <MakeForm desk={desk} racks={[d]} more={sameMake(desk.drafts, d)} />}
         <div className={s.turn}>
           <span className={s.turnLabel}>Turned {d.box.turn}°</span>
           <IconButton label="Turn a quarter anticlockwise" icon={<RotateCcw />} onClick={() => desk.change(d.place_id, (x) => ({ ...x, box: turned(x.box, 90) }))} />
@@ -425,18 +538,137 @@ function Inspector({ desk }: { desk: PlanDesk }) {
         {rack && <p className={s.note}>Its bins move with it: each is in a bay and a level of it, wherever it stands.</p>}
         {d.outline && <p className={s.note}>It has an outline of its own, so it is moved and turned, not resized.</p>}
         <div className={s.remove}>
-          <Button
-            variant="ghost"
-            icon={<Trash2 />}
-            disabled={d.bins > 0 || d.parent_id === null}
-            onClick={() => desk.remove(d.place_id)}
-          >
+          <Button variant="ghost" icon={<Trash2 />} disabled={d.bins > 0 || d.parent_id === null} onClick={() => desk.remove(d.place_id)}>
             Take it away
           </Button>
           {d.bins > 0 && <span className={s.note}>It holds bins or places, so it stays.</span>}
         </div>
       </div>
     </Card>
+  );
+}
+
+const SIDE_WORD = { left: "Left", right: "Right", front: "In front", back: "Behind" } as const;
+
+/** Several places chosen: set out in a row, or sized from their bays together. */
+function Several({ desk }: { desk: PlanDesk }) {
+  const mm = desk.cellMm;
+  const unit = unitOf(mm);
+  const racks = desk.chosen.filter((d) => d.parent_id !== null);
+  const parents = new Set(racks.map((d) => d.parent_id));
+  const bounds = racks.map(boundsOf);
+  const [left, setLeft] = useState(() => String(shown(Math.min(...bounds.map((b) => b.left)), mm)));
+  const [front, setFront] = useState(() => String(shown(Math.min(...bounds.map((b) => b.front)), mm)));
+  const [aisle, setAisle] = useState(() => String(mm ? 2.4 : 2));
+  const [way, setWay] = useState<RowWay>("up");
+  const [order, setOrder] = useState<"az" | "za">("az");
+  const numbers = [left, front, aisle].map((t) => Number.parseFloat(t));
+  const ready = parents.size === 1 && numbers.every((n) => Number.isFinite(n)) && numbers[2]! >= 0;
+  const sized = racks.filter((d) => d.solid && d.bays > 1);
+
+  return (
+    <Card title={`${desk.chosen.length} places chosen`} description="Shift-click a place to add it or take it out. Drag any of them to move them all.">
+      <div className={s.fields}>
+        <fieldset className={s.group}>
+          <legend className={s.legend}>Set out in a row</legend>
+          <div className={s.pair}>
+            <TextField label="First from the left" type="number" inputMode="decimal" trailing={unit} value={left} onChange={(e) => setLeft(e.target.value)} />
+            <TextField label="First from the front" type="number" inputMode="decimal" trailing={unit} value={front} onChange={(e) => setFront(e.target.value)} />
+          </div>
+          <div className={s.pair}>
+            <TextField label="Aisles" type="number" inputMode="decimal" trailing={unit} value={aisle} onChange={(e) => setAisle(e.target.value)} />
+            <Select
+              label="Each next one"
+              value={way}
+              options={[
+                { value: "up", label: "Behind" },
+                { value: "across", label: "To the right" },
+              ]}
+              onValueChange={(v) => setWay(v as RowWay)}
+            />
+          </div>
+          <Select
+            label="In order"
+            value={order}
+            options={[
+              { value: "az", label: "By name, A first" },
+              { value: "za", label: "By name, A last" },
+            ]}
+            onValueChange={(v) => setOrder(v as "az" | "za")}
+          />
+          {parents.size > 1 && <p className={s.note}>They are inside different places, so they can't share a row.</p>}
+          <Button
+            disabled={!ready}
+            onClick={() => {
+              const sorted = [...racks].sort(byName);
+              if (order === "za") sorted.reverse();
+              const [l, f, a] = numbers as [number, number, number];
+              desk.place(inRow(sorted, { left: stored(l, mm), front: stored(f, mm) }, stored(a, mm), way));
+            }}
+          >
+            Set out {racks.length} in a row
+          </Button>
+        </fieldset>
+        {sized.length > 0 && <MakeForm desk={desk} racks={sized} more={[]} />}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * A rack's make, measured once: a bay's width, one side's depth, a level's
+ * height. Every rack given it is sized from its own bays and levels.
+ */
+function MakeForm({ desk, racks, more }: { desk: PlanDesk; racks: Draft[]; more: Draft[] }) {
+  const mm = desk.cellMm;
+  const unit = unitOf(mm);
+  const first = racks[0]!;
+  const now = makeOf(first);
+  const [bay, setBay] = useState(() => String(shown(now.bay, mm)));
+  const [side, setSide] = useState(() => String(shown(now.side, mm)));
+  const [level, setLevel] = useState(() => String(shown(now.level, mm)));
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    const m = makeOf(first);
+    setBay(String(shown(m.bay, mm)));
+    setSide(String(shown(m.side, mm)));
+    setLevel(String(shown(m.level, mm)));
+  }, [first.place_id, mm]); // eslint-disable-line react-hooks/exhaustive-deps
+  const values = [bay, side, level].map((t) => Number.parseFloat(t));
+  const ready = values.every((n) => Number.isFinite(n) && n > 0);
+  const others = more.filter((d) => !racks.includes(d));
+  const targets = all ? [...racks, ...others] : racks;
+
+  return (
+    <fieldset className={s.group}>
+      <legend className={s.legend}>Size from its bays</legend>
+      <div className={s.trio}>
+        <TextField label="Bay width" type="number" inputMode="decimal" trailing={unit} value={bay} onChange={(e) => setBay(e.target.value)} />
+        <TextField label="Side depth" type="number" inputMode="decimal" trailing={unit} value={side} onChange={(e) => setSide(e.target.value)} />
+        <TextField label="Level height" type="number" inputMode="decimal" trailing={unit} value={level} onChange={(e) => setLevel(e.target.value)} />
+      </div>
+      {others.length > 0 && (
+        <Checkbox
+          checked={all}
+          onCheckedChange={(v) => setAll(v === true)}
+          label={`And the ${others.length} other rack${others.length === 1 ? "" : "s"} with ${first.levels} levels and ${first.sides === 2 ? "two sides" : "one side"}`}
+        />
+      )}
+      <Button
+        disabled={!ready}
+        onClick={() => {
+          const [b, sd, lv] = values.map((v) => stored(v, mm)) as [number, number, number];
+          desk.place(new Map(targets.map((d) => [d.place_id, sizedFrom(d, { bay: b, side: sd, level: lv })])));
+        }}
+      >
+        {targets.length === 1 ? "Size it" : `Size ${targets.length} racks`}
+      </Button>
+      <p className={s.note}>
+        {racks.length === 1
+          ? `${first.bays} bays long, ${first.sides === 2 ? "two sides" : "one side"} deep and ${first.levels} levels high. It grows from its front left corner.`
+          : "Each is sized from its own bays and levels, and grows from its front left corner."}
+      </p>
+    </fieldset>
   );
 }
 

@@ -96,7 +96,7 @@ import { ImportPage } from "@app/admin/ImportPage";
 import { APPLIED as IMP_APPLIED, DRY as IMP_DRY, FAILED as IMP_FAILED, IDLE as IMP_IDLE, ITEMS as IMP_ITEMS, fixtureImport } from "@app/admin/import-fixture";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { PlanEditorPage } from "@app/layout/PlanEditorPage";
-import { fixturePlan, fixturePlanEdited } from "@app/layout/plan-fixture";
+import { fixturePlan, fixturePlanChosen, fixturePlanEdited } from "@app/layout/plan-fixture";
 import { MapPage } from "@app/layout/MapPage";
 import { fixtureMap, fixtureMapChosen } from "@app/layout/map-fixture";
 import { BackupPage } from "@app/admin/BackupPage";
@@ -630,6 +630,9 @@ export const FIXTURES: readonly Screen[] = [
   app("f-plan", "/fixtures/warehouse/edit", "Edit layout", "desk", { screen: "plan" }, () => <PlanEditorPage desk={fixturePlan()} />),
   app("f-plan-edited", "/fixtures/warehouse/edit/changed", "Edit layout — changed", "desk", { screen: "plan" }, () => (
     <PlanEditorPage desk={fixturePlanEdited()} />
+  )),
+  app("f-plan-several", "/fixtures/warehouse/edit/several", "Edit layout — several chosen", "desk", { screen: "plan" }, () => (
+    <PlanEditorPage desk={fixturePlanChosen()} />
   )),
   // The bin map (D208): the site, a bin chosen with its card, and the reach layer.
   app("f-map", "/fixtures/map", "Bin map", "desk", { screen: "map" }, () => <MapPage desk={fixtureMap()} />),

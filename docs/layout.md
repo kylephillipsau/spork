@@ -126,6 +126,28 @@ and you open it again to see their change.
 Every change is kept: what the place was, what it became, who did it, and
 when.
 
+## Measuring the floor
+
+The draft's racks are in the right order but not the right places, and there
+is no floor plan to copy. So the floor is built from measurements. Press
+**Measure in metres** once: from then on every number in the editor is in
+metres, from the front left corner of the place it is inside.
+
+1. **The building.** Choose it and type its inside length and width.
+2. **Each rack make.** Choose a rack and, under **Size from its bays**, type a
+   bay's width from upright centre to upright centre, one side's depth, and a
+   level's height. Tick the box to size every rack of the same make too.
+3. **Each row.** Choose the racks in it (Shift-click, or **Choose every
+   rack**). Under **Set out in a row**, type how far the first is from the
+   left and the front walls, and how wide the aisles are.
+4. **The odd one out.** Choose it and type what the tape says under **Room
+   round it**: to the wall, or to the rack across the aisle.
+5. **Which way each rack faces.** The chosen rack's front is marked. If its
+   first bay opens onto the other aisle, press **Face the other way**.
+6. **Docks, packing stations, columns.** Add them and type where they are.
+
+Then **Save**, and walk the floor with the bin map to check it.
+
 ## Not built yet
 
 - Changing a rack's bays, levels or naming pattern, which moves bins.

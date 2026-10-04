@@ -13,8 +13,11 @@ function deskOf(drafts: Draft[], over: Partial<PlanDesk> = {}): PlanDesk {
     drafts,
     plan: planOf(drafts),
     selected: null,
+    chosen: [],
     select: () => {},
+    selectAll: () => {},
     change: () => {},
+    place: () => {},
     begin: () => {},
     drag: () => {},
     add: () => {},
@@ -53,9 +56,19 @@ export function fixturePlanEdited(over: Partial<PlanDesk> = {}): PlanDesk {
       box: { x: 0, y: building.box.depth - 0.5, z: 0, length: building.box.length, depth: 0.5, height: 4, turn: 0 },
       outline: null,
       sides: 1,
+      bays: 1,
+      levels: 1,
       bins: 0,
       fresh: true,
     },
   ];
-  return deskOf(drafts, { selected: drafts.find((d) => d.name === "Rack G") ?? null, canUndo: true, cellMm: 1000, ...over });
+  const g = drafts.find((d) => d.name === "Rack G") ?? null;
+  return deskOf(drafts, { selected: g, chosen: g ? [g] : [], canUndo: true, cellMm: 1000, ...over });
+}
+
+/** Three racks chosen together, to set out in a row or size from their bays. */
+export function fixturePlanChosen(over: Partial<PlanDesk> = {}): PlanDesk {
+  const drafts = draftsOf(DRAFTED_SITE);
+  const chosen = drafts.filter((d) => ["Rack E", "Rack F", "Rack G"].includes(d.name));
+  return deskOf(drafts, { chosen, cellMm: 1000, ...over });
 }

@@ -37,6 +37,9 @@ export interface Draft {
   outline: Point[] | null;
   /** Bins on two faces, so it stays solid. */
   sides: number;
+  /** Its grid, which sizing from bays reads and nothing here changes. */
+  bays: number;
+  levels: number;
   /** Bins in its cells, and places inside it: either keeps it. */
   bins: number;
   /** Drawn in this editor, not yet saved. */
@@ -111,6 +114,8 @@ export function draftsOf(view: LayoutView): Draft[] {
       box: { x: p.x, y: p.y, z: p.z, length: p.length, depth: p.depth, height: p.height, turn: p.turn },
       outline: p.outlined && shape ? shape.corners.map((c) => within(shape.frame, c)) : null,
       sides: p.sides,
+      bays: p.bays,
+      levels: p.levels,
       bins: p.bins + (children.has(p.place_id) ? 1 : 0),
       fresh: false,
     };
@@ -261,4 +266,139 @@ function round(n: number): number {
 /** Rounded past floating-point dust, so a quarter turn back lands where it was. */
 function tidy(n: number): number {
   return Math.round(n * 1e6) / 1e6 + 0;
+}
+
+// ── building the floor from measurements (D210) ─────────────────────────
+
+/** A rack's make: how wide a bay is, how deep one side, how high a level. In cells. */
+export interface RackMake {
+  bay: number;
+  side: number;
+  level: number;
+}
+
+/** What a rack's make is, as it is drawn now. */
+export function makeOf(d: Draft): RackMake {
+  return {
+    bay: tidy(d.box.length / Math.max(1, d.bays)),
+    side: tidy(d.box.depth / Math.max(1, d.sides)),
+    level: tidy(d.box.height / Math.max(1, d.levels)),
+  };
+}
+
+/**
+ * A rack sized from its bays: as long as its bays, as deep as its sides, as
+ * tall as its levels. It grows from its front left corner, so where it stands
+ * doesn't change, and its bins, a bay and a level each, go with it.
+ */
+export function sizedFrom(d: Draft, make: RackMake): PlaceBox {
+  return {
+    ...d.box,
+    length: tidy(d.bays * make.bay),
+    depth: tidy(d.sides * make.side),
+    height: tidy(d.levels * make.level),
+  };
+}
+
+/** Racks of the same make as this one, by their grid: the same levels and sides. */
+export function sameMake(drafts: readonly Draft[], d: Draft): Draft[] {
+  return drafts.filter((x) => x.solid && x.bays > 1 && x.levels === d.levels && x.sides === d.sides);
+}
+
+/** A rectangle on the plan, in its parent's cells: left, front, right, back. */
+export interface Bounds {
+  left: number;
+  front: number;
+  right: number;
+  back: number;
+}
+
+/** Where a place lies in its parent, whichever way it is turned. */
+export function boundsOf(d: Pick<Draft, "box" | "outline">): Bounds {
+  const corners = footprint({ x: d.box.x, y: d.box.y, z: 0, turn: d.box.turn }, d);
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  return { left: tidy(Math.min(...xs)), front: tidy(Math.min(...ys)), right: tidy(Math.max(...xs)), back: tidy(Math.max(...ys)) };
+}
+
+/** What a place's parent is, as the walls a place inside it stands between. */
+export function wallsOf(parent: Draft | undefined): Bounds | null {
+  if (!parent) return null;
+  if (parent.outline) {
+    const xs = parent.outline.map((c) => c[0]);
+    const ys = parent.outline.map((c) => c[1]);
+    return { left: Math.min(...xs), front: Math.min(...ys), right: Math.max(...xs), back: Math.max(...ys) };
+  }
+  return { left: 0, front: 0, right: parent.box.length, back: parent.box.depth };
+}
+
+export type Side = "left" | "right" | "front" | "back";
+
+/** How far a place is from whatever is next to it on one side, and what that is. */
+export interface Clearance {
+  side: Side;
+  gap: number;
+  /** A neighbour's name, or null for its parent's wall. */
+  to: string | null;
+}
+
+/**
+ * The room round a place on each side: to the nearest neighbour that faces it
+ * across the gap, or else to the wall. What a tape measures from a rack.
+ */
+export function clearances(drafts: readonly Draft[], d: Draft): Clearance[] {
+  const parent = drafts.find((x) => x.place_id === d.parent_id);
+  const walls = wallsOf(parent);
+  const me = boundsOf(d);
+  const others = drafts.filter((x) => x.parent_id === d.parent_id && x.place_id !== d.place_id).map((x) => ({ name: x.name, b: boundsOf(x) }));
+  const across = (b: Bounds) => b.left < me.right && b.right > me.left;
+  const along = (b: Bounds) => b.front < me.back && b.back > me.front;
+  const nearest = (side: Side): Clearance | null => {
+    const wall = walls ? { left: me.left - walls.left, right: walls.right - me.right, front: me.front - walls.front, back: walls.back - me.back }[side] : null;
+    let best: Clearance | null = wall === null ? null : { side, gap: wall, to: null };
+    for (const o of others) {
+      const gap =
+        side === "left" && along(o.b) && o.b.right <= me.left + 1e-9 ? me.left - o.b.right
+        : side === "right" && along(o.b) && o.b.left >= me.right - 1e-9 ? o.b.left - me.right
+        : side === "front" && across(o.b) && o.b.back <= me.front + 1e-9 ? me.front - o.b.back
+        : side === "back" && across(o.b) && o.b.front >= me.back - 1e-9 ? o.b.front - me.back
+        : null;
+      if (gap !== null && (!best || gap < best.gap)) best = { side, gap: tidy(gap), to: o.name };
+    }
+    return best && { ...best, gap: tidy(best.gap) };
+  };
+  return (["left", "right", "front", "back"] as const).map(nearest).filter((c): c is Clearance => c !== null);
+}
+
+/** The box moved so that its clearance on one side is `wanted` rather than `now`. */
+export function cleared(box: PlaceBox, side: Side, now: number, wanted: number): PlaceBox {
+  const by = wanted - now;
+  const [dx, dy] = side === "left" ? [by, 0] : side === "right" ? [-by, 0] : side === "front" ? [0, by] : [0, -by];
+  return { ...box, x: tidy(box.x + dx), y: tidy(box.y + dy) };
+}
+
+/** Which way a row of racks steps: up the plan, each behind the last, or across it. */
+export type RowWay = "up" | "across";
+
+/**
+ * Racks set out in a row, as they are on most floors: the first `from` its
+ * parent's left and front, each next one an aisle beyond the last, their ends
+ * lined up. Each keeps its turn, so a rack that faces the other way still
+ * does. In the order given.
+ */
+export function inRow(racks: readonly Draft[], from: { left: number; front: number }, aisle: number, way: RowWay): Map<string, PlaceBox> {
+  const out = new Map<string, PlaceBox>();
+  let at = way === "up" ? from.front : from.left;
+  for (const d of racks) {
+    const b = boundsOf(d);
+    const [dx, dy] = way === "up" ? [from.left - b.left, at - b.front] : [at - b.left, from.front - b.front];
+    out.set(d.place_id, { ...d.box, x: tidy(d.box.x + dx), y: tidy(d.box.y + dy) });
+    at += (way === "up" ? b.back - b.front : b.right - b.left) + aisle;
+  }
+  return out;
+}
+
+/** Names in the order people say them: Rack 2 before Rack 10. */
+export function byName(a: Draft, b: Draft): number {
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 }

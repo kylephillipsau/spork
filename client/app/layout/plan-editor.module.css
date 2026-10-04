@@ -169,3 +169,37 @@
   padding-top: var(--ui-space-3);
   border-top: 1px solid var(--ui-border);
 }
+
+/* The room round the chosen place, as a tape would be held. */
+.gap {
+  stroke: var(--ui-info);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+.gapLabel {
+  fill: var(--ui-info);
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--ui-surface);
+  pointer-events: none;
+  user-select: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  margin: 0;
+  padding: var(--ui-space-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  min-width: 0;
+}
+.legend {
+  padding: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

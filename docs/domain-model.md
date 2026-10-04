@@ -14731,3 +14731,43 @@ costs one Undo. The history answers D173's open "who drew what".
 of which. Roles for who may edit: for now, anyone signed in, as with drafting
 (Q176). The scale (`site.cell_mm`, Proposal B) waits for the user's
 measurement.
+
+### D210: The floor is measured in metres, and built from a handful of measurements
+
+*Adopted 2026-10-04, with migration 120. Adopts docs/picking-plan.md's
+Proposal B scale; extends D209.*
+
+**Decision.** A site says how long a cell is (`site.cell_mm`), once. The plan
+editor offers **Measure in metres**, which makes a cell a metre. From then on
+it shows and takes every position and size in metres:
+
+- A place's position is measured from the front left corner of the place it
+  is inside.
+- A drag or a nudge moves ten centimetres, or a metre with Shift.
+- Stored positions stay in cells, so nothing drawn changes meaning.
+
+Three tools build the floor from measurements:
+
+- **Size from its bays.** Measure a bay's width, one side's depth and a
+  level's height once. A rack is then as long as its bays, as deep as its
+  sides and as tall as its levels, growing from its front left corner. Any
+  other rack with the same levels and sides takes the same size in one go.
+- **Set out in a row.** Choose racks (Shift-click, or Choose every rack) and
+  say how far the first is from the left and the front, and how wide the
+  aisles are. They stand one behind or beside the next, ends lined up, each
+  keeping its turn.
+- **Room round it.** The chosen place shows its distance to the nearest
+  neighbour across each gap, or to the wall, on the plan and as numbers to
+  type over. Typing what the tape says moves it.
+
+**Why.** The user has no floor plan to copy: it is proprietary. So the floor
+is built from first principles (2026-10-04). The bin codes already give each
+rack's bays and levels, so a whole floor is about a dozen measurements: the
+building, each rack make, each row's start and aisles, and which aisle each
+rack's first bay faces. The scale is the metre, not a bay's width, because a
+rack is as long as it is measured to be. One number then serves every rack,
+whatever its make. It is set once because everything after it is measured in
+it.
+
+**Not decided.** Distances between bins (Proposal C) are what this is for, and
+come next.

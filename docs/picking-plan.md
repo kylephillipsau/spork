@@ -170,7 +170,8 @@ happen in NetSuite: other sites, and the changeover.
 
 ### Proposal B: The floor has a scale, and every bin face has a place to stand
 
-*Proposed, not adopted. Amends D173.*
+*The scale is adopted as D210, in metres. The walkable grid and places to
+stand are still proposed. Amends D173.*
 
 **Decision.**
 - **A scale.** A site says how long one of its layout cells is, in

@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { LayoutView } from "@domain/types";
 
-import { changeCount, changesOf, draftsOf, freeName, moved, planOf, shown, snap, stepOf, stored, turned, unitOf, type Draft, type PlaceBox } from "./edit.ts";
+import { boundsOf, byName, changeCount, changesOf, cleared, clearances, draftsOf, freeName, inRow, makeOf, moved, planOf, sameMake, shown, sizedFrom, snap, stepOf, stored, turned, unitOf, type Draft, type PlaceBox } from "./edit.ts";
 import { DRAFTED_SITE, LAID_OUT } from "./fixture.ts";
 
 const near = (a: number[][], b: number[][], what: string) =>
@@ -18,6 +18,8 @@ const draft = (place_id: string, parent_id: string | null, over: Partial<PlaceBo
   box: box(over),
   outline: null,
   sides: 1,
+  bays: 1,
+  levels: 1,
   bins: 0,
   fresh: false,
 });
@@ -96,4 +98,60 @@ test("once a cell is a metre, numbers read in metres and a nudge is ten centimet
   assert.equal(stepOf(1000, true), 1);
   assert.equal(stepOf(null), 0.5);
   assert.deepEqual(moved(box({ x: 1, y: 1 }), { x: 0, y: 0, z: 0, turn: 0 }, 0.26, 0.04, stepOf(1000)), box({ x: 1.3, y: 1 }));
+});
+
+const rack = (id: string, over: Partial<PlaceBox>, grid: Partial<Draft> = {}): Draft => ({
+  ...draft(id, "b", over),
+  name: `Rack ${id}`,
+  solid: true,
+  bays: 18,
+  levels: 4,
+  sides: 2,
+  ...grid,
+});
+
+test("a rack is sized from its bays, growing from its front left corner", () => {
+  const e = rack("E", { x: 3, y: 4, length: 18, depth: 2, height: 4 });
+  const box = sizedFrom(e, { bay: 0.9, side: 0.6, level: 0.5 });
+  assert.deepEqual([box.x, box.y, box.length, box.depth, box.height], [3, 4, 16.2, 1.2, 2]);
+  assert.deepEqual(makeOf({ ...e, box }), { bay: 0.9, side: 0.6, level: 0.5 });
+  const pallet = rack("A", {}, { bays: 14, levels: 6 });
+  assert.deepEqual(sameMake([e, pallet, rack("F", {})], e).map((d) => d.name), ["Rack E", "Rack F"], "racks of its make, not A");
+});
+
+test("a rack's clearances are to whatever faces it across the gap, or the wall", () => {
+  const building = draft("b", null, { length: 30, depth: 20 });
+  const e = rack("E", { x: 2, y: 4, length: 16, depth: 1.2 });
+  const f = rack("F", { x: 2, y: 7.6, length: 16, depth: 1.2 });
+  const elsewhere = rack("Z", { x: 25, y: 10, length: 3, depth: 1 });
+  const c = clearances([building, e, f, elsewhere], e);
+  assert.deepEqual(c, [
+    { side: "left", gap: 2, to: null },
+    { side: "right", gap: 12, to: null },
+    { side: "front", gap: 4, to: null },
+    { side: "back", gap: 2.4, to: "Rack F" },
+  ]);
+  assert.deepEqual(cleared(e.box, "back", 2.4, 2.8), { ...e.box, y: 3.6 }, "a wider aisle moves it away from F");
+  assert.deepEqual(cleared(e.box, "left", 2, 1.5), { ...e.box, x: 1.5 });
+});
+
+test("a turned rack is measured by where it lies, not by its corner", () => {
+  const building = draft("b", null, { length: 30, depth: 20 });
+  // A quarter turn: from (5, 2) it runs 4 up the plan and lies 1 to the left.
+  const t = rack("T", { x: 5, y: 2, length: 4, depth: 1, turn: 90 });
+  assert.deepEqual(boundsOf(t), { left: 4, front: 2, right: 5, back: 6 });
+  assert.equal(clearances([building, t], t).find((c) => c.side === "left")!.gap, 4);
+});
+
+test("racks set out in a row stand an aisle apart, ends lined up, each keeping its turn", () => {
+  const a = rack("A", { x: 9, y: 9, length: 14, depth: 2 });
+  const b = rack("B", { x: 0, y: 0, length: 14, depth: 2, turn: 180 });
+  const c = rack("C", { x: 4, y: 1, length: 16, depth: 1.2 });
+  const row = inRow([a, b, c].sort(byName), { left: 1.5, front: 2 }, 2.4, "up");
+  const at = (d: Draft) => boundsOf({ ...d, box: row.get(d.place_id)! });
+  assert.deepEqual(at(a), { left: 1.5, front: 2, right: 15.5, back: 4 });
+  assert.deepEqual(at(b), { left: 1.5, front: 6.4, right: 15.5, back: 8.4 }, "turned the other way, still in line");
+  assert.equal(row.get(b.place_id)!.turn, 180);
+  assert.deepEqual(at(c), { left: 1.5, front: 10.8, right: 17.5, back: 12 });
+  assert.deepEqual([rack("10", {}), rack("9", {})].sort(byName).map((d) => d.name), ["Rack 9", "Rack 10"]);
 });

@@ -24,14 +24,22 @@ export interface PlanDesk {
   drafts: Draft[];
   /** The plan as the changes leave it. */
   plan: PlanShape[];
+  /** The place chosen, when exactly one is. */
   selected: Draft | null;
-  select: (placeId: Uuid | null) => void;
+  /** Every place chosen, in the order they were chosen. */
+  chosen: Draft[];
+  /** Choose a place, or none; with `add`, add it to the choice or take it out. */
+  select: (placeId: Uuid | null, add?: boolean) => void;
+  /** Choose these places. */
+  selectAll: (placeIds: Uuid[]) => void;
   /** Change a place, as one step to undo. */
   change: (placeId: Uuid, next: (d: Draft) => Draft) => void;
+  /** Put places where they go, as one step to undo. */
+  place: (boxes: ReadonlyMap<Uuid, PlaceBox>) => void;
   /** A drag begins: one undo step for the whole of it. */
   begin: () => void;
-  /** A drag goes on: the box as it is now, with no step of its own. */
-  drag: (placeId: Uuid, box: PlaceBox) => void;
+  /** A drag goes on: the boxes as they are now, with no step of their own. */
+  drag: (boxes: ReadonlyMap<Uuid, PlaceBox>) => void;
   add: (preset: Preset, at: [number, number]) => void;
   remove: (placeId: Uuid) => void;
   undo: () => void;
@@ -56,7 +64,7 @@ export function usePlanEditor(): PlanDesk {
   const live = useLive();
   const [read, setRead] = useState<Read<LayoutView>>({ kind: "loading" });
   const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [selectedId, setSelectedId] = useState<Uuid | null>(null);
+  const [selection, setSelection] = useState<Uuid[]>([]);
   const [past, setPast] = useState<Draft[][]>([]);
   const [future, setFuture] = useState<Draft[][]>([]);
   const [said, setSaid] = useState<string | null>(null);
@@ -111,15 +119,22 @@ export function usePlanEditor(): PlanDesk {
     read,
     drafts,
     plan,
-    selected: drafts.find((d) => d.place_id === selectedId) ?? null,
-    select: setSelectedId,
+    selected: selection.length === 1 ? (drafts.find((d) => d.place_id === selection[0]) ?? null) : null,
+    chosen: selection.flatMap((id) => drafts.filter((d) => d.place_id === id)),
+    select: (id, add = false) => {
+      if (id === null) setSelection([]);
+      else if (add) setSelection((was) => (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]));
+      else setSelection([id]);
+    },
+    selectAll: setSelection,
     change: (id, next) => step(latest.current.map((d) => (d.place_id === id ? next(d) : d))),
+    place: (boxes) => step(latest.current.map((d) => ({ ...d, box: boxes.get(d.place_id) ?? d.box }))),
     begin: () => {
       setPast((p) => [...p.slice(-99), latest.current]);
       setFuture([]);
       setSaid(null);
     },
-    drag: (id, box) => setDrafts((all) => all.map((d) => (d.place_id === id ? { ...d, box } : d))),
+    drag: (boxes) => setDrafts((all) => all.map((d) => ({ ...d, box: boxes.get(d.place_id) ?? d.box }))),
     add: (preset, [x, y]) => {
       const all = latest.current;
       // Inside the outermost place, where it was asked for.
@@ -135,15 +150,17 @@ export function usePlanEditor(): PlanDesk {
           box: { x, y, z: 0, length: preset.length, depth: preset.depth, height: preset.height, turn: 0 },
           outline: null,
           sides: 1,
+          bays: 1,
+          levels: 1,
           bins: 0,
           fresh: true,
         },
       ]);
-      setSelectedId(place_id);
+      setSelection([place_id]);
     },
     remove: (id) => {
       step(latest.current.filter((d) => d.place_id !== id));
-      setSelectedId(null);
+      setSelection([]);
     },
     undo: () => {
       const before = past[past.length - 1];
@@ -187,7 +204,7 @@ export function usePlanEditor(): PlanDesk {
     discard: () => {
       if (!view) return;
       step(draftsOf(view));
-      setSelectedId(null);
+      setSelection([]);
     },
     busy,
     problem,
