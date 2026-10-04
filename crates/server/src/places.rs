@@ -19,6 +19,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Transaction;
 use uuid::Uuid;
@@ -27,6 +28,7 @@ use crate::error::ApiError;
 use crate::layout::{self, GridCell, Frame, Grid, Pattern};
 use crate::routes::caller;
 use crate::tenancy::TenantScope;
+use crate::client_events::{claim_act, NewClientEvent};
 use crate::AppState;
 
 /// How many codes a report lists before it only counts.
@@ -160,6 +162,9 @@ pub struct PlanShape {
     /// How far above the site's floor it starts, and how tall it is, in cells.
     pub z: f64,
     pub height: f64,
+    /// Its own corner and turn on the site: what a place inside it is
+    /// positioned against (D209).
+    pub frame: Frame,
 }
 
 /// One place, as a page.
@@ -326,6 +331,7 @@ async fn place_view(
                 corners: layout::footprint(f, p.length, p.depth, p.outline.as_deref()),
                 z: f.z,
                 height: p.height,
+                frame: *f,
             })
         })
         .collect();
@@ -444,6 +450,18 @@ pub struct LayoutPlace {
     pub reach_levels: i32,
     /// Bins in its own cells, not counting places inside it.
     pub bins: i64,
+    /// Its box in its parent's cells, as drawn: where its front-left corner
+    /// is, how big it is, and how far it is turned, in degrees anticlockwise
+    /// (D209).
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub length: f64,
+    pub depth: f64,
+    pub height: f64,
+    pub turn: f64,
+    /// It has an outline of its own, so it is moved and turned, not resized.
+    pub outlined: bool,
 }
 
 /// A site's layout, as a list.
@@ -459,6 +477,9 @@ pub struct LayoutView {
     /// Every place on the site, as footprints: what the warehouse's plan and
     /// its 3D view draw.
     pub plan: Vec<PlanShape>,
+    /// The layout as read, as a fingerprint: an edit made against an older
+    /// one is refused rather than written over somebody else's (D209).
+    pub version: String,
 }
 
 /// Every place on the site as it stands there, outermost first.
@@ -501,6 +522,7 @@ fn site_plan(places: &[Row]) -> Vec<PlanShape> {
                 corners: layout::footprint(f, p.length, p.depth, p.outline.as_deref()),
                 z: f.z,
                 height: p.height,
+                frame: *f,
             });
             for k in kids.get(&id).into_iter().flatten().rev() {
                 stack.push((*k, nesting + 1));
@@ -508,6 +530,20 @@ fn site_plan(places: &[Row]) -> Vec<PlanShape> {
         }
     }
     out
+}
+
+/// A fingerprint of every place on the site as its row stands, so two people
+/// editing at once can't write over each other unknowingly (D209). Drafting
+/// and reach change the rows too, and so change it.
+pub(crate) async fn layout_version(tx: &Transaction<'_>, site: Uuid) -> Result<String, ApiError> {
+    Ok(tx
+        .query_one(
+            "SELECT md5(coalesce(string_agg(p::text, '|' ORDER BY p.id), ''))
+               FROM place p WHERE p.site_id = $1",
+            &[&site],
+        )
+        .await?
+        .get(0))
 }
 
 /// The site the caller is working at, or a refusal that says what to do.
@@ -560,8 +596,17 @@ pub async fn site_layout(
                         positions: (1..=p.grid.levels).map(|l| p.grid.positions_at(l)).collect(),
                         pattern: p.pattern,
                         reach_levels: p.reach_levels,
+                        x: p.x,
+                        y: p.y,
+                        z: p.z,
+                        length: p.length,
+                        depth: p.depth,
+                        height: p.height,
+                        turn: p.turn,
+                        outlined: p.outline.is_some(),
                     })
                     .collect();
+                let version = layout_version(tx, site).await?;
                 let r = tx
                     .query_one(
                         "SELECT count(*), count(*) FILTER (WHERE place_id IS NULL)
@@ -587,6 +632,7 @@ pub async fn site_layout(
                     unplaced: r.get(1),
                     unplaced_sample,
                     plan,
+                    version,
                 })
             })
         })
@@ -1342,4 +1388,278 @@ pub async fn draft_layout(
         .run(move |tx| Box::pin(async move { draft(tx, tenant, site, apply, &asked).await }))
         .await?;
     Ok(HttpResponse::Ok().json(report))
+}
+
+// ---------------------------------------------------------------------------
+// The plan editor (D209)
+// ---------------------------------------------------------------------------
+
+/// A place's box in its parent's cells.
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub struct PlaceBox {
+    pub x: f64,
+    pub y: f64,
+    #[serde(default)]
+    pub z: f64,
+    pub length: f64,
+    pub depth: f64,
+    pub height: f64,
+    /// Degrees anticlockwise; whole degrees are kept.
+    #[serde(default)]
+    pub turn: f64,
+}
+
+/// A place as the editor left it. Its grid is not here: changing bays,
+/// levels or the naming pattern would move or rename bins, and the editor
+/// moves none.
+#[derive(Deserialize, Debug)]
+pub struct PlaceChanged {
+    pub place_id: Uuid,
+    pub name: String,
+    pub solid: bool,
+    #[serde(flatten)]
+    pub at: PlaceBox,
+}
+
+/// A place drawn in the editor: a wall, a column, a dock, a packing station.
+#[derive(Deserialize, Debug)]
+pub struct PlaceAdded {
+    /// Minted by the client, so the place it drew is the one it can name.
+    pub place_id: Uuid,
+    /// The place it is inside, or none: standing on the site.
+    pub parent_id: Option<Uuid>,
+    pub name: String,
+    pub solid: bool,
+    #[serde(flatten)]
+    pub at: PlaceBox,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct LayoutEdit {
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+    /// The layout's fingerprint when the editor read it (`LayoutView::version`).
+    pub version: String,
+    #[serde(default)]
+    pub changed: Vec<PlaceChanged>,
+    #[serde(default)]
+    pub added: Vec<PlaceAdded>,
+    #[serde(default)]
+    pub removed: Vec<Uuid>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct LayoutEdited {
+    pub changed: i64,
+    pub added: i64,
+    pub removed: i64,
+    /// The layout's fingerprint now, to edit on from.
+    pub version: String,
+    /// This act had already been saved; nothing was written again.
+    pub replay: bool,
+}
+
+/// A box worth keeping, or what is wrong with it.
+fn checked(at: PlaceBox, what: &str) -> Result<PlaceBox, ApiError> {
+    let all = [at.x, at.y, at.z, at.length, at.depth, at.height, at.turn];
+    if all.iter().any(|v| !v.is_finite()) {
+        return Err(ApiError::Rejected(format!("{what} has a position or size that isn't a number")));
+    }
+    if at.length <= 0.0 || at.depth <= 0.0 || at.height <= 0.0 {
+        return Err(ApiError::Rejected(format!("{what} needs a length, a depth and a height above nothing")));
+    }
+    Ok(PlaceBox { turn: at.turn.round().rem_euclid(360.0), ..at })
+}
+
+/// How a place is kept in its history: its name, kind and box.
+fn as_kept(parent: Option<Uuid>, name: &str, solid: bool, at: &PlaceBox) -> serde_json::Value {
+    serde_json::json!({
+        "parent_id": parent, "name": name, "solid": solid,
+        "x": at.x, "y": at.y, "z": at.z,
+        "length": at.length, "depth": at.depth, "height": at.height, "turn": at.turn,
+    })
+}
+
+/// A database refusal the person can act on, in their words.
+fn said(e: tokio_postgres::Error, name: &str) -> ApiError {
+    match e.code() {
+        Some(c) if *c == tokio_postgres::error::SqlState::UNIQUE_VIOLATION => {
+            ApiError::Rejected(format!("there is already a place called {name} there"))
+        }
+        Some(c) if *c == tokio_postgres::error::SqlState::CHECK_VIOLATION => {
+            ApiError::Rejected(format!("{name} can't be drawn like that"))
+        }
+        _ => ApiError::Database(e),
+    }
+}
+
+/// Save what the plan editor changed, as one act (D209).
+///
+/// **Bins never move.** A place's box is where it is drawn; a bin's cell is a
+/// bay and a level of its place, so moving, turning or stretching a rack
+/// carries its bins with it. Its grid is not editable here at all.
+///
+/// **Against the layout the editor read.** If the layout has changed since,
+/// by another editor, a draft or a rack's reach, the save is refused, so
+/// nobody's change is overwritten without them knowing.
+#[post("/layout/edit")]
+pub async fn edit_layout(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<LayoutEdit>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let site = working_site(who.site_id)?;
+    let body = body.into_inner();
+    let ev = NewClientEvent {
+        tenant_id: who.tenant_id,
+        client_event_id: body.client_event_id,
+        site_id: who.site_id,
+        recorded_by_id: who.person_id,
+        submitted_at: body.occurred_at,
+    };
+    let tenant = who.tenant_id;
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                // A retry of a save that landed answers with what it did.
+                if claim_act(tx, &ev).await?.is_replay() {
+                    let n = |kind: &'static str| async move {
+                        tx.query_one(
+                            "SELECT count(*) FROM place_change WHERE client_event_id = $1 AND change = $2",
+                            &[&ev.client_event_id, &kind],
+                        )
+                        .await
+                        .map(|r| r.get::<_, i64>(0))
+                    };
+                    return Ok(LayoutEdited {
+                        changed: n("changed").await?,
+                        added: n("added").await?,
+                        removed: n("removed").await?,
+                        version: layout_version(tx, site).await?,
+                        replay: true,
+                    });
+                }
+                if layout_version(tx, site).await? != body.version {
+                    return Err(ApiError::Rejected(
+                        "the layout has changed since you opened it; open it again to see what changed, then make your change".into(),
+                    ));
+                }
+                let rows = site_places(tx, site).await?;
+                let by_id: HashMap<Uuid, &Row> = rows.iter().map(|p| (p.id, p)).collect();
+                let record = |place: Uuid, change: &'static str, before: Option<serde_json::Value>, after: Option<serde_json::Value>| async move {
+                    // As text, cast: the driver is built without JSON.
+                    let (before, after) = (before.map(|v| v.to_string()), after.map(|v| v.to_string()));
+                    tx.execute(
+                        "INSERT INTO place_change (tenant_id, site_id, place_id, client_event_id, change, before, after)
+                         VALUES ($1, $2, $3, $4, $5, $6::text::jsonb, $7::text::jsonb)",
+                        &[&tenant, &site, &place, &ev.client_event_id, &change, &before, &after],
+                    )
+                    .await
+                };
+
+                for c in &body.changed {
+                    let was = *by_id.get(&c.place_id).ok_or(ApiError::NotFound)?;
+                    let name = c.name.trim();
+                    if name.is_empty() {
+                        return Err(ApiError::Rejected("a place needs a name".into()));
+                    }
+                    let at = checked(c.at, name)?;
+                    if was.outline.is_some() && (at.length != was.length || at.depth != was.depth) {
+                        return Err(ApiError::Rejected(format!("{name} has its own outline, so it is moved and turned, not resized")));
+                    }
+                    if was.grid.sides == 2 && !c.solid {
+                        return Err(ApiError::Rejected(format!("{name} has bins on two sides, so it stays solid")));
+                    }
+                    let before = PlaceBox { x: was.x, y: was.y, z: was.z, length: was.length, depth: was.depth, height: was.height, turn: was.turn };
+                    tx.execute(
+                        "UPDATE place SET name = $2, solid = $3, x = $4, y = $5, z = $6,
+                                          length = $7, depth = $8, height = $9, turn = $10
+                          WHERE id = $1",
+                        &[&c.place_id, &name, &c.solid, &at.x, &at.y, &at.z, &at.length, &at.depth, &at.height, &(at.turn as i16)],
+                    )
+                    .await
+                    .map_err(|e| said(e, name))?;
+                    record(
+                        c.place_id,
+                        "changed",
+                        Some(as_kept(was.parent_id, &was.name, was.solid, &before)),
+                        Some(as_kept(was.parent_id, name, c.solid, &at)),
+                    )
+                    .await?;
+                }
+
+                for a in &body.added {
+                    let name = a.name.trim();
+                    if name.is_empty() {
+                        return Err(ApiError::Rejected("a place needs a name".into()));
+                    }
+                    if let Some(parent) = a.parent_id {
+                        if !by_id.contains_key(&parent) {
+                            return Err(ApiError::Rejected(format!("{name} is inside a place that isn't on this site")));
+                        }
+                    }
+                    let at = checked(a.at, name)?;
+                    tx.execute(
+                        "INSERT INTO place (id, tenant_id, site_id, parent_id, name, solid,
+                                            x, y, z, length, depth, height, turn)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+                        &[&a.place_id, &tenant, &site, &a.parent_id, &name, &a.solid, &at.x, &at.y, &at.z, &at.length, &at.depth, &at.height, &(at.turn as i16)],
+                    )
+                    .await
+                    .map_err(|e| said(e, name))?;
+                    record(a.place_id, "added", None, Some(as_kept(a.parent_id, name, a.solid, &at))).await?;
+                }
+
+                for id in &body.removed {
+                    let was = *by_id.get(id).ok_or(ApiError::NotFound)?;
+                    let bins: i64 = tx
+                        .query_one("SELECT count(*) FROM location WHERE place_id = $1", &[id])
+                        .await?
+                        .get(0);
+                    if bins > 0 {
+                        return Err(ApiError::Rejected(format!(
+                            "{} still has {bins} bin{} in it, so it stays",
+                            was.name,
+                            if bins == 1 { "" } else { "s" }
+                        )));
+                    }
+                    if rows.iter().any(|p| p.parent_id == Some(*id) && !body.removed.contains(&p.id)) {
+                        return Err(ApiError::Rejected(format!("{} has places inside it, so it stays", was.name)));
+                    }
+                }
+                // Inside first, so a place is never removed from under another.
+                let mut gone: Vec<&Row> = body.removed.iter().filter_map(|id| by_id.get(id).copied()).collect();
+                let depth_of = |p: &Row| {
+                    let mut n = 0;
+                    let mut at = p.parent_id;
+                    while let Some(id) = at {
+                        n += 1;
+                        at = by_id.get(&id).and_then(|q| q.parent_id);
+                        if n > rows.len() {
+                            break;
+                        }
+                    }
+                    n
+                };
+                gone.sort_by_key(|p| std::cmp::Reverse(depth_of(p)));
+                for was in gone {
+                    tx.execute("DELETE FROM place WHERE id = $1", &[&was.id]).await?;
+                    let before = PlaceBox { x: was.x, y: was.y, z: was.z, length: was.length, depth: was.depth, height: was.height, turn: was.turn };
+                    record(was.id, "removed", Some(as_kept(was.parent_id, &was.name, was.solid, &before)), None).await?;
+                }
+
+                Ok(LayoutEdited {
+                    changed: body.changed.len() as i64,
+                    added: body.added.len() as i64,
+                    removed: body.removed.len() as i64,
+                    version: layout_version(tx, site).await?,
+                    replay: false,
+                })
+            })
+        })
+        .await?;
+    tracing::info!(tenant_id = %tenant, changed = out.changed, added = out.added, removed = out.removed, "the layout was edited");
+    Ok(HttpResponse::Ok().json(out))
 }

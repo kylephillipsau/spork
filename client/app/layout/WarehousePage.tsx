@@ -1,5 +1,5 @@
 import { Component, Suspense, lazy, useState, type ReactNode } from "react";
-import { Boxes, Inbox, Rotate3d, SquareDashed, Wand2 } from "lucide-react";
+import { Boxes, Inbox, PencilRuler, Rotate3d, SquareDashed, Wand2 } from "lucide-react";
 
 import {
   Alert,
@@ -40,6 +40,7 @@ const Site3D = lazy(() => import("./Site3D"));
  */
 export function WarehousePage({ desk }: { desk: WarehouseDesk }) {
   const read = desk.read;
+  const navigate = useNavigate();
 
   if (read.kind !== "ready") {
     return (
@@ -80,7 +81,16 @@ export function WarehousePage({ desk }: { desk: WarehouseDesk }) {
       <PageHeader
         title="Warehouse"
         description={`Where every bin at ${v.site_code} is, and what NetSuite says is in it.`}
-        actions={v.places.length > 0 && v.unplaced > 0 && quiet ? drafting("Draft the rest", false) : undefined}
+        actions={
+          v.places.length > 0 ? (
+            <>
+              {v.unplaced > 0 && quiet && drafting("Draft the rest", false)}
+              <Button icon={<PencilRuler />} onClick={() => navigate("/warehouse/edit")}>
+                Edit layout
+              </Button>
+            </>
+          ) : undefined
+        }
       />
       <Stack gap={5}>
         {draft.kind === "failed" && (

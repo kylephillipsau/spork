@@ -1275,6 +1275,16 @@ export interface PlanShape {
   /** How far above the site's floor it starts, and how tall it is, in cells. */
   z: number;
   height: number;
+  /** Its own corner and turn on the site: what a place inside it is positioned against (D209). */
+  frame: Frame;
+}
+
+/** Where a place's corner is on the site, and which way it faces: degrees anticlockwise. */
+export interface Frame {
+  x: number;
+  y: number;
+  z: number;
+  turn: number;
 }
 
 /** `GET /places/{id}`: one place, as a page. */
@@ -1625,6 +1635,16 @@ export interface LayoutPlace {
   reach_levels: number;
   /** Bins in its own cells, not counting places inside it. */
   bins: number;
+  /** Its box in its parent's cells, as drawn: its front-left corner, its size, and its turn in degrees anticlockwise (D209). */
+  x: number;
+  y: number;
+  z: number;
+  length: number;
+  depth: number;
+  height: number;
+  turn: number;
+  /** It has an outline of its own, so it is moved and turned, not resized. */
+  outlined: boolean;
 }
 
 /** `GET /layout`: the site's layout, as a list. */
@@ -1638,6 +1658,8 @@ export interface LayoutView {
   unplaced_sample: string[];
   /** Every place on the site, as footprints: what the plan and the 3D view draw. */
   plan: PlanShape[];
+  /** The layout as read, as a fingerprint; an edit is saved against it (D209). */
+  version: string;
 }
 
 /** Something NetSuite last reported on a shelf. */
@@ -1774,4 +1796,15 @@ export interface ReachSaid {
   place_id: Uuid;
   reach_levels: number;
   levels: number;
+}
+
+/** `POST /layout/edit`: what the plan editor saved (D209). */
+export interface LayoutEdited {
+  changed: number;
+  added: number;
+  removed: number;
+  /** The layout's fingerprint now, to edit on from. */
+  version: string;
+  /** This save had already landed; nothing was written again. */
+  replay: boolean;
 }

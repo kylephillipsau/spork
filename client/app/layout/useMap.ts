@@ -87,7 +87,13 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
   }, [load]);
 
   // Stock moves as people pick and put away (D206); the map follows quietly.
-  useChanges(() => void load());
+  // Only the bins: the layout itself changes by an edit, which reloads.
+  useChanges(() => {
+    void api.mapBins().then(
+      (bins) => live.current && setRead((r) => (r.kind === "ready" ? { kind: "ready", value: { ...r.value, bins } } : r)),
+      () => undefined,
+    );
+  });
 
   const chosen = useMemo(
     () => (read.kind === "ready" && chosenId ? (read.value.bins.bins.find((b) => b.location_id === chosenId) ?? null) : null),

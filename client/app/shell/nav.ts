@@ -107,6 +107,8 @@ export const REACHED_ANOTHER_WAY = [
   "order",
   "bin",
   "place",
+  // The plan editor, from the Warehouse screen (D209).
+  "plan",
   "item",
   "finding",
   "sign-in",

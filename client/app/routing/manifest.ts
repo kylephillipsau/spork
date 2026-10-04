@@ -112,6 +112,7 @@ export const SCREENS: readonly ScreenSpec[] = [
   // Every place and the bins in each, and drafting the layout from the bin list.
   spec("warehouse", "/warehouse", "Warehouse", "desk"),
   spec("map", "/map", "Bin map", "desk"),
+  spec("plan", "/warehouse/edit", "Edit layout", "desk"),
   spec("findings", "/findings", "Findings", "desk"),
   // The screen D135 was waiting for: a finding is a row in the database, so a
   // link to one restores the queue, the tab and the evidence panel. Same title

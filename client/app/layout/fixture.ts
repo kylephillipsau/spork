@@ -28,13 +28,31 @@ const rect = (x: number, y: number, l: number, d: number): [number, number][] =>
   [x, y + d],
 ];
 
+/** A place as the list carries it, before its box is read off the plan. */
+type Bare = Omit<LayoutPlace, "x" | "y" | "z" | "length" | "depth" | "height" | "turn" | "outlined">;
+
+/**
+ * Its box, read off its rectangle on the plan, relative to its parent's
+ * corner: every fixture place is square to the site, so that is a subtraction.
+ */
+function boxed(places: Bare[], plan: PlanShape[]): LayoutPlace[] {
+  const shapes = new Map(plan.map((sh) => [sh.place_id, sh]));
+  return places.map((p) => {
+    const sh = shapes.get(p.place_id);
+    const parent = p.parent_id ? shapes.get(p.parent_id) : undefined;
+    const [[x0, y0] = [0, 0], [x1] = [0, 0], , [, y3] = [0, 0]] = sh?.corners ?? [];
+    const [px, py] = parent?.corners[0] ?? [0, 0];
+    return { ...p, x: x0 - px, y: y0 - py, z: sh?.z ?? 0, length: x1 - x0 || 1, depth: y3 - y0 || 1, height: sh?.height || 1, turn: 0, outlined: false };
+  });
+}
+
 const PLAN: PlanShape[] = [
-  { place_id: MAIN, name: "Main", solid: false, nesting: 0, corners: rect(0, 0, 14, 12), z: 0, height: 6 },
-  { place_id: RACK_C, name: "Rack C", solid: true, nesting: 1, corners: rect(1, 1, 5, 1), z: 0, height: 4 },
-  { place_id: RACK_D, name: "Rack D", solid: true, nesting: 1, corners: rect(1, 4, 5, 1), z: 0, height: 3 },
-  { place_id: RETURNS, name: "Returns (reserved)", solid: false, nesting: 1, corners: rect(9, 4, 4, 3), z: 0, height: 1 },
-  { place_id: DOCK, name: "Dock", solid: false, nesting: 1, corners: rect(1, 10, 12, 1), z: 0, height: 1 },
-  { place_id: RACK_E, name: "Rack E", solid: true, nesting: 1, corners: rect(1, 7, 6, 2), z: 0, height: 3 },
+  { place_id: MAIN, name: "Main", solid: false, nesting: 0, corners: rect(0, 0, 14, 12), z: 0, height: 6, frame: { x: 0, y: 0, z: 0, turn: 0 } },
+  { place_id: RACK_C, name: "Rack C", solid: true, nesting: 1, corners: rect(1, 1, 5, 1), z: 0, height: 4, frame: { x: 1, y: 1, z: 0, turn: 0 } },
+  { place_id: RACK_D, name: "Rack D", solid: true, nesting: 1, corners: rect(1, 4, 5, 1), z: 0, height: 3, frame: { x: 1, y: 4, z: 0, turn: 0 } },
+  { place_id: RETURNS, name: "Returns (reserved)", solid: false, nesting: 1, corners: rect(9, 4, 4, 3), z: 0, height: 1, frame: { x: 9, y: 4, z: 0, turn: 0 } },
+  { place_id: DOCK, name: "Dock", solid: false, nesting: 1, corners: rect(1, 10, 12, 1), z: 0, height: 1, frame: { x: 1, y: 10, z: 0, turn: 0 } },
+  { place_id: RACK_E, name: "Rack E", solid: true, nesting: 1, corners: rect(1, 7, 6, 2), z: 0, height: 3, frame: { x: 1, y: 7, z: 0, turn: 0 } },
 ];
 
 const TRAIL = [{ place_id: MAIN, name: "Main" }];
@@ -204,6 +222,7 @@ export const NO_LAYOUT: LayoutView = {
   unplaced: 1284,
   unplaced_sample: [],
   plan: [],
+  version: "none",
 };
 
 export const DRAFTED: DraftReport = {
@@ -227,18 +246,19 @@ export const DRAFTED: DraftReport = {
 
 export const LAID_OUT: LayoutView = {
   site_code: "NORTH",
-  places: [
+  places: boxed([
     { place_id: MAIN, parent_id: null, name: "Main", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
     { place_id: RACK_C, parent_id: MAIN, name: "Rack C", solid: true, bays: 5, levels: 4, rows: 1, positions: [1, 1, 1, 1], sides: 1, reach_levels: 1, pattern: "C-{bay:02}-{level}", bins: 18 },
     { place_id: RACK_D, parent_id: MAIN, name: "Rack D", solid: true, bays: 4, levels: 3, rows: 1, positions: [1, 1, 1], sides: 1, reach_levels: 1, pattern: "D-{bay:02}-{level}-{position}", bins: 20 },
     { place_id: RETURNS, parent_id: MAIN, name: "Returns (reserved)", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
     { place_id: DOCK, parent_id: MAIN, name: "Dock", solid: false, bays: 6, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: "DOCK-{bay}", bins: 6 },
     { place_id: RACK_E, parent_id: MAIN, name: "Rack E", solid: true, bays: 6, levels: 3, rows: 1, positions: [1, 1, 1], sides: 2, reach_levels: 1, pattern: "E-{bay:02}-{level}", bins: 34 },
-  ],
+  ], PLAN),
   bins: 81,
   unplaced: 3,
   unplaced_sample: ["3PL", "ASSEMBLY-BIN", "C-FLOOR"],
   plan: PLAN,
+  version: "laid-out",
 };
 
 const ITEM = (k: number) => `01990000-0000-7000-8000-0000000b${String(k).padStart(4, "0")}`;
@@ -280,7 +300,7 @@ const BUILDING_ID = DRAFT_ID(0);
  * half as many columns as it has bays and two cells deep, a side to each
  * aisle. Shelves have one side.
  */
-const DRAFT_PLACES: { place: LayoutPlace; shape: PlanShape }[] = (() => {
+const DRAFT_PLACES: { place: Bare; shape: PlanShape }[] = (() => {
   let y = 1;
   return FAMILIES.map(([name, bays, levels, solid], i) => {
     const id = DRAFT_ID(i + 1);
@@ -291,7 +311,7 @@ const DRAFT_PLACES: { place: LayoutPlace; shape: PlanShape }[] = (() => {
     y += sides + 2;
     return {
       place: { place_id: id, parent_id: BUILDING_ID, name, solid, bays: columns, levels, rows: 1, positions: Array<number>(levels).fill(1), sides, reach_levels: 1, pattern, bins: bays * levels - (i % 4) },
-      shape: { place_id: id, name, solid, nesting: 1, corners: rect(1, at, columns, sides), z: 0, height: solid ? levels : 1 },
+      shape: { place_id: id, name, solid, nesting: 1, corners: rect(1, at, columns, sides), z: 0, height: solid ? levels : 1, frame: { x: 1, y: at, z: 0, turn: 0 } },
     };
   });
 })();
@@ -299,19 +319,25 @@ const DRAFT_PLACES: { place: LayoutPlace; shape: PlanShape }[] = (() => {
 const DRAFT_WIDE = Math.max(10, ...FAMILIES.map(([, bays]) => bays + 2));
 const DRAFT_DEEP = Math.max(...DRAFT_PLACES.flatMap((p) => p.shape.corners.map(([, y]) => y))) + 1;
 
+const DRAFTED_PLAN: PlanShape[] = [
+  { place_id: BUILDING_ID, name: "Building", solid: false, nesting: 0, corners: rect(0, 0, DRAFT_WIDE, DRAFT_DEEP), z: 0, height: 8, frame: { x: 0, y: 0, z: 0, turn: 0 } },
+  ...DRAFT_PLACES.map((p) => p.shape),
+];
+
 export const DRAFTED_SITE: LayoutView = {
   site_code: "NORTH",
-  places: [
-    { place_id: BUILDING_ID, parent_id: null, name: "Building", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
-    ...DRAFT_PLACES.map((p) => p.place),
-  ],
+  places: boxed(
+    [
+      { place_id: BUILDING_ID, parent_id: null, name: "Building", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
+      ...DRAFT_PLACES.map((p) => p.place),
+    ],
+    DRAFTED_PLAN,
+  ),
   bins: 1640,
   unplaced: 42,
   unplaced_sample: ["3PL", "ASSEMBLY-BIN", "C-FLOOR", "QUARANTINE"],
-  plan: [
-    { place_id: BUILDING_ID, name: "Building", solid: false, nesting: 0, corners: rect(0, 0, DRAFT_WIDE, DRAFT_DEEP), z: 0, height: 8 },
-    ...DRAFT_PLACES.map((p) => p.shape),
-  ],
+  plan: DRAFTED_PLAN,
+  version: "drafted",
 };
 
 /** Rack G, chosen: the first dozen of its bins, on its front. */

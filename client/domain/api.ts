@@ -32,6 +32,7 @@ import type {
   PackLocationSet,
   DraftReport,
   DraftRequest,
+  LayoutEdited,
   LayoutView,
   MapBins,
   ReachSaid,
@@ -922,6 +923,26 @@ export const api = {
 
   /** The layout of the site the session is working at. */
   layout: () => send<LayoutView>("GET", "/layout"),
+
+  /**
+   * Save what the plan editor changed, as one act (D209), against the layout
+   * it read: a save after somebody else's is refused, not written over theirs.
+   */
+  editLayout: (input: {
+    version: string;
+    changed: unknown[];
+    added: unknown[];
+    removed: Uuid[];
+    act: Act;
+  }) =>
+    send<LayoutEdited>("POST", "/layout/edit", {
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+      version: input.version,
+      changed: input.changed,
+      added: input.added,
+      removed: input.removed,
+    }),
 
   /** Every bin in a cell at the site, for the bin map (D208). */
   mapBins: () => send<MapBins>("GET", "/layout/bins"),

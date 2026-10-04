@@ -38,6 +38,7 @@ mod packing_list;
 mod passkeys_http;
 mod picking_http;
 mod places_http;
+mod plan_edit_http;
 mod presentation_and_parts;
 mod putaway_http;
 mod receipt_disposition;

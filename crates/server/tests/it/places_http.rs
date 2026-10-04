@@ -24,7 +24,8 @@ async fn clear(c: &tokio_postgres::Client) {
          DELETE FROM reported_stock WHERE item_id IN (SELECT id FROM item WHERE code LIKE 'LT-ITEM-%');
          DELETE FROM item WHERE code LIKE 'LT-ITEM-%';
          DELETE FROM location WHERE code LIKE 'LT-%' OR code LIKE 'LX-%' OR code LIKE 'LW-%';
-         DELETE FROM place WHERE site_id = '{SITE}';"
+         DELETE FROM place WHERE site_id = '{SITE}';
+         DELETE FROM place_change WHERE site_id = '{SITE}';"
     ))
     .await
     .expect("clear the layout");

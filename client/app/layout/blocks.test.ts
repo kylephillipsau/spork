@@ -23,6 +23,7 @@ const shape = (over: Partial<PlanShape>): PlanShape => ({
   corners: rect(0, 0, 10, 8),
   z: 0,
   height: 4,
+  frame: { x: 0, y: 0, z: 0, turn: 0 },
   ...over,
 });
 
@@ -39,6 +40,14 @@ const place = (place_id: string, bays: number, levels: number, rows = 1): Layout
   reach_levels: 1,
   pattern: null,
   bins: 0,
+  x: 0,
+  y: 0,
+  z: 0,
+  length: bays,
+  depth: 1,
+  height: levels,
+  turn: 0,
+  outlined: false,
 });
 
 test("a solid place stands up; a walk-through one lies flat, however tall it is", () => {

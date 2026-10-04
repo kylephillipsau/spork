@@ -1,0 +1,191 @@
+//! The plan editor over HTTP (D209): a rack moved and turned, a wall drawn,
+//! one act that a retry repeats without writing twice, a save against a layout
+//! that has changed refused, a rack with bins in it kept, and a history of who
+//! did what.
+//!
+//! Its own file because it draws on the fixture site's layout, as
+//! `places_http` does, and tests in one file run side by side.
+
+use actix_web::{test, web, App};
+use serde_json::Value;
+use spork_server::{routes, AppState};
+
+use super::common;
+use common::{pool, url, SITE};
+
+const TENANT: &str = "11111111-1111-1111-1111-111111111111";
+
+/// The fixture site with no layout, none of this file's bins, and no history.
+async fn clear(c: &tokio_postgres::Client) {
+    c.batch_execute(&format!(
+        "UPDATE location SET place_id = NULL, slot_bay = NULL, slot_level = NULL,
+                             slot_row = NULL, slot_position = NULL, slot_side = NULL
+          WHERE site_id = '{SITE}';
+         DELETE FROM location WHERE code LIKE 'PE-%';
+         DELETE FROM place WHERE site_id = '{SITE}';
+         DELETE FROM place_change WHERE site_id = '{SITE}';"
+    ))
+    .await
+    .expect("clear the layout");
+}
+
+async fn call<S>(app: &S, req: test::TestRequest) -> (u16, Value)
+where
+    S: actix_web::dev::Service<
+        actix_http::Request,
+        Response = actix_web::dev::ServiceResponse,
+        Error = actix_web::Error,
+    >,
+{
+    let r = test::call_service(app, req.to_request()).await;
+    let status = r.status().as_u16();
+    let bytes = test::read_body(r).await;
+    let v = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
+    (status, v)
+}
+
+/// The plan editor's save (D209): a rack moved and turned, a wall drawn, one
+/// act that a retry repeats without writing twice, a save against a layout
+/// that has changed refused, and a rack with bins in it kept.
+#[actix_web::test]
+async fn the_plan_editor_moves_draws_and_keeps_its_history() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let db = common::connect(&u, false).await;
+    clear(&db).await;
+    db.batch_execute(&format!(
+        "INSERT INTO place (id, tenant_id, site_id, name, x, y, length, depth, height)
+         VALUES ('9e0e0000-0000-0000-0000-000000000001', '{TENANT}', '{SITE}', 'Building', 0, 0, 30, 20, 8);
+         INSERT INTO place (id, tenant_id, site_id, parent_id, name, solid, x, y, length, depth, height,
+                            bays, levels, sides, bin_pattern)
+         VALUES ('9e0e0000-0000-0000-0000-000000000002', '{TENANT}', '{SITE}', '9e0e0000-0000-0000-0000-000000000001',
+                 'Rack LE', true, 1, 1, 4, 2, 3, 4, 3, 2, 'LE-{{bay:02}}-{{level}}');
+         INSERT INTO location (tenant_id, site_id, code, kind, active, place_id, slot_bay, slot_level, slot_row, slot_position, slot_side)
+         VALUES ('{TENANT}', '{SITE}', 'PE-01-1', 'pick_face', true, '9e0e0000-0000-0000-0000-000000000002', 1, 1, 1, 1, 1);"
+    ))
+    .await
+    .expect("a building with a rack in it");
+
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    let auth = ("authorization", common::bearer(&app).await);
+    let read = |app| {
+        let auth = auth.clone();
+        async move { call(app, test::TestRequest::get().uri("/layout").insert_header(auth)).await.1 }
+    };
+    let save = |app, body: Value| {
+        let auth = auth.clone();
+        async move { call(app, test::TestRequest::post().uri("/layout/edit").insert_header(auth).set_json(body)).await }
+    };
+
+    let layout = read(&app).await;
+    let version = layout["version"].as_str().expect("a version").to_string();
+    let rack = layout["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack LE").unwrap().clone();
+    assert_eq!((rack["x"].as_f64(), rack["length"].as_f64(), rack["outlined"].as_bool()), (Some(1.0), Some(4.0), Some(false)), "{rack}");
+
+    // ── the rack moved and turned a quarter, and a wall drawn ───────────
+    let event = uuid::Uuid::new_v4();
+    let wall = uuid::Uuid::new_v4();
+    let body = serde_json::json!({
+        "client_event_id": event, "occurred_at": "2026-10-04T01:00:00Z", "version": version,
+        "changed": [{ "place_id": rack["place_id"], "name": "Rack LE", "solid": true,
+                      "x": 10, "y": 4, "length": 4, "depth": 2, "height": 3, "turn": 90 }],
+        "added": [{ "place_id": wall, "parent_id": "9e0e0000-0000-0000-0000-000000000001", "name": "North wall",
+                    "solid": true, "x": 0, "y": 19.5, "length": 30, "depth": 0.5, "height": 4 }],
+    });
+    let (status, saved) = save(&app, body.clone()).await;
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!((saved["changed"].as_i64(), saved["added"].as_i64(), saved["replay"].as_bool()), (Some(1), Some(1), Some(false)), "{saved}");
+    let after = read(&app).await;
+    let moved = after["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack LE").unwrap();
+    assert_eq!((moved["x"].as_f64(), moved["y"].as_f64(), moved["turn"].as_f64()), (Some(10.0), Some(4.0), Some(90.0)), "{moved}");
+    let shape = after["plan"].as_array().unwrap().iter().find(|s| s["name"] == "Rack LE").unwrap();
+    assert_eq!(shape["frame"]["turn"].as_f64(), Some(90.0), "{shape}");
+    // Turned a quarter about its corner: its front now runs up the plan.
+    let corners: Vec<(f64, f64)> = shape["corners"].as_array().unwrap().iter().map(|c| (c[0].as_f64().unwrap(), c[1].as_f64().unwrap())).collect();
+    assert!((corners[1].0 - 10.0).abs() < 1e-9 && (corners[1].1 - 8.0).abs() < 1e-9, "{corners:?}");
+    assert!(after["places"].as_array().unwrap().iter().any(|p| p["name"] == "North wall"));
+    let bin: i64 = db
+        .query_one("SELECT slot_bay FROM location WHERE code = 'PE-01-1' AND place_id = '9e0e0000-0000-0000-0000-000000000002'", &[])
+        .await
+        .unwrap()
+        .get::<_, i32>(0) as i64;
+    assert_eq!(bin, 1, "the bin went with its rack, in the same cell");
+
+    // ── the same act again writes nothing twice ─────────────────────────
+    let (status, again) = save(&app, body).await;
+    assert_eq!(status, 200, "{again}");
+    assert_eq!((again["added"].as_i64(), again["replay"].as_bool()), (Some(1), Some(true)), "{again}");
+    let walls: i64 = db
+        .query_one(&format!("SELECT count(*) FROM place WHERE site_id = '{SITE}' AND name = 'North wall'"), &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(walls, 1, "one wall");
+
+    // ── against a layout that has changed since, refused ────────────────
+    let (status, stale) = save(
+        &app,
+        serde_json::json!({ "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-04T01:01:00Z",
+                            "version": version, "removed": [wall] }),
+    )
+    .await;
+    assert_eq!(status, 400, "{stale}");
+    assert!(stale.to_string().contains("changed since"), "{stale}");
+
+    // ── a rack with bins stays; a two-sided rack stays solid; a wall goes ─
+    let now = saved["version"].as_str().unwrap().to_string();
+    let (status, kept) = save(
+        &app,
+        serde_json::json!({ "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-04T01:02:00Z",
+                            "version": now, "removed": [rack["place_id"]] }),
+    )
+    .await;
+    assert_eq!(status, 400, "{kept}");
+    assert!(kept.to_string().contains("1 bin in it"), "{kept}");
+    let (status, flat) = save(
+        &app,
+        serde_json::json!({ "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-04T01:03:00Z", "version": now,
+                            "changed": [{ "place_id": rack["place_id"], "name": "Rack LE", "solid": false,
+                                          "x": 10, "y": 4, "length": 4, "depth": 2, "height": 3, "turn": 90 }] }),
+    )
+    .await;
+    assert_eq!(status, 400, "{flat}");
+    let (status, gone) = save(
+        &app,
+        serde_json::json!({ "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-04T01:04:00Z",
+                            "version": now, "removed": [wall] }),
+    )
+    .await;
+    assert_eq!(status, 200, "{gone}");
+
+    // ── and the history says who did what ───────────────────────────────
+    let history = db
+        .query(
+            &format!(
+                "SELECT pc.change, ce.recorded_by_id IS NOT NULL, pc.before->>'x', pc.after->>'x'
+                   FROM place_change pc
+                   JOIN client_event ce ON ce.tenant_id = pc.tenant_id AND ce.client_event_id = pc.client_event_id
+                  WHERE pc.site_id = '{SITE}' ORDER BY pc.id"
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
+    let kinds: Vec<(String, bool, Option<String>, Option<String>)> = history.iter().map(|r| (r.get(0), r.get(1), r.get(2), r.get(3))).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            ("changed".into(), true, Some("1.0".into()), Some("10.0".into())),
+            ("added".into(), true, None, Some("0.0".into())),
+            ("removed".into(), true, Some("0.0".into()), None),
+        ],
+        "moved from 1 to 10, the wall drawn, then taken away"
+    );
+
+    clear(&db).await;
+}

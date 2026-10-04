@@ -65,6 +65,8 @@ import { WarehousePage } from "@app/layout/WarehousePage";
 import { useBin, usePlace } from "@app/layout/usePlace";
 import { chosenFrom, useWarehouse } from "@app/layout/useWarehouse";
 import { MapPage } from "@app/layout/MapPage";
+import { PlanEditorPage } from "@app/layout/PlanEditorPage";
+import { usePlanEditor } from "@app/layout/usePlanEditor";
 import { mapFrom, useMap } from "@app/layout/useMap";
 import { ItemPage } from "@app/items/ItemPage";
 import { useItemProperties } from "@app/items/useItemProperties";
@@ -310,6 +312,11 @@ function LiveWarehouse() {
   return <WarehousePage desk={useWarehouse(chosenFrom(window.location.search))} />;
 }
 
+/** The plan editor (D209): the site's places, moved, turned and drawn. */
+function LivePlan() {
+  return <PlanEditorPage desk={usePlanEditor()} />;
+}
+
 /** The bin map (D208): every bin where it sits. */
 function LiveMap() {
   return <MapPage desk={useMap(mapFrom(window.location.search))} />;
@@ -349,6 +356,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   photos: () => <LivePhotos />,
   warehouse: () => <LiveWarehouse />,
   map: () => <LiveMap />,
+  plan: () => <LivePlan />,
   findings: () => <LiveFindings at={null} />,
   finding: (params) => <LiveFindings at={params["finding"] ?? null} />,
   where: () => <LiveWhere />,

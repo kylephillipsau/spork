@@ -105,8 +105,29 @@ face**: the way into the place, the front of the rack with the bin's cell lit,
 labelled the way the rack's own labels read, and a small plan of the building.
 The plan is always drawn the same way up.
 
+## Editing the layout
+
+**Inventory › Warehouse › Edit layout** shows the site from above. Drag a
+place to move it, half a cell at a time, or nudge it with the arrow keys. Turn
+it a quarter at a time with R or the buttons, and it turns about its middle.
+Its front is marked, and a rack with two sides has its back marked too.
+Beside the plan are its name, what it is (solid or walk-through), and its
+position and size in cells.
+
+You can add a wall, a column, a dock, a packing station or an area. You can
+take away a place that holds no bins.
+
+Nothing is saved until **Save**, and **Undo** takes back one change at a
+time. Bins move with their racks, because each is in a bay and a level of its
+rack wherever the rack stands. A rack's bays and levels can't be changed here.
+If somebody else changed the layout since you opened it, the save says so,
+and you open it again to see their change.
+
+Every change is kept: what the place was, what it became, who did it, and
+when.
+
 ## Not built yet
 
-- The plan editor, for drawing and arranging places.
+- Changing a rack's bays, levels or naming pattern, which moves bins.
 - Correcting a bin's cell by scanning it at the shelf.
-- A history of who changed the layout, and roles for who may.
+- Roles for who may change the layout. For now, anyone signed in may.

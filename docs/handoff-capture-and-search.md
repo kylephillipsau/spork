@@ -140,6 +140,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   (`cellsOf` in `blocks.ts`, `GET /layout/bins`), coloured by what's here or by
   reach (`layers.ts`). A search flies to a bin's face, and the chosen bin's rack
   stays solid while the rest fade. The card sets the rack's reach.
+- D209, migration 119. Warehouse › Edit layout (`/warehouse/edit`): drag,
+  nudge, turn about the middle, resize, add (wall, column, dock, packing
+  station, area) and take away places, with undo, saved as one act against the
+  layout's `version` (`POST /layout/edit`). Each change is kept in
+  `place_change`. Grids are not editable. The arithmetic is `edit.ts`, tested
+  against the server's composition.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

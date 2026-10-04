@@ -14690,3 +14690,44 @@ already chosen.
 **Not decided.** The real positions of the racks. The user will share a floor
 plan, and a plan editor follows. The scale (`site.cell_mm`, Proposal B) waits
 for the user's measurement of a bay.
+
+### D209: The layout is edited on its plan, and remembers who moved what
+
+*Adopted 2026-10-04, with migration 119. The plan editor D173 deferred.*
+
+**Decision.** Inventory › Warehouse › Edit layout shows the site from above.
+On it you can:
+
+- **Move** a place by dragging it, half a cell at a time, or by the arrow keys.
+- **Turn** it a quarter at a time about its middle, or **face it the other
+  way**. The chosen place's front is marked, and a two-sided rack's back is
+  too, because turning changes which aisle its first bins open onto.
+- **Resize** it, rename it, and say whether it is solid or walk-through.
+- **Add** a wall, a column, a dock, a packing station or an area.
+- **Take away** a place that holds no bins and has nothing inside it.
+
+Exact numbers sit beside the plan. Changes are held in the editor with undo
+until **Save**. Save sends them all as one act (`POST /layout/edit`) against
+the layout's fingerprint as read. A retry is the same act and writes nothing
+twice. A save against a layout that has changed since, by another editor, a
+draft or a rack's reach, is refused with a sentence that says so. Each place
+changed, added or removed is kept in `place_change`, as it was and as it
+became, under the act that did it, and so with the person and the moment.
+
+**A rack's grid is never edited here.** Its bays, levels, sides and naming
+pattern decide which bin is in which cell, and the server takes none of them
+in an edit. Moving, turning or stretching a rack carries its bins with it,
+because a bin's cell is a bay and a level of its place. A place with its own
+outline is moved and turned, never resized, because its outline is in its
+own cells. A two-sided rack stays solid.
+
+**Why.** The racks have to stand where they really stand before a route can
+be trusted (docs/picking-plan.md, step 2). The user will share a floor plan,
+and wants to nudge and add things themselves afterwards (2026-10-04). Holding
+changes until Save means nobody sees a half-moved warehouse, and a mouse slip
+costs one Undo. The history answers D173's open "who drew what".
+
+**Not decided.** Editing a rack's grid, which moves bins and needs a preview
+of which. Roles for who may edit: for now, anyone signed in, as with drafting
+(Q176). The scale (`site.cell_mm`, Proposal B) waits for the user's
+measurement.
