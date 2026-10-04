@@ -369,8 +369,8 @@ fn exact(cost: &[Vec<f64>], start: usize, closed: bool) -> Vec<usize> {
 /// few percent of the best for the thirty-odd stops a run has.
 fn improved(cost: &[Vec<f64>], start: usize, closed: bool) -> Vec<usize> {
     let budget = std::time::Instant::now() + std::time::Duration::from_millis(20);
-    let mut best = polish(cost, inserted(cost, start, closed), closed);
-    let other = polish(cost, nearest(cost, start), closed);
+    let mut best = polish(cost, inserted(cost, start, closed), closed, budget);
+    let other = polish(cost, nearest(cost, start), closed, budget);
     if length(cost, &other, closed) < length(cost, &best, closed) {
         best = other;
     }
@@ -395,7 +395,7 @@ fn improved(cost: &[Vec<f64>], start: usize, closed: bool) -> Vec<usize> {
         shaken.extend_from_slice(&best[cuts[1]..cuts[2]]);
         shaken.extend_from_slice(&best[cuts[0]..cuts[1]]);
         shaken.extend_from_slice(&best[cuts[2]..]);
-        let tried = polish(cost, shaken, closed);
+        let tried = polish(cost, shaken, closed, budget);
         if length(cost, &tried, closed) + 1e-9 < length(cost, &best, closed) {
             best = tried;
         }
@@ -449,12 +449,20 @@ fn nearest(cost: &[Vec<f64>], start: usize) -> Vec<usize> {
     route
 }
 
-/// 2-opt and Or-opt until neither shortens the walk. The start stays first.
-fn polish(cost: &[Vec<f64>], mut route: Vec<usize>, closed: bool) -> Vec<usize> {
+/// 2-opt and Or-opt until neither shortens the walk, or the time is up: a
+/// walk of a hundred lines is polished as far as the budget goes, not to the
+/// end. The start stays first.
+fn polish(cost: &[Vec<f64>], mut route: Vec<usize>, closed: bool, budget: std::time::Instant) -> Vec<usize> {
     for _ in 0..50 {
+        if std::time::Instant::now() > budget {
+            break;
+        }
         let mut better = false;
         // 2-opt: reverse a stretch.
         for i in 1..route.len().saturating_sub(1) {
+            if std::time::Instant::now() > budget {
+                break;
+            }
             for k in i + 1..route.len() {
                 let mut tried = route.clone();
                 tried[i..=k].reverse();
@@ -467,7 +475,7 @@ fn polish(cost: &[Vec<f64>], mut route: Vec<usize>, closed: bool) -> Vec<usize> 
         // Or-opt: move a stretch of one to three stops elsewhere, either way round.
         for len in 1..=3usize {
             let mut i = 1;
-            while i + len <= route.len() {
+            while i + len <= route.len() && std::time::Instant::now() <= budget {
                 let now = length(cost, &route, closed);
                 let mut rest = route.clone();
                 let piece: Vec<usize> = rest.drain(i..i + len).collect();
@@ -703,6 +711,21 @@ mod tests {
         let route = order(&cost, 3, false);
         assert_eq!(route[0], 3);
         assert_eq!(route.len(), 40);
+    }
+
+    #[test]
+    fn a_long_walk_is_ordered_within_its_budget() {
+        // A hundred stops, as a busy morning's walk might have: every device
+        // reads it again after every pick, so it must stay quick.
+        let cost = scattered(100, 11);
+        let began = std::time::Instant::now();
+        let route = order(&cost, 0, true);
+        let took = began.elapsed();
+        let mut seen = route.clone();
+        seen.sort();
+        assert_eq!(seen, (0..100).collect::<Vec<_>>(), "every stop once");
+        assert!(took < std::time::Duration::from_millis(250), "ordered in {took:?}");
+        assert!(length(&cost, &route, true) < length(&cost, &(0..100).collect::<Vec<_>>(), true), "better than as given");
     }
 
     #[test]

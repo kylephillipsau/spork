@@ -14822,6 +14822,11 @@ bench gets on the layout to be the walk's start.
   person's or a trolley's width round a rack. Distances run slightly short,
   and a trolley's aisles (Question 3) are not modelled yet.
 - A stop above reach costs nothing extra yet (Proposal C's climbing cost).
+- The ordering is held to 20 ms of polishing, so a long walk read again after
+  every pick stays quick.
+- On a device that is part-way through a walk, a fresh read is laid over the
+  rows on screen (D206), which keep their order. The route's numbers shown
+  then are the fresh route's, not quite the order on screen.
 
 **Why.** The user asked for the best picking route by A* (2026-10-04). A*
 measures; the order of stops is the travelling-salesman half, which is what
