@@ -9429,6 +9429,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::places::site_layout)
         .service(crate::places::draft_layout)
         .service(crate::places::edit_layout)
+        .service(crate::places::set_scale)
         .service(crate::workspace::workspace)
         .service(crate::workspace::set_pack_location)
         .service(crate::workspace::set_owner)

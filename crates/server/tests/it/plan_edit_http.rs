@@ -23,7 +23,8 @@ async fn clear(c: &tokio_postgres::Client) {
           WHERE site_id = '{SITE}';
          DELETE FROM location WHERE code LIKE 'PE-%';
          DELETE FROM place WHERE site_id = '{SITE}';
-         DELETE FROM place_change WHERE site_id = '{SITE}';"
+         DELETE FROM place_change WHERE site_id = '{SITE}';
+         UPDATE site SET cell_mm = NULL WHERE id = '{SITE}';"
     ))
     .await
     .expect("clear the layout");
@@ -162,6 +163,22 @@ async fn the_plan_editor_moves_draws_and_keeps_its_history() {
     )
     .await;
     assert_eq!(status, 200, "{gone}");
+
+    // ── the scale: a metre to a cell, said once (D210) ──────────────────
+    assert!(read(&app).await["cell_mm"].is_null(), "not to scale until it is said");
+    let scale = |app, mm: i64| {
+        let auth = auth.clone();
+        async move {
+            call(app, test::TestRequest::post().uri("/layout/scale").insert_header(auth).set_json(serde_json::json!({ "cell_mm": mm }))).await
+        }
+    };
+    let (status, set) = scale(&app, 1000).await;
+    assert_eq!(status, 200, "{set}");
+    assert_eq!(read(&app).await["cell_mm"], 1000);
+    assert_eq!(scale(&app, 1000).await.0, 200, "saying it again is no change");
+    let (status, refused) = scale(&app, 900).await;
+    assert_eq!(status, 400, "a scale places were measured in stays: {refused}");
+    assert_eq!(scale(&app, 0).await.0, 400);
 
     // ── and the history says who did what ───────────────────────────────
     let history = db

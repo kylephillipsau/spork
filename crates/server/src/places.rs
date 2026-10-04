@@ -480,6 +480,9 @@ pub struct LayoutView {
     /// The layout as read, as a fingerprint: an edit made against an older
     /// one is refused rather than written over somebody else's (D209).
     pub version: String,
+    /// How many millimetres one cell is, once the site says (D210). Until
+    /// then the layout is not to scale, and is shown in cells.
+    pub cell_mm: Option<i32>,
 }
 
 /// Every place on the site as it stands there, outermost first.
@@ -564,11 +567,11 @@ pub async fn site_layout(
     let view = scope
         .run(|tx| {
             Box::pin(async move {
-                let site_code: String = tx
-                    .query_opt("SELECT code FROM site WHERE id = $1", &[&site])
+                let (site_code, cell_mm): (String, Option<i32>) = tx
+                    .query_opt("SELECT code, cell_mm FROM site WHERE id = $1", &[&site])
                     .await?
-                    .ok_or(ApiError::NotFound)?
-                    .get(0);
+                    .map(|r| (r.get(0), r.get(1)))
+                    .ok_or(ApiError::NotFound)?;
                 let counts: HashMap<Uuid, i64> = tx
                     .query(
                         "SELECT place_id, count(*) FROM location
@@ -633,6 +636,7 @@ pub async fn site_layout(
                     unplaced_sample,
                     plan,
                     version,
+                    cell_mm,
                 })
             })
         })
@@ -1665,5 +1669,65 @@ pub async fn edit_layout(
         })
         .await?;
     tracing::info!(tenant_id = %tenant, changed = out.changed, added = out.added, removed = out.removed, "the layout was edited");
+    Ok(HttpResponse::Ok().json(out))
+}
+
+// ---------------------------------------------------------------------------
+// The scale (D210)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Debug)]
+pub struct ScaleRequest {
+    /// How many millimetres one cell is.
+    pub cell_mm: i32,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ScaleSet {
+    pub cell_mm: i32,
+}
+
+/// Say how long one of the site's cells is (D210). Once.
+///
+/// **Set once, because everything after it is measured in it.** A rack placed
+/// 4.2 m from the wall is 4.2 cells there with a one-metre cell; changing the
+/// cell afterwards would move every measured place without anybody moving it.
+#[post("/layout/scale")]
+pub async fn set_scale(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<ScaleRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let site = working_site(who.site_id)?;
+    let cell_mm = body.cell_mm;
+    if !(10..=100_000).contains(&cell_mm) {
+        return Err(ApiError::Rejected("a cell is between a centimetre and a hundred metres".into()));
+    }
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let was: Option<i32> = tx
+                    .query_opt("SELECT cell_mm FROM site WHERE id = $1 FOR UPDATE", &[&site])
+                    .await?
+                    .ok_or(ApiError::NotFound)?
+                    .get(0);
+                match was {
+                    Some(same) if same == cell_mm => {}
+                    Some(_) => {
+                        return Err(ApiError::Rejected(
+                            "the scale is set already, and places are measured in it; move the places instead".into(),
+                        ))
+                    }
+                    None => {
+                        tx.execute("UPDATE site SET cell_mm = $2 WHERE id = $1", &[&site, &cell_mm]).await?;
+                    }
+                }
+                Ok(ScaleSet { cell_mm })
+            })
+        })
+        .await?;
+    tracing::info!(%site, cell_mm, by = %who.person_id, "the site's scale was set");
     Ok(HttpResponse::Ok().json(out))
 }

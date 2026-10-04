@@ -33,6 +33,7 @@ import type {
   DraftReport,
   DraftRequest,
   LayoutEdited,
+  ScaleSet,
   LayoutView,
   MapBins,
   ReachSaid,
@@ -943,6 +944,9 @@ export const api = {
       added: input.added,
       removed: input.removed,
     }),
+
+  /** Say how long one of the site's cells is, in millimetres: once (D210). */
+  setScale: (cellMm: number) => send<ScaleSet>("POST", "/layout/scale", { cell_mm: cellMm }),
 
   /** Every bin in a cell at the site, for the bin map (D208). */
   mapBins: () => send<MapBins>("GET", "/layout/bins"),

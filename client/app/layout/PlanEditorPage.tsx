@@ -4,7 +4,7 @@ import { Maximize, Minus, Plus, Redo2, RotateCcw, RotateCw, Rotate3d, Save, Tras
 import { Alert, Button, Card, IconButton, Page, PageHeader, Select, Skeleton, TextField } from "@ui/index";
 import type { Frame, LayoutPlace, PlanShape, Uuid } from "@domain/types";
 
-import { moved, PRESETS, SITE, SNAP, turned, type Draft, type PlaceBox, type Point } from "./edit";
+import { moved, PRESETS, shown, SITE, stepOf, stored, turned, unitOf, type Draft, type PlaceBox, type Point } from "./edit";
 import type { PlanDesk } from "./usePlanEditor";
 import s from "./plan-editor.module.css";
 
@@ -58,6 +58,20 @@ export function PlanEditorPage({ desk }: { desk: PlanDesk }) {
         <Alert tone="success" onDismiss={desk.dismiss}>
           {desk.said}
         </Alert>
+      )}
+
+      {desk.cellMm === null && (
+        <Card
+          title="Measure in metres"
+          description="The plan isn't to scale yet: it was drafted from the bin codes. In metres, each cell on the plan is a metre, and everything you type or measure is in metres. The racks keep their drawn sizes until you set them. The scale stays once it is set."
+          actions={
+            <Button variant="secondary" loading={desk.busy} onClick={() => void desk.measureInMetres()}>
+              Measure in metres
+            </Button>
+          }
+        >
+          {null}
+        </Card>
       )}
 
       <div className={s.editor}>
@@ -162,7 +176,7 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
     if (!g) return;
     if (g.kind === "drag") {
       const [x, y] = site(e);
-      const box = moved(g.box, g.parent, x - g.from[0], y - g.from[1]);
+      const box = moved(g.box, g.parent, x - g.from[0], y - g.from[1], stepOf(desk.cellMm, e.shiftKey));
       if (!g.begun && box.x === g.box.x && box.y === g.box.y) return;
       if (!g.begun) {
         desk.begin();
@@ -195,12 +209,12 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
       return;
     }
     if (!d) return;
-    const step = e.shiftKey ? SNAP * 10 : SNAP;
+    const step = stepOf(desk.cellMm, e.shiftKey);
     const nudge: Record<string, Point> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
     const by = nudge[e.key];
     if (by) {
       e.preventDefault();
-      desk.change(d.place_id, (x) => ({ ...x, box: moved(x.box, parentOf(x), by[0], by[1]) }));
+      desk.change(d.place_id, (x) => ({ ...x, box: moved(x.box, parentOf(x), by[0], by[1], step) }));
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
       desk.change(d.place_id, (x) => ({ ...x, box: turned(x.box, e.shiftKey ? 90 : -90) }));
@@ -362,12 +376,22 @@ function Inspector({ desk }: { desk: PlanDesk }) {
   }
 
   const parent = desk.drafts.find((x) => x.place_id === d.parent_id);
+  const mm = desk.cellMm;
+  const unit = unitOf(mm);
   const set = (field: keyof PlaceBox) => (value: number) =>
-    desk.change(d.place_id, (x) => ({ ...x, box: { ...x.box, [field]: value } }));
+    desk.change(d.place_id, (x) => ({ ...x, box: { ...x.box, [field]: stored(value, mm) } }));
+  const step = mm ? 0.01 : 0.5;
   const rack = d.sides === 2 || d.bins > 0;
 
   return (
-    <Card title={d.name || "A place"} description={parent ? `Inside ${parent.name}, in its cells.` : "Standing on the site, in cells."}>
+    <Card
+      title={d.name || "A place"}
+      description={
+        parent
+          ? `Inside ${parent.name}, measured from its front left corner${mm ? ", in metres" : ""}.`
+          : `Standing on the site${mm ? ", in metres" : ", in cells"}.`
+      }
+    >
       <div className={s.fields}>
         <TextField label="Name" value={d.name} onChange={(e) => desk.change(d.place_id, (x) => ({ ...x, name: e.target.value }))} />
         <Select
@@ -382,13 +406,13 @@ function Inspector({ desk }: { desk: PlanDesk }) {
           onValueChange={(v) => desk.change(d.place_id, (x) => ({ ...x, solid: v === "solid" }))}
         />
         <div className={s.pair}>
-          <NumberField label="Across" value={d.box.x} step={SNAP} onCommit={set("x")} />
-          <NumberField label="Up the plan" value={d.box.y} step={SNAP} onCommit={set("y")} />
+          <NumberField label={parent ? "From its left" : "Across"} unit={unit} value={shown(d.box.x, mm)} step={step} onCommit={set("x")} />
+          <NumberField label={parent ? "From its front" : "Up the plan"} unit={unit} value={shown(d.box.y, mm)} step={step} onCommit={set("y")} />
         </div>
         <div className={s.trio}>
-          <NumberField label="Length" value={d.box.length} step={SNAP} min={0.1} disabled={!!d.outline} onCommit={set("length")} />
-          <NumberField label="Depth" value={d.box.depth} step={SNAP} min={0.1} disabled={!!d.outline} onCommit={set("depth")} />
-          <NumberField label="Height" value={d.box.height} step={SNAP} min={0.1} onCommit={set("height")} />
+          <NumberField label="Length" unit={unit} value={shown(d.box.length, mm)} step={step} min={0.01} disabled={!!d.outline} onCommit={set("length")} />
+          <NumberField label="Depth" unit={unit} value={shown(d.box.depth, mm)} step={step} min={0.01} disabled={!!d.outline} onCommit={set("depth")} />
+          <NumberField label="Height" unit={unit} value={shown(d.box.height, mm)} step={step} min={0.01} onCommit={set("height")} />
         </div>
         <div className={s.turn}>
           <span className={s.turnLabel}>Turned {d.box.turn}°</span>
@@ -422,6 +446,7 @@ function Inspector({ desk }: { desk: PlanDesk }) {
  */
 function NumberField({
   label,
+  unit,
   value,
   step,
   min,
@@ -429,6 +454,7 @@ function NumberField({
   onCommit,
 }: {
   label: string;
+  unit: string;
   value: number;
   step: number;
   min?: number | undefined;
@@ -451,7 +477,7 @@ function NumberField({
       min={min}
       value={text}
       disabled={disabled}
-      trailing="cells"
+      trailing={unit}
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { LayoutView } from "@domain/types";
 
-import { changeCount, changesOf, draftsOf, freeName, moved, planOf, snap, turned, type Draft, type PlaceBox } from "./edit.ts";
+import { changeCount, changesOf, draftsOf, freeName, moved, planOf, shown, snap, stepOf, stored, turned, unitOf, type Draft, type PlaceBox } from "./edit.ts";
 import { DRAFTED_SITE, LAID_OUT } from "./fixture.ts";
 
 const near = (a: number[][], b: number[][], what: string) =>
@@ -83,4 +83,17 @@ test("a new place takes a name nothing beside it has", () => {
   const drafts = [draft("a", null), { ...draft("w", "a"), name: "Wall" }, { ...draft("w2", "a"), name: "Wall 2" }];
   assert.equal(freeName(drafts, "a", "Wall"), "Wall 3");
   assert.equal(freeName(drafts, null, "Wall"), "Wall", "a wall elsewhere is no clash");
+});
+
+test("once a cell is a metre, numbers read in metres and a nudge is ten centimetres", () => {
+  assert.equal(unitOf(null), "cells");
+  assert.equal(shown(2.5, null), 2.5, "not to scale: cells as they are");
+  assert.equal(unitOf(1000), "m");
+  assert.equal(shown(2.4, 1000), 2.4);
+  assert.equal(shown(18, 900), 16.2, "any scale reads in metres");
+  assert.equal(stored(16.2, 900), 18);
+  assert.equal(stepOf(1000), 0.1);
+  assert.equal(stepOf(1000, true), 1);
+  assert.equal(stepOf(null), 0.5);
+  assert.deepEqual(moved(box({ x: 1, y: 1 }), { x: 0, y: 0, z: 0, turn: 0 }, 0.26, 0.04, stepOf(1000)), box({ x: 1.3, y: 1 }));
 });

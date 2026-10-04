@@ -24,6 +24,8 @@ function deskOf(drafts: Draft[], over: Partial<PlanDesk> = {}): PlanDesk {
     canUndo: false,
     canRedo: false,
     count: changeCount(DRAFTED_SITE, drafts),
+    cellMm: null,
+    measureInMetres: async () => {},
     save: async () => {},
     discard: () => {},
     busy: false,
@@ -55,5 +57,5 @@ export function fixturePlanEdited(over: Partial<PlanDesk> = {}): PlanDesk {
       fresh: true,
     },
   ];
-  return deskOf(drafts, { selected: drafts.find((d) => d.name === "Rack G") ?? null, canUndo: true, ...over });
+  return deskOf(drafts, { selected: drafts.find((d) => d.name === "Rack G") ?? null, canUndo: true, cellMm: 1000, ...over });
 }

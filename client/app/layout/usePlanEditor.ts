@@ -40,6 +40,10 @@ export interface PlanDesk {
   canRedo: boolean;
   /** How many places a save would change. */
   count: number;
+  /** How long a cell is, once the site says; null while the plan isn't to scale (D210). */
+  cellMm: number | null;
+  /** Measure in metres from now on: a cell is a metre. Once. */
+  measureInMetres: () => Promise<void>;
   save: () => Promise<void>;
   discard: () => void;
   busy: boolean;
@@ -158,6 +162,16 @@ export function usePlanEditor(): PlanDesk {
     canUndo: past.length > 0,
     canRedo: future.length > 0,
     count,
+    cellMm: view?.cell_mm ?? null,
+    measureInMetres: async () => {
+      await press("scale:1000", async () => {
+        await api.setScale(1000);
+        if (!live.current) return;
+        // The scale is the site's, not the drawing's: the changes stand.
+        setRead((r) => (r.kind === "ready" ? { kind: "ready", value: { ...r.value, cell_mm: 1000 } } : r));
+        setSaid("The plan is in metres now. Measure each rack and set it, and the rest follows.");
+      });
+    },
     save: async () => {
       if (!view || count === 0) return;
       const c = changesOf(view, latest.current);

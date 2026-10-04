@@ -1660,6 +1660,8 @@ export interface LayoutView {
   plan: PlanShape[];
   /** The layout as read, as a fingerprint; an edit is saved against it (D209). */
   version: string;
+  /** How many millimetres one cell is, once the site says (D210); null while the layout is not to scale. */
+  cell_mm: number | null;
 }
 
 /** Something NetSuite last reported on a shelf. */
@@ -1807,4 +1809,9 @@ export interface LayoutEdited {
   version: string;
   /** This save had already landed; nothing was written again. */
   replay: boolean;
+}
+
+/** `POST /layout/scale`: how long one of the site's cells is, said once (D210). */
+export interface ScaleSet {
+  cell_mm: number;
 }

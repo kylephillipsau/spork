@@ -223,6 +223,7 @@ export const NO_LAYOUT: LayoutView = {
   unplaced_sample: [],
   plan: [],
   version: "none",
+  cell_mm: null,
 };
 
 export const DRAFTED: DraftReport = {
@@ -259,6 +260,7 @@ export const LAID_OUT: LayoutView = {
   unplaced_sample: ["3PL", "ASSEMBLY-BIN", "C-FLOOR"],
   plan: PLAN,
   version: "laid-out",
+  cell_mm: null,
 };
 
 const ITEM = (k: number) => `01990000-0000-7000-8000-0000000b${String(k).padStart(4, "0")}`;
@@ -338,6 +340,7 @@ export const DRAFTED_SITE: LayoutView = {
   unplaced_sample: ["3PL", "ASSEMBLY-BIN", "C-FLOOR", "QUARANTINE"],
   plan: DRAFTED_PLAN,
   version: "drafted",
+  cell_mm: null,
 };
 
 /** Rack G, chosen: the first dozen of its bins, on its front. */

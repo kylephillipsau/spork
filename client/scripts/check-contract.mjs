@@ -301,6 +301,7 @@ const PAIRS = [
   // The plan editor (D209).
   ["Frame", ["Frame"]],
   ["LayoutEdited", ["LayoutEdited"]],
+  ["ScaleSet", ["ScaleSet"]],
   // The bin map (D208), and reach set from it.
   ["MapBin", ["MapBin"]],
   ["MapBins", ["MapBins"]],

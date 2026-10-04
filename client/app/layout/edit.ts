@@ -45,8 +45,36 @@ export interface Draft {
 
 export const SITE: Frame = { x: 0, y: 0, z: 0, turn: 0 };
 
-/** The finest a drag or a nudge places a corner: half a cell. */
+/** The finest a drag or a nudge places a corner when the plan isn't to scale: half a cell. */
 export const SNAP = 0.5;
+
+/**
+ * How the layout's numbers read (D210): metres once the site says how long a
+ * cell is, cells until then. Stored positions are always cells.
+ */
+export function shown(cells: number, cellMm: number | null): number {
+  return cellMm ? round((cells * cellMm) / 1000) : round(cells);
+}
+
+/** A number as read on screen, back into cells. */
+export function stored(value: number, cellMm: number | null): number {
+  return cellMm ? (value * 1000) / cellMm : value;
+}
+
+/** The unit the numbers are shown in. */
+export function unitOf(cellMm: number | null): "m" | "cells" {
+  return cellMm ? "m" : "cells";
+}
+
+/**
+ * The step a drag or a nudge moves by, in cells: ten centimetres once the
+ * plan is to scale, which a tape can tell apart, or a metre with Shift.
+ * Half a cell, or five, before then.
+ */
+export function stepOf(cellMm: number | null, big = false): number {
+  if (!cellMm) return big ? SNAP * 10 : SNAP;
+  return (big ? 1000 : 100) / cellMm;
+}
 
 /** A point in a frame's cells, on the site: `Frame::point`. */
 export function at(frame: Frame, u: number, v: number): Point {
@@ -139,9 +167,9 @@ export function footprint(f: Frame, d: Pick<Draft, "box" | "outline">): Point[] 
   return [at(f, 0, 0), at(f, l, 0), at(f, l, w), at(f, 0, w)];
 }
 
-/** To the nearest half cell, without a negative nought. */
+/** To the nearest step, without a negative nought or floating-point dust. */
 export function snap(n: number, step = SNAP): number {
-  return Math.round(n / step) * step + 0;
+  return tidy(Math.round(n / step) * step);
 }
 
 /**
@@ -149,9 +177,9 @@ export function snap(n: number, step = SNAP): number {
  * The drag is in the site's cells and the box is in its parent's, so a place
  * inside a turned building moves the way the pointer does.
  */
-export function moved(start: PlaceBox, parent: Frame, dx: number, dy: number): PlaceBox {
+export function moved(start: PlaceBox, parent: Frame, dx: number, dy: number, step = SNAP): PlaceBox {
   const [du, dv] = within({ ...parent, x: 0, y: 0 }, [dx, dy]);
-  return { ...start, x: snap(start.x + du), y: snap(start.y + dv) };
+  return { ...start, x: snap(start.x + du, step), y: snap(start.y + dv, step) };
 }
 
 /**
@@ -223,6 +251,11 @@ function sameBox(a: PlaceBox, b: PlaceBox): boolean {
 
 function mod360(n: number): number {
   return ((n % 360) + 360) % 360;
+}
+
+/** To the millimetre of a metre, or the thousandth of a cell: what is shown. */
+function round(n: number): number {
+  return Math.round(n * 1000) / 1000 + 0;
 }
 
 /** Rounded past floating-point dust, so a quarter turn back lands where it was. */
