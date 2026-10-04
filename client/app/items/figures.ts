@@ -14,6 +14,11 @@ export interface Figures {
   length: string;
   width: string;
   height: string;
+  /** A round thing's (D213): across the top, across the base (blank when it
+   *  doesn't taper), and how much of its height at the top is straight. */
+  top: string;
+  base: string;
+  topHeight: string;
   /** One of [`PRESENTATIONS`], or empty before it is chosen. D138. */
   presentation: string;
   /** **The answer that is not a number.** A two-part set has no bounding box
@@ -30,7 +35,7 @@ export interface Figures {
  * refusal belongs here: an operator who weighed a box and could not reach a
  * tape has recorded a weight, and the request should say that rather than fail.
  */
-export function measurementsOf(figures: Figures): {
+export function measurementsOf(figures: Figures, round = false): {
   metric: string;
   entered_value?: string;
   unit?: string;
@@ -66,10 +71,33 @@ export function measurementsOf(figures: Figures): {
     for (const metric of ["length", "width", "height"]) {
       out.push({ metric, absent_reason: "not_applicable" });
     }
+  } else if (round) {
+    // **A round thing, measured across** (D213). Its widths and the straight
+    // part at its top are the shape; the box it fits in is still recorded,
+    // because D191 says a size is that box whatever the shape, and for a
+    // round thing the tape across its wider end is that box's length and its
+    // width. Everything that reads a size goes on reading it.
+    push("diameter", figures.top, "cm");
+    push("base_diameter", figures.base, "cm");
+    push("height", figures.height, "cm");
+    push("top_height", figures.topHeight, "cm");
+    const across = wider(figures.top, figures.base);
+    push("length", across, "cm");
+    push("width", across, "cm");
   } else {
     push("length", figures.length, "cm");
     push("width", figures.width, "cm");
     push("height", figures.height, "cm");
   }
   return out;
+}
+
+/** The wider of two widths as typed, or whichever was typed. */
+function wider(a: string, b: string): string {
+  const [x, y] = [a.trim(), b.trim()];
+  if (!y) return x;
+  if (!x) return y;
+  const [nx, ny] = [Number.parseFloat(x), Number.parseFloat(y)];
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return x;
+  return ny > nx ? y : x;
 }

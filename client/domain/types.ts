@@ -358,6 +358,10 @@ export interface CaptureSubject {
   length_mm: number | null;
   width_mm: number | null;
   height_mm: number | null;
+  /** Across the top and the base, and the straight top part's height, for a round thing (D213). */
+  diameter_mm: number | null;
+  base_diameter_mm: number | null;
+  top_height_mm: number | null;
   /** Declared to have none, rather than not yet weighed. D138. */
   weight_absent: boolean;
   /** All three lengths declared absent. Two of three is not an answer. */
@@ -376,6 +380,8 @@ export interface CaptureSubject {
   upright_source: string;
   /** Photographed side by side, cut to its faces and drawn: six-sided, or nothing said. */
   box_shaped: boolean;
+  /** Packed in a round type, a bucket or a tin: measured across, photographed by its side and lid (D213). */
+  round: boolean;
   /** `own`, `style` or `mixed` — D108. A screen that cannot tell them apart
    *  reports a number nobody took against this code as though somebody had. */
   source: string | null;
@@ -1576,6 +1582,8 @@ export interface PackagingType {
   definition: string;
   /** A box with six flat faces: photographed side by side and drawn. */
   six_sided: boolean;
+  /** Round, a bucket or a tin: measured across, photographed by its side and lid (D213). */
+  round: boolean;
   /** Offered first, in this order; null for the rest. */
   common: number | null;
 }

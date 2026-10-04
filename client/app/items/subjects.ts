@@ -36,6 +36,9 @@ export const PRESENTATIONS = [
 
 export const NO_FIGURES: Figures = {
   weight: "",
+  top: "",
+  base: "",
+  topHeight: "",
   length: "",
   width: "",
   height: "",

@@ -26,6 +26,9 @@ pub struct PackagingType {
     pub definition: String,
     /// A box with six flat faces: photographed side by side and drawn.
     pub six_sided: bool,
+    /// Round, a bucket or a tin: measured across, photographed by its side
+    /// and lid (D213).
+    pub round: bool,
     /// Offered first, in this order; absent for the rest.
     pub common: Option<i16>,
 }
@@ -40,7 +43,7 @@ pub async fn packaging_types(req: HttpRequest, state: web::Data<AppState>) -> Re
             Box::pin(async move {
                 let rows = tx
                     .query(
-                        "SELECT code, name, definition, six_sided, common FROM packaging_type
+                        "SELECT code, name, definition, six_sided, common, round FROM packaging_type
                           ORDER BY common NULLS LAST, name",
                         &[],
                     )
@@ -53,6 +56,7 @@ pub async fn packaging_types(req: HttpRequest, state: web::Data<AppState>) -> Re
                         definition: r.get(2),
                         six_sided: r.get(3),
                         common: r.get(4),
+                        round: r.get(5),
                     })
                     .collect::<Vec<_>>())
             })

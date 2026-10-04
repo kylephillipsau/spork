@@ -14225,6 +14225,8 @@ carton (`packed_in()`).
 **What follows from it.** Spork marks each type `six_sided` or not.
 - Six-sided, or nothing said: a box. Its sides are taken in turn, cut to their
   faces and drawn (D176, D181, D186), as before.
+- Round (D213): a bucket, a can, a jar. It is measured across, and its side,
+  lid, label and a close-up are asked for.
 - Anything else: a thing. The card asks for its photo, then its back, label
   and a close-up (`detail`), any of them skipped, and offers every side as
   well. Its photos never wait in Photos to crop, it is never drawn, and its
@@ -14917,3 +14919,44 @@ the best way to walk it, and the work done there.
 Known cost: a changed balance is a new stored arrival, roughly 200 kB, which
 is tens of megabytes a day if NetSuite changes between every load. Pruning old
 arrivals of this feed is for later.
+
+### D213: A round thing is measured across
+
+*Adopted 2026-10-05, with migration 121. Extends D191 and D138.*
+
+**Decision.** A packaging type can be `round`: GS1's bucket (`BJ`), can
+(`CNG`), cylinder (`CY`), barrel (`BA`), cup or tub (`CU`), pot (`PT`), jar
+(`JR`) and aerosol (`AE`). Rolls, reels and tubes are left out, because they
+lie on their side, and so are bottles, which narrow to a neck: they are
+measured as boxes. A type is never both round and six-sided
+(`packaging_type_one_shape_ck`). A subject packed in a round type says
+`round` on its card, as `box_shaped` says a box (D191).
+
+A round thing is measured by four figures, three of them new metrics in the
+`length` dimension:
+
+- `diameter`, across the top, at the rim;
+- `base_diameter`, across the base, when it tapers; left out when it doesn't;
+- `height`, the whole height, lid on (the existing metric);
+- `top_height`, how far down from the rim it stays straight before it
+  tapers, when it does.
+
+**The box it fits in goes up beside them**, in the same act: length and width
+are the wider of the two widths, and height is the height. A size is still the
+box a thing fits in (D191), so packing, the worklist's "measured" and every
+other reader of length, width and height go on reading them unchanged. The
+widths are the shape; the box is the size. The arrangement is asked for as
+with any size at `each` (D138).
+
+Its photos are its side, square on, then its lid from above, its label and a
+close-up (`front`, `top`, `label`, `detail`), any of them skipped. It is not
+offered "every side": a round thing has one side.
+
+**Why.** Floor sealer comes in 20 L buckets that taper to the base. Measured as
+a box, the record kept the box and lost the bucket, so it could not be drawn
+as one, nor nested, nor told from a carton of the same size. Across the top,
+across the base and the straight band under the rim are what the tape reads,
+and they are enough to draw a tapered bucket and its lid.
+
+**Not yet.** Drawing it: a tapered cylinder with its side photo wrapped round
+and its lid photo on top, in the item's 3D view and the packing view.

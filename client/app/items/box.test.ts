@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { BOX_FACES, MATERIAL_ORDER, boxSize, cover, faceAspect, faceName, facesToAsk, isBox, toward } from "./box.ts";
+import { BOX_FACES, MATERIAL_ORDER, boxSize, cover, faceAspect, faceName, facesToAsk, isBox, isRound, toward } from "./box.ts";
 
 /** An item as a box: which faces to ask for, and how a photo sits on one. */
 
@@ -13,6 +13,16 @@ test("a box is asked for its six sides, walked round from the front, then its la
   assert.equal(faceName("front", { box_shaped: true }), "Front");
   assert.equal(faceName("label", { box_shaped: false }), "Label");
   assert.equal(faceName("detail", { box_shaped: false }), "Close-up");
+});
+
+test("a round thing is asked for its side and its lid, then its label (D213)", () => {
+  const bucket = { box_shaped: false, round: true };
+  assert.deepEqual(facesToAsk(bucket), ["front", "top", "label", "detail"]);
+  assert.equal(faceName("front", bucket), "Side");
+  assert.equal(faceName("top", bucket), "Lid");
+  assert.equal(faceName("label", bucket), "Label");
+  assert.equal(isRound({ box_shaped: true, round: true }), false, "a box is a box, whatever else is said of it");
+  assert.equal(faceName("top", { box_shaped: true }), "Top");
 });
 
 test("a size is all three lengths or nothing", () => {

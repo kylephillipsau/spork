@@ -164,6 +164,12 @@ pub struct CaptureSubject {
     pub length_mm: Option<i64>,
     pub width_mm: Option<i64>,
     pub height_mm: Option<i64>,
+    /// Across the top and across the base, for a round thing (D213); the
+    /// base is absent for one that doesn't taper. And how much of its height
+    /// at the top is straight, at the top's width, below the rim.
+    pub diameter_mm: Option<i64>,
+    pub base_diameter_mm: Option<i64>,
+    pub top_height_mm: Option<i64>,
     /// Declared to have none, rather than not yet weighed. D138.
     pub weight_absent: bool,
     /// All three lengths declared absent. Two of three is not an answer, for
@@ -190,6 +196,9 @@ pub struct CaptureSubject {
     /// Photographed side by side, cut to its faces and drawn as a box: a
     /// six-sided type, or nothing said, and not declared without a size.
     pub box_shaped: bool,
+    /// Packed in a round type, a bucket or a tin: measured across its top and
+    /// base, photographed by its side and its lid (D213).
+    pub round: bool,
     /// `own`, `style` or `mixed` — D108's vocabulary, and the reason it exists:
     /// a screen that cannot tell them apart reports a number nobody took
     /// against this code as though somebody had.
@@ -499,6 +508,9 @@ async fn classified_subjects(
                 length_mm,
                 width_mm,
                 height_mm,
+                diameter_mm: r.get(22),
+                base_diameter_mm: r.get(23),
+                top_height_mm: r.get(24),
                 weight_absent,
                 dimensions_absent,
                 packed_in: None,
@@ -508,6 +520,7 @@ async fn classified_subjects(
                 upright: false,
                 upright_source: "default".into(),
                 box_shaped: !dimensions_absent,
+                round: false,
                 source: r.get(9),
                 style_code: r.get(10),
                 wants: wants(held),
@@ -623,6 +636,9 @@ pub async fn subjects_for_item(
                 length_mm: None,
                 width_mm: None,
                 height_mm: None,
+                diameter_mm: None,
+                base_diameter_mm: None,
+                top_height_mm: None,
                 weight_absent: false,
                 dimensions_absent: false,
                 packed_in: None,
@@ -632,6 +648,8 @@ pub async fn subjects_for_item(
                 upright: false,
                 upright_source: "default".into(),
                 box_shaped: true,
+
+                round: false,
                 source: None,
                 style_code: None,
                 method: None,
@@ -703,7 +721,7 @@ async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubjec
     for s in found.iter_mut() {
         let said = tx
             .query_opt(
-                "SELECT p.packaging_type, p.source, t.six_sided
+                "SELECT p.packaging_type, p.source, t.six_sided, t.round
                    FROM packed_in($1, $2, $3, $4, $5::text::packaging_level) p
                    JOIN packaging_type t ON t.code = p.packaging_type",
                 &[&s.item_id, &s.item_style_id, &s.lot_id, &s.item_part_id, &s.packaging_level],
@@ -713,6 +731,7 @@ async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubjec
             s.packed_in = r.get(0);
             s.packed_in_source = r.get(1);
             s.box_shaped = !s.dimensions_absent && r.get::<_, bool>(2);
+            s.round = !s.dimensions_absent && r.get::<_, bool>(3);
         }
         // Always a row: the default when nobody has said (D196).
         let ships = tx
@@ -772,7 +791,8 @@ async fn lot_subjects(
 /// The columns [`own_figures`] adds, in the order [`own_subject`] reads them.
 const OWN_FIGURES_COLUMNS: &str = "f.weight::bigint, f.length::bigint, f.width::bigint, f.height::bigint,
                     coalesce(f.weight_absent, false), coalesce(f.dimensions_absent, false),
-                    f.method, f.observed_at, fa.faces";
+                    f.method, f.observed_at, fa.faces, f.diameter::bigint, f.base_diameter::bigint,
+                    f.top_height::bigint";
 
 /// A subject's own figures and photographed faces, for the observables `who`
 /// names (`o` is the observable): the joins `f` and `fa`. Nothing inherits.
@@ -783,6 +803,9 @@ fn own_figures(who: &str) -> String {
                     max(oc.value_numeric) FILTER (WHERE m.code = 'length') AS length,
                     max(oc.value_numeric) FILTER (WHERE m.code = 'width') AS width,
                     max(oc.value_numeric) FILTER (WHERE m.code = 'height') AS height,
+                    max(oc.value_numeric) FILTER (WHERE m.code = 'diameter') AS diameter,
+                    max(oc.value_numeric) FILTER (WHERE m.code = 'base_diameter') AS base_diameter,
+                    max(oc.value_numeric) FILTER (WHERE m.code = 'top_height') AS top_height,
                     bool_or(m.code = 'gross_weight' AND oc.absent_reason IS NOT NULL) AS weight_absent,
                     count(*) FILTER (WHERE m.code IN ('length', 'width', 'height')
                                        AND oc.absent_reason IS NOT NULL) = 3 AS dimensions_absent,
@@ -792,7 +815,7 @@ fn own_figures(who: &str) -> String {
                FROM observable o
                JOIN observation_current oc ON oc.observable_id = o.id
                JOIN metric m ON m.id = oc.metric_id
-              WHERE {who} AND m.code IN ('gross_weight', 'length', 'width', 'height')
+              WHERE {who} AND m.code IN ('gross_weight', 'length', 'width', 'height', 'diameter', 'base_diameter', 'top_height')
          ) f ON true
          LEFT JOIN LATERAL (
              SELECT array_agg(DISTINCT oi.face) AS faces
@@ -815,6 +838,8 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
     let method: Option<String> = r.get(at + 6);
     let observed_at: Option<DateTime<Utc>> = r.get(at + 7);
     let faces: Vec<String> = r.get::<_, Option<Vec<String>>>(at + 8).unwrap_or_default();
+    let (diameter_mm, base_diameter_mm, top_height_mm): (Option<i64>, Option<i64>, Option<i64>) =
+        (r.get(at + 9), r.get(at + 10), r.get(at + 11));
     let held = Held {
         weight: if gross_weight_g.is_some() {
             Answer::Recorded
@@ -854,6 +879,9 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         length_mm,
         width_mm,
         height_mm,
+        diameter_mm,
+        base_diameter_mm,
+        top_height_mm,
         weight_absent,
         dimensions_absent,
         packed_in: None,
@@ -863,6 +891,8 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         upright: false,
         upright_source: "default".into(),
         box_shaped: !dimensions_absent,
+
+        round: false,
         source: method.as_ref().map(|_| "own".to_string()),
         style_code: None,
         wants: wants(held),
@@ -1080,6 +1110,10 @@ figures AS (
            (max(r.value_numeric) FILTER (WHERE m.code = 'length'))::bigint  AS length_mm,
            (max(r.value_numeric) FILTER (WHERE m.code = 'width'))::bigint   AS width_mm,
            (max(r.value_numeric) FILTER (WHERE m.code = 'height'))::bigint  AS height_mm,
+           -- A round thing's widths (D213), beside the box it fits in.
+           (max(r.value_numeric) FILTER (WHERE m.code = 'diameter'))::bigint      AS diameter_mm,
+           (max(r.value_numeric) FILTER (WHERE m.code = 'base_diameter'))::bigint AS base_diameter_mm,
+           (max(r.value_numeric) FILTER (WHERE m.code = 'top_height'))::bigint    AS top_height_mm,
            -- D138. A declared absence is an answer, and it is not a number, so
            -- it travels beside the figures rather than in them.
            bool_or(m.code = 'gross_weight' AND r.absent_reason IS NOT NULL) AS weight_absent,
@@ -1104,7 +1138,7 @@ figures AS (
            max(r.observed_at) FILTER (WHERE r.absent_reason IS NULL) AS observed_at
       FROM resolved r
       JOIN metric m ON m.id = r.metric_id
-     WHERE m.code IN ('gross_weight','length','width','height')
+     WHERE m.code IN ('gross_weight','length','width','height','diameter','base_diameter','top_height')
      GROUP BY coalesce(r.item_id, r.item_style_id, r.item_part_id), r.level
 ),
 -- Photographs do not inherit: this joins the subject's own observable only.
@@ -1155,7 +1189,8 @@ SELECT sub.item_id, sub.item_style_id, sub.code, sub.description, sub.level,
        sub.item_part_id, sub.part_label,
        CASE WHEN sub.level = 'each' THEN coalesce(pc.n, 0) ELSE 0 END,
        loc.code,
-       coalesce(hi.soh, hs.soh, 0)::bigint
+       coalesce(hi.soh, hs.soh, 0)::bigint,
+       f.diameter_mm, f.base_diameter_mm, f.top_height_mm
   FROM subject sub
   LEFT JOIN figures f
          ON f.subject_key = coalesce(sub.item_id, sub.item_style_id, sub.item_part_id)

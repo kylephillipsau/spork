@@ -20,12 +20,13 @@ const AS_AT = "2026-09-29T23:10:00Z";
 
 /** A few of GS1's packaging types, as the server lists them: the common first. */
 export const PACKAGING_TYPES: PackagingType[] = [
-  { code: "CS", name: "Case", definition: "A container designed to hold its content while protecting it.", six_sided: true, common: 1 },
-  { code: "BX", name: "Box", definition: "A rigid container with closed faces.", six_sided: true, common: 2 },
-  { code: "BG", name: "Bag", definition: "A preformed, flexible container.", six_sided: false, common: 3 },
-  { code: "SW", name: "Shrinkwrapped", definition: "A film heated to shrink around an item.", six_sided: false, common: 4 },
-  { code: "NE", name: "Not packed", definition: "The item is provided without packaging.", six_sided: false, common: 11 },
-  { code: "TU", name: "Tube", definition: "A cylindrical container sealed on one end.", six_sided: false, common: null },
+  { code: "CS", name: "Case", definition: "A container designed to hold its content while protecting it.", six_sided: true, round: false, common: 1 },
+  { code: "BX", name: "Box", definition: "A rigid container with closed faces.", six_sided: true, round: false, common: 2 },
+  { code: "BG", name: "Bag", definition: "A preformed, flexible container.", six_sided: false, round: false, common: 3 },
+  { code: "SW", name: "Shrinkwrapped", definition: "A film heated to shrink around an item.", six_sided: false, round: false, common: 4 },
+  { code: "NE", name: "Not packed", definition: "The item is provided without packaging.", six_sided: false, round: false, common: 11 },
+  { code: "TU", name: "Tube", definition: "A cylindrical container sealed on one end.", six_sided: false, round: false, common: null },
+  { code: "BJ", name: "Bucket", definition: "A container, usually cylindrical, can be equipped with a lid and a handle.", six_sided: false, round: true, common: null },
 ];
 const BRUSH = "01990000-0000-7000-8000-0000000b5120";
 const BRUSH_FAMILY = "01990000-0000-7000-8000-0000000a5120";
@@ -46,6 +47,9 @@ const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "
   length_mm: null,
   width_mm: null,
   height_mm: null,
+  diameter_mm: null,
+  base_diameter_mm: null,
+  top_height_mm: null,
   weight_absent: false,
   dimensions_absent: false,
   packed_in: null,
@@ -55,6 +59,7 @@ const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "
   upright: false,
   upright_source: "default",
   box_shaped: true,
+  round: false,
   source: null,
   style_code: null,
   method: null,
@@ -322,6 +327,41 @@ export const NO_BOX: ItemView = {
 };
 export const PHOTOGRAPHING_NO_BOX = fixtureProperties(NO_BOX, {
   open: { key: `${TAPE_GUN}:each`, action: "photos" },
+});
+
+/** A bucket (D213): measured across its top and base, its height and the straight band under its rim. */
+export const BUCKET: ItemView = {
+  ...ITEM_UNKNOWN,
+  code: "SKU-2040",
+  description: "Floor sealer, 20 L",
+  box_picture: null,
+  subjects: [
+    subject({
+      item_id: TAPE_GUN,
+      code: "SKU-2040",
+      packaging_level: "each",
+      gross_weight_g: 21400,
+      length_mm: 300,
+      width_mm: 300,
+      height_mm: 380,
+      diameter_mm: 300,
+      base_diameter_mm: 265,
+      top_height_mm: 75,
+      packed_in: "BJ",
+      packed_in_source: "own",
+      box_shaped: false,
+      round: true,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-05T01:00:00Z",
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
+  ],
+};
+export const MEASURING_BUCKET = fixtureProperties(BUCKET, {
+  open: { key: `${TAPE_GUN}:each`, action: "measure" },
+  figures: { ...NO_FIGURES, weight: "21.4", top: "30", base: "26.5", height: "38", topHeight: "", presentation: "as_supplied" },
 });
 
 /** The camera open on the each, its front and then its top taken in this look. */

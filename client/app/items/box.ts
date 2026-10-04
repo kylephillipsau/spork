@@ -24,16 +24,31 @@ export function isBox(subject: Pick<CaptureSubject, "box_shaped">): boolean {
 /** A thing that is not a box: its photo, then its back, label and a close-up, any of them skipped. */
 export const THING_FACES: readonly Face[] = ["front", "back", "label", "detail"];
 
+/** A round thing, a bucket or a tin: its side, its lid, its label and a close-up (D213). */
+export const ROUND_FACES: readonly Face[] = ["front", "top", "label", "detail"];
+
+/** What a subject is, for photographs and figures: the server says, from what it is packed in. */
+type Shaped = Pick<CaptureSubject, "box_shaped"> & { round?: boolean | undefined };
+
+/** Whether it is round: measured across, and photographed by its side and lid (D213). */
+export function isRound(subject: Shaped): boolean {
+  return !subject.box_shaped && subject.round === true;
+}
+
 /**
  * What to photograph: a box's six sides and its label, or a thing's photo and
  * what else is worth taking. `sides` asks a thing for every side as well.
  */
-export function facesToAsk(subject: Pick<CaptureSubject, "box_shaped">, sides = false): readonly Face[] {
-  return isBox(subject) ? FACES : sides ? [...FACES, "detail"] : THING_FACES;
+export function facesToAsk(subject: Shaped, sides = false): readonly Face[] {
+  if (isBox(subject)) return FACES;
+  if (sides) return [...FACES, "detail"];
+  return isRound(subject) ? ROUND_FACES : THING_FACES;
 }
 
-/** A face's name on screen: a thing that is not a box has a photo, not a front. */
-export function faceName(face: string, subject: Pick<CaptureSubject, "box_shaped">): string {
+/** A face's name on screen: a thing that is not a box has a photo, not a front; a round one a side and a lid. */
+export function faceName(face: string, subject: Shaped): string {
+  if (isRound(subject) && face === "front") return "Side";
+  if (isRound(subject) && face === "top") return "Lid";
   if (!isBox(subject) && face === "front") return "Photo";
   if (face === "detail") return "Close-up";
   return face.charAt(0).toUpperCase() + face.slice(1);

@@ -26,7 +26,7 @@ import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
 
-import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, measuredAspect, type BoxFace } from "./box";
+import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, isRound, measuredAspect, type BoxFace } from "./box";
 import { handheld } from "./crop";
 import { FaceCrop } from "./FaceCrop";
 import {
@@ -253,7 +253,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           <Fact label="Weight" always>
             {weightOf(subject)}
           </Fact>
-          <Fact label="Size (L × W × H)" always>
+          <Fact label={subject.diameter_mm !== null ? "Size" : "Size (L × W × H)"} always>
             {sizeOf(subject)}
           </Fact>
           <Fact label="Packed in" always>
@@ -297,11 +297,13 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           <p className={s.note}>
             {isBox(subject)
               ? "Take each side in turn, then its label. Each photo sends while you take the next."
-              : "Take its photo, then its back, label or a close-up if they help. Each sends while you take the next."}
+              : isRound(subject)
+                ? "Take its side square on, then its lid from above, then its label or a close-up if they help. Each sends while you take the next."
+                : "Take its photo, then its back, label or a close-up if they help. Each sends while you take the next."}
             {handheld() && isBox(subject) && " They are cut to their faces at a computer, under Photos to crop."}
           </p>
           <NextSide subject={subject} desk={desk} order={facesToAsk(subject, sides)} />
-          {!isBox(subject) && !sides && (
+          {!isBox(subject) && !isRound(subject) && !sides && (
             <div>
               <Button size="sm" onClick={() => setSides(true)}>
                 Take every side as well
@@ -368,6 +370,15 @@ function WeighForm({ subject, desk }: { subject: CaptureSubject; desk: Propertie
  * instruments read. A thing with no box says so rather than leaving it blank
  * (D138).
  */
+/** What a round thing is measured by (D213): its widths, its whole height, and
+ *  how far down from the rim it stays straight before it tapers. */
+const ROUND_FIELDS = [
+  { field: "top", label: "Across the top", hint: "At the rim" },
+  { field: "base", label: "Across the base", hint: "Blank if straight" },
+  { field: "height", label: "Height", hint: "With the lid on" },
+  { field: "topHeight", label: "Top part’s height", hint: "Straight, under the rim" },
+] as const;
+
 function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
   const f = desk.figures;
   const offered = presentationOffered(subject);
@@ -393,7 +404,23 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
         </div>
         {isOwnCarton(subject) && <HoldsField desk={desk} />}
       </div>
-      {!f.noDimensions && (
+      {!f.noDimensions && isRound(subject) && (
+        <div className={s.dimensions}>
+          {ROUND_FIELDS.map(({ field, label, hint }) => (
+            <TextField
+              key={field}
+              label={label}
+              hint={hint}
+              inputMode="decimal"
+              autoComplete="off"
+              trailing="cm"
+              value={f[field]}
+              onChange={(e) => desk.type(field, e.target.value)}
+            />
+          ))}
+        </div>
+      )}
+      {!f.noDimensions && !isRound(subject) && (
         <div className={s.dimensions}>
           {(["length", "width", "height"] as const).map((field) => (
             <TextField
@@ -898,7 +925,17 @@ function weightOf(s: CaptureSubject): ReactNode {
 }
 
 function sizeOf(s: CaptureSubject): ReactNode {
+  if (s.diameter_mm !== null) return roundSize(s);
   const d = [s.length_mm, s.width_mm, s.height_mm];
   if (d.some((v) => v !== null)) return `${d.map((v) => (v === null ? "?" : centimetres(v))).join(" × ")} cm`;
   return <Faint>{s.dimensions_absent ? "No size" : "Not measured"}</Faint>;
+}
+
+/** A round thing's size: "30 cm across, 25 at the base, 40 tall, straight for 8". */
+function roundSize(s: CaptureSubject): string {
+  const parts = [`${centimetres(s.diameter_mm ?? 0)} cm across`];
+  if (s.base_diameter_mm !== null && s.base_diameter_mm !== s.diameter_mm) parts.push(`${centimetres(s.base_diameter_mm)} at the base`);
+  if (s.height_mm !== null) parts.push(`${centimetres(s.height_mm)} tall`);
+  if (s.top_height_mm !== null) parts.push(`straight for ${centimetres(s.top_height_mm)}`);
+  return parts.join(", ");
 }

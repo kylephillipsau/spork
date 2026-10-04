@@ -164,6 +164,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   import, and the bin map says how old it is (`MapBins.reported_as_at`).
   Next: the walk routing to NetSuite's bins, a pick into custody, and the
   write-back to NetSuite.
+- D213. A round thing (a bucket, can, jar; `packaging_type.round`) is
+  measured across its top and base, its height and the straight part under
+  its rim (`diameter`, `base_diameter`, `top_height`), with the box it fits in
+  recorded beside them. Its photos are side, lid, label, close-up. Not drawn
+  as a bucket yet.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

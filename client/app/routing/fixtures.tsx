@@ -116,6 +116,7 @@ import {
   fixturePhotoQueue,
   CROPPING,
   MEASURING,
+  MEASURING_BUCKET,
   PHOTOGRAPHING,
   PHOTOGRAPHING_NO_BOX,
   RECROPPING,
@@ -608,6 +609,10 @@ export const FIXTURES: readonly Screen[] = [
   // A thing in a bag is asked for its photo and what else helps, not six sides (D191).
   app("f-item-no-box", "/fixtures/item/no-box", "Item — in a bag", "floor", { screen: "item" }, () => (
     <ItemPage desk={PHOTOGRAPHING_NO_BOX} />
+  )),
+  // A bucket is measured across, top and base, and by the straight part under its rim (D213).
+  app("f-item-bucket", "/fixtures/item/bucket", "Item — measuring a bucket", "floor", { screen: "item" }, () => (
+    <ItemPage desk={MEASURING_BUCKET} />
   )),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureProperties(ITEM_UNKNOWN)} />

@@ -8,6 +8,7 @@ import type { BoundBarcode, CaptureSubject, ItemView, PackagingType, Uuid } from
 import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
 import { measurementsOf, type Figures } from "./figures";
+import { isRound } from "./box";
 import { NO_FIGURES, cartonHolds, isOwnCarton, photosOf, presentationNeeded, readHolds, sayFirst, subjectKey, type Face } from "./subjects";
 
 /**
@@ -98,7 +99,7 @@ export interface PropertiesDesk {
   typePer: (next: string) => void;
 
   figures: Figures;
-  type: (field: "weight" | "length" | "width" | "height", next: string) => void;
+  type: (field: "weight" | "length" | "width" | "height" | "top" | "base" | "topHeight", next: string) => void;
   choosePresentation: (code: string) => void;
   toggleNoDimensions: () => void;
   measure: (subject: CaptureSubject) => Promise<void>;
@@ -478,13 +479,17 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     // Clearing the lengths is part of declaring there are none (D138): typed
     // numbers behind a "none" are two answers, and one of them would be sent.
     toggleNoDimensions: () =>
-      setFigures((f) => (f.noDimensions ? { ...f, noDimensions: false } : { ...f, noDimensions: true, length: "", width: "", height: "" })),
+      setFigures((f) =>
+        f.noDimensions
+          ? { ...f, noDimensions: false }
+          : { ...f, noDimensions: true, length: "", width: "", height: "", top: "", base: "", topHeight: "" },
+      ),
     /**
      * Figures, as one act (D133): everything typed in one request, and the
      * event it answers with is what the photographs taken next hang off.
      */
     measure: (subject) => {
-      const measurements = measurementsOf(figures);
+      const measurements = measurementsOf(figures, isRound(subject));
       return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}:${holds.trim()}:${per.trim()}`, async (act) => {
         if (measurements.length === 0) throw new ApiError("Nothing has been measured yet.", 400);
         // Said sooner than the server would say it (D138).
