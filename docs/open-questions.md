@@ -45,7 +45,7 @@ about inter-company documents and about legal entities.
 | # | Question | Trigger |
 |---|---|---|
 | 26 | Who allocates, and when | Building the allocator |
-| 28, 42 | Whether the allocator and task ordering can run before the location survey | The survey, or the interim sequence column |
+| 28, 42 | Whether the allocator and task ordering can run before the location survey. **Task ordering can (D211):** the walk is routed on the layout as drawn, in cells until it is measured, and `pick_sequence` orders only what isn't on the layout. The allocator half stays open, with question 26 | The survey, or the interim sequence column |
 | 29 | Whether equipment cost needs to model contention rather than a scalar | Forklift queuing becoming the bottleneck |
 | 34 | Whether held-lot allocations auto-release or wait for a human | Building the re-allocator |
 | 41 | Whether a count task locks its location | Building cycle counting |

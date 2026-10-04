@@ -462,8 +462,37 @@ function Inspector({ desk }: { desk: PlanDesk }) {
             <Button onClick={() => desk.selectAll(racks.sort(byName).map((r) => r.place_id))}>Choose every rack ({racks.length})</Button>
           </div>
         )}
+        <Tray desk={desk} where={where} />
       </div>
     </Card>
+  );
+}
+
+/**
+ * The bins on no layout yet (D211): the packing bench, a dock door, a floor
+ * bay. Each can go on the plan as a spot of its own, and the packing bench
+ * there is where the picking walk starts and ends.
+ */
+function Tray({ desk, where }: { desk: PlanDesk; where: Point }) {
+  if (desk.tray.kind !== "ready") return null;
+  const placing = new Set(desk.drafts.map((d) => d.holds?.location_id).filter(Boolean));
+  const left = desk.tray.value.filter((b) => !placing.has(b.location_id));
+  if (left.length === 0) return null;
+  return (
+    <fieldset className={s.group}>
+      <legend className={s.legend}>On no layout ({left.length})</legend>
+      <p className={s.note}>Put one on the plan as a spot of its own. The packing bench there is where the picking walk starts and ends.</p>
+      <ul className={s.tray}>
+        {left.map((b) => (
+          <li key={b.location_id}>
+            <span className={s.code}>{b.code}</span>
+            <Button size="sm" icon={<Plus />} onClick={() => desk.placeBin(b, where)}>
+              Place
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </fieldset>
   );
 }
 
@@ -488,7 +517,13 @@ function One({ desk, d }: { desk: PlanDesk; d: Draft }) {
       }
     >
       <div className={s.fields}>
-        <TextField label="Name" value={d.name} onChange={(e) => desk.change(d.place_id, (x) => ({ ...x, name: e.target.value }))} />
+        <TextField
+          label="Name"
+          value={d.name}
+          disabled={!!d.holds}
+          hint={d.holds ? `The spot for ${d.holds.code}, from the bins on no layout. It takes the bin's name.` : undefined}
+          onChange={(e) => desk.change(d.place_id, (x) => ({ ...x, name: e.target.value }))}
+        />
         <Select
           label="What it is"
           value={d.solid ? "solid" : "floor"}

@@ -14771,3 +14771,66 @@ it.
 
 **Not decided.** Distances between bins (Proposal C) are what this is for, and
 come next.
+
+### D211: The picking walk comes in the order that walks least
+
+*Adopted 2026-10-04, with no migration. Adopts docs/picking-plan.md's
+Proposals C and D, with the deviations below; answers the task-ordering half
+of Q28 and Q42.*
+
+**Decision.** The floor is the layout, gridded. A point is walkable when it
+is inside a walk-through place and outside every solid one. The grid is a
+quarter of a metre once the site is measured (D210), half a cell before. A
+diagonal step never cuts a solid corner.
+
+- **Where a picker stands.** For each bin on the walk, the picker stands in
+  the aisle its face opens onto: found by stepping out from the face the way
+  it looks, never round the rack. A bin on a walk-through spot is stood on.
+  A face with no aisle within reach can't be reached, and its lines go off
+  the route.
+- **Distances.** Measured on the floor: A* between two points, with the
+  octile guess, and Dijkstra from each stop to the rest for the table of
+  distances between stops.
+- **Order.** Exact by Held-Karp up to twelve stops. Beyond that, nearest
+  insertion, then 2-opt and Or-opt, shaken and polished again within 20 ms.
+- **Start and end.** The walk starts and ends at the packing bench, the
+  site's packing location, when it is on the layout. When it isn't, it starts
+  at the typed order's first stop and ends at its last.
+- **The comparison.** The typed order (`pick_sequence`) is measured over the
+  same stops, from the same start, under the same rule. So the difference
+  between the two numbers is the route.
+
+`GET /sites/{id}/picking` returns its lines in route order, a bin's lines
+together. Lines whose bin isn't on the layout, or can't be reached, follow in
+the typed order. The response carries `route`: where it starts, both
+lengths, the stops, the lines off the route, and the path. The picking screen
+says the order and, once the floor is measured, the metres saved. The bin map
+draws today's walk on request.
+
+A bin on no layout can go on the plan as a spot of its own (`spots` in
+`POST /layout/edit`): a new one-cell place named for it, holding it, in the
+history like any place added. No placed bin moves. That is how the packing
+bench gets on the layout to be the walk's start.
+
+**Deviations from the plan.**
+- Distances are worked out per walk, by one Dijkstra per stop, rather than
+  kept as a site-wide matrix. The walk is small, and only the floor is cached,
+  by layout and scale.
+- Standing spots are worked out per walk, because a draft can put bins into
+  existing cells without changing any place.
+- Paths keep to the middle of each grid square, with no allowance for a
+  person's or a trolley's width round a rack. Distances run slightly short,
+  and a trolley's aisles (Question 3) are not modelled yet.
+- A stop above reach costs nothing extra yet (Proposal C's climbing cost).
+
+**Why.** The user asked for the best picking route by A* (2026-10-04). A*
+measures; the order of stops is the travelling-salesman half, which is what
+saves the walking. Comparing from the same start is the only honest way to say
+what the route saves.
+
+**Not decided.** Which bin a line is taken from is still the ledger's
+earliest cell (Proposal F). At Melbourne, Spork's ledger holds no stock in
+bins yet, only NetSuite's last count does. So the real walk has no bins to
+route until it does, or until the walk may route to where NetSuite last
+counted an item. That is a decision for moving picking into Spork
+(Proposal A).

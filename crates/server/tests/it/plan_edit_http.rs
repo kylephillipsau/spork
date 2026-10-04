@@ -164,6 +164,47 @@ async fn the_plan_editor_moves_draws_and_keeps_its_history() {
     .await;
     assert_eq!(status, 200, "{gone}");
 
+    // ── a bin from the tray, put on the plan as a spot of its own (D211) ─
+    db.batch_execute(&format!(
+        "INSERT INTO location (tenant_id, site_id, code, kind, active)
+         VALUES ('{TENANT}', '{SITE}', 'PE-SPOT', 'staging', true);"
+    ))
+    .await
+    .expect("a bin on no layout");
+    let spot: String = db
+        .query_one("SELECT id::text FROM location WHERE code = 'PE-SPOT'", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let now = read(&app).await["version"].as_str().unwrap().to_string();
+    let place_it = serde_json::json!({
+        "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-04T01:05:00Z", "version": now,
+        "spots": [{ "place_id": uuid::Uuid::new_v4(), "location_id": spot, "parent_id": "9e0e0000-0000-0000-0000-000000000001",
+                    "solid": false, "x": 2, "y": 2, "length": 2, "depth": 2, "height": 1 }],
+    });
+    let (status, placed) = save(&app, place_it.clone()).await;
+    assert_eq!(status, 200, "{placed}");
+    assert_eq!((placed["placed"].as_i64(), placed["added"].as_i64()), (Some(1), Some(0)), "{placed}");
+    let cell = db
+        .query_one("SELECT p.name, l.slot_bay, l.slot_level FROM location l JOIN place p ON p.id = l.place_id WHERE l.code = 'PE-SPOT'", &[])
+        .await
+        .expect("it is in a cell now");
+    assert_eq!((cell.get::<_, String>(0), cell.get::<_, i32>(1), cell.get::<_, i32>(2)), ("PE-SPOT".into(), 1, 1));
+    let (_, again) = save(&app, place_it).await;
+    assert_eq!((again["placed"].as_i64(), again["replay"].as_bool()), (Some(1), Some(true)), "a retry places nothing twice: {again}");
+    let now = read(&app).await["version"].as_str().unwrap().to_string();
+    let (status, twice) = save(
+        &app,
+        serde_json::json!({
+            "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-04T01:06:00Z", "version": now,
+            "spots": [{ "place_id": uuid::Uuid::new_v4(), "location_id": spot, "parent_id": null,
+                        "solid": false, "x": 5, "y": 5, "length": 2, "depth": 2, "height": 1 }],
+        }),
+    )
+    .await;
+    assert_eq!(status, 400, "a bin on the layout stays where it is: {twice}");
+    db.batch_execute("DELETE FROM place_change WHERE after ? 'bin'").await.unwrap();
+
     // ── the scale: a metre to a cell, said once (D210) ──────────────────
     assert!(read(&app).await["cell_mm"].is_null(), "not to scale until it is said");
     let scale = |app, mm: i64| {

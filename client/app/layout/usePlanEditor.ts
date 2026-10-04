@@ -4,7 +4,7 @@ import { useLive, useWriting } from "@app/acting";
 import { guardLeaving } from "@app/routing/location";
 import { api, reason } from "@domain/api";
 import { uuid } from "@domain/acts";
-import type { LayoutView, PlanShape, Uuid } from "@domain/types";
+import type { BinRow, LayoutView, PlanShape, Uuid } from "@domain/types";
 
 import { changeCount, changesOf, draftsOf, freeName, planOf, type Draft, type PlaceBox, type Preset } from "./edit";
 import type { Read } from "./usePlace";
@@ -41,6 +41,10 @@ export interface PlanDesk {
   /** A drag goes on: the boxes as they are now, with no step of their own. */
   drag: (boxes: ReadonlyMap<Uuid, PlaceBox>) => void;
   add: (preset: Preset, at: [number, number]) => void;
+  /** Bins on no layout yet: the tray (D211). */
+  tray: Read<BinRow[]>;
+  /** Put a bin from the tray on the plan, as a spot of its own. */
+  placeBin: (bin: BinRow, at: [number, number]) => void;
   remove: (placeId: Uuid) => void;
   undo: () => void;
   redo: () => void;
@@ -68,6 +72,7 @@ export function usePlanEditor(): PlanDesk {
   const [past, setPast] = useState<Draft[][]>([]);
   const [future, setFuture] = useState<Draft[][]>([]);
   const [said, setSaid] = useState<string | null>(null);
+  const [tray, setTray] = useState<Read<BinRow[]>>({ kind: "loading" });
   const { busy, problem, dismiss, press, say } = useWriting();
   const latest = useRef(drafts);
   latest.current = drafts;
@@ -85,9 +90,19 @@ export function usePlanEditor(): PlanDesk {
     }
   }, [live]);
 
+  const readTray = useCallback(async () => {
+    try {
+      const list = await api.bins({ unplaced: true });
+      if (live.current) setTray({ kind: "ready", value: list.bins });
+    } catch (error) {
+      if (live.current) setTray({ kind: "failed", message: reason(error, "Could not read the bins on no layout.") });
+    }
+  }, [live]);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void readTray();
+  }, [load, readTray]);
 
   const view = read.kind === "ready" ? read.value : null;
   const plan = useMemo(() => planOf(drafts), [drafts]);
@@ -158,6 +173,33 @@ export function usePlanEditor(): PlanDesk {
       ]);
       setSelection([place_id]);
     },
+    tray,
+    placeBin: (bin, [x, y]) => {
+      const all = latest.current;
+      if (all.some((d) => d.holds?.location_id === bin.location_id)) return;
+      const parent = all.find((d) => d.parent_id === null) ?? null;
+      // Two metres square once the floor is measured, two cells before.
+      const size = view?.cell_mm ? 2000 / view.cell_mm : 2;
+      const place_id = uuid();
+      step([
+        ...all,
+        {
+          place_id,
+          parent_id: parent?.place_id ?? null,
+          name: bin.code,
+          solid: false,
+          box: { x, y, z: 0, length: size, depth: size, height: size / 2, turn: 0 },
+          outline: null,
+          sides: 1,
+          bays: 1,
+          levels: 1,
+          bins: 0,
+          fresh: true,
+          holds: { location_id: bin.location_id, code: bin.code },
+        },
+      ]);
+      setSelection([place_id]);
+    },
     remove: (id) => {
       step(latest.current.filter((d) => d.place_id !== id));
       setSelection([]);
@@ -197,8 +239,8 @@ export function usePlanEditor(): PlanDesk {
       await press(`layout:${view.version}:${JSON.stringify(c)}`, async (act) => {
         const done = await api.editLayout({ version: view.version, ...c, act });
         if (!live.current) return;
-        await load();
-        setSaid(savedSentence(done.changed, done.added, done.removed));
+        await Promise.all([load(), readTray()]);
+        setSaid(savedSentence(done.changed, done.added, done.removed, done.placed));
       });
     },
     discard: () => {
@@ -218,10 +260,11 @@ export function usePlanEditor(): PlanDesk {
 }
 
 /** What a save did, in a sentence. */
-export function savedSentence(changed: number, added: number, removed: number): string {
+export function savedSentence(changed: number, added: number, removed: number, placed = 0): string {
   const parts = [
     changed > 0 ? `${changed} ${changed === 1 ? "place" : "places"} moved or changed` : null,
     added > 0 ? `${added} added` : null,
+    placed > 0 ? `${placed} ${placed === 1 ? "bin" : "bins"} put on the plan` : null,
     removed > 0 ? `${removed} taken away` : null,
   ].filter(Boolean);
   return parts.length > 0 ? `Saved: ${parts.join(", ")}.` : "Saved.";

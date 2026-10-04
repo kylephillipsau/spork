@@ -145,6 +145,9 @@ metres, from the front left corner of the place it is inside.
 5. **Which way each rack faces.** The chosen rack's front is marked. If its
    first bay opens onto the other aisle, press **Face the other way**.
 6. **Docks, packing stations, columns.** Add them and type where they are.
+   A bin on no layout, like the packing bench's `PACK`, is listed under **On
+   no layout**: press **Place** and it goes on the plan as a spot of its own.
+   The picking walk starts and ends at the packing bench once it is there.
 
 Then **Save**, and walk the floor with the bin map to check it.
 

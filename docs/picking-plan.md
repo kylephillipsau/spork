@@ -195,7 +195,8 @@ real layout comes first.
 
 ### Proposal C: Walking distance is A\* on the floor, kept as a matrix per site
 
-*Proposed, not adopted.*
+*Adopted as D211, with distances worked out per walk rather than kept as a
+matrix, and no climbing cost yet.*
 
 **Decision.**
 - **Two points.** The distance between two points is A\* on the walkable
@@ -216,8 +217,8 @@ there", and it can draw the path. It does not order the stops. That is Proposal 
 
 ### Proposal D: A route visits its stops in the order that walks least
 
-*Proposed, not adopted. Answers Q28 and Q42: the computed route replaces the
-interim sequence.*
+*Adopted as D211. Answers the task-ordering half of Q28 and Q42: the computed
+route replaces the interim sequence.*
 
 **Decision.**
 - **The problem.** Order a run's stops to minimise the walk from its start
@@ -412,7 +413,8 @@ can see.
 
    Done when every bin a picker might go to is on the map where it really
    is, and checked by walking the floor once.
-3. **Distances and routes** (Proposals C and D).
+3. **Distances and routes** (Proposals C and D). *Built as D211, on the
+   drafted layout; exact once the floor is measured (D210).*
    - Build the walkable grid, A\* and the matrix.
    - Today's single walk is ordered by distance, and the path is drawn on
      the plan and on the 3D map.

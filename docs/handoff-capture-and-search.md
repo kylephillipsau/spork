@@ -151,6 +151,13 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   side depth and level height; set chosen racks out in a row; type a place's
   room to its neighbour or the wall. There's no floor plan to copy, so the
   user is measuring the floor.
+- D211. The picking walk comes in route order (`routing.rs` pure: floor, A*,
+  Dijkstra, Held-Karp, insertion with 2-opt and Or-opt; `walk_route.rs` glue;
+  `picking_list.rs`), from the packing bench when it is on the layout, with
+  the typed order's length beside it. The bin map draws today's walk. A bin
+  from the tray can go on the plan as a spot (`spots`). At Melbourne the
+  ledger holds no stock in bins, so the real walk has nothing to route yet;
+  see D211's last paragraph.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

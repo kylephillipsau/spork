@@ -934,6 +934,7 @@ export const api = {
     changed: unknown[];
     added: unknown[];
     removed: Uuid[];
+    spots: unknown[];
     act: Act;
   }) =>
     send<LayoutEdited>("POST", "/layout/edit", {
@@ -943,6 +944,7 @@ export const api = {
       changed: input.changed,
       added: input.added,
       removed: input.removed,
+      spots: input.spots,
     }),
 
   /** Say how long one of the site's cells is, in millimetres: once (D210). */

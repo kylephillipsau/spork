@@ -1823,6 +1823,8 @@ export interface LayoutEdited {
   changed: number;
   added: number;
   removed: number;
+  /** Bins from the tray put on the plan (D211). */
+  placed: number;
   /** The layout's fingerprint now, to edit on from. */
   version: string;
   /** This save had already landed; nothing was written again. */

@@ -44,6 +44,8 @@ export interface Draft {
   bins: number;
   /** Drawn in this editor, not yet saved. */
   fresh: boolean;
+  /** A bin from the tray this new spot is for, named for it (D211). */
+  holds?: { location_id: Uuid; code: string } | undefined;
 }
 
 export const SITE: Frame = { x: 0, y: 0, z: 0, turn: 0 };
@@ -221,11 +223,14 @@ export function freeName(drafts: readonly Draft[], parent: Uuid | null, base: st
 export type PlaceChanged = { place_id: Uuid; name: string; solid: boolean } & PlaceBox;
 /** And its `added`, which also says what the place is inside. */
 export type PlaceAdded = PlaceChanged & { parent_id: Uuid | null };
+/** And its `spots`: a bin from the tray on a spot of its own. */
+export type SpotAdded = { place_id: Uuid; location_id: Uuid; parent_id: Uuid | null; solid: boolean } & PlaceBox;
 
 export interface Changes {
   changed: PlaceChanged[];
   added: PlaceAdded[];
   removed: Uuid[];
+  spots: SpotAdded[];
 }
 
 /** What a save sends: each place changed, added or removed since the read. */
@@ -234,20 +239,22 @@ export function changesOf(view: LayoutView, drafts: readonly Draft[]): Changes {
   const now = new Set(drafts.map((d) => d.place_id));
   const changed: PlaceChanged[] = [];
   const added: PlaceAdded[] = [];
+  const spots: SpotAdded[] = [];
   for (const d of drafts) {
     const before = was.get(d.place_id);
     const row = { place_id: d.place_id, name: d.name.trim(), solid: d.solid, ...d.box };
-    if (!before) added.push({ ...row, parent_id: d.parent_id });
+    if (!before && d.holds) spots.push({ place_id: d.place_id, location_id: d.holds.location_id, parent_id: d.parent_id, solid: d.solid, ...d.box });
+    else if (!before) added.push({ ...row, parent_id: d.parent_id });
     else if (before.name !== row.name || before.solid !== d.solid || !sameBox(before.box, d.box)) changed.push(row);
   }
   const removed = [...was.keys()].filter((id) => !now.has(id));
-  return { changed, added, removed };
+  return { changed, added, removed, spots };
 }
 
 /** How many changes a save would make. */
 export function changeCount(view: LayoutView, drafts: readonly Draft[]): number {
   const c = changesOf(view, drafts);
-  return c.changed.length + c.added.length + c.removed.length;
+  return c.changed.length + c.added.length + c.removed.length + c.spots.length;
 }
 
 function sameBox(a: PlaceBox, b: PlaceBox): boolean {

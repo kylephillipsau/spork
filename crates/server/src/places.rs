@@ -1438,6 +1438,20 @@ pub struct PlaceAdded {
     pub at: PlaceBox,
 }
 
+/// A bin from the tray put on the plan as a spot of its own (D211): the
+/// packing bench, a dock door, a floor bay. One cell, named for the bin.
+#[derive(Deserialize, Debug)]
+pub struct SpotAdded {
+    /// Minted by the client, as an added place's is.
+    pub place_id: Uuid,
+    /// The bin it holds, which is on no layout yet.
+    pub location_id: Uuid,
+    pub parent_id: Option<Uuid>,
+    pub solid: bool,
+    #[serde(flatten)]
+    pub at: PlaceBox,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct LayoutEdit {
     pub client_event_id: Uuid,
@@ -1450,6 +1464,8 @@ pub struct LayoutEdit {
     pub added: Vec<PlaceAdded>,
     #[serde(default)]
     pub removed: Vec<Uuid>,
+    #[serde(default)]
+    pub spots: Vec<SpotAdded>,
 }
 
 #[derive(Serialize, Debug)]
@@ -1457,6 +1473,8 @@ pub struct LayoutEdited {
     pub changed: i64,
     pub added: i64,
     pub removed: i64,
+    /// Bins from the tray put on the plan.
+    pub placed: i64,
     /// The layout's fingerprint now, to edit on from.
     pub version: String,
     /// This act had already been saved; nothing was written again.
@@ -1541,10 +1559,18 @@ pub async fn edit_layout(
                         .await
                         .map(|r| r.get::<_, i64>(0))
                     };
+                    let placed: i64 = tx
+                        .query_one(
+                            "SELECT count(*) FROM place_change WHERE client_event_id = $1 AND change = 'added' AND after ? 'bin'",
+                            &[&ev.client_event_id],
+                        )
+                        .await?
+                        .get(0);
                     return Ok(LayoutEdited {
                         changed: n("changed").await?,
-                        added: n("added").await?,
+                        added: n("added").await? - placed,
                         removed: n("removed").await?,
+                        placed,
                         version: layout_version(tx, site).await?,
                         replay: true,
                     });
@@ -1620,6 +1646,47 @@ pub async fn edit_layout(
                     record(a.place_id, "added", None, Some(as_kept(a.parent_id, name, a.solid, &at))).await?;
                 }
 
+                // A bin from the tray, on a spot of its own: one cell, named for
+                // it. Only a bin on no layout: one already in a cell stays put.
+                for spot in &body.spots {
+                    let code: String = tx
+                        .query_opt(
+                            "SELECT code FROM location WHERE id = $1 AND site_id = $2 AND active",
+                            &[&spot.location_id, &site],
+                        )
+                        .await?
+                        .ok_or(ApiError::NotFound)?
+                        .get(0);
+                    if let Some(parent) = spot.parent_id {
+                        if !by_id.contains_key(&parent) {
+                            return Err(ApiError::Rejected(format!("{code} is inside a place that isn't on this site")));
+                        }
+                    }
+                    let at = checked(spot.at, &code)?;
+                    tx.execute(
+                        "INSERT INTO place (id, tenant_id, site_id, parent_id, name, solid,
+                                            x, y, z, length, depth, height, turn)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+                        &[&spot.place_id, &tenant, &site, &spot.parent_id, &code, &spot.solid, &at.x, &at.y, &at.z, &at.length, &at.depth, &at.height, &(at.turn as i16)],
+                    )
+                    .await
+                    .map_err(|e| said(e, &code))?;
+                    let moved = tx
+                        .execute(
+                            "UPDATE location
+                                SET place_id = $2, slot_side = 1, slot_bay = 1, slot_level = 1, slot_row = 1, slot_position = 1
+                              WHERE id = $1 AND place_id IS NULL",
+                            &[&spot.location_id, &spot.place_id],
+                        )
+                        .await?;
+                    if moved == 0 {
+                        return Err(ApiError::Rejected(format!("{code} is on the layout already, so it stays where it is")));
+                    }
+                    let mut after = as_kept(spot.parent_id, &code, spot.solid, &at);
+                    after["bin"] = serde_json::json!(code);
+                    record(spot.place_id, "added", None, Some(after)).await?;
+                }
+
                 for id in &body.removed {
                     let was = *by_id.get(id).ok_or(ApiError::NotFound)?;
                     let bins: i64 = tx
@@ -1662,6 +1729,7 @@ pub async fn edit_layout(
                     changed: body.changed.len() as i64,
                     added: body.added.len() as i64,
                     removed: body.removed.len() as i64,
+                    placed: body.spots.len() as i64,
                     version: layout_version(tx, site).await?,
                     replay: false,
                 })

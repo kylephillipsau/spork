@@ -155,3 +155,13 @@ test("racks set out in a row stand an aisle apart, ends lined up, each keeping i
   assert.deepEqual(at(c), { left: 1.5, front: 10.8, right: 17.5, back: 12 });
   assert.deepEqual([rack("10", {}), rack("9", {})].sort(byName).map((d) => d.name), ["Rack 9", "Rack 10"]);
 });
+
+test("a bin from the tray goes in as a spot of its own, not a place", () => {
+  const drafts = draftsOf(LAID_OUT);
+  const main = drafts[0]!;
+  const spot: Draft = { ...draft("s", main.place_id, { length: 2, depth: 2, height: 1 }), name: "PACK", solid: false, fresh: true, holds: { location_id: "loc-pack", code: "PACK" } };
+  const c = changesOf(LAID_OUT, [...drafts, spot]);
+  assert.deepEqual(c.added, []);
+  assert.deepEqual(c.spots.map((s) => [s.place_id, s.location_id, s.parent_id]), [["s", "loc-pack", main.place_id]]);
+  assert.equal(changeCount(LAID_OUT, [...drafts, spot]), 1);
+});
