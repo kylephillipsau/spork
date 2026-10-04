@@ -2,13 +2,43 @@
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "default",
   "description": "What the webview may ask the shell to do.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     {
       "identifier": "http:default",
-      "comment": "HTTPS only, and only ever the server the build was pointed at. The scope is deliberately not a single host: a laptop build points at a development server, and a rule that only holds for the deployment is a rule somebody edits in a hurry.",
-      "allow": [{ "url": "https://**" }]
+      "comment": "HTTPS anywhere; plain HTTP only to a server on a private network, which is where a warehouse's own Spork runs: the warehouse wifi (10/8, 172.16/12, 192.168/16), Tailscale (100.64/10 and *.ts.net), a .local name, or this device. Not every HTTP address, so a script that got into the webview can't send anything to the internet in the clear. IP addresses are written as regular-expression groups: URL patterns rewrite a bare 10.* as an IPv4 address before matching.",
+      "allow": [
+        {
+          "url": "https://**"
+        },
+        {
+          "url": "http://(10(?:\\.[0-9]+){3}):*"
+        },
+        {
+          "url": "http://(192\\.168(?:\\.[0-9]+){2}):*"
+        },
+        {
+          "url": "http://(172\\.(?:1[6-9]|2[0-9]|3[01])(?:\\.[0-9]+){2}):*"
+        },
+        {
+          "url": "http://(100\\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])(?:\\.[0-9]+){2}):*"
+        },
+        {
+          "url": "http://*.ts.net:*"
+        },
+        {
+          "url": "http://*.local:*"
+        },
+        {
+          "url": "http://localhost:*"
+        },
+        {
+          "url": "http://(127(?:\\.[0-9]+){3}):*"
+        }
+      ]
     }
   ]
 }

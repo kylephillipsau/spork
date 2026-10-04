@@ -2,3 +2,4 @@ node_modules/
 dist/
 .render/
 dist-review
+dist-mobile

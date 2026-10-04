@@ -204,6 +204,12 @@ export function useTransport(next: Transport): void {
  */
 export const imageUrl = (digest: string): string => `${transport.base}/images/${digest}`;
 
+/** Forget the session this device holds, without asking a server: on a device
+ *  moving to another Spork, whose sessions mean nothing there. */
+export function forgetSession(): void {
+  transport.remember(null);
+}
+
 /**
  * The live channel (D206): a stream that says when to read again, read by
  * `domain/changes.ts`. Not `send`, which waits for a body that never ends.

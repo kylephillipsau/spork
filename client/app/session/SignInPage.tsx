@@ -3,6 +3,7 @@ import { CircleAlert, CircleCheck, Fingerprint } from "lucide-react";
 import { Button, Card, Checkbox, Stack, TextField } from "@ui/index";
 
 import type { SignInBench } from "./useSignIn";
+import { ServerField } from "./ServerField";
 import s from "./session-pages.module.css";
 
 /** Sign in with email and password, or a passkey (D171 layout; logic in useSignIn). */
@@ -93,6 +94,11 @@ export function SignInPage({ bench }: { bench: SignInBench }) {
               <CircleAlert aria-hidden />
               {bench.problem}
             </p>
+          )}
+
+          {/* The app's only: a browser is on the server that sent it. */}
+          {import.meta.env.MODE === "mobile" && !choosing && (
+            <ServerField unreachable={!!bench.problem && /reach|fetch|network|connect/i.test(bench.problem)} />
           )}
 
           <Stack gap={3}>

@@ -85,6 +85,45 @@ changing a screen. `beforeDevCommand` passes `--mode mobile`; without it vite
 serves the default mode, the transport never rebinds, and the app asks the vite
 origin for `/api` and gets nothing.
 
+## Android (a Boox Tab Ultra, first)
+
+No signing account is involved: a debug build is signed with the SDK's debug
+key, so the whole thing runs from a shell. Android Studio's own Java and SDK
+are enough:
+
+```sh
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/<version>"
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+# Its own cargo folder: a shared one is locked by whatever else is building.
+export CARGO_TARGET_DIR="$HOME/.cargo/spork-mobile-target"
+
+npm --prefix mobile install
+cd mobile && npx tauri android build --debug --target aarch64 --apk
+```
+
+The Tab Ultra is `arm64-v8a` on Android 11, so `--target aarch64` is all it
+needs. The APK lands under `src-tauri/gen/android/app/build/outputs/apk/`.
+
+**Installing over Tailscale.** On the tablet, Settings › Developer options ›
+Wireless debugging. Pair once with the code it shows, then connect to the
+port it shows now. Use the tablet's **Tailscale** address, not the wifi one the
+screen prints; the port is the same either way. The port changes whenever
+wireless debugging is switched off, which Android does by itself now and then.
+
+```sh
+adb pair <tailscale-ip>:<pairing-port> <code>     # once
+adb connect <tailscale-ip>:<port>
+adb -s <tailscale-ip>:<port> install -r <apk>
+```
+
+**Which server.** The app's sign-in screen asks for it the first time (a
+work computer started with `scripts\local.ps1 start -Lan` prints the address
+to use, port 18080) and keeps it on the device; **Change** under the form sets
+another. Plain HTTP is allowed only to private networks — the warehouse wifi,
+Tailscale, `.local` names — and HTTPS anywhere (`capabilities/default.json`).
+
 ## Pointing it at a different server
 
 The default is `https://spork.warehouseutilities.com`. For a laptop build:
@@ -93,8 +132,8 @@ The default is `https://spork.warehouseutilities.com`. For a laptop build:
 VITE_SPORK_SERVER=https://spork.warehouseutilities.com npm --prefix client run build:mobile
 ```
 
-One constant and one override, because there is one deployment. When there are
-two, the server picker goes in `client/app/platform/server.ts`.
+A build can bake an address in this way; the address set on the device's
+sign-in screen outranks it (`client/app/platform/server.ts`).
 
 ## First time on the device, in this order
 
