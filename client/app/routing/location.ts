@@ -44,7 +44,25 @@ function announce(): void {
  * One listener at module load rather than one per subscriber, so the snapshot is
  * written once and every subscriber is notified from the same `CHANGED`.
  */
-window.addEventListener("popstate", announce);
+/**
+ * Something on screen that leaving would lose, asked before going (D209). It
+ * answers whether to go. One at a time: the screen that has it sets it, and
+ * clears it when there is nothing left to lose.
+ */
+let leaving: (() => boolean) | null = null;
+
+export function guardLeaving(ask: (() => boolean) | null): void {
+  leaving = ask;
+}
+
+// Back and forward have moved the address already; staying puts it back.
+window.addEventListener("popstate", () => {
+  if (leaving && !leaving()) {
+    window.history.pushState(null, "", withBaseFor(snapshot));
+    return;
+  }
+  announce();
+});
 
 export function currentPath(): string {
   return snapshot;
@@ -65,6 +83,7 @@ export function subscribe(listener: () => void): () => void {
  * that rejected them.
  */
 export function go(to: string, options?: { replace?: boolean }): void {
+  if (leaving && normalise(to) !== normalise(snapshot) && !leaving()) return;
   const url = withBaseFor(to);
   if (options?.replace) window.history.replaceState(null, "", url);
   else window.history.pushState(null, "", url);

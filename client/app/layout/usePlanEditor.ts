@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useLive, useWriting } from "@app/acting";
+import { guardLeaving } from "@app/routing/location";
 import { api, reason } from "@domain/api";
 import { uuid } from "@domain/acts";
 import type { LayoutView, PlanShape, Uuid } from "@domain/types";
@@ -80,12 +81,19 @@ export function usePlanEditor(): PlanDesk {
   const plan = useMemo(() => planOf(drafts), [drafts]);
   const count = useMemo(() => (view ? changeCount(view, drafts) : 0), [view, drafts]);
 
-  // Leaving with changes not saved asks first.
+  // Leaving with changes not saved asks first: closing the tab or reloading,
+  // and going to another screen in the app, which the browser doesn't see.
   useEffect(() => {
     if (count === 0) return;
     const ask = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", ask);
-    return () => window.removeEventListener("beforeunload", ask);
+    guardLeaving(() =>
+      window.confirm(`Leave without saving? ${count === 1 ? "1 change" : `${count} changes`} to the layout will be lost.`),
+    );
+    return () => {
+      window.removeEventListener("beforeunload", ask);
+      guardLeaving(null);
+    };
   }, [count]);
 
   const step = useCallback((next: Draft[]) => {

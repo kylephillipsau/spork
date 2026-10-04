@@ -1523,6 +1523,10 @@ pub async fn edit_layout(
     let out = scope
         .run(move |tx| {
             Box::pin(async move {
+                // One save at a time per site, so two can't both pass the
+                // version check below and write over each other.
+                tx.execute("SELECT pg_advisory_xact_lock(hashtext('layout:' || $1::uuid::text))", &[&site])
+                    .await?;
                 // A retry of a save that landed answers with what it did.
                 if claim_act(tx, &ev).await?.is_replay() {
                     let n = |kind: &'static str| async move {

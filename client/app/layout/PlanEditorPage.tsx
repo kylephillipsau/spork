@@ -204,7 +204,7 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
       desk.change(d.place_id, (x) => ({ ...x, box: turned(x.box, e.shiftKey ? 90 : -90) }));
-    } else if ((e.key === "Delete" || e.key === "Backspace") && d.bins === 0) {
+    } else if ((e.key === "Delete" || e.key === "Backspace") && d.bins === 0 && d.parent_id !== null) {
       e.preventDefault();
       desk.remove(d.place_id);
     } else if (e.key === "Escape") {
