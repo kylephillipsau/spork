@@ -14898,15 +14898,21 @@ the best way to walk it, and the work done there.
   Question 1). A write-back that fails is held and sent again (D207), and what
   NetSuite hasn't yet heard stays visible.
 
+**Settled since (the user, 2026-10-05).**
+- **Five minutes is fresh enough** for the balance, for now.
+- **Receiving and put-away stay in NetSuite.** They reach Spork through the
+  balance, and nothing else is needed for them.
+- **There is no write-back yet.** The user is asking for NetSuite
+  permission for one. Until there is, picking at Melbourne stays on
+  NetSuite's handheld, because a pick NetSuite never hears would leave its
+  shelves wrong.
+
 **Not decided.**
 - The write-back's route: the Bridge writing from a signed-in browser, or a
   NetSuite integration (a RESTlet with token-based authentication) the server
-  calls directly. The second needs NetSuite administration.
+  calls directly. Either needs the permission being asked for.
 - Who fixes a difference in NetSuite: the picker, a supervisor, or Spork
   writing back an adjustment.
-- The refresh interval. Five minutes is a default until the user says.
-- Whether receiving and put-away at Melbourne stay in NetSuite. If they do,
-  they reach Spork through the balance; nothing else is needed.
 
 Known cost: a changed balance is a new stored arrival, roughly 200 kB, which
 is tens of megabytes a day if NetSuite changes between every load. Pruning old

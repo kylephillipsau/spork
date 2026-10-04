@@ -485,7 +485,8 @@ raising it is adopted.
   marking them in NetSuite, or by the bridge writing them back. This needs a
   business answer before step 4. **D212 makes it the critical path:** NetSuite
   keeps the shelves, so it has to hear every pick Spork records. The route,
-  the Bridge or a RESTlet with token-based authentication, is still open.
+  the Bridge or a RESTlet with token-based authentication, is still open, and
+  waits on NetSuite permission the user is asking for (2026-10-05).
 - **Question 2. How long is a layout cell at Melbourne?** One measurement, taken
   with the real layout: a bay's width and an aisle's width.
 - **Question 3. The trolleys and totes.** How many totes fit a trolley, and what
