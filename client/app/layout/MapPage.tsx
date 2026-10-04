@@ -1,9 +1,9 @@
 import { Suspense, lazy, useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
 
-import { Alert, Badge, Link, Page, PageHeader, SearchField, Select, Skeleton, Tabs } from "@ui/index";
+import { Alert, Badge, Checkbox, Link, Page, PageHeader, SearchField, Select, Skeleton, Tabs } from "@ui/index";
 import { href } from "@app/routing/location";
-import type { MapBin } from "@domain/types";
+import type { MapBin, WalkRoute } from "@domain/types";
 
 import { findBins, LAYERS, LEGEND, swatch, type Layer } from "./layers";
 import type { MapDesk } from "./useMap";
@@ -43,6 +43,7 @@ export function MapPage({ desk }: { desk: MapDesk }) {
                 chosen={desk.chosen?.location_id ?? null}
                 choose={desk.choose}
                 flight={desk.flight}
+                route={desk.showWalk && desk.walk.kind === "ready" ? (desk.walk.value?.path ?? null) : null}
               />
             </Suspense>
           ) : (
@@ -102,6 +103,10 @@ export function MapPage({ desk }: { desk: MapDesk }) {
               ))}
             </ul>
             {desk.layer === "stock" && <p className={s.source}>From NetSuite's last count, and Spork's own records.</p>}
+            <div className={s.walk}>
+              <Checkbox checked={desk.showWalk} onCheckedChange={(v) => desk.setShowWalk(v === true)} label="Today's walk" />
+              {desk.showWalk && <span className={s.source}>{walkSentence(desk.walk)}</span>}
+            </div>
           </div>
         </section>
 
@@ -214,4 +219,16 @@ function Chosen({ desk }: { desk: MapDesk }) {
       </Link>
     </div>
   );
+}
+
+/** What today's walk is, in a few words (D211). */
+function walkSentence(walk: MapDesk["walk"]): string {
+  if (walk.kind === "loading" || walk.kind === "idle") return "Reading it…";
+  if (walk.kind === "failed") return walk.message;
+  const route: WalkRoute | null = walk.value;
+  if (!route) return "None of it is on the layout, or there's nothing to pick.";
+  const stops = `${route.stops} ${route.stops === 1 ? "stop" : "stops"}`;
+  const off = route.off_route > 0 ? `, and ${route.off_route} off the layout` : "";
+  if (!route.cell_mm) return `${stops}${off}.`;
+  return `${stops}, ${Math.round((route.walked * route.cell_mm) / 1000)} m${off}.`;
 }

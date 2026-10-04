@@ -70,7 +70,7 @@ test("a line with nowhere to pick from offers what the line wants", () => {
 });
 
 function screen(lines: PickLine[]): PickListScreen {
-  return { site: "MEL", lines };
+  return { site: "MEL", lines, route: null };
 }
 
 test("a served line keeps its place and loses what was picked", () => {
@@ -114,6 +114,7 @@ test("lines the pick did not serve are untouched", () => {
 function walk(...rows: [string, number][]): PickListScreen {
   return {
     site: "5170",
+    route: null,
     lines: rows.map(([id, remaining]) => line({ fulfilment_line_id: id, item_code: id, remaining })),
   };
 }

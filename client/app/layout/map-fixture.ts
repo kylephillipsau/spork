@@ -81,6 +81,9 @@ export function fixtureMap(over: Partial<MapDesk> = {}): MapDesk {
     busy: false,
     problem: null,
     dismiss: () => {},
+    showWalk: false,
+    setShowWalk: () => {},
+    walk: { kind: "idle" },
     ...over,
   };
 }
@@ -94,3 +97,25 @@ export function fixtureMapChosen(over: Partial<MapDesk> = {}): MapDesk {
     ...over,
   });
 }
+
+/**
+ * Today's walk on the drafted site: from the bench at the front, up the left
+ * side, along an aisle between two racks and back.
+ */
+export const MAP_WALK = {
+  from: "pack" as const,
+  cell_mm: 1000,
+  walked: 62.5,
+  typed: 97,
+  stops: 6,
+  off_route: 0,
+  path: [
+    [0.5, 0.5],
+    [0.5, 34.5],
+    [12, 34.5],
+    [12, 37.5],
+    [3, 37.5],
+    [0.5, 35],
+    [0.5, 0.5],
+  ] as [number, number][],
+};

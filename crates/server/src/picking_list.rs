@@ -16,10 +16,13 @@
 //!
 //! # The order is the floor's, not the database's
 //!
-//! `location.pick_sequence` is the walking order somebody typed in, and J71
-//! reports when two bins claim the same one. Ordering by it is what makes the
-//! list a route rather than a set — and it is the reason that column, which
-//! nothing had read until now, exists at all.
+//! **The walk is routed (D211).** Where the walk's bins are on the layout,
+//! the lines come in the order that walks least, from the packing bench and
+//! back when the bench is on the layout (`walk_route`), with the route's
+//! length beside the typed order's. `location.pick_sequence`, the walking
+//! order somebody typed in (J71 reports two bins claiming one), orders only
+//! what isn't on the layout yet, after the route, and is still the order the
+//! read comes back from the database in.
 //!
 //! # One cell per line, chosen rather than listed
 //!
@@ -39,7 +42,9 @@ use actix_web::web;
 use crate::auth::Caller;
 use crate::error::ApiError;
 use crate::pictures::{self, Picture};
+use crate::layout::GridCell;
 use crate::tenancy::TenantScope;
+use crate::walk_route::{self, WalkRoute, Whereabouts};
 use crate::AppState;
 
 /// One thing to walk to.
@@ -90,6 +95,8 @@ pub struct PickLine {
 pub struct PickListScreen {
     pub site: String,
     pub lines: Vec<PickLine>,
+    /// How the walk is routed, when any of its bins is on the layout (D211).
+    pub route: Option<WalkRoute>,
 }
 
 pub async fn screen(
@@ -109,7 +116,23 @@ pub async fn screen(
                     .ok_or(ApiError::NotFound)?;
 
                 let rows = tx.query(LINES.as_str(), &[&site_id, &limit]).await?;
-                let lines = rows
+                // Where each line's bin is on the layout, if it is.
+                let whereabouts: Vec<Option<Whereabouts>> = rows
+                    .iter()
+                    .map(|r| {
+                        Some(Whereabouts {
+                            place_id: r.get::<_, Option<Uuid>>(16)?,
+                            cell: GridCell {
+                                side: r.get::<_, Option<i16>>(17).unwrap_or(1) as i32,
+                                bay: r.get::<_, Option<i32>>(18)?,
+                                level: r.get::<_, Option<i32>>(19)?,
+                                row: r.get::<_, Option<i32>>(20)?,
+                                position: r.get::<_, Option<i32>>(21)?,
+                            },
+                        })
+                    })
+                    .collect();
+                let mut lines: Vec<Option<PickLine>> = rows
                     .iter()
                     .map(|r| PickLine {
                         fulfilment_line_id: r.get(0),
@@ -128,9 +151,18 @@ pub async fn screen(
                         allocated: r.get(13),
                         picture: pictures::from_row(r.get(14), r.get(15)),
                     })
+                    .map(Some)
                     .collect();
 
-                Ok(PickListScreen { site, lines })
+                // In route order, when the walk's bins are on the layout.
+                let routed = walk_route::route(tx, site_id, &whereabouts).await?;
+                let (order, route) = match routed {
+                    Some((order, route)) => (order, Some(route)),
+                    None => ((0..lines.len()).collect(), None),
+                };
+                let lines = order.into_iter().filter_map(|i| lines[i].take()).collect();
+
+                Ok(PickListScreen { site, lines, route })
             })
         })
         .await
@@ -163,7 +195,13 @@ static LINES: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             cell.available,
             coalesce(cell.allocated, false),
             p.digest,
-            p.source
+            p.source,
+            cell.place_id,
+            cell.slot_side,
+            cell.slot_bay,
+            cell.slot_level,
+            cell.slot_row,
+            cell.slot_position
        FROM fulfilment_line fl
        -- What is left to pick here, live (migration 117): picked here out of
        -- storage and reported picked elsewhere, so neither comes back.
@@ -177,6 +215,12 @@ static LINES: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             SELECT s.id AS stock_id,
                    l.code AS location_code,
                    l.pick_sequence,
+                   l.place_id,
+                   l.slot_side,
+                   l.slot_bay,
+                   l.slot_level,
+                   l.slot_row,
+                   l.slot_position,
                    lt.code AS lot_code,
                    s.available_quantity::bigint AS available,
                    EXISTS (SELECT 1 FROM stock_allocation sa

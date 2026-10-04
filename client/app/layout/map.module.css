@@ -291,3 +291,12 @@
   color: var(--ui-text-muted);
   font-size: var(--ui-text-sm);
 }
+
+.walk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-3);
+  padding-top: var(--ui-space-2);
+  border-top: 1px solid var(--ui-border);
+}

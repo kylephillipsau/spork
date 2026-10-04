@@ -2,7 +2,9 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CircleGeometry,
   Color,
+  DoubleSide,
   EdgesGeometry,
   ExtrudeGeometry,
   Float32BufferAttribute,
@@ -160,6 +162,7 @@ export class SiteScene {
     hover: new LineBasicMaterial(),
     bin: new MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
     ghost: new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.13, depthWrite: false }),
+    route: new MeshBasicMaterial({ side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
   };
 
   // ── the bins (D208) ──────────────────────────────────────────────────
@@ -174,6 +177,8 @@ export class SiteScene {
   private groups: { mesh: InstancedMesh; cells: BinCell[] }[] = [];
   /** The place whose bins are in front, while a bin is chosen there. */
   private focus: string | null = null;
+  /** The walk drawn on the floor, and where it starts (D211). */
+  private walk: Mesh[] = [];
   private layer: Layer = "stock";
   private chosenBin: string | null = null;
   private hoveredBin: string | null = null;
@@ -286,6 +291,50 @@ export class SiteScene {
     this.colourBins();
   }
 
+  /**
+   * Draw a walk on the floor (D211): a ribbon along its path, and a disc
+   * where it starts. Nothing, to take it away.
+   */
+  setRoute(path: [number, number][] | null): void {
+    for (const m of this.walk) {
+      this.stage.scene.remove(m);
+      m.geometry.dispose();
+    }
+    this.walk = [];
+    if (path && path.length > 1) {
+      const { min, max } = this.site;
+      // A ribbon a fraction of the site wide, so it reads at any size.
+      const width = Math.max(0.12, Math.hypot(max[0] - min[0], max[1] - min[1]) / 250);
+      const lift = 0.05;
+      const positions: number[] = [];
+      for (let k = 0; k + 1 < path.length; k++) {
+        const [ax, ay] = path[k]!;
+        const [bx, by] = path[k + 1]!;
+        const len = Math.hypot(bx - ax, by - ay) || 1;
+        const [nx, ny] = [(-(by - ay) / len) * (width / 2), ((bx - ax) / len) * (width / 2)];
+        // Extended by half a width at each end, so the bends close.
+        const [ex, ey] = [((bx - ax) / len) * (width / 2), ((by - ay) / len) * (width / 2)];
+        const c = [
+          [ax - ex + nx, ay - ey + ny],
+          [bx + ex + nx, by + ey + ny],
+          [bx + ex - nx, by + ey - ny],
+          [ax - ex - nx, ay - ey - ny],
+        ] as const;
+        for (const i of [0, 1, 2, 0, 2, 3]) positions.push(c[i]![0], lift, -c[i]![1]);
+      }
+      const ribbon = new BufferGeometry().setAttribute("position", new Float32BufferAttribute(positions, 3));
+      const start = new CircleGeometry(width * 2.2, 24);
+      start.rotateX(-Math.PI / 2);
+      start.translate(path[0]![0], lift, -path[0]![1]);
+      this.walk = [new Mesh(ribbon, this.materials.route), new Mesh(start, this.materials.route)];
+      for (const m of this.walk) {
+        m.renderOrder = 3;
+        this.stage.scene.add(m);
+      }
+    }
+    this.stage.invalidate();
+  }
+
   /** Colour the bins by this layer. */
   setLayer(layer: Layer): void {
     if (layer === this.layer) return;
@@ -370,6 +419,7 @@ export class SiteScene {
     canvas.removeEventListener("pointerleave", this.onLeave);
     this.clear();
     this.dropGroups();
+    this.setRoute(null);
     for (const mark of [this.chosenMark, this.hoverMark]) mark.geometry.dispose();
     for (const m of Object.values(this.materials)) m.dispose();
     this.stage.dispose();
@@ -455,6 +505,7 @@ export class SiteScene {
     m.chosenLine.color.copy(p.chosenLine);
     m.chosenGrid.color.copy(p.chosenGrid);
     m.hover.color.copy(p.hover);
+    m.route.color.copy(p.chosen);
     const surface = this.stage.token("--ui-surface");
     for (const [tone, { token, share }] of Object.entries(MIX) as [Tone, { token: string; share: number }][]) {
       this.tones[tone] = mix(surface, this.stage.token(token), share);

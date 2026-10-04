@@ -211,7 +211,8 @@ impl Floor {
     }
 
     /// A path as points on the site, with the bends kept and the straight
-    /// runs between them left out.
+    /// runs between them left out. A point where the path doubles back is a
+    /// bend, and is kept: it is where the stop is.
     pub fn line(&self, path: &[usize]) -> Vec<Pt> {
         let pts: Vec<Pt> = path.iter().map(|&n| self.at(n)).collect();
         let mut out: Vec<Pt> = vec![];
@@ -219,7 +220,8 @@ impl Floor {
             if k > 0 && k + 1 < pts.len() {
                 let (a, b) = (pts[k - 1], pts[k + 1]);
                 let cross = (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]);
-                if cross.abs() < 1e-9 {
+                let onward = (p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]);
+                if cross.abs() < 1e-9 && onward > 0.0 {
                     continue;
                 }
             }
@@ -501,6 +503,74 @@ fn polish(cost: &[Vec<f64>], mut route: Vec<usize>, closed: bool) -> Vec<usize> 
     route
 }
 
+// ---------------------------------------------------------------------------
+// A walk, planned
+// ---------------------------------------------------------------------------
+
+/// A walk's stops put in order, against the order they were typed in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Planned {
+    /// The stops reached, by their index in the typed order, in walking order.
+    pub order: Vec<usize>,
+    /// The stops that can't be reached from where the walk starts.
+    pub unreachable: Vec<usize>,
+    /// The walk in this order, and in the typed order over the same stops,
+    /// from the same start to the same end. In the site's cells.
+    pub walked: f64,
+    pub typed: f64,
+    /// Where it goes, on the site.
+    pub path: Vec<Pt>,
+}
+
+/// Plan a walk over `stops`, nodes on the floor in the order somebody typed.
+///
+/// **From the same place, both ways.** With a `base` (the packing bench), the
+/// walk starts there and comes back. Without one it starts at the typed
+/// order's first stop and ends wherever its last one is. Either way the typed
+/// order is measured from the same start under the same rule, so the
+/// difference between the two numbers is the route and nothing else.
+pub fn plan(floor: &Floor, base: Option<usize>, stops: &[usize]) -> Planned {
+    let start = base.or_else(|| stops.first().copied());
+    let Some(start) = start else {
+        return Planned { order: vec![], unreachable: vec![], walked: 0.0, typed: 0.0, path: vec![] };
+    };
+    let closed = base.is_some();
+    // Nodes: the start, then each stop.
+    let mut nodes = vec![start];
+    nodes.extend_from_slice(stops);
+    let from_start = floor.distances(start, &nodes);
+    let (reached, unreachable): (Vec<usize>, Vec<usize>) = (0..stops.len()).partition(|&k| from_start[k + 1].is_finite());
+    // The matrix over the start and the stops it can reach.
+    let mine: Vec<usize> = std::iter::once(start).chain(reached.iter().map(|&k| stops[k])).collect();
+    let cost: Vec<Vec<f64>> = mine.iter().map(|&a| floor.distances(a, &mine)).collect();
+    let route = order(&cost, 0, closed);
+    // The typed order is the reached stops as they were typed; without a base
+    // the first of them is the start itself.
+    let typed_route: Vec<usize> = (0..mine.len()).collect();
+    let walked = length(&cost, &route, closed);
+    let typed = length(&cost, &typed_route, closed);
+    let mut legs: Vec<usize> = route.iter().map(|&i| mine[i]).collect();
+    if closed {
+        legs.push(start);
+    }
+    let mut path: Vec<usize> = vec![];
+    for w in legs.windows(2) {
+        if let Some((_, leg)) = floor.path(w[0], w[1]) {
+            if !path.is_empty() {
+                path.pop();
+            }
+            path.extend(leg);
+        }
+    }
+    Planned {
+        order: route.into_iter().skip(1).map(|i| reached[i - 1]).collect(),
+        unreachable,
+        walked,
+        typed,
+        path: floor.line(&path),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -633,5 +703,55 @@ mod tests {
         let route = order(&cost, 3, false);
         assert_eq!(route[0], 3);
         assert_eq!(route.len(), 40);
+    }
+
+    #[test]
+    fn a_walk_is_planned_against_the_order_it_was_typed_in() {
+        // Two rows of racks, an aisle between, a bench at the left end.
+        let floor = Floor::build(
+            &[rect(0.0, 0.0, 20.0, 10.0)],
+            &[rect(2.0, 2.0, 16.0, 1.0), rect(2.0, 6.0, 16.0, 1.0)],
+            0.5,
+        )
+        .unwrap();
+        let at = |x: f64, y: f64| floor.node_of([x, y]).unwrap();
+        let bench = at(0.75, 4.75);
+        // Typed to zigzag: far end, near end, far end, near end.
+        let stops = [at(16.25, 4.25), at(3.25, 4.25), at(15.25, 5.25), at(4.25, 5.25)];
+        let p = plan(&floor, Some(bench), &stops);
+        assert_eq!(p.unreachable, Vec::<usize>::new());
+        let mut seen = p.order.clone();
+        seen.sort();
+        assert_eq!(seen, vec![0, 1, 2, 3], "every stop once");
+        assert!(p.walked < p.typed * 0.7, "the near end, then the far, beats the zigzag: {} against {}", p.walked, p.typed);
+        assert_eq!(floor.node_of(p.path[0]), Some(bench), "from the bench");
+        assert_eq!(floor.node_of(*p.path.last().unwrap()), Some(bench), "and back");
+
+        // With no bench: from the first stop typed, both ways, ending anywhere.
+        let open = plan(&floor, None, &stops);
+        assert_eq!(open.order[0], 0, "it starts where the typed order starts");
+        assert!(open.walked <= open.typed + 1e-9);
+    }
+
+    #[test]
+    fn a_path_that_doubles_back_keeps_the_point_it_turns_at() {
+        let floor = Floor::build(&[rect(0.0, 0.0, 10.0, 2.0)], &[], 0.5).unwrap();
+        let at = |x: f64| floor.node_of([x, 0.25]).unwrap();
+        let p = plan(&floor, Some(at(0.25)), &[at(5.25)]);
+        assert_eq!(p.path, vec![[0.25, 0.25], [5.25, 0.25], [0.25, 0.25]], "out to the stop and back");
+    }
+
+    #[test]
+    fn a_stop_behind_a_wall_is_left_off_the_walk() {
+        // A closed room in the corner, with a stop inside it.
+        let floor = Floor::build(
+            &[rect(0.0, 0.0, 10.0, 10.0)],
+            &[rect(6.0, 6.0, 4.0, 0.5), rect(6.0, 6.0, 0.5, 4.0)],
+            0.5,
+        )
+        .unwrap();
+        let at = |x: f64, y: f64| floor.node_of([x, y]).unwrap();
+        let p = plan(&floor, Some(at(0.25, 0.25)), &[at(3.25, 3.25), at(8.25, 8.25)]);
+        assert_eq!((p.order.clone(), p.unreachable.clone()), (vec![0], vec![1]));
     }
 }

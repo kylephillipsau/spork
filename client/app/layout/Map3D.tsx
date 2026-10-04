@@ -22,6 +22,7 @@ export default function Map3D({
   chosen,
   choose,
   flight,
+  route,
 }: {
   plan: PlanShape[];
   places: LayoutPlace[];
@@ -31,6 +32,8 @@ export default function Map3D({
   choose: (locationId: string | null) => void;
   /** Bumped when the view should fly to what is chosen. */
   flight: number;
+  /** Today's walk, to draw on the floor (D211). */
+  route: [number, number][] | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const tag = useRef<HTMLSpanElement>(null);
@@ -74,6 +77,7 @@ export default function Map3D({
   useEffect(() => scene.current?.set(site), [site]);
   useEffect(() => scene.current?.setBins(cells), [cells]);
   useEffect(() => scene.current?.setLayer(layer), [layer]);
+  useEffect(() => scene.current?.setRoute(route), [route, site]);
   useEffect(() => scene.current?.chooseBin(chosen), [chosen, cells]);
   // Each flight once, as soon as its bin is drawn. A click chooses a bin
   // already in view, and a quiet refresh of the stock flies nowhere.

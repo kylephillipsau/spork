@@ -17,7 +17,7 @@ import {
 } from "@ui/index";
 import { Faint } from "@app/common/cells";
 import { Thumb } from "@app/common/Thumb";
-import type { PickLine } from "@domain/types";
+import type { PickLine, WalkRoute } from "@domain/types";
 
 import type { PickBench } from "./usePicking";
 import s from "./picking-page.module.css";
@@ -79,7 +79,7 @@ export function PickingPage({ bench }: { bench: PickBench }) {
       )}
       <Outbox outbox={bench.outbox} />
 
-      <Card title="To pick" count={lines.length} padded={false}>
+      <Card title="To pick" count={lines.length} description={routeSentence(st.screen.route)} padded={false}>
         {lines.length === 0 ? (
           <EmptyState icon={<PackageCheck />} title="Nothing to pick" description="All picked." />
         ) : (
@@ -289,4 +289,20 @@ function Outbox({ outbox }: { outbox: PickBench["outbox"] }) {
       ))}
     </>
   );
+}
+
+/**
+ * How the walk is ordered (D211), in a sentence: the route's length beside the
+ * typed order's once the floor is measured, and only the order before then,
+ * because a length in cells means nothing to a picker.
+ */
+export function routeSentence(route: WalkRoute | null): string | undefined {
+  if (!route) return undefined;
+  const from = route.from === "pack" ? "from the bench and back" : "from the first stop";
+  if (!route.cell_mm) return `In walking order, ${from}.`;
+  const m = (cells: number) => Math.round((cells * route.cell_mm!) / 1000);
+  const saved = m(route.typed) - m(route.walked);
+  return saved > 0
+    ? `In walking order, ${from}: ${m(route.walked)} m, ${saved} m less than NetSuite's order.`
+    : `In walking order, ${from}: ${m(route.walked)} m.`;
 }

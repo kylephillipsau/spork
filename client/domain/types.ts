@@ -613,6 +613,24 @@ export interface RecordEvidenceResponse {
 export interface PickListScreen {
   site: string;
   lines: PickLine[];
+  /** How the walk is routed, when any of its bins is on the layout (D211). */
+  route: WalkRoute | null;
+}
+
+/** The picking walk's route, beside the order it was typed in (D211). */
+export interface WalkRoute {
+  /** `pack`: from the packing location and back. `first`: from the typed order's first stop. */
+  from: "pack" | "first";
+  /** How long a cell is, once the site says; the lengths are in cells. */
+  cell_mm: number | null;
+  /** The walk in route order, and in the typed order over the same stops. */
+  walked: number;
+  typed: number;
+  stops: number;
+  /** Lines whose bin isn't on the layout, walked last in the typed order. */
+  off_route: number;
+  /** Where the walk goes, on the site, in cells. */
+  path: [number, number][];
 }
 
 

@@ -98,10 +98,15 @@ const LINES: PickListScreen["lines"] = [
   },
 ];
 
-export const PICKING_FIXTURE: PickListScreen = { site: "MEL", lines: LINES };
+export const PICKING_FIXTURE: PickListScreen = {
+  site: "MEL",
+  lines: LINES,
+  // Routed from the bench, on a site measured in metres (D211).
+  route: { from: "pack", cell_mm: 1000, walked: 84.2, typed: 131.6, stops: 3, off_route: 1, path: [] },
+};
 
 /** Nothing to pick, which is the screen's best state and its emptiest. */
-export const PICKING_CLEAR: PickListScreen = { site: "MEL", lines: [] };
+export const PICKING_CLEAR: PickListScreen = { site: "MEL", lines: [], route: null };
 
 export function fixturePicking(
   screen: PickListScreen = PICKING_FIXTURE,

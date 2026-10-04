@@ -98,7 +98,7 @@ import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { PlanEditorPage } from "@app/layout/PlanEditorPage";
 import { fixturePlan, fixturePlanChosen, fixturePlanEdited } from "@app/layout/plan-fixture";
 import { MapPage } from "@app/layout/MapPage";
-import { fixtureMap, fixtureMapChosen } from "@app/layout/map-fixture";
+import { fixtureMap, fixtureMapChosen, MAP_WALK } from "@app/layout/map-fixture";
 import { BackupPage } from "@app/admin/BackupPage";
 import { BACKUP_READY, fixtureBackup } from "@app/admin/backup-fixture";
 import { PeoplePage } from "@app/admin/PeoplePage";
@@ -639,6 +639,9 @@ export const FIXTURES: readonly Screen[] = [
   app("f-map-chosen", "/fixtures/map/chosen", "Bin map — a bin chosen", "desk", { screen: "map" }, () => <MapPage desk={fixtureMapChosen()} />),
   app("f-map-reach", "/fixtures/map/reach", "Bin map — reach", "desk", { screen: "map" }, () => (
     <MapPage desk={fixtureMapChosen({ layer: "reach" })} />
+  )),
+  app("f-map-walk", "/fixtures/map/walk", "Bin map — today's walk", "desk", { screen: "map" }, () => (
+    <MapPage desk={fixtureMap({ showWalk: true, walk: { kind: "ready", value: MAP_WALK } })} />
   )),
   app("f-warehouse-none", "/fixtures/warehouse/none", "Warehouse — none yet", "desk", { screen: "warehouse" }, () => (
     <WarehousePage desk={fixtureWarehouse(NO_LAYOUT)} />

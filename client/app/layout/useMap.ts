@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useLive } from "@app/acting";
+import { useSite } from "@app/session/SessionContext";
 import { useChanges } from "@app/changes";
 import { href } from "@app/routing/location";
 import { api, reason } from "@domain/api";
-import type { BinRow, LayoutPlace, LayoutView, MapBin, MapBins, Uuid } from "@domain/types";
+import type { BinRow, LayoutPlace, LayoutView, MapBin, MapBins, Uuid, WalkRoute } from "@domain/types";
 
 import { LAYERS, type Layer } from "./layers";
 import type { Read } from "./usePlace";
@@ -42,6 +43,10 @@ export interface MapDesk {
   busy: boolean;
   problem: string | null;
   dismiss: () => void;
+  /** Today's picking walk, drawn on the floor when asked for (D211). */
+  showWalk: boolean;
+  setShowWalk: (on: boolean) => void;
+  walk: Read<WalkRoute | null> | { kind: "idle" };
 }
 
 const REMEMBERED = "spork.map.layer";
@@ -72,6 +77,28 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const asking = useRef(0);
+  const site = useSite();
+  const [showWalk, setShowWalk] = useState(false);
+  const [walk, setWalk] = useState<MapDesk["walk"]>({ kind: "idle" });
+
+  const readWalk = useCallback(async () => {
+    if (!site) return;
+    try {
+      const screen = await api.picking(site);
+      if (live.current) setWalk({ kind: "ready", value: screen.route });
+    } catch (error) {
+      if (live.current) setWalk({ kind: "failed", message: reason(error, "Could not read today's walk.") });
+    }
+  }, [site, live]);
+
+  useEffect(() => {
+    if (!showWalk) {
+      setWalk({ kind: "idle" });
+      return;
+    }
+    setWalk({ kind: "loading" });
+    void readWalk();
+  }, [showWalk, readWalk]);
 
   const load = useCallback(async () => {
     try {
@@ -88,7 +115,10 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
 
   // Stock moves as people pick, and racks as somebody edits the layout
   // (D206, D209); the message says where, never which, so both are read.
-  useChanges(() => void load());
+  useChanges(() => {
+    void load();
+    if (showWalk) void readWalk();
+  });
 
   const chosen = useMemo(
     () => (read.kind === "ready" && chosenId ? (read.value.bins.bins.find((b) => b.location_id === chosenId) ?? null) : null),
@@ -167,5 +197,8 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
     busy,
     problem,
     dismiss: () => setProblem(null),
+    showWalk,
+    setShowWalk,
+    walk,
   };
 }
