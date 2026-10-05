@@ -107,6 +107,7 @@ import { ItemPage } from "@app/items/ItemPage";
 import {
   BRUSH,
   ITEM,
+  ITEM_FLAGGED,
   ITEM_UNKNOWN,
   ITEMS_LISTED,
   ITEMS_NONE,
@@ -614,6 +615,16 @@ export const FIXTURES: readonly Screen[] = [
   // A bucket is measured across, top and base, and by the straight part under its rim (D213).
   app("f-item-bucket", "/fixtures/item/bucket", "Item — measuring a bucket", "floor", { screen: "item" }, () => (
     <ItemPage desk={MEASURING_BUCKET} />
+  )),
+  // D215: what the floor says against NetSuite's bins, and the two questions.
+  app("f-item-flagged", "/fixtures/item/flagged", "Item — not where NetSuite lists it", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(ITEM_FLAGGED)} />
+  )),
+  app("f-item-not-here", "/fixtures/item/not-here", "Item — not in a listed bin", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(ITEM)} asking={{ said: "not_here", row: ITEM.reported[0]! }} />
+  )),
+  app("f-item-found-here", "/fixtures/item/found-here", "Item — found in a bin", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(ITEM_UNKNOWN)} asking={{ said: "found_here" }} />
   )),
   app("f-item-unknown", "/fixtures/item/unknown", "Item — nothing recorded", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureProperties(ITEM_UNKNOWN)} />

@@ -173,6 +173,13 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   (`lieOf` in `cut.ts`): Photos to crop confirms a matching face with one
   press, and sends one found a quarter turn out to the crop screen to be
   turned. The crop screen says how the corners lie beside the preview.
+- D215. On an item's page, "Not here" on a bin NetSuite lists it in, and
+  "Found it in another bin", each raise a finding for someone to put right in
+  NetSuite (`listed.rs`, `POST /items/{id}/bin-flags`, migration 122). The
+  page shows the open ones. An adjustment can't resolve one; accept it.
+- D185, amended: "How many in it" is the whole carton's count, and the packs
+  are worked out from it. A carton said the old way shows its inflated total
+  when opened, which is how to find and fix one.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

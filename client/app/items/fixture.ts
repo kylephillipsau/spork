@@ -166,6 +166,7 @@ export const ITEM: ItemView = {
       source: "netsuite-inventory-balance",
     },
   ],
+  flags: [],
   box_picture: null,
   subjects: [FAMILY_CARTON, BRUSH_EACH],
   photos: [
@@ -212,6 +213,7 @@ export const ITEM_UNKNOWN: ItemView = {
   packing: null,
   held: [],
   reported: [],
+  flags: [],
   // Its own carton offered before anybody has said it has one (D178).
   box_picture: null,
   subjects: [
@@ -252,6 +254,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     packIn: later,
     shipAsIs: later,
     keepUpright: later,
+    flagBin: async () => null,
     taken: [],
     sending: {},
     attach: noop,
@@ -276,6 +279,34 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     ...over,
   };
 }
+
+/**
+ * Said on the floor against NetSuite's bins (D215): none in D-03-2, where
+ * NetSuite lists 18, and six found in E-02-4, where it lists none.
+ */
+export const ITEM_FLAGGED: ItemView = {
+  ...ITEM,
+  flags: [
+    {
+      discrepancy_id: "01990000-0000-7000-8000-0000000f0021",
+      kind: "found_in_unlisted_bin",
+      location_id: "01990000-0000-7000-8000-000000000009",
+      bin_code: "E-02-4",
+      found: "6",
+      detected_at: "2026-09-30T00:02:00Z",
+      detected_by: "D. Stooke",
+    },
+    {
+      discrepancy_id: "01990000-0000-7000-8000-0000000f0020",
+      kind: "not_in_listed_bin",
+      location_id: "01990000-0000-7000-8000-000000000007",
+      bin_code: "D-03-2",
+      found: "0",
+      detected_at: "2026-09-30T00:01:00Z",
+      detected_by: "D. Stooke",
+    },
+  ],
+};
 
 /** The each being measured: an each says how it was arranged, and may say it has no box. */
 export const MEASURING = fixtureProperties(ITEM, {

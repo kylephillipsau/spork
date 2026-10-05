@@ -94,6 +94,20 @@ pub struct ItemReported {
     pub source: String,
 }
 
+/// Something said on the floor against NetSuite's bins, still open (D215).
+#[derive(Serialize, Debug)]
+pub struct ItemFlag {
+    pub discrepancy_id: Uuid,
+    /// `not_in_listed_bin` or `found_in_unlisted_bin`.
+    pub kind: String,
+    pub location_id: Option<Uuid>,
+    pub bin_code: Option<String>,
+    /// How many were found there, when they were counted.
+    pub found: Option<String>,
+    pub detected_at: DateTime<Utc>,
+    pub detected_by: Option<String>,
+}
+
 /// One item, with everything a person needs to find it and know it.
 #[derive(Serialize, Debug)]
 pub struct ItemView {
@@ -110,6 +124,9 @@ pub struct ItemView {
     pub held: Vec<ItemHeld>,
     /// What NetSuite last reported, in walking order.
     pub reported: Vec<ItemReported>,
+    /// What has been said against those bins on the floor and not yet put
+    /// right in NetSuite, newest first (D215).
+    pub flags: Vec<ItemFlag>,
     /// What gets measured for it, each with what is known, in the order to
     /// offer them: its carton, its each, its family's carton, its parts.
     pub subjects: Vec<CaptureSubject>,
@@ -287,6 +304,31 @@ pub async fn item_page(
                     })
                     .collect();
 
+                let flags = tx
+                    .query(
+                        "SELECT d.id, d.kind::text, l.id, l.code, d.observed_quantity::text, d.detected_at,
+                                fb.display_name
+                           FROM discrepancy d
+                           LEFT JOIN location l ON l.id = d.holder_location_id
+                           LEFT JOIN person fb ON fb.id = d.detected_by_id
+                          WHERE d.item_id = $1 AND d.kind::text = ANY($2)
+                            AND d.state IN ('open', 'investigating')
+                          ORDER BY d.detected_at DESC",
+                        &[&id, &crate::listed::KINDS.as_slice()],
+                    )
+                    .await?
+                    .iter()
+                    .map(|f| ItemFlag {
+                        discrepancy_id: f.get(0),
+                        kind: f.get(1),
+                        location_id: f.get(2),
+                        bin_code: f.get(3),
+                        found: f.get(4),
+                        detected_at: f.get(5),
+                        detected_by: f.get(6),
+                    })
+                    .collect();
+
                 let subjects = capture::subjects_for_item(tx, site, id).await?;
 
                 let box_picture = tx
@@ -354,6 +396,7 @@ pub async fn item_page(
                     packing,
                     held,
                     reported,
+                    flags,
                     subjects,
                     box_picture,
                     photos,

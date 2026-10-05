@@ -81,6 +81,9 @@ pub enum Problem {
     FindingAlreadyResolved,
     /// Soft: resolving a non–count_variance finding.
     FindingUnexpectedKind { kind: String },
+    /// Hard: a finding about NetSuite's report (D215). Spork holds no cell
+    /// to adjust; it is put right in NetSuite and accepted.
+    FindingIsNetSuites { kind: String },
     /// Finding's stock_count names a different cell than this adjust.
     FindingCellMismatch,
     /// Soft: no finding linked; resolution is unattached to investigation.
@@ -121,6 +124,11 @@ impl std::fmt::Display for Problem {
             Problem::FindingUnexpectedKind { kind } => write!(
                 f,
                 "resolving discrepancy kind {kind}; count_variance is the usual target"
+            ),
+            Problem::FindingIsNetSuites { kind } => write!(
+                f,
+                "a {kind} finding is about NetSuite's inventory balance, which Spork does not \
+                 adjust: put it right in NetSuite, then accept the finding (D215)"
             ),
             Problem::FindingCellMismatch => write!(
                 f,
@@ -184,7 +192,9 @@ pub fn check(
                 if f.state == "resolved" || f.state == "accepted" {
                     problems.push(Problem::FindingAlreadyResolved);
                 }
-                if f.kind != "count_variance" {
+                if crate::listed::is_netsuites(&f.kind) {
+                    problems.push(Problem::FindingIsNetSuites { kind: f.kind.clone() });
+                } else if f.kind != "count_variance" {
                     problems.push(Problem::FindingUnexpectedKind {
                         kind: f.kind.clone(),
                     });
@@ -343,6 +353,18 @@ mod tests {
         f.state = "resolved".into();
         let (problems, _) = check(&p, Some(&cell(50)), Some(&f));
         assert!(problems.contains(&Problem::FindingAlreadyResolved));
+    }
+
+    #[test]
+    fn a_finding_about_netsuites_bins_is_never_adjusted() {
+        let mut p = good(47);
+        p.discrepancy_id = Some(u(20));
+        for kind in ["not_in_listed_bin", "found_in_unlisted_bin"] {
+            let mut f = finding();
+            f.kind = kind.into();
+            let (problems, _) = check(&p, Some(&cell(50)), Some(&f));
+            assert!(problems.iter().any(|x| matches!(x, Problem::FindingIsNetSuites { .. }) && is_hard(x)), "{kind}");
+        }
     }
 
     #[test]

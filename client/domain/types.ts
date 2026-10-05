@@ -1408,6 +1408,27 @@ export interface ItemReported {
 }
 
 /** `GET /items/{id}`: what an item is, what it measures, and where each record says it is. */
+/** Said on the floor against NetSuite's bins, still open (D215). */
+export interface ItemFlag {
+  discrepancy_id: Uuid;
+  /** `not_in_listed_bin` or `found_in_unlisted_bin`. */
+  kind: string;
+  location_id: Uuid | null;
+  bin_code: string | null;
+  /** How many were found there, when they were counted. */
+  found: string | null;
+  detected_at: string;
+  detected_by: string | null;
+}
+
+/** What saying it of a bin made (D215). */
+export interface BinFlagged {
+  discrepancy_id: Uuid;
+  /** Already said and still open: the finding is the one already there. */
+  already: boolean;
+  bin_code: string;
+}
+
 export interface ItemView {
   item_id: Uuid;
   code: string;
@@ -1422,6 +1443,8 @@ export interface ItemView {
   held: ItemHeld[];
   /** What NetSuite last reported, in walking order. */
   reported: ItemReported[];
+  /** What has been said against those bins on the floor and not yet put right in NetSuite, newest first (D215). */
+  flags: ItemFlag[];
   /**
    * What gets measured for it, each with what is known, in the order to offer
    * them: its carton, its each, its family's carton, its parts. The capture

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { anAct, partOf, type Act } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
-import type { BoundBarcode, CaptureSubject, ItemView, PackagingType, Uuid } from "@domain/types";
+import type { BinFlagged, BoundBarcode, CaptureSubject, ItemView, PackagingType, Uuid } from "@domain/types";
 
 import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
@@ -72,6 +72,11 @@ export interface Cropping {
 export type Sending = "sending" | "failed";
 
 /** What the last act said, worth showing once. */
+/** What can be said of a bin against NetSuite's balance (D215). */
+export type BinFlag =
+  | { said: "not_here"; location_id: Uuid; note?: string | undefined }
+  | { said: "found_here"; bin_code: string; quantity: number | null; note?: string | undefined };
+
 export interface Said {
   tone: "success" | "warning";
   text: string;
@@ -147,6 +152,12 @@ export interface PropertiesDesk {
   shipAsIs: (subject: CaptureSubject, asItIs: boolean) => Promise<void>;
   /** Say whether it must stay the way up it stands (D200). */
   keepUpright: (subject: CaptureSubject, upright: boolean) => Promise<void>;
+  /**
+   * Say it isn't in a bin NetSuite lists, or is in one it doesn't (D215): a
+   * finding for someone to put right in NetSuite. What it made, or null when
+   * it was refused (the reason in `problem`).
+   */
+  flagBin: (said: BinFlag) => Promise<BinFlagged | null>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -587,6 +598,18 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         if (!live.current) return;
         await reload();
       }),
+
+    flagBin: async (said) => {
+      if (read.kind !== "ready") return null;
+      const item = read.item.item_id;
+      let made: BinFlagged | null = null;
+      await press(`flag:${item}:${JSON.stringify(said)}`, async (act) => {
+        made = await api.flagBin(item, { ...said, act });
+        if (!live.current) return;
+        await reload();
+      });
+      return made;
+    },
 
     pictureFamily: (pictures) =>
       press(`family-picture:${pictures}`, async () => {

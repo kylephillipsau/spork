@@ -246,6 +246,8 @@ const PAIRS = [
   ["ItemPacking", ["ItemPacking"]],
   ["ItemHeld", ["ItemHeld"]],
   ["ItemReported", ["ItemReported"]],
+  ["ItemFlag", ["ItemFlag"]],
+  ["BinFlagged", ["BinFlagged"]],
   ["ItemMeasurements", ["ItemMeasurements"]],
   ["LayoutPlace", ["LayoutPlace"]],
   ["LayoutView", ["LayoutView"]],

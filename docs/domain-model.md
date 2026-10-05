@@ -14884,7 +14884,10 @@ word. What needs care is Spork acting on an older picture in between:
 2. **Its age shown.** A number from NetSuite says how old it is wherever it
    is shown: "NetSuite's count, 4 min ago".
 3. **The shelf breaks ties.** A picker who finds a different quantity records
-   it as a count (D8). That is evidence, never a silent overwrite.
+   it as a count (D8). That is evidence, never a silent overwrite. *Amended by
+   D215:* where NetSuite keeps the shelves, what the floor says against its
+   bins is a finding directly, not a count, because a count asserts against a
+   cell of Spork's own ledger and there is none.
 4. **A difference is a finding, fixed in NetSuite.** What the picker saw and
    what NetSuite says go to a person with both sides' evidence. NetSuite keeps
    the shelves, so the fix is made there.
@@ -15006,3 +15009,41 @@ photographed on its side, made a squashed face, and the list saved it with
 one press without showing it. The proportions tell a quarter turn from the
 face. They can't tell which quarter, nor upside down: that is the thick edge,
 and the person's to check before they confirm.
+
+### D215: An item not where NetSuite lists it is a finding, said on the floor
+
+*Adopted 2026-10-05, with migration 122. Amends D212's third point.*
+
+**Decision.** From an item's page, beside NetSuite's balance:
+
+- **Not here**, on a bin NetSuite lists the item in: none of it is there.
+  A `not_in_listed_bin` finding, expecting NetSuite's count and finding none.
+- **Found it in another bin**: the bin's code as typed, how many when they
+  were counted, and a note. A `found_in_unlisted_bin` finding, expecting none
+  and finding the count. Offered where NetSuite lists none of the item too.
+
+`POST /items/{id}/bin-flags`. Either is refused, in words, where it
+contradicts nothing: "Not here" on a bin NetSuite doesn't list, "found" in one
+it does. The finding names the item, the bin and who said it, carries
+NetSuite's count and the time of its balance, says where else NetSuite lists
+the item, and ends "Put it right in NetSuite, then accept this with what was
+done." Said again while it is open, or retried, it is the same finding. The
+item's page shows the open ones: "Said not here" on the bin's row, and the
+bins it was found in, each linked to its finding.
+
+**Resolved by accepting, never by an adjustment.** The fix is made in
+NetSuite, whose next balance shows it, and the finding is accepted with what
+was done. `/adjustments` refuses to resolve one (`FindingIsNetSuites`):
+Spork holds no cell of these to adjust.
+
+**Why a finding and not a count.** D212 had a picker record a count (D8). A
+count asserts against a cell of Spork's own ledger
+(`stock_count.system_quantity`), and where NetSuite keeps the shelves there
+is no such cell: a count of none against Spork's none would say nothing.
+What the person saw and what NetSuite listed are both on the finding, which
+is what D212's fourth point asks for.
+
+**Why two new kinds.** `count_variance` and `unexpected_stock` are about
+Spork's ledger and are put right by moving its stock. These are about
+NetSuite's report and are put right in NetSuite. They route differently,
+which is D33's test for a kind.

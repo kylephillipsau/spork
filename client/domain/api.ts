@@ -2,6 +2,7 @@ import type { Act } from "./acts";
 import type { AuthenticationOptions, RegistrationOptions } from "./webauthn";
 import type {
   ApiToken,
+  BinFlagged,
   CeremonyBegun,
   BenchScreen,
   BoundBarcode,
@@ -834,6 +835,24 @@ export const api = {
 
   /** GS1's packaging types, the common ones first (D191). */
   packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),
+
+  /**
+   * Say an item isn't in a bin NetSuite lists it in, or is in one it doesn't
+   * (D215): a finding, for someone to put right in NetSuite.
+   */
+  flagBin: (
+    itemId: Uuid,
+    input:
+      | { said: "not_here"; location_id: Uuid; note?: string | undefined; act: Act }
+      | { said: "found_here"; bin_code: string; quantity: number | null; note?: string | undefined; act: Act },
+  ) => {
+    const { act, ...said } = input;
+    return send<BinFlagged>("POST", `/items/${encodeURIComponent(itemId)}/bin-flags`, {
+      ...said,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    });
+  },
 
   /** Say what a subject is packed in, as a GS1 packaging type code (D191). */
   sayPackedIn: (
