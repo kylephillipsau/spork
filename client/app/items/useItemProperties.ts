@@ -92,7 +92,7 @@ export interface PropertiesDesk {
   setUnit: (next: string) => void;
   weigh: (subject: CaptureSubject) => Promise<void>;
 
-  /** How many of the item its carton holds, as typed (D178); or how many packs, with `per` in each (D185). */
+  /** How many of the item its carton holds altogether, as typed (D178); with `per`, in packs of that many (D185). */
   holds: string;
   typeHolds: (next: string) => void;
   per: string;
@@ -305,11 +305,12 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setReading("");
     setBinding("");
     setCount("");
-    // The count on file, to keep or correct; nothing, for a carton not said.
+    // The count on file, to keep or correct, as the whole carton's (D185);
+    // nothing, for a carton not said.
     const packing = read.kind === "ready" && isOwnCarton(subject) ? read.item.packing : null;
     const packs = (packing?.units_per_inner ?? 1) > 1;
-    const known = packs ? packing!.inners_per_carton : cartonHolds(packing);
-    setHolds(known === null || known === undefined ? "" : String(known));
+    const known = cartonHolds(packing);
+    setHolds(known === null ? "" : String(known));
     setPer(packs ? String(packing!.units_per_inner) : "");
     // Measuring starts from nothing typed; photographing after measuring keeps
     // the measuring look, and photographing on its own starts a new one.

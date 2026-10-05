@@ -140,11 +140,13 @@ test("a carton holds its packs times what is in each, or nobody has said", () =>
   assert.equal(holdsInWords(null), "No carton on file yet");
 });
 
-test("a count typed is a whole number from one, or nothing said", () => {
+test("a count typed is the whole carton's, a whole number from one, or nothing said (D185)", () => {
   assert.deepEqual(readHolds(" 16 "), { holds: 16, per: null });
   assert.deepEqual(readHolds(""), { holds: null, per: null });
-  assert.deepEqual(readHolds("6", "24"), { holds: 6, per: 24 }, "six packs of 24");
-  assert.ok("problem" in readHolds("", "24"), "packs of 24, but how many packs?");
+  assert.deepEqual(readHolds("144", "24"), { holds: 6, per: 24 }, "144 in all, in packs of 24: six packs");
+  assert.deepEqual(readHolds("1000", "50"), { holds: 20, per: 50 }, "a thousand in packs of 50 is 20 packs, not 50,000");
+  assert.ok("problem" in readHolds("1000", "30"), "a thousand is not a whole number of packs of 30");
+  assert.ok("problem" in readHolds("", "24"), "packs of 24, but how many altogether?");
   assert.ok("problem" in readHolds("0"));
   assert.ok("problem" in readHolds("1.5"));
   assert.ok("problem" in readHolds("a dozen"));

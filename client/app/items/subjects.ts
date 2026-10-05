@@ -148,8 +148,10 @@ export function holdsInWords(p: Counts | null): string {
 }
 
 /**
- * How many a carton holds, as typed: a whole number from 1, or nothing said;
- * and, when it holds packs, how many of the item are in each (D185).
+ * How many a carton holds, as typed: the whole carton's count of the item, a
+ * whole number from 1, or nothing said; and, when it holds packs, how many are
+ * in each, so the packs are the count over that (D185). 1,000 in packs of 50
+ * is 20 packs: the count is what a person reads off the carton's label.
  */
 export function readHolds(typed: string, perTyped = ""): { holds: number | null; per: number | null } | { problem: string } {
   const t = typed.trim();
@@ -157,8 +159,13 @@ export function readHolds(typed: string, perTyped = ""): { holds: number | null;
   const whole = (v: string) => /^\d+$/.test(v) && Number(v) >= 1;
   if (t && !whole(t)) return { problem: "How many it holds is a whole number, 1 or more." };
   if (p && !whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
-  if (p && !t) return { problem: "Say how many packs are in it, as well as what is in each." };
-  return { holds: t ? Number(t) : null, per: p ? Number(p) : null };
+  if (p && !t) return { problem: "Say how many are in it altogether, as well as how many in each pack." };
+  if (!p) return { holds: t ? Number(t) : null, per: null };
+  const [total, per] = [Number(t), Number(p)];
+  if (total % per !== 0) {
+    return { problem: `${total.toLocaleString()} isn’t a whole number of packs of ${per.toLocaleString()}.` };
+  }
+  return { holds: total / per, per };
 }
 
 /**

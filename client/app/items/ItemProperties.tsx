@@ -38,6 +38,7 @@ import {
   photosOf,
   presentationNeeded,
   presentationOffered,
+  readHolds,
   subjectKey,
   weighable,
   type Face,
@@ -471,15 +472,19 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
  * said together. Blank says nothing of the count.
  */
 function HoldsField({ desk }: { desk: PropertiesDesk }) {
-  const packs = desk.per.trim() !== "";
+  // The whole carton's count, and the packs worked out from it (D185).
+  const read = readHolds(desk.holds, desk.per);
+  const packs = "problem" in read || read.per === null || read.holds === null ? null : read;
+  const wrong = "problem" in read && desk.per.trim() !== "" && desk.holds.trim() !== "" ? read.problem : undefined;
   return (
     <>
       <div className={s.holds}>
         <TextField
           label="How many in it"
+          hint="The whole carton"
           inputMode="numeric"
           autoComplete="off"
-          trailing={packs ? "packs" : "× each"}
+          trailing="× each"
           value={desk.holds}
           onChange={(e) => desk.typeHolds(e.target.value)}
         />
@@ -487,7 +492,8 @@ function HoldsField({ desk }: { desk: PropertiesDesk }) {
       <div className={s.holds}>
         <TextField
           label="In packs of"
-          hint="Blank if loose"
+          hint={packs ? `That’s ${packs.holds!.toLocaleString()} ${packs.holds === 1 ? "pack" : "packs"} of ${packs.per!.toLocaleString()}` : "Blank if loose"}
+          error={wrong}
           inputMode="numeric"
           autoComplete="off"
           trailing="× each"

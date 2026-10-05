@@ -14089,7 +14089,16 @@ at again; pointing says what is true, that the carton is that printing.
 **Decision.** Saying what a carton holds (D178) takes **In packs of** beside
 **How many in it**: a box of six bundles of 24 gloves is six packs of 24
 (`units_per_inner` 24, `inners_per_carton` 6), 144 of the item. Left blank,
-the carton holds the item loose, a pack of one. Once the case pack in force
+the carton holds the item loose, a pack of one.
+
+**How many in it is the whole carton's count** (amended 2026-10-05): 144,
+not 6. The packs are worked out from it, and the screen says so ("That's 6
+packs of 24"); a count that isn't a whole number of packs is refused. It
+first meant the number of packs once a pack size was typed, so 1,000 in
+packs of 50 was kept as 1,000 packs, 50,000 of the item. The carton's label
+gives the total, and that is what people type. A carton said the old way
+shows its total when it is opened again, which is how one is found and put
+right. Once the case pack in force
 says packs of more than one, the item's page offers its **Inner pack** between
 the carton and the each, weighed, measured and photographed on its own like
 the others. The two counts are compared as they are, so loose sixteen is not

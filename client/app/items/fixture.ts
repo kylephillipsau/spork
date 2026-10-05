@@ -286,10 +286,12 @@ export const MEASURING = fixtureProperties(ITEM, {
 /**
  * An item's own carton measured before anybody said it had one (D178): how
  * many it holds is typed with its figures, and saying it makes the carton.
+ * A thousand in packs of 50: twenty packs (D185).
  */
 export const CARTON_MEASURING = fixtureProperties(ITEM_UNKNOWN, {
   open: { key: `${TAPE_GUN}:carton`, action: "measure" },
-  holds: "12",
+  holds: "1000",
+  per: "50",
   figures: { ...NO_FIGURES, weight: "6.4", length: "41", width: "31", height: "" },
 });
 
