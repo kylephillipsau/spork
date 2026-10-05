@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { RotateCw } from "lucide-react";
 
-import { Alert, Button, Dialog } from "@ui/index";
+import { Alert, Button, Dialog, cx } from "@ui/index";
 import { imageUrl } from "@domain/api";
 import { Faint } from "@app/common/cells";
 
 import { draw, handheld, loadPhoto, pixelsOf, ratioOf, straightened } from "./crop";
-import { START, WHOLE, cutSize, fromCorners, isFace, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
+import { measuredFace } from "./box";
+import { START, WHOLE, aspectOf, cutSize, fromCorners, isFace, lieOf, straighten, toCorners, turn, type Pixels, type Point, type Quad } from "./cut";
+import { lieSaid } from "./lie";
 import { SAM_SIZE } from "./faceFind";
 import type { PropertiesDesk, Cropping } from "./useItemProperties";
 import s from "./items.module.css";
@@ -14,7 +16,8 @@ import s from "./items.module.css";
 /**
  * A photograph cut to the face it is of (D176). Four corners to drag onto the
  * face's corners, the face straightened beside them as they move, and a turn
- * for a face photographed sideways. The same screen from an item's photo, at
+ * for a face photographed sideways, checked against the face as measured
+ * before it is kept (D214). The same screen from an item's photo, at
  * a computer's queue of photos to cut (D181), and on a phone by hand.
  *
  * **Dragged by how far the pointer moves**, not to where it is, so a finger
@@ -116,6 +119,11 @@ export function FaceCrop({
   const loaded = photo && photo !== "failed" ? photo : null;
   const ratio = loaded ? ratioOf(loaded.image, quad, aspect) : 1;
   const whole = isFace(quad);
+  // The corners against the face as measured (D214): checked, then kept.
+  const shot = loaded && whole ? aspectOf(quad, loaded.image.naturalWidth, loaded.image.naturalHeight) : null;
+  const lie = shot !== null && aspect !== null ? lieOf(shot, aspect) : null;
+  const said = shot !== null ? lieSaid(lie, face, measuredFace(cropping.subject, cropping.face)) : null;
+  const out = said?.out ?? false;
 
   // The face straightened, small, redrawn as the corners move: once a frame at most.
   useEffect(() => {
@@ -202,8 +210,8 @@ export function FaceCrop({
           >
             Use as taken
           </Button>
-          <Button variant="primary" onClick={save} disabled={!loaded || !whole || desk.busy}>
-            {desk.busy ? "Saving…" : "Save"}
+          <Button variant={out ? "secondary" : "primary"} onClick={save} disabled={!loaded || !whole || desk.busy}>
+            {desk.busy ? "Saving…" : out ? "Save anyway" : "Save"}
           </Button>
         </>
       }
@@ -227,7 +235,7 @@ export function FaceCrop({
             <svg className={s.cropMarks} viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
               <path className={s.cropShade} fillRule="evenodd" d={`M0 0H1V1H0Z M${quad.map(([x, y]) => `${x} ${y}`).join(" L")}Z`} />
               <polygon className={s.cropEdge} points={quad.map((p) => p.join(",")).join(" ")} />
-              <line className={s.cropTop} x1={top[0]} y1={top[1]} x2={right[0]} y2={right[1]} />
+              <line className={cx(s.cropTop, out && s.cropTopOut)} x1={top[0]} y1={top[1]} x2={right[0]} y2={right[1]} />
             </svg>
             {quad.map(([x, y], i) => (
               <button
@@ -245,6 +253,7 @@ export function FaceCrop({
             {!whole && <Faint>Those corners cross or fold in.</Faint>}
             <Button
               size="sm"
+              variant={lie === "turned" ? "primary" : "secondary"}
               icon={<RotateCw />}
               onClick={() => {
                 asked.current++;
@@ -254,6 +263,7 @@ export function FaceCrop({
             >
               Turn
             </Button>
+            {said && <p className={cx(s.cropLie, out && s.cropLieOut)}>{said.text}</p>}
             {finding && (
               <p className={s.cropStatus} role="status">
                 {FINDING[finding]}

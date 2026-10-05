@@ -63,17 +63,23 @@ export function boxSize(s: Pick<CaptureSubject, "length_mm" | "width_mm" | "heig
  * A face's width over its height. The length runs across the front and back,
  * the width across the sides, and the top is length by width.
  */
-export function faceAspect(face: BoxFace, [l, w, h]: [number, number, number]): number {
+export function faceAspect(face: BoxFace, size: [number, number, number]): number {
+  const [across, down] = faceSize(face, size);
+  return across / down;
+}
+
+/** A face's measured size, across and down, from the box's length, width and height. */
+export function faceSize(face: BoxFace, [l, w, h]: [number, number, number]): [number, number] {
   switch (face) {
     case "front":
     case "back":
-      return l / h;
+      return [l, h];
     case "left":
     case "right":
-      return w / h;
+      return [w, h];
     case "top":
     case "bottom":
-      return l / w;
+      return [l, w];
   }
 }
 
@@ -100,9 +106,18 @@ export function measuredAspect(
   subject: Pick<CaptureSubject, "box_shaped" | "length_mm" | "width_mm" | "height_mm">,
   face: string,
 ): number | null {
+  const size = measuredFace(subject, face);
+  return size && size[0] / size[1];
+}
+
+/** A face's measured size in millimetres, across and down, or nothing, as [`measuredAspect`]. */
+export function measuredFace(
+  subject: Pick<CaptureSubject, "box_shaped" | "length_mm" | "width_mm" | "height_mm">,
+  face: string,
+): [number, number] | null {
   const size = boxSize(subject);
   if (!isBox(subject) || !size || !(BOX_FACES as readonly string[]).includes(face)) return null;
-  return faceAspect(face as BoxFace, size);
+  return faceSize(face as BoxFace, size);
 }
 
 /** The order three.js's box takes its six materials in: +x, −x, +y, −y, +z, −z. */

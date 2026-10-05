@@ -114,6 +114,7 @@ import {
   LISTS,
   CARTON_MEASURING,
   fixturePhotoQueue,
+  TURNED,
   CROPPING,
   MEASURING,
   MEASURING_BUCKET,
@@ -620,6 +621,10 @@ export const FIXTURES: readonly Screen[] = [
   // D181: a phone's photographs, their faces found at a computer and checked;
   // and the queue when every photo has been cut.
   app("f-photos", "/fixtures/photos", "Photos to crop", "desk", { screen: "photos" }, () => <PhotosPage desk={fixturePhotoQueue()} />),
+  // D214: a face found a quarter turn out, open to be turned before it is kept.
+  app("f-photos-turned", "/fixtures/photos/turned", "Photos to crop — a quarter turn out", "desk", { screen: "photos" }, () => (
+    <PhotosPage desk={fixturePhotoQueue({ adjusting: TURNED })} />
+  )),
   app("f-photos-none", "/fixtures/photos/none", "Photos to crop — none", "desk", { screen: "photos" }, () => (
     <PhotosPage desk={fixturePhotoQueue({ queued: [] })} />
   )),

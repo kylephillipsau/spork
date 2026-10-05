@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { START, aspectOf, cutSize, fromCorners, isFace, projection, straighten, toCorners, turn, type Quad } from "./cut.ts";
+import { START, aspectOf, cutSize, fromCorners, isFace, lieOf, projection, straighten, toCorners, turn, type Quad } from "./cut.ts";
 
 /** A photograph cut to its face: the corners, which way up, and the straightening. */
 
@@ -51,6 +51,20 @@ test("a face's proportions come from its edges, and its size from the pixels it 
   assert.deepEqual(cutSize(q, 4000, 3000, 2), [2000, 1000], "the longest edge's pixels, at the measured proportions");
   assert.deepEqual(cutSize(q, 4000, 3000, 0.5), [1000, 2000], "taller than wide");
   assert.deepEqual(cutSize(WHOLE, 6000, 4000, 1.5), [2048, 1365], "never more than 2048 on a side");
+});
+
+test("corners a quarter turn out from the measured face are told from the face, and a turn puts them right (D214)", () => {
+  // A carton front 52 cm wide and 24 tall, its corners marked from its side.
+  const front = 52 / 24;
+  const sideways: Quad = [[0.3, 0.1], [0.7, 0.1], [0.7, 0.9], [0.3, 0.9]];
+  const shot = aspectOf(sideways, 3000, 3000);
+  assert.equal(lieOf(shot, front), "turned");
+  assert.equal(lieOf(aspectOf(turn(sideways), 3000, 3000), front), "matches", "one turn and it lies right");
+  assert.equal(lieOf(1.7, 2), "matches", "photographed a little off square, it is still the face");
+  assert.equal(lieOf(0.5, 2), "turned");
+  assert.equal(lieOf(1.2, 3), "neither", "a face of another shape is not put right by turning it");
+  assert.equal(lieOf(0.95, 1.05), "matches");
+  assert.equal(lieOf(0.62, 1.1), "neither", "a nearly square face is never called turned: it looks the same either way");
 });
 
 test("straightening the whole photograph onto itself is the photograph, and a turn turns it", () => {

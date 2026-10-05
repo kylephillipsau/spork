@@ -71,6 +71,38 @@ export function aspectOf(q: Quad, width: number, height: number): number {
 }
 
 /**
+ * How the corners lie against the face as it was measured (D214): the right
+ * way round, a quarter turn out, or neither.
+ *
+ * A measured face is straightened to its measured proportions whatever its
+ * corners say, so corners named from the wrong one squash it: a carton front
+ * 52 cm wide and 24 tall, its corners marked from its side, comes out a
+ * front half as wide and twice as tall. The corners' own proportions as
+ * photographed tell the two apart. They can't tell a quarter turn one way
+ * from the other, nor right way up from upside down: that is the thick edge,
+ * and the person's to check.
+ */
+export type Lie = "matches" | "turned" | "neither";
+
+/**
+ * How far the corners' proportions may stray from the face's and still be
+ * it. A face photographed a little off square comes out foreshortened.
+ */
+export const LIE_TOLERANCE = 1.45;
+/** A face nearer square than this looks the same turned, so it is never called turned. */
+export const NEAR_SQUARE = 1.2;
+
+/** `shot`, the corners' width over height as photographed ([`aspectOf`]); `measured`, the face's. */
+export function lieOf(shot: number, measured: number): Lie {
+  const near = Math.log(LIE_TOLERANCE);
+  const straight = Math.abs(Math.log(shot / measured));
+  if (straight <= near) return "matches";
+  const turned = Math.abs(Math.log(shot * measured));
+  const square = Math.abs(Math.log(measured)) < Math.log(NEAR_SQUARE);
+  return !square && turned <= near && turned < straight ? "turned" : "neither";
+}
+
+/**
  * The straightened size: the face's proportions, as large as the photograph
  * has pixels for along its longest edge, and at most `longest` on a side.
  */

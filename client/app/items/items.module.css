@@ -404,6 +404,10 @@
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
+/* The top edge of corners that don't lie as the face was measured (D214). */
+.cropTopOut {
+  stroke: var(--ui-warning);
+}
 /* A target a thumb can hold, round a ring an eye can place. */
 .corner {
   position: absolute;
@@ -440,6 +444,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ui-space-2);
+}
+/* The cut against the face as measured (D214), under the preview and Turn. */
+.cropLie {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--ui-text-sm);
+}
+.cropLieOut {
+  color: var(--ui-warning);
+  font-weight: 500;
 }
 /* What the face-finder is doing, under the preview and Turn. */
 .cropStatus {

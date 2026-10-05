@@ -494,10 +494,23 @@ const QUEUED = (n: number, over: Partial<Queued> & Pick<Queued, "state">): Queue
   name: (["Front", "Right", "Back", "Left", "Top", "Bottom"] as const)[n % 6]!,
   aspect: null,
   corners: null,
+  lie: null,
   ...over,
 });
 
 const FOUND = [0.16, 0.2, 0.86, 0.18, 0.9, 0.84, 0.12, 0.86];
+
+/**
+ * The family carton's front, 52 × 24 cm, its corners found from its side
+ * (D214): marked taller than wide, a quarter turn out.
+ */
+export const TURNED: Queued = QUEUED(6, {
+  state: "turned",
+  subject: FAMILY_CARTON,
+  aspect: 520 / 240,
+  corners: [0.3, 0.1, 0.7, 0.1, 0.7, 0.9, 0.3, 0.9],
+  lie: "turned",
+});
 
 /** A morning's photographs part-way through: one saving, one found, one missed, the rest still to look at. */
 export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
@@ -505,7 +518,14 @@ export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
     read: { kind: "ready" },
     queued: [
       QUEUED(0, { state: "saving", corners: FOUND }),
-      QUEUED(1, { state: "found", corners: [0.2, 0.24, 0.8, 0.22, 0.84, 0.8, 0.18, 0.82] }),
+      QUEUED(1, {
+        state: "found",
+        subject: FAMILY_CARTON,
+        aspect: 310 / 240,
+        corners: [0.2, 0.24, 0.8, 0.22, 0.84, 0.8, 0.18, 0.82],
+        lie: "matches",
+      }),
+      TURNED,
       QUEUED(2, { state: "missed" }),
       QUEUED(3, { state: "finding" }),
       QUEUED(4, { state: "waiting" }),

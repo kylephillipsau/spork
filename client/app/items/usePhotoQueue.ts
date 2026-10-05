@@ -7,7 +7,7 @@ import type { CaptureSubject, ItemView, UncutPhoto, Uuid } from "@domain/types";
 
 import { faceName, measuredAspect } from "./box";
 import { handheld, loadPhoto, pixelsOf, ratioOf, straightened } from "./crop";
-import { WHOLE, fromCorners, isFace } from "./cut";
+import { WHOLE, aspectOf, fromCorners, isFace, lieOf, type Lie } from "./cut";
 import { SAM_SIZE } from "./faceFind";
 import type { CropDesk } from "./FaceCrop";
 import { subjectKey } from "./subjects";
@@ -21,11 +21,15 @@ import { subjectKey } from "./subjects";
  * that is right with one press. One that is wrong, or where no face was
  * found, opens in the crop screen to be put right. **Nothing is kept until
  * the person saves** (D177): a cut is their judgement, and an act of theirs.
+ *
+ * **A face found a quarter turn out is not saved from the list** (D214). A
+ * measured face is straightened to its measured shape, so it would be kept
+ * squashed; it opens in the crop screen to be turned.
  */
 
 const model = () => import("./faceModel");
 
-export type QueueState = "waiting" | "finding" | "found" | "missed" | "failed" | "saving" | "saved";
+export type QueueState = "waiting" | "finding" | "found" | "turned" | "missed" | "failed" | "saving" | "saved";
 
 export interface Queued {
   photo: UncutPhoto;
@@ -37,6 +41,8 @@ export interface Queued {
   aspect: number | null;
   /** Where the face-finder put its corners; null until found, or when it found none. */
   corners: number[] | null;
+  /** How those corners lie against the face as measured (D214); null with nothing to check. */
+  lie: Lie | null;
   state: QueueState;
 }
 
@@ -133,6 +139,7 @@ export function usePhotoQueue(): QueueDesk {
           name: faceName(photo.face, { box_shaped: true }),
           aspect: null,
           corners: null,
+          lie: null,
           state: "waiting",
         })),
       );
@@ -167,7 +174,15 @@ export function usePhotoQueue(): QueueDesk {
           const corners = await (await model()).findFace(id, pixelsOf(image, SAM_SIZE, true));
           if (stopped || !live.current) return;
           const found = corners !== null && isFace(fromCorners(corners));
-          update(id, { corners: found ? corners : null, state: found ? "found" : "missed" });
+          const lie =
+            found && described.aspect !== null
+              ? lieOf(aspectOf(fromCorners(corners), image.naturalWidth, image.naturalHeight), described.aspect)
+              : null;
+          update(id, {
+            corners: found ? corners : null,
+            lie,
+            state: !found ? "missed" : lie === "turned" ? "turned" : "found",
+          });
         } catch (error) {
           console.warn("photo queue:", error);
           if (live.current) update(id, { state: "failed" });

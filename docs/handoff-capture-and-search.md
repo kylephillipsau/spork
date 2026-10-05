@@ -169,6 +169,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   its rim (`diameter`, `base_diameter`, `top_height`), with the box it fits in
   recorded beside them. Its photos are side, lid, label, close-up. Not drawn
   as a bucket yet.
+- D214. A cut is checked against the face as measured before it is kept
+  (`lieOf` in `cut.ts`): Photos to crop confirms a matching face with one
+  press, and sends one found a quarter turn out to the crop screen to be
+  turned. The crop screen says how the corners lie beside the preview.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

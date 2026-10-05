@@ -2,7 +2,7 @@ import { Check, Crop, ImageOff } from "lucide-react";
 
 import { useState } from "react";
 
-import { Alert, Button, Card, Dialog, EmptyState, Link, Page, PageHeader, Skeleton, Stack, Tabs, TextField, Toolbar, Spacer } from "@ui/index";
+import { Alert, Button, Card, Dialog, EmptyState, Link, Page, PageHeader, Skeleton, Stack, Tabs, TextField, Toolbar, Spacer, cx } from "@ui/index";
 import { imageUrl } from "@domain/api";
 import { Faint } from "@app/common/cells";
 
@@ -15,9 +15,10 @@ import s from "./items.module.css";
  * The photographs nobody has cut to their faces yet, at a computer (D181).
  *
  * A phone takes them and has not the memory to find a face, so the computer
- * finds each one, the oldest first, and draws where it put the corners. What
- * is right is saved with one press; what is not opens in the crop screen.
- * Nothing is kept until the person saves.
+ * finds each one, the oldest first, and draws where it put the corners, and
+ * checks them against the face as measured (D214). What is right is confirmed
+ * with one press; what is not opens in the crop screen. Nothing is kept until
+ * the person confirms.
  */
 export function PhotosPage({ desk }: { desk: QueueDesk }) {
   const read = desk.read;
@@ -30,7 +31,7 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
     <Page>
       <PageHeader
         title="Photos to crop"
-        description="Photos not yet cut to their faces. The computer finds each face; save it, or adjust it first."
+        description="Photos not yet cut to their faces. The computer finds each face and checks it against the measured size; confirm it, or adjust it first."
       />
       {read.kind === "failed" ? (
         <Alert tone="danger">{read.message}</Alert>
@@ -99,6 +100,7 @@ const SAID: Record<Queued["state"], string> = {
   waiting: "Waiting",
   finding: "Finding the face…",
   found: "Found",
+  turned: "Found a quarter turn out: adjust it",
   missed: "No face found: adjust it",
   failed: "Could not be read here",
   saving: "Saving…",
@@ -162,10 +164,21 @@ function MoveDialog({ desk, q, onClose }: { desk: QueueDesk; q: Queued; onClose:
   );
 }
 
+/** What the list says of a photograph: its state, and for a found face how it lies against the face as measured (D214). */
+function said(q: Queued): { text: string; out: boolean } {
+  const face = q.name.toLowerCase();
+  if (q.state === "turned") return { text: SAID.turned, out: true };
+  if (q.state !== "found" || !q.lie) return { text: SAID[q.state], out: false };
+  return q.lie === "matches"
+    ? { text: `Found: matches the ${face} as measured`, out: false }
+    : { text: `Found, but not the ${face}’s measured shape either way round: check it`, out: true };
+}
+
 /** One photograph: where its corners were found, drawn on it, and what to do with it. */
 function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () => void }) {
   const saving = q.state === "saving";
   const busy = saving || desk.crop.busy;
+  const status = said(q);
   const quad = q.corners ? [0, 1, 2, 3].map((i) => [q.corners![i * 2]!, q.corners![i * 2 + 1]!] as const) : null;
   return (
     <li className={s.queued}>
@@ -181,7 +194,7 @@ function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () =
               <svg className={s.cropMarks} viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
                 <path className={s.cropShade} fillRule="evenodd" d={`M0 0H1V1H0Z M${quad.map(([x, y]) => `${x} ${y}`).join(" L")}Z`} />
                 <polygon className={s.cropEdge} points={quad.map((p) => p.join(",")).join(" ")} />
-                <line className={s.cropTop} x1={quad[0]![0]} y1={quad[0]![1]} x2={quad[1]![0]} y2={quad[1]![1]} />
+                <line className={cx(s.cropTop, status.out && s.cropTopOut)} x1={quad[0]![0]} y1={quad[0]![1]} x2={quad[1]![0]} y2={quad[1]![1]} />
               </svg>
             )}
           </>
@@ -190,7 +203,7 @@ function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () =
       <div className={s.queueText}>
         <span className={s.code}>{whose(q)}</span>
         <span>{q.name}</span>
-        <Faint>{SAID[q.state]}</Faint>
+        {status.out ? <span className={s.cropLieOut}>{status.text}</span> : <Faint>{status.text}</Faint>}
       </div>
       <div className={s.queueActions}>
         {q.state === "failed" ? (
@@ -199,7 +212,7 @@ function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () =
           <>
             {(q.state === "found" || saving) && (
               <Button size="sm" icon={<Check />} loading={saving} disabled={desk.crop.busy} onClick={() => void desk.save(q.photo.image_id)}>
-                Save
+                {status.out ? "Confirm anyway" : "Confirm"}
               </Button>
             )}
             <Button size="sm" icon={<Crop />} disabled={!q.subject || saving} onClick={() => desk.adjust(q.photo.image_id)}>

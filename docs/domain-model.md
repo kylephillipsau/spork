@@ -14960,3 +14960,38 @@ and they are enough to draw a tapered bucket and its lid.
 
 **Not yet.** Drawing it: a tapered cylinder with its side photo wrapped round
 and its lid photo on top, in the item's 3D view and the packing view.
+
+### D214: A cut is checked against the face as measured before it is kept
+
+*Adopted 2026-10-05, with no migration. Extends D176, D177 and D181.*
+
+**Decision.** Where a face has a measured size, its corners' proportions as
+photographed are checked against it before the cut is kept (`lieOf`):
+
+- **Matches**: the corners mark the face's shape, wide or tall as measured.
+  The crop screen says so beside the preview, with the measured size; the
+  list of photos to crop says so, and the face is confirmed there with one
+  press (**Confirm**, where it was Save).
+- **A quarter turn out**: the corners mark it tall where it measures wide, or
+  the other way round. The list gives it its own state and no Confirm: it
+  opens in the crop screen, where **Turn** is the main action until it lies
+  right. Its top edge is drawn amber in both.
+- **Neither**: the corners match its shape neither way round, which turning
+  won't fix. The screens say to check it is that face and that the corners
+  are on its corners.
+
+A face not measured, a label, or a thing that isn't a box has nothing to check
+against: it is cut to its corners, so turning can't squash it, and the screen
+says to check the thick edge is its top. Kept anyway, a cut that is out says
+so on the button: **Save anyway**, **Confirm anyway**.
+
+The check allows the corners to be up to 1.45 times off the face's
+proportions, because a face photographed off square is foreshortened. A face
+nearer square than 1.2 is never called turned: turned, it looks the same.
+
+**Why.** A measured face is straightened to its measured proportions,
+whatever its corners say (D176). Corners named from the wrong one, a box
+photographed on its side, made a squashed face, and the list saved it with
+one press without showing it. The proportions tell a quarter turn from the
+face. They can't tell which quarter, nor upside down: that is the thick edge,
+and the person's to check before they confirm.
