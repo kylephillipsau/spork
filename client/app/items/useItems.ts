@@ -66,7 +66,7 @@ export interface ItemsDesk {
   /** Make a list from pasted codes and narrow to it. True when it was made. */
   makeList: (name: string, pasted: string) => Promise<boolean>;
   /** Where the list as asked downloads, every row of it (D216). */
-  exportUrl: (format: "csv" | "xlsx") => string;
+  exportUrl: (format: "csv" | "xlsx" | "pdf") => string;
   making: { busy: boolean; problem: string | null; dismiss: () => void };
 }
 

@@ -801,7 +801,7 @@ export const api = {
    */
   itemsExportUrl: (
     query: { q?: string; stock?: "here"; needs?: string; has?: string; list?: Uuid; order?: string },
-    format: "csv" | "xlsx",
+    format: "csv" | "xlsx" | "pdf",
   ): string => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) if (v) p.set(k, String(v));

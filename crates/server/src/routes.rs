@@ -6783,6 +6783,13 @@ pub struct StockImportReport {
 }
 
 #[derive(Serialize, Debug)]
+pub struct ItemDetailsImportReport {
+    pub survey: crate::importing::item_details::DetailsSurvey,
+    pub loaded: crate::importing::item_details::DetailsLoaded,
+    pub arrival: Option<FileArrival>,
+}
+
+#[derive(Serialize, Debug)]
 pub struct ItemImportReport {
     pub survey: crate::importing::items::ItemSurvey,
     pub loaded: crate::importing::items::ItemsLoaded,
@@ -6912,6 +6919,50 @@ pub async fn import_stock(
         arrival: loaded.2.map(FileArrival::from),
         refused,
     }))
+}
+
+/// Load what NetSuite says each item is sold in and its supplier's part number
+/// (D217), into `reported_item`: a report with its age, the whole of it each
+/// time, like the balance.
+#[post("/import/item-details")]
+pub async fn import_item_details(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ImportQuery>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+    let Some(as_at) = query.as_at else {
+        return Err(ApiError::Rejected("as_at is required".into()));
+    };
+    let Some(source) = query.source.clone().filter(|s| !s.trim().is_empty()) else {
+        return Err(ApiError::Rejected("source is required".into()));
+    };
+    let rows = crate::importing::item_details::read(body.as_ref()).map_err(ApiError::Rejected)?;
+    if rows.is_empty() {
+        return Err(ApiError::Rejected("no rows naming an item — is this the item details export?".into()));
+    }
+    let survey = crate::importing::item_details::survey(&rows);
+
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let tenant = scope.tenant();
+    let apply = query.apply;
+    let actor = crate::importing::received::Actor::Token(machine.token_id);
+    let filename = query.filename.clone();
+    let (loaded, arrival) = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
+                let loaded = crate::importing::item_details::load(tx, tenant, &rows, as_at, &source, apply)
+                    .await
+                    .map_err(ApiError::Rejected)?;
+                read_through(tx, arrival).await?;
+                Ok((loaded, arrival))
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(ItemDetailsImportReport { survey, loaded, arrival: arrival.map(FileArrival::from) }))
 }
 
 /// Load the bin list, from the CSV the system of record exports.
@@ -9478,6 +9529,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(import_bins)
         .service(import_items)
         .service(import_stock)
+        .service(import_item_details)
         .service(import_fulfilment)
         .service(void_package)
         .service(bind_barcode)

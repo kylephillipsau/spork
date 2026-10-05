@@ -1,4 +1,4 @@
-import { Boxes, Camera, Download, FileSpreadsheet, FileText, ListPlus, Ruler, Scale } from "lucide-react";
+import { Boxes, Camera, ClipboardList, Download, FileSpreadsheet, FileText, ListPlus, Ruler, Scale } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import {
@@ -33,13 +33,14 @@ import type { Has, ItemsDesk, Needs, Order, Stock } from "./useItems";
 import s from "./items.module.css";
 
 /**
- * The list as asked, every row of it, as a file (D216): what is shown,
+ * The list as asked, every row of it, as a file (D216), or as the capture
+ * sheet it replaces with what is recorded in its boxes (D217): what is shown,
  * whatever has been loaded of it, and every item when nothing narrows it.
  * Followed as a link, so the browser saves it as it arrives. Not in the app,
  * whose session is not a cookie a link carries.
  */
 function Export({ desk, narrowed }: { desk: ItemsDesk; narrowed: boolean }) {
-  const get = (format: "csv" | "xlsx") => () => window.location.assign(desk.exportUrl(format));
+  const get = (format: "csv" | "xlsx" | "pdf") => () => window.location.assign(desk.exportUrl(format));
   return (
     <Menu
       trigger={
@@ -53,6 +54,9 @@ function Export({ desk, narrowed }: { desk: ItemsDesk; narrowed: boolean }) {
       </MenuItem>
       <MenuItem icon={<FileText />} onSelect={get("csv")}>
         CSV
+      </MenuItem>
+      <MenuItem icon={<ClipboardList />} onSelect={get("pdf")}>
+        Capture sheet (PDF)
       </MenuItem>
     </Menu>
   );

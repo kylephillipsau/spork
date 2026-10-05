@@ -97,8 +97,12 @@ pub struct ExportRow {
     pub description: String,
     pub active: bool,
     pub family: Option<String>,
-    /// The bin to go to for it here (D180).
+    /// What NetSuite says it is sold in, and its supplier's part number (D217).
+    pub selling_unit: Option<String>,
+    pub supplier_part: Option<String>,
+    /// The bin to go to for it here (D180), and what NetSuite has in it.
     pub bin: Option<String>,
+    pub bin_on_hand: Option<String>,
     /// NetSuite's balance at this site: in all, and bin by bin.
     pub netsuite_on_hand: Option<String>,
     pub netsuite_bins: Option<String>,
@@ -132,9 +136,10 @@ pub async fn export_items(
         None | Some("csv") => Kind::Csv,
         Some("xlsx") => Kind::Xlsx,
         Some("json") => Kind::Json,
+        Some("pdf") => Kind::Pdf,
         Some(other) => {
             return Err(ApiError::Rejected(format!(
-                "format is csv, xlsx or json, not {other}"
+                "format is csv, xlsx, pdf or json, not {other}"
             )))
         }
     };
@@ -142,7 +147,7 @@ pub async fn export_items(
     let site = who.site_id;
 
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
-    let (rows, today) = scope
+    let (rows, context) = scope
         .run(move |tx| Box::pin(async move { rows_of(tx, &ask, site).await }))
         .await?;
 
@@ -154,13 +159,23 @@ pub async fn export_items(
         format!("{}://{}{api}/images/", info.scheme(), info.host())
     };
     let link = |digest: &str| format!("{base}{digest}");
-    let name = format!("spork-items-{today}");
+    let name = format!("spork-items-{}", context.today);
     match format {
         Kind::Json => Ok(HttpResponse::Ok().json(rows)),
         Kind::Csv => Ok(download(
             csv_of(&rows, &link)?,
             "text/csv; charset=utf-8",
             &format!("{name}.csv"),
+        )),
+        Kind::Pdf => Ok(download(
+            crate::sheet::render(&sheet_of(&rows, &context)),
+            "application/pdf",
+            &format!(
+                "{}_Weights_Dims_Capture_{}_{}.pdf",
+                file_word(&context.tenant),
+                file_word(&context.site),
+                context.today
+            ),
         )),
         Kind::Xlsx => {
             let pictures = thumbnails(&rows).await;
@@ -173,10 +188,94 @@ pub async fn export_items(
     }
 }
 
+/// A name as a file's: its words joined by underscores, and nothing a file
+/// system would refuse.
+fn file_word(s: &str) -> String {
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+/// The capture sheet the list replaces, with what is recorded in its boxes
+/// (D217): for the unit NetSuite says it is sold in, to one decimal.
+fn sheet_of(rows: &[ExportRow], context: &Context) -> crate::sheet::Sheet {
+    crate::sheet::Sheet {
+        title: format!("WEIGHTS & DIMENSIONS CAPTURE — {}", context.site.to_uppercase()),
+        subtitle: format!(
+            "NetSuite data refreshed: {} · {} {} · measure the selling unit shown in Unit · centimetres and kilograms, one decimal",
+            context.refreshed.as_deref().unwrap_or("not yet"),
+            rows.len(),
+            if rows.len() == 1 { "item" } else { "items" },
+        ),
+        rows: rows
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let level = selling_level(r);
+                let one = |v: Option<i64>, absent: bool, per: f64| match (v, absent) {
+                    (Some(v), _) => Some(format!("{:.1}", v as f64 / per)),
+                    (None, true) => Some("none".into()),
+                    _ => None,
+                };
+                crate::sheet::SheetRow {
+                    seq: i + 1,
+                    bin: r.bin.clone().unwrap_or_else(|| "-".into()),
+                    code: r.code.clone(),
+                    description: r.description.clone(),
+                    supplier_part: r.supplier_part.clone().unwrap_or_else(|| "-".into()),
+                    unit: r.selling_unit.clone().unwrap_or_else(|| "not set".into()),
+                    // What NetSuite has in the bin named: the shelf the
+                    // sheet sends somebody to. With no bin, all of it here.
+                    soh: match (&r.bin, &r.bin_on_hand) {
+                        (Some(_), Some(n)) => whole(n),
+                        (Some(_), None) => "0".into(),
+                        (None, _) => r.netsuite_on_hand.as_deref().map(whole).unwrap_or_else(|| "0".into()),
+                    },
+                    boxes: match level {
+                        Some(l) => [
+                            one(l.length_mm, l.dimensions_absent, 10.0),
+                            one(l.width_mm, l.dimensions_absent, 10.0),
+                            one(l.height_mm, l.dimensions_absent, 10.0),
+                            one(l.weight_g, l.weight_absent, 1000.0),
+                        ],
+                        None => [None, None, None, None],
+                    },
+                }
+            })
+            .collect(),
+    }
+}
+
+/// The level whose figures go in the boxes: the carton for a unit that is
+/// one, the each for any other; with no unit set, the carton when it has
+/// figures and the each when it doesn't.
+fn selling_level(r: &ExportRow) -> Option<&ExportLevel> {
+    let measured = |l: &&ExportLevel| {
+        l.weight_g.is_some() || l.length_mm.is_some() || l.weight_absent || l.dimensions_absent
+    };
+    match r.selling_unit.as_deref().map(str::to_lowercase).as_deref() {
+        Some("ctn" | "carton" | "cartons" | "ct" | "cs" | "case") => r.carton.as_ref(),
+        Some("inner" | "inner pack") => r.inner.as_ref(),
+        Some(_) => r.each.as_ref(),
+        None => r.carton.as_ref().filter(measured).or(r.each.as_ref()),
+    }
+}
+
+/// A count as a person writes it: "19", not "19.000".
+fn whole(n: &str) -> String {
+    if n.contains('.') {
+        n.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        n.to_string()
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Kind {
     Csv,
     Xlsx,
+    Pdf,
     Json,
 }
 
@@ -193,11 +292,23 @@ fn download(body: Vec<u8>, kind: &str, file: &str) -> HttpResponse {
 
 /// The rows, read in one transaction; and today's date at the site, for the
 /// file's name.
+/// What a file is named and headed by, beside its rows.
+struct Context {
+    /// Today, at the site.
+    today: String,
+    tenant: String,
+    /// The site's name, or "every site".
+    site: String,
+    /// When NetSuite's balance here was last loaded, in the site's own time
+    /// and zone: "1 Oct 2026, 6:46 AM AEST".
+    refreshed: Option<String>,
+}
+
 async fn rows_of(
     tx: &tokio_postgres::Transaction<'_>,
     ask: &items::ListAsk,
     site: Option<Uuid>,
-) -> Result<(Vec<ExportRow>, String), ApiError> {
+) -> Result<(Vec<ExportRow>, Context), ApiError> {
     let (listed, _, _) = items::list_rows(tx, ask, EVERY_ROW).await?;
     let ids: Vec<Uuid> = listed.iter().map(|i| i.item_id).collect();
     let tz: String = match site {
@@ -217,6 +328,17 @@ async fn rows_of(
         .get(0);
 
     let mut subjects = capture::subjects_for_items(tx, site, &ids).await?;
+    // NetSuite's newest word on what each is sold in (D217).
+    let details: HashMap<Uuid, (Option<String>, Option<String>)> = tx
+        .query(
+            "SELECT DISTINCT ON (item_id) item_id, selling_unit, supplier_part FROM reported_item
+              WHERE item_id = ANY($1) ORDER BY item_id, as_at DESC",
+            &[&ids],
+        )
+        .await?
+        .iter()
+        .map(|r| (r.get(0), (r.get(1), r.get(2))))
+        .collect();
 
     let by_item = |rows: Vec<tokio_postgres::Row>| -> HashMap<Uuid, String> {
         rows.iter().map(|r| (r.get(0), r.get(1))).collect()
@@ -236,6 +358,19 @@ async fn rows_of(
         )
         .await?,
     );
+    // What NetSuite has in each bin of each item here, newest word per bin.
+    let in_bins: HashMap<(Uuid, String), String> = tx
+        .query(
+            "SELECT DISTINCT ON (rs.item_id, l.id) rs.item_id, l.code, rs.on_hand::text
+               FROM reported_stock rs JOIN location l ON l.id = rs.location_id
+              WHERE rs.item_id = ANY($1) AND ($2::uuid IS NULL OR rs.site_id = $2)
+              ORDER BY rs.item_id, l.id, rs.as_at DESC",
+            &[&ids, &site],
+        )
+        .await?
+        .iter()
+        .map(|r| ((r.get(0), r.get(1)), r.get(2)))
+        .collect();
     let barcodes = by_item(
         tx.query(
             "SELECT item_id, string_agg(barcode || coalesce(' (' || packaging_level::text || ')', ''), '; '
@@ -411,8 +546,12 @@ async fn rows_of(
                 }),
                 (None, None) => None,
             };
+            let (selling_unit, supplier_part) =
+                details.get(&i.item_id).cloned().unwrap_or((None, None));
             ExportRow {
                 item_id: i.item_id,
+                selling_unit,
+                supplier_part,
                 each: at("each"),
                 inner: at("inner"),
                 carton: at("carton"),
@@ -428,13 +567,49 @@ async fn rows_of(
                 description: i.description,
                 active: i.active,
                 family: i.style_code,
+                bin_on_hand: i
+                    .bin_code
+                    .as_ref()
+                    .and_then(|b| in_bins.get(&(i.item_id, b.clone())).cloned()),
                 bin: i.bin_code,
                 netsuite_on_hand: i.reported_on_hand,
                 spork_holds: i.held,
             }
         })
         .collect();
-    Ok((rows, today))
+
+    let tenant: String = tx
+        .query_one("SELECT name FROM tenant WHERE id = current_tenant()", &[])
+        .await?
+        .get(0);
+    let site_name: String = match site {
+        Some(s) => tx
+            .query_opt("SELECT name FROM site WHERE id = $1", &[&s])
+            .await?
+            .map(|r| r.get(0)),
+        None => None,
+    }
+    .unwrap_or_else(|| "every site".into());
+    // Last, because it sets the transaction's zone to name it ("AEST").
+    tx.execute("SELECT set_config('timezone', $1, true)", &[&tz])
+        .await?;
+    let refreshed: Option<String> = tx
+        .query_one(
+            "SELECT to_char(max(as_at), 'FMDD Mon YYYY, FMHH12:MI AM TZ') FROM reported_stock
+              WHERE $1::uuid IS NULL OR site_id = $1",
+            &[&site],
+        )
+        .await?
+        .get(0);
+    Ok((
+        rows,
+        Context {
+            today,
+            tenant,
+            site: site_name,
+            refreshed,
+        },
+    ))
 }
 
 /// A part in a few words: "Handle: 0.600 kg, 120.0 × 6.0 × 4.0 cm".
@@ -546,12 +721,27 @@ fn columns<'a>(link: &'a dyn Fn(&str) -> String) -> Vec<Column<'a>> {
             "Description".into(),
             Box::new(|r| Cell::Text(r.description.clone())),
         ),
+        ("Unit".into(), Box::new(|r| text(r.selling_unit.as_ref()))),
+        (
+            "Supplier Part No.".into(),
+            Box::new(|r| text(r.supplier_part.as_ref())),
+        ),
         (
             "Active".into(),
             Box::new(|r| Cell::Text(if r.active { "yes" } else { "no" }.into())),
         ),
         ("Family".into(), Box::new(|r| text(r.family.as_ref()))),
         ("Bin".into(), Box::new(|r| text(r.bin.as_ref()))),
+        (
+            "Bin on hand".into(),
+            Box::new(|r| {
+                r.bin_on_hand
+                    .as_ref()
+                    .and_then(|n| n.parse::<f64>().ok())
+                    .map(|n| Cell::Number(n, 0))
+                    .unwrap_or(Cell::Empty)
+            }),
+        ),
         (
             "NetSuite on hand".into(),
             Box::new(|r| {

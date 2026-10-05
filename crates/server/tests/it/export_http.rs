@@ -300,7 +300,105 @@ async fn the_list_exported_says_what_each_item_page_says() {
         "{strings}"
     );
 
+    // ── what NetSuite sells it in, loaded as the Bridge loads it (D217) ─
+    let session = common::bearer_without_site(&app).await;
+    let minted = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri("/tokens")
+            .insert_header(("authorization", session))
+            .set_json(json!({ "label": "item details, from a test" }))
+            .to_request(),
+    )
+    .await;
+    let minted = json_of(&test::read_body(minted).await);
+    let machine = format!("Bearer {}", minted["token"].as_str().unwrap());
+    let part = format!("SUP-{n}");
+    let details = format!("Item,Unit,Supplier Part No.\n{code},CTN,{part}\nNO-SUCH-{n},Each,X\n");
+    let load = |apply: bool| {
+        let (machine, details) = (machine.clone(), details.clone());
+        let app = &app;
+        async move {
+            let r = test::call_service(
+                app,
+                test::TestRequest::post()
+                    .uri(&format!(
+                        "/import/item-details?apply={apply}&source=netsuite-item-details&as_at=2026-10-05T03:00:00Z"
+                    ))
+                    .insert_header(("authorization", machine))
+                    .set_payload(details)
+                    .to_request(),
+            )
+            .await;
+            let status = r.status().as_u16();
+            (status, json_of(&test::read_body(r).await))
+        }
+    };
+    let (status, dry) = load(false).await;
+    assert_eq!(status, 200, "{dry}");
+    assert_eq!(
+        (
+            dry["loaded"]["rows_written"].as_i64(),
+            dry["loaded"]["items_unknown"].as_i64()
+        ),
+        (Some(1), Some(1))
+    );
+    let (_, _, _, rows) =
+        call(test::TestRequest::get().uri(&format!("/items/export?format=json&q={code}"))).await;
+    assert!(
+        json_of(&rows)[0]["selling_unit"].is_null(),
+        "a dry run keeps nothing"
+    );
+    let (status, wet) = load(true).await;
+    assert_eq!(status, 200, "{wet}");
+    let (_, _, _, rows) =
+        call(test::TestRequest::get().uri(&format!("/items/export?format=json&q={code}"))).await;
+    let rows = json_of(&rows);
+    assert_eq!(
+        (
+            rows[0]["selling_unit"].as_str(),
+            rows[0]["supplier_part"].as_str()
+        ),
+        (Some("CTN"), Some(part.as_str()))
+    );
+    let (_, _, _, csv) =
+        call(test::TestRequest::get().uri(&format!("/items/export?q={code}"))).await;
+    let text = String::from_utf8(csv[3..].to_vec()).unwrap();
+    assert!(
+        text.lines()
+            .next()
+            .unwrap()
+            .contains("Unit,Supplier Part No."),
+        "{text}"
+    );
+
+    // ── the capture sheet, its boxes filled for the unit it is sold in ──
+    let (status, kind, disposition, pdf) =
+        call(test::TestRequest::get().uri(&format!("/items/export?format=pdf&q={code}"))).await;
+    assert_eq!(status, 200);
+    assert_eq!(kind, "application/pdf");
+    assert!(
+        disposition.contains("_Weights_Dims_Capture_") && disposition.ends_with(".pdf\""),
+        "{disposition}"
+    );
+    let pdf = String::from_utf8_lossy(&pdf);
+    assert!(pdf.starts_with("%PDF-1.4"));
+    assert!(
+        pdf.contains("(WEIGHTS & DIMENSIONS CAPTURE \\227 "),
+        "the sheet's title"
+    );
+    assert!(
+        pdf.contains(&format!("({code})"))
+            && pdf.contains(&format!("({part})"))
+            && pdf.contains("(CTN)")
+    );
+    // Sold by the carton, so the carton's figures: its family's 41 × 31 × 22.5 cm, 6.4 kg.
+    for figure in ["(41.0)", "(31.0)", "(22.5)", "(6.4)"] {
+        assert!(pdf.contains(figure), "{figure} in its box");
+    }
+    assert!(!pdf.contains("(24.0)"), "not the each's");
+
     // ── refused, in words ───────────────────────────────────────────────
-    let (status, _, _, _) = call(test::TestRequest::get().uri("/items/export?format=pdf")).await;
+    let (status, _, _, _) = call(test::TestRequest::get().uri("/items/export?format=docx")).await;
     assert_eq!(status, 400);
 }

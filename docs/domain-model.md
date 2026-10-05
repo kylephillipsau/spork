@@ -15095,3 +15095,41 @@ session's cookie, which the app's session isn't.
 by a customer, on a sheet. Exported fifty at a time, or without the
 pictures, they would be copied out by hand. The whole catalogue (9,181
 items) exports in about two seconds.
+
+### D217: The capture sheet, exported as it was printed
+
+*Adopted 2026-10-05, with migration 123. Extends D216 and D179.*
+
+**Decision.** Items → Export → **Capture sheet (PDF)** gives the list as
+asked as the weights and dimensions capture sheet the list replaces, drawn as
+that sheet was drawn: A4 landscape, Helvetica, "WEIGHTS & DIMENSIONS CAPTURE
+— MELBOURNE" and the page, when NetSuite's data was refreshed, a grey band of
+column names, twelve-millimetre rows fourteen to a page with every other one
+shaded, and four boxes a row. Its columns are Seq, Bin, Item Code,
+Description, Supplier Part No., Unit, SOH, Length, Width, Height and Weight.
+Every measure is the printed sheet's, in millimetres, and text is fitted as it
+fitted it: a column's text stops two millimetres short of the next; a code or
+a bin shrinks a quarter point at a time to 9 pt and is then cut with "…"; a
+description wraps to two lines and the second is cut. The fonts are the two
+every PDF reader has, measured with their standard metrics, so nothing is
+embedded (`sheet.rs`). It is named as the printed one was:
+`Foodcare_Weights_Dims_Capture_Melbourne_<date>.pdf`.
+
+- **The boxes hold what Spork has recorded**, to one decimal, for the unit the
+  item is sold in: the carton's figures for CTN (or carton, case), the each's
+  for anything else, and with no unit set, the carton's when it has any.
+  "none" where it was said to have no size or weight; empty where nothing is
+  recorded, so the sheet is the record and the work left on it.
+- **SOH is what NetSuite has in the bin named**, the shelf the row sends
+  somebody to, as the printed sheet had it; with no bin, all of it here.
+- **Unit and Supplier Part No. are NetSuite's**, held as `reported_item`, a
+  report with its age replaced by each load of its feed, as migration 86
+  holds the balance. The Spork Bridge (0.7.0) reads them every six hours for
+  the items with stock at its location (`BUILTIN.DF(saleunit)` and
+  `vendorname`) and loads them through `POST /import/item-details`. No unit
+  is "not set" and no part is "-", as printed. The CSV and workbook gain
+  both, and the bin's own quantity.
+
+**Why.** The sheet is how a list arrives and how the work on it is handed
+back. Exported in its own format with the figures in, it goes back to
+whoever sent it as the sheet they know.

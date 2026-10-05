@@ -185,6 +185,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   levels come from `capture::subjects_for_items`, which assembles each item
   with the item page's own `assemble`; `items::ListAsk`/`list_rows` are the
   list's filters and rows, shared by the page and the export.
+- D217. Export → Capture sheet (PDF): the printed capture sheet's exact
+  layout (`sheet.rs`, metrics in `pdf_metrics.rs`) with recorded figures in
+  the boxes. Unit and Supplier Part No. are `reported_item` (migration 123),
+  loaded by Spork Bridge 0.7.0 via `POST /import/item-details`; its SuiteQL
+  (`saleunit`, `vendorname`) is untested against the real NetSuite.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

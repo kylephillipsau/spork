@@ -24,6 +24,7 @@
 //! reason `party_message` has a writer at all.
 
 pub mod bins;
+pub mod item_details;
 pub mod items;
 pub mod orders;
 pub mod picks;
