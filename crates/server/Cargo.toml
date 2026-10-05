@@ -65,6 +65,11 @@ webauthn-rs = { version = "0.5.5", features = ["conditional-ui", "danger-allow-s
 webauthn-rs-proto = "0.5.5"
 # A workspace's backup (D193): one zip, every entry AES-256 encrypted.
 zip = { version = "8.6.0", default-features = false, features = ["aes-crypto", "deflate"] }
+# The item export (D216): a workbook with each item's picture in its row.
+rust_xlsxwriter = "0.99"
+# The pictures for it: drawings and cuts are WebP, which a workbook can't
+# hold, so each is shrunk and written again as a PNG.
+image = { version = "0.25", default-features = false, features = ["webp", "png", "jpeg"] }
 
 [dev-dependencies]
 # `test::init_service` builds the real `App` in-process, so the harness exercises

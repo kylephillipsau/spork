@@ -577,254 +577,315 @@ pub async fn item_list(
     query: web::Query<ItemsQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let who = caller(&state, &req).await?;
-    let site = who.site_id;
-    let asked = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|q| !q.is_empty())
-        .map(str::to_string);
-    // The wildcards a person did not mean are dropped, not escaped: nobody
-    // searches for a percent sign in a stock code.
-    let like = asked.as_ref().map(|q| format!("%{}%", q.replace(['%', '_'], "")));
-    let codes: Vec<String> = asked
-        .iter()
-        .flat_map(|q| [Some(q.clone()), crate::barcodes::normalise_gtin(q)])
-        .flatten()
-        .collect();
-    let here = query.stock.as_deref() == Some("here");
-    let (weighing, measuring, photo, packing) = match query.needs.as_deref() {
-        Some("weighing") => (true, false, false, false),
-        Some("measuring") => (false, true, false, false),
-        Some("photo") => (false, false, true, false),
-        Some("packing") => (false, false, false, true),
-        Some(other) => {
-            return Err(ApiError::Rejected(format!(
-                "needs is weighing, measuring, photo or packing, not {other}"
-            )))
-        }
-        None => (false, false, false, false),
-    };
-    let (has_measured, has_photo) = match query.has.as_deref() {
-        Some("measured") => (true, false),
-        Some("photographed") => (false, true),
-        Some("both") => (true, true),
-        Some(other) => {
-            return Err(ApiError::Rejected(format!(
-                "has is measured, photographed or both, not {other}"
-            )))
-        }
-        None => (false, false),
-    };
-    let list = query.list;
-    let order = match query.order.as_deref() {
-        None | Some("code") => Order::Code,
-        Some("demand") => Order::Demand,
-        Some("packing") => Order::Packing,
-        Some("walk") => Order::Walk,
-        Some("list") if list.is_some() => Order::Listed,
-        Some("list") => return Err(ApiError::Rejected("order=list needs a list".into())),
-        Some(other) => {
-            return Err(ApiError::Rejected(format!(
-                "order is code, demand, packing, walk or list, not {other}"
-            )))
-        }
-    };
-    let after = query.after.clone().filter(|a| !a.is_empty());
-    // Code order pages by the last code, which stays right while rows are
-    // added; the other two by position, because a count of order lines or a
-    // bin's place in the walk is no key to start from.
-    let (after_code, offset): (Option<String>, i64) = match order {
-        Order::Code => (after, 0),
-        _ => match after.as_deref().map(str::parse::<i64>) {
-            None => (None, 0),
-            Some(Ok(n)) if n >= 0 => (None, n),
-            Some(_) => return Err(ApiError::Rejected("after is where the last page ended".into())),
-        },
-    };
+    let ask = ListAsk::read(&query, who.site_id)?;
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
 
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     let out = scope
         .run(move |tx| {
             Box::pin(async move {
-                // How it is ordered is one of three fixed clauses, chosen here
-                // rather than passed in.
-                // **The page first, then what is shown on it.** Every join
-                // below is a lookup per row, and run before the sort they cost
-                // a lookup for each of nine thousand items to show fifty. So
-                // the page is chosen with only what its order needs, and the
-                // rest is looked up for the rows on it.
-                let pile = pile();
-                let (sort_join, sort_by) = match order {
-                    Order::Code => ("", "n.code"),
-                    Order::Demand => (DEMAND, "dem.lines DESC, n.code"),
-                    Order::Packing => (PACKING, "tp.lines DESC NULLS LAST, tp.units DESC NULLS LAST, n.code"),
-                    Order::Walk => (pile.as_str(), "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
-                    Order::Listed => (LISTED, "le.position, n.code"),
-                };
-                // Asked as yes or no: whether a measured figure exists.
-                let measured = |metrics: &str| {
-                    format!(
-                        "EXISTS (SELECT 1 FROM observable o
-                                   JOIN observation_current oc ON oc.observable_id = o.id
-                                   JOIN metric m ON m.id = oc.metric_id
-                                  WHERE (o.item_id = c.id
-                                         OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
-                                    AND m.code IN ({metrics})
-                                    AND (oc.absent_reason IS NOT NULL
-                                         OR oc.method::text IN {MEASURED_METHODS}))"
-                    )
-                };
-                let weighed = measured("'gross_weight'");
-                let sized = measured("'length', 'width', 'height'");
-                // Its each has all three lengths recorded, its own or its
-                // family's, or is said to have none (D138): the pack bench can
-                // place it, or knows to put it in loose (D197).
-                let each_sized = "EXISTS (SELECT 1 FROM observable o
-                                   JOIN observation_current oc ON oc.observable_id = o.id
-                                   JOIN metric m ON m.id = oc.metric_id
-                                  WHERE (o.item_id = c.id
-                                         OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
-                                    AND o.packaging_level = 'each'
-                                    AND m.code IN ('length', 'width', 'height')
-                                    AND (oc.value_numeric IS NOT NULL OR oc.absent_reason IS NOT NULL)
-                                 HAVING count(DISTINCT m.code) = 3)";
-                let sql = format!(
-                    "WITH {picture},
-                     {TO_PACK},
-                     candidates AS (
-                         SELECT i.id, i.code, i.description, i.active, i.style_id
-                           FROM item i
-                          WHERE ($1::text IS NULL OR i.code ILIKE $1 OR i.description ILIKE $1
-                                 OR EXISTS (SELECT 1 FROM item_barcode b
-                                             WHERE b.item_id = i.id AND b.barcode = ANY($2::text[])))
-                            AND (NOT $3::bool
-                                 OR EXISTS (SELECT 1 FROM reported_stock rs
-                                             WHERE rs.item_id = i.id AND rs.on_hand > 0
-                                               AND ($4::uuid IS NULL OR rs.site_id = $4))
-                                 OR EXISTS (SELECT 1 FROM stock s
-                                             WHERE s.item_id = i.id AND s.quantity > 0
-                                               AND ($4::uuid IS NULL OR s.site_id = $4)))
-                            AND ($11::uuid IS NULL
-                                 OR EXISTS (SELECT 1 FROM item_list_entry e
-                                             WHERE e.item_list_id = $11 AND e.item_id = i.id))
-                     ),
-                     needed AS (
-                         SELECT c.* FROM candidates c
-                          WHERE (NOT $5::bool OR NOT {weighed})
-                            AND (NOT $6::bool OR NOT {sized})
-                            AND (NOT $7::bool
-                                 OR NOT EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
-                            AND (NOT $12::bool OR {weighed} OR {sized})
-                            AND (NOT $13::bool
-                                 OR EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
-                            AND (NOT $14::bool
-                                 OR (EXISTS (SELECT 1 FROM to_pack tp WHERE tp.item_id = c.id)
-                                     AND NOT {each_sized}
-                                     AND NOT (SELECT s.as_it_is
-                                                FROM ships_as_is(c.id, NULL, NULL, NULL, 'each') s)))
-                     ),
-                     page AS (
-                         SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
-                           FROM needed n {sort_join}
-                          WHERE ($8::text IS NULL OR n.code > $8)
-                          ORDER BY {sort_by}
-                          LIMIT $9 OFFSET $10
-                     )
-                     SELECT n.id, n.code, n.description, n.active, st.code, fig.weight, fig.size,
-                            pic.digest, pic.source, rep.on_hand, rep.bins, held.q,
-                            (SELECT count(*) FROM needed), dem.lines, pile.code,
-                            (SELECT e.position FROM item_list_entry e
-                              WHERE e.item_list_id = $11 AND e.item_id = n.id),
-                            pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0)
-                       FROM page n
-                       LEFT JOIN to_pack tpk ON tpk.item_id = n.id
-                       LEFT JOIN item_style st ON st.id = n.style_id
-                       LEFT JOIN picture pic ON pic.item_id = n.id
-                       {DEMAND}
-                       {pile}
-                       -- Its weight and its size, its own or its family's:
-                       -- 2 measured (or said to have none), 1 only copied.
-                       LEFT JOIN LATERAL (
-                           SELECT max(CASE WHEN m.code = 'gross_weight' THEN grade END) AS weight,
-                                  max(CASE WHEN m.code IN ('length', 'width', 'height') THEN grade END)
-                                    AS size
-                             FROM (SELECT oc.metric_id,
-                                          CASE WHEN oc.absent_reason IS NOT NULL
-                                                 OR oc.method::text IN {MEASURED_METHODS}
-                                               THEN 2 ELSE 1 END AS grade
-                                     FROM observable o
-                                     JOIN observation_current oc ON oc.observable_id = o.id
-                                    WHERE o.item_id = n.id
-                                       OR (n.style_id IS NOT NULL AND o.item_style_id = n.style_id)) g
-                             JOIN metric m ON m.id = g.metric_id
-                       ) fig ON true
-                       LEFT JOIN LATERAL (
-                           SELECT sum(rs.on_hand)::text AS on_hand,
-                                  count(DISTINCT rs.location_id) AS bins
-                             FROM reported_stock rs
-                            WHERE rs.item_id = n.id AND ($4::uuid IS NULL OR rs.site_id = $4)
-                       ) rep ON true
-                       LEFT JOIN LATERAL (
-                           SELECT coalesce(sum(s.quantity), 0)::bigint AS q
-                             FROM stock s
-                            WHERE s.item_id = n.id AND s.quantity > 0
-                              AND ($4::uuid IS NULL OR s.site_id = $4)
-                       ) held ON true
-                      ORDER BY n.ordinal",
-                    picture = pictures::PICTURE_CTE
-                );
-                let rows = tx
-                    .query(
-                        &sql,
-                        &[
-                            &like, &codes, &here, &site, &weighing, &measuring, &photo,
-                            &after_code, &(limit + 1), &offset, &list, &has_measured, &has_photo, &packing,
-                        ],
-                    )
-                    .await?;
-                let total: i64 = rows.first().map(|r| r.get(12)).unwrap_or(0);
-                let more = rows.len() as i64 > limit;
-                let said = |n: Option<i32>| {
-                    match n {
-                        Some(2) => "measured",
-                        Some(_) => "listed",
-                        None => "none",
-                    }
-                    .to_string()
-                };
-                let items: Vec<ItemRow> = rows
-                    .iter()
-                    .take(limit as usize)
-                    .map(|r| ItemRow {
-                        item_id: r.get(0),
-                        code: r.get(1),
-                        description: r.get(2),
-                        active: r.get(3),
-                        style_code: r.get(4),
-                        weight: said(r.get(5)),
-                        size: said(r.get(6)),
-                        picture: pictures::from_row(r.get(7), r.get(8)),
-                        reported_on_hand: r.get(9),
-                        reported_bins: r.get(10),
-                        held: r.get(11),
-                        demand: r.get(13),
-                        bin_code: r.get(14),
-                        list_position: r.get(15),
-                        bin_within_reach: r.get(16),
-                        to_pack: r.get(17),
-                        to_pack_lines: r.get(18),
-                    })
-                    .collect();
-                let next = match (more, order) {
+                let (items, total, more) = list_rows(tx, &ask, limit).await?;
+                let next = match (more, ask.order) {
                     (false, _) => None,
                     (true, Order::Code) => items.last().map(|i| i.code.clone()),
-                    (true, _) => Some((offset + limit).to_string()),
+                    (true, _) => Some((ask.offset + limit).to_string()),
                 };
                 Ok(ItemsList { items, total, next })
             })
         })
         .await?;
     Ok(HttpResponse::Ok().json(out))
+}
+
+/// The list asked for, read from its query once: what the page and the export
+/// (D216) both filter and order by.
+pub(crate) struct ListAsk {
+    like: Option<String>,
+    codes: Vec<String>,
+    here: bool,
+    site: Option<Uuid>,
+    weighing: bool,
+    measuring: bool,
+    photo: bool,
+    packing: bool,
+    has_measured: bool,
+    has_photo: bool,
+    list: Option<Uuid>,
+    order: Order,
+    after_code: Option<String>,
+    offset: i64,
+}
+
+impl ListAsk {
+    pub(crate) fn read(query: &ItemsQuery, site: Option<Uuid>) -> Result<ListAsk, ApiError> {
+        let asked = query
+            .q
+            .as_deref()
+            .map(str::trim)
+            .filter(|q| !q.is_empty())
+            .map(str::to_string);
+        // The wildcards a person did not mean are dropped, not escaped: nobody
+        // searches for a percent sign in a stock code.
+        let like = asked.as_ref().map(|q| format!("%{}%", q.replace(['%', '_'], "")));
+        let codes: Vec<String> = asked
+            .iter()
+            .flat_map(|q| [Some(q.clone()), crate::barcodes::normalise_gtin(q)])
+            .flatten()
+            .collect();
+        let here = query.stock.as_deref() == Some("here");
+        let (weighing, measuring, photo, packing) = match query.needs.as_deref() {
+            Some("weighing") => (true, false, false, false),
+            Some("measuring") => (false, true, false, false),
+            Some("photo") => (false, false, true, false),
+            Some("packing") => (false, false, false, true),
+            Some(other) => {
+                return Err(ApiError::Rejected(format!(
+                    "needs is weighing, measuring, photo or packing, not {other}"
+                )))
+            }
+            None => (false, false, false, false),
+        };
+        let (has_measured, has_photo) = match query.has.as_deref() {
+            Some("measured") => (true, false),
+            Some("photographed") => (false, true),
+            Some("both") => (true, true),
+            Some(other) => {
+                return Err(ApiError::Rejected(format!(
+                    "has is measured, photographed or both, not {other}"
+                )))
+            }
+            None => (false, false),
+        };
+        let list = query.list;
+        let order = match query.order.as_deref() {
+            None | Some("code") => Order::Code,
+            Some("demand") => Order::Demand,
+            Some("packing") => Order::Packing,
+            Some("walk") => Order::Walk,
+            Some("list") if list.is_some() => Order::Listed,
+            Some("list") => return Err(ApiError::Rejected("order=list needs a list".into())),
+            Some(other) => {
+                return Err(ApiError::Rejected(format!(
+                    "order is code, demand, packing, walk or list, not {other}"
+                )))
+            }
+        };
+        let after = query.after.clone().filter(|a| !a.is_empty());
+        // Code order pages by the last code, which stays right while rows are
+        // added; the other two by position, because a count of order lines or a
+        // bin's place in the walk is no key to start from.
+        let (after_code, offset): (Option<String>, i64) = match order {
+            Order::Code => (after, 0),
+            _ => match after.as_deref().map(str::parse::<i64>) {
+                None => (None, 0),
+                Some(Ok(n)) if n >= 0 => (None, n),
+                Some(_) => return Err(ApiError::Rejected("after is where the last page ended".into())),
+            },
+        };
+        Ok(ListAsk {
+            like,
+            codes,
+            here,
+            site,
+            weighing,
+            measuring,
+            photo,
+            packing,
+            has_measured,
+            has_photo,
+            list,
+            order,
+            after_code,
+            offset,
+        })
+    }
+}
+
+/// The rows of the list asked for, at most `limit`, in its order; how many
+/// match in all; and whether there are more than `limit`.
+pub(crate) async fn list_rows(
+    tx: &tokio_postgres::Transaction<'_>,
+    ask: &ListAsk,
+    limit: i64,
+) -> Result<(Vec<ItemRow>, i64, bool), ApiError> {
+    let ListAsk {
+        like,
+        codes,
+        here,
+        site,
+        weighing,
+        measuring,
+        photo,
+        packing,
+        has_measured,
+        has_photo,
+        list,
+        order,
+        after_code,
+        offset,
+    } = ask;
+    let order = *order;
+    let pile = pile();
+    let (sort_join, sort_by) = match order {
+        Order::Code => ("", "n.code"),
+        Order::Demand => (DEMAND, "dem.lines DESC, n.code"),
+        Order::Packing => (PACKING, "tp.lines DESC NULLS LAST, tp.units DESC NULLS LAST, n.code"),
+        Order::Walk => (pile.as_str(), "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
+        Order::Listed => (LISTED, "le.position, n.code"),
+    };
+    // Asked as yes or no: whether a measured figure exists.
+    let measured = |metrics: &str| {
+        format!(
+            "EXISTS (SELECT 1 FROM observable o
+                       JOIN observation_current oc ON oc.observable_id = o.id
+                       JOIN metric m ON m.id = oc.metric_id
+                      WHERE (o.item_id = c.id
+                             OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
+                        AND m.code IN ({metrics})
+                        AND (oc.absent_reason IS NOT NULL
+                             OR oc.method::text IN {MEASURED_METHODS}))"
+        )
+    };
+    let weighed = measured("'gross_weight'");
+    let sized = measured("'length', 'width', 'height'");
+    // Its each has all three lengths recorded, its own or its
+    // family's, or is said to have none (D138): the pack bench can
+    // place it, or knows to put it in loose (D197).
+    let each_sized = "EXISTS (SELECT 1 FROM observable o
+                       JOIN observation_current oc ON oc.observable_id = o.id
+                       JOIN metric m ON m.id = oc.metric_id
+                      WHERE (o.item_id = c.id
+                             OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
+                        AND o.packaging_level = 'each'
+                        AND m.code IN ('length', 'width', 'height')
+                        AND (oc.value_numeric IS NOT NULL OR oc.absent_reason IS NOT NULL)
+                     HAVING count(DISTINCT m.code) = 3)";
+    let sql = format!(
+        "WITH {picture},
+         {TO_PACK},
+         candidates AS (
+             SELECT i.id, i.code, i.description, i.active, i.style_id
+               FROM item i
+              WHERE ($1::text IS NULL OR i.code ILIKE $1 OR i.description ILIKE $1
+                     OR EXISTS (SELECT 1 FROM item_barcode b
+                                 WHERE b.item_id = i.id AND b.barcode = ANY($2::text[])))
+                AND (NOT $3::bool
+                     OR EXISTS (SELECT 1 FROM reported_stock rs
+                                 WHERE rs.item_id = i.id AND rs.on_hand > 0
+                                   AND ($4::uuid IS NULL OR rs.site_id = $4))
+                     OR EXISTS (SELECT 1 FROM stock s
+                                 WHERE s.item_id = i.id AND s.quantity > 0
+                                   AND ($4::uuid IS NULL OR s.site_id = $4)))
+                AND ($11::uuid IS NULL
+                     OR EXISTS (SELECT 1 FROM item_list_entry e
+                                 WHERE e.item_list_id = $11 AND e.item_id = i.id))
+         ),
+         needed AS (
+             SELECT c.* FROM candidates c
+              WHERE (NOT $5::bool OR NOT {weighed})
+                AND (NOT $6::bool OR NOT {sized})
+                AND (NOT $7::bool
+                     OR NOT EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
+                AND (NOT $12::bool OR {weighed} OR {sized})
+                AND (NOT $13::bool
+                     OR EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
+                AND (NOT $14::bool
+                     OR (EXISTS (SELECT 1 FROM to_pack tp WHERE tp.item_id = c.id)
+                         AND NOT {each_sized}
+                         AND NOT (SELECT s.as_it_is
+                                    FROM ships_as_is(c.id, NULL, NULL, NULL, 'each') s)))
+         ),
+         page AS (
+             SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
+               FROM needed n {sort_join}
+              WHERE ($8::text IS NULL OR n.code > $8)
+              ORDER BY {sort_by}
+              LIMIT $9 OFFSET $10
+         )
+         SELECT n.id, n.code, n.description, n.active, st.code, fig.weight, fig.size,
+                pic.digest, pic.source, rep.on_hand, rep.bins, held.q,
+                (SELECT count(*) FROM needed), dem.lines, pile.code,
+                (SELECT e.position FROM item_list_entry e
+                  WHERE e.item_list_id = $11 AND e.item_id = n.id),
+                pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0)
+           FROM page n
+           LEFT JOIN to_pack tpk ON tpk.item_id = n.id
+           LEFT JOIN item_style st ON st.id = n.style_id
+           LEFT JOIN picture pic ON pic.item_id = n.id
+           {DEMAND}
+           {pile}
+           -- Its weight and its size, its own or its family's:
+           -- 2 measured (or said to have none), 1 only copied.
+           LEFT JOIN LATERAL (
+               SELECT max(CASE WHEN m.code = 'gross_weight' THEN grade END) AS weight,
+                      max(CASE WHEN m.code IN ('length', 'width', 'height') THEN grade END)
+                        AS size
+                 FROM (SELECT oc.metric_id,
+                              CASE WHEN oc.absent_reason IS NOT NULL
+                                     OR oc.method::text IN {MEASURED_METHODS}
+                                   THEN 2 ELSE 1 END AS grade
+                         FROM observable o
+                         JOIN observation_current oc ON oc.observable_id = o.id
+                        WHERE o.item_id = n.id
+                           OR (n.style_id IS NOT NULL AND o.item_style_id = n.style_id)) g
+                 JOIN metric m ON m.id = g.metric_id
+           ) fig ON true
+           LEFT JOIN LATERAL (
+               SELECT sum(rs.on_hand)::text AS on_hand,
+                      count(DISTINCT rs.location_id) AS bins
+                 FROM reported_stock rs
+                WHERE rs.item_id = n.id AND ($4::uuid IS NULL OR rs.site_id = $4)
+           ) rep ON true
+           LEFT JOIN LATERAL (
+               SELECT coalesce(sum(s.quantity), 0)::bigint AS q
+                 FROM stock s
+                WHERE s.item_id = n.id AND s.quantity > 0
+                  AND ($4::uuid IS NULL OR s.site_id = $4)
+           ) held ON true
+          ORDER BY n.ordinal",
+        picture = pictures::PICTURE_CTE
+    );
+    let rows = tx
+        .query(
+            &sql,
+            &[
+                &like, &codes, &here, &site, &weighing, &measuring, &photo,
+                &after_code, &(limit + 1), &offset, &list, &has_measured, &has_photo, &packing,
+            ],
+        )
+        .await?;
+    let total: i64 = rows.first().map(|r| r.get(12)).unwrap_or(0);
+    let more = rows.len() as i64 > limit;
+    let said = |n: Option<i32>| {
+        match n {
+            Some(2) => "measured",
+            Some(_) => "listed",
+            None => "none",
+        }
+        .to_string()
+    };
+    let items: Vec<ItemRow> = rows
+        .iter()
+        .take(limit as usize)
+        .map(|r| ItemRow {
+            item_id: r.get(0),
+            code: r.get(1),
+            description: r.get(2),
+            active: r.get(3),
+            style_code: r.get(4),
+            weight: said(r.get(5)),
+            size: said(r.get(6)),
+            picture: pictures::from_row(r.get(7), r.get(8)),
+            reported_on_hand: r.get(9),
+            reported_bins: r.get(10),
+            held: r.get(11),
+            demand: r.get(13),
+            bin_code: r.get(14),
+            list_position: r.get(15),
+            bin_within_reach: r.get(16),
+            to_pack: r.get(17),
+            to_pack_lines: r.get(18),
+        })
+        .collect();
+    Ok((items, total, more))
 }

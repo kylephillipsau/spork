@@ -88,6 +88,8 @@
 //! subject's carton. Figures are what a kind of thing measures; a photograph is
 //! what one look saw.
 
+use std::collections::{HashMap, HashSet};
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
@@ -130,7 +132,7 @@ pub struct CaptureScreen {
 /// exactly what `POST /observations` takes as a subject. There is deliberately
 /// no `observable_id`: the writer is get-or-create over that table, so a screen
 /// that carried one would be carrying an id it must not send.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct CaptureSubject {
     pub item_id: Option<Uuid>,
     pub item_style_id: Option<Uuid>,
@@ -566,11 +568,141 @@ pub async fn subjects_for_item(
          ORDER BY CASE sub.level WHEN 'carton' THEN 0 WHEN 'each' THEN 1 ELSE 2 END,
                   sub.code, sub.part_label"
     );
-    let mut found: Vec<CaptureSubject> = classified_subjects(tx, &sql, &[&site_id, &item_id])
+    let found: Vec<CaptureSubject> = classified_subjects(tx, &sql, &[&site_id, &item_id])
         .await?
         .into_iter()
         .map(|(_, s)| s)
         .collect();
+    let known = Known::read(tx, Some(item_id)).await?;
+    let mut found = assemble(tx, item_id, found, &known).await?;
+    packed(tx, &mut found).await?;
+    Ok(found)
+}
+
+/// What [`assemble`] needs to know beyond the enumeration: whose case pack
+/// says packs of more than one (D185), which items have runs (D182), and the
+/// variant that stands for an item's carton (D184). Read once, for one item or
+/// for the whole catalogue, so assembling every item is not a query apiece.
+struct Known {
+    packs: HashSet<Uuid>,
+    lots: HashSet<Uuid>,
+    chosen: HashMap<Uuid, Uuid>,
+}
+
+impl Known {
+    async fn read(tx: &tokio_postgres::Transaction<'_>, item: Option<Uuid>) -> Result<Known, ApiError> {
+        let packs = tx
+            .query(
+                "SELECT item_id FROM (
+                     SELECT DISTINCT ON (item_id) item_id, units_per_inner
+                       FROM item_packing_config
+                      WHERE effective_from <= current_date AND ($1::uuid IS NULL OR item_id = $1)
+                      ORDER BY item_id, effective_from DESC, id DESC) c
+                  WHERE units_per_inner > 1",
+                &[&item],
+            )
+            .await?
+            .iter()
+            .map(|r| r.get(0))
+            .collect();
+        let lots = tx
+            .query("SELECT DISTINCT item_id FROM lot WHERE $1::uuid IS NULL OR item_id = $1", &[&item])
+            .await?
+            .iter()
+            .map(|r| r.get(0))
+            .collect();
+        let chosen = tx
+            .query(
+                "SELECT id, default_lot_id FROM item
+                  WHERE default_lot_id IS NOT NULL AND ($1::uuid IS NULL OR id = $1)",
+                &[&item],
+            )
+            .await?
+            .iter()
+            .map(|r| (r.get(0), r.get(1)))
+            .collect();
+        Ok(Known { packs, lots, chosen })
+    }
+}
+
+/// Every listed item's subjects, by item (D216): the enumeration run once over
+/// the catalogue, then each item's subjects assembled exactly as its page
+/// assembles them ([`assemble`]), and what each is packed in read in one go.
+pub async fn subjects_for_items(
+    tx: &tokio_postgres::Transaction<'_>,
+    site_id: Option<Uuid>,
+    items: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<CaptureSubject>>, ApiError> {
+    let all: Vec<CaptureSubject> = classified_subjects(tx, SUBJECTS, &[&site_id])
+        .await?
+        .into_iter()
+        .map(|(_, s)| s)
+        .collect();
+    // Whose family each item is in, and whose parts are whose: the page's
+    // `WHERE` (its own, its family's, its parts'), as lookups.
+    let style_of: HashMap<Uuid, Uuid> = tx
+        .query("SELECT id, style_id FROM item WHERE id = ANY($1) AND style_id IS NOT NULL", &[&items])
+        .await?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
+    let part_of: HashMap<Uuid, Uuid> = tx
+        .query("SELECT id, item_id FROM item_part WHERE item_id = ANY($1)", &[&items])
+        .await?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
+    let mut own: HashMap<Uuid, Vec<CaptureSubject>> = HashMap::new();
+    let mut family: HashMap<Uuid, Vec<CaptureSubject>> = HashMap::new();
+    for subject in all {
+        if let Some(item) = subject.item_id {
+            own.entry(item).or_default().push(subject);
+        } else if let Some(style) = subject.item_style_id {
+            family.entry(style).or_default().push(subject);
+        } else if let Some(item) = subject.item_part_id.and_then(|p| part_of.get(&p)) {
+            own.entry(*item).or_default().push(subject);
+        }
+    }
+    let known = Known::read(tx, None).await?;
+    let mut assembled: Vec<(Uuid, usize)> = Vec::with_capacity(items.len());
+    let mut every: Vec<CaptureSubject> = vec![];
+    for &item in items {
+        let mut found = own.remove(&item).unwrap_or_default();
+        if let Some(rows) = style_of.get(&item).and_then(|s| family.get(s)) {
+            found.extend(rows.iter().cloned());
+        }
+        // The page's order: carton, each, the rest; then code and part.
+        let rank = |s: &CaptureSubject| match s.packaging_level.as_deref() {
+            Some("carton") => 0,
+            Some("each") => 1,
+            _ => 2,
+        };
+        found.sort_by(|a, b| {
+            rank(a).cmp(&rank(b)).then_with(|| a.code.cmp(&b.code)).then_with(|| a.part_label.cmp(&b.part_label))
+        });
+        let found = assemble(tx, item, found, &known).await?;
+        assembled.push((item, found.len()));
+        every.extend(found);
+    }
+    packed(tx, &mut every).await?;
+    let mut out = HashMap::with_capacity(assembled.len());
+    let mut rest = every.into_iter();
+    for (item, n) in assembled {
+        out.insert(item, rest.by_ref().take(n).collect());
+    }
+    Ok(out)
+}
+
+/// An item's subjects, from what the enumeration found for it: its family's
+/// carton made its own, a carton offered where there is none, its inner pack,
+/// its runs, and the variant standing for its carton. One item's page and the
+/// whole export (D216) assemble them here, so the two cannot disagree.
+async fn assemble(
+    tx: &tokio_postgres::Transaction<'_>,
+    item_id: Uuid,
+    mut found: Vec<CaptureSubject>,
+    known: &Known,
+) -> Result<Vec<CaptureSubject>, ApiError> {
     // **On an item's page, its carton is its own** (D190). A family's carton
     // speaks for the sizes on the worklist (D108), but somebody on the page of
     // one size, holding that size's carton, is recording that carton. So the
@@ -665,20 +797,21 @@ pub async fn subjects_for_item(
         }
     }
     // The inner pack sits between the carton and the each (D185).
-    if let Some(inner) = inner_subject(tx, item_id).await? {
-        let at = found
-            .iter()
-            .position(|s| s.packaging_level.as_deref() == Some("each"))
-            .unwrap_or(found.len());
-        found.insert(at, inner);
+    if known.packs.contains(&item_id) {
+        if let Some(inner) = inner_subject(tx, item_id).await? {
+            let at = found
+                .iter()
+                .position(|s| s.packaging_level.as_deref() == Some("each"))
+                .unwrap_or(found.len());
+            found.insert(at, inner);
+        }
     }
-    found.extend(lot_subjects(tx, item_id).await?);
+    if known.lots.contains(&item_id) {
+        found.extend(lot_subjects(tx, item_id).await?);
+    }
     // **The variant that is its carton** (D184): the carton card shows it
     // until the carton has figures or photographs of its own.
-    let chosen: Option<uuid::Uuid> = tx
-        .query_opt("SELECT default_lot_id FROM item WHERE id = $1", &[&item_id])
-        .await?
-        .and_then(|r| r.get(0));
+    let chosen: Option<uuid::Uuid> = known.chosen.get(&item_id).copied();
     if let Some(lot) = chosen {
         let standing = found.iter().find(|s| s.lot_id == Some(lot)).map(|v| {
             (v.gross_weight_g, v.length_mm, v.width_mm, v.height_mm, v.weight_absent, v.dimensions_absent,
@@ -711,45 +844,50 @@ pub async fn subjects_for_item(
     // is usually the bigger one, so carton leads, then the each, then the parts
     // — which are what to measure when the each turns out to have no box. Its
     // runs that look different come last (D182).
-    packed(tx, &mut found).await?;
     Ok(found)
 }
 
 /// What each subject is packed in, own before inherited, and so whether it
-/// is photographed as a box (D191). A handful of subjects per item.
+/// is photographed as a box (D191); whether it ships as it is (D196) and
+/// keeps a way up (D200). **One query for all of them**: an item's page has a
+/// handful of subjects, and the export (D216) the whole catalogue's.
 async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubject]) -> Result<(), ApiError> {
-    for s in found.iter_mut() {
-        let said = tx
-            .query_opt(
-                "SELECT p.packaging_type, p.source, t.six_sided, t.round
-                   FROM packed_in($1, $2, $3, $4, $5::text::packaging_level) p
-                   JOIN packaging_type t ON t.code = p.packaging_type",
-                &[&s.item_id, &s.item_style_id, &s.lot_id, &s.item_part_id, &s.packaging_level],
-            )
-            .await?;
-        if let Some(r) = said {
-            s.packed_in = r.get(0);
-            s.packed_in_source = r.get(1);
-            s.box_shaped = !s.dimensions_absent && r.get::<_, bool>(2);
-            s.round = !s.dimensions_absent && r.get::<_, bool>(3);
+    if found.is_empty() {
+        return Ok(());
+    }
+    let items: Vec<Option<uuid::Uuid>> = found.iter().map(|s| s.item_id).collect();
+    let styles: Vec<Option<uuid::Uuid>> = found.iter().map(|s| s.item_style_id).collect();
+    let lots: Vec<Option<uuid::Uuid>> = found.iter().map(|s| s.lot_id).collect();
+    let parts: Vec<Option<uuid::Uuid>> = found.iter().map(|s| s.item_part_id).collect();
+    let levels: Vec<Option<String>> = found.iter().map(|s| s.packaging_level.clone()).collect();
+    let rows = tx
+        .query(
+            "SELECT k.n, p.packaging_type, p.source, t.six_sided, t.round,
+                    sa.as_it_is, sa.source, ku.upright, ku.source
+               FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::uuid[], $5::text[])
+                    WITH ORDINALITY AS k(item, style, lot, part, level, n)
+               LEFT JOIN LATERAL packed_in(k.item, k.style, k.lot, k.part, k.level::packaging_level) p ON true
+               LEFT JOIN packaging_type t ON t.code = p.packaging_type
+              CROSS JOIN LATERAL ships_as_is(k.item, k.style, k.lot, k.part, k.level::packaging_level) sa
+              CROSS JOIN LATERAL keeps_upright(k.item, k.style, k.lot, k.part, k.level::packaging_level) ku",
+            &[&items, &styles, &lots, &parts, &levels],
+        )
+        .await?;
+    for r in &rows {
+        let Some(s) = found.get_mut((r.get::<_, i64>(0) - 1) as usize) else { continue };
+        if let (Some(code), Some(six_sided), Some(round)) =
+            (r.get::<_, Option<String>>(1), r.get::<_, Option<bool>>(3), r.get::<_, Option<bool>>(4))
+        {
+            s.packed_in = Some(code);
+            s.packed_in_source = r.get(2);
+            s.box_shaped = !s.dimensions_absent && six_sided;
+            s.round = !s.dimensions_absent && round;
         }
         // Always a row: the default when nobody has said (D196).
-        let ships = tx
-            .query_one(
-                "SELECT as_it_is, source FROM ships_as_is($1, $2, $3, $4, $5::text::packaging_level)",
-                &[&s.item_id, &s.item_style_id, &s.lot_id, &s.item_part_id, &s.packaging_level],
-            )
-            .await?;
-        s.ships_as_is = ships.get(0);
-        s.ships_as_is_source = ships.get(1);
-        let upright = tx
-            .query_one(
-                "SELECT upright, source FROM keeps_upright($1, $2, $3, $4, $5::text::packaging_level)",
-                &[&s.item_id, &s.item_style_id, &s.lot_id, &s.item_part_id, &s.packaging_level],
-            )
-            .await?;
-        s.upright = upright.get(0);
-        s.upright_source = upright.get(1);
+        s.ships_as_is = r.get(5);
+        s.ships_as_is_source = r.get(6);
+        s.upright = r.get(7);
+        s.upright_source = r.get(8);
     }
     Ok(())
 }

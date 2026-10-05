@@ -9401,6 +9401,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::places::bin_page)
         .service(crate::places::place_page)
         .service(crate::items::item_list)
+        // Before `/items/{id}`, which would take "export" for an item.
+        .service(crate::export::export_items)
         .service(crate::items::item_page)
         .service(crate::listed::flag_bin)
         .service(crate::cartons::say_carton)

@@ -15047,3 +15047,51 @@ is what D212's fourth point asks for.
 Spork's ledger and are put right by moving its stock. These are about
 NetSuite's report and are put right in NetSuite. They route differently,
 which is D33's test for a kind.
+
+### D216: The item list exports every row, with everything recorded
+
+*Adopted 2026-10-05, with no migration.*
+
+**Decision.** The Items page's **Export** gives the list as it is asked
+(its search, filters, list and order, every row, not the fifty loaded), as
+CSV or as an Excel workbook (`GET /items/export?format=csv|xlsx`). Nothing
+asked is the whole catalogue. One row per item:
+
+- what it is: code, description, active, family;
+- where it is: the bin to go to, NetSuite's on hand and its bins, what
+  Spork's ledger holds;
+- its barcodes, and what its carton holds: the whole carton, packs per
+  carton and each per pack (D185);
+- for each of its **each**, **inner pack** and **carton**: weight (kg),
+  length, width and height (cm), across the top and base and the top part's
+  height for a round thing (D213), what it is packed in, whether it ships as
+  it is or keeps a way up, how it was arranged, the faces photographed, when
+  its newest figure was recorded, how, by whom, and whose figures they are
+  (its own, its family's, its variant's). "none" where it was said to have no
+  weight or no size (D138);
+- its parts, in a few words each; open bin flags (D215);
+- **its picture**: its newest box drawing (D186), or, where it has none, its
+  front photo, its own or its family's.
+
+The workbook holds each picture in the row, shrunk to 160 px and written as
+PNG (a workbook can't hold WebP), anchored to its cell rather than "in" it,
+so Numbers on an iPhone shows it too. Both formats link to the picture, a
+link that opens in a browser signed in to Spork. The CSV is UTF-8 with a
+byte-order mark, so a spreadsheet reads `×` and `’` as written.
+
+**The item page's subjects, not a second idea of them.** An item's levels
+are assembled by the code that assembles its page (`capture::assemble`): its
+family's carton when it has none of its own, the variant standing for its
+carton (D184), its inner pack where the case pack says packs. The export
+runs the capture enumeration once over the catalogue and assembles each item
+from it; the item page runs it for one item. A test holds the two to the
+same figures. What each subject is packed in is read in one query for both.
+
+**Not in a row:** an item's runs that look different (D182), which are on
+its page. Not in the app: a download is a link the browser follows with the
+session's cookie, which the app's session isn't.
+
+**Why.** Measurements recorded in Spork are wanted elsewhere: in NetSuite,
+by a customer, on a sheet. Exported fifty at a time, or without the
+pictures, they would be copied out by hand. The whole catalogue (9,181
+items) exports in about two seconds.

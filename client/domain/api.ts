@@ -794,6 +794,21 @@ export const api = {
     return send<ItemsList>("GET", `/items${qs ? `?${qs}` : ""}`);
   },
 
+  /**
+   * The list as asked, every row, as a file to download (D216): CSV, or a
+   * workbook with each item's picture. A link the browser follows, so the
+   * file is saved as it arrives, with the session's cookie.
+   */
+  itemsExportUrl: (
+    query: { q?: string; stock?: "here"; needs?: string; has?: string; list?: Uuid; order?: string },
+    format: "csv" | "xlsx",
+  ): string => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v) p.set(k, String(v));
+    p.set("format", format);
+    return `${transport.base}/items/export?${p.toString()}`;
+  },
+
   /** An item: what it is, what it measures, and where each record says it is. */
   item: (itemId: Uuid) => send<ItemView>("GET", `/items/${encodeURIComponent(itemId)}`),
 

@@ -65,6 +65,8 @@ export interface ItemsDesk {
   pick: (listId: string) => void;
   /** Make a list from pasted codes and narrow to it. True when it was made. */
   makeList: (name: string, pasted: string) => Promise<boolean>;
+  /** Where the list as asked downloads, every row of it (D216). */
+  exportUrl: (format: "csv" | "xlsx") => string;
   making: { busy: boolean; problem: string | null; dismiss: () => void };
 }
 
@@ -191,6 +193,7 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
 
     lists,
     pick: (list) => setAsked((a) => ({ ...a, list, order: list ? "list" : a.order === "list" ? "" : a.order })),
+    exportUrl: (format) => api.itemsExportUrl(queryOf(asked), format),
     makeList: async (name, pasted) => {
       let made: ItemListRow | null = null;
       await making.press(`list:${name.trim()}:${pasted}`, async (act) => {

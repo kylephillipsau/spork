@@ -29,6 +29,7 @@ pub mod despatching;
 pub mod findings;
 pub mod handover;
 pub mod error;
+pub mod export;
 pub mod health;
 pub mod images;
 pub mod importing;

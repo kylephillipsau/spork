@@ -180,6 +180,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - D185, amended: "How many in it" is the whole carton's count, and the packs
   are worked out from it. A carton said the old way shows its inflated total
   when opened, which is how to find and fix one.
+- D216. Items → Export: the list as asked, every row, as CSV or a workbook
+  with each item's picture (`export.rs`, `GET /items/export`). An item's
+  levels come from `capture::subjects_for_items`, which assembles each item
+  with the item page's own `assemble`; `items::ListAsk`/`list_rows` are the
+  list's filters and rows, shared by the page and the export.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

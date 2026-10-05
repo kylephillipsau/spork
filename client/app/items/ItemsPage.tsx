@@ -1,4 +1,4 @@
-import { Boxes, Camera, ListPlus, Ruler, Scale } from "lucide-react";
+import { Boxes, Camera, Download, FileSpreadsheet, FileText, ListPlus, Ruler, Scale } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import {
@@ -8,6 +8,8 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  Menu,
+  MenuItem,
   Page,
   PageHeader,
   SearchField,
@@ -29,6 +31,32 @@ import { ItemDrawer } from "./ItemProperties";
 import type { PropertiesDesk } from "./useItemProperties";
 import type { Has, ItemsDesk, Needs, Order, Stock } from "./useItems";
 import s from "./items.module.css";
+
+/**
+ * The list as asked, every row of it, as a file (D216): what is shown,
+ * whatever has been loaded of it, and every item when nothing narrows it.
+ * Followed as a link, so the browser saves it as it arrives. Not in the app,
+ * whose session is not a cookie a link carries.
+ */
+function Export({ desk, narrowed }: { desk: ItemsDesk; narrowed: boolean }) {
+  const get = (format: "csv" | "xlsx") => () => window.location.assign(desk.exportUrl(format));
+  return (
+    <Menu
+      trigger={
+        <Button size="sm" icon={<Download />}>
+          {narrowed ? "Export these" : "Export all"}
+        </Button>
+      }
+    >
+      <MenuItem icon={<FileSpreadsheet />} onSelect={get("xlsx")}>
+        Excel, with pictures
+      </MenuItem>
+      <MenuItem icon={<FileText />} onSelect={get("csv")}>
+        CSV
+      </MenuItem>
+    </Menu>
+  );
+}
 
 /**
  * Every item, and what is known about each: what it looks like, how many are
@@ -57,7 +85,11 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
 
   return (
     <Page>
-      <PageHeader title="Items" description="Everything NetSuite has sent: where it is, and its weight, size and photos." />
+      <PageHeader
+        title="Items"
+        description="Everything NetSuite has sent: where it is, and its weight, size and photos."
+        actions={import.meta.env.MODE !== "mobile" && <Export desk={desk} narrowed={!!narrowed} />}
+      />
 
       <Card padded={false}>
         <Toolbar>

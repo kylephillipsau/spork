@@ -491,6 +491,7 @@ export function fixtureItems(
     lists: LISTS,
     pick: noop,
     makeList: async () => false,
+    exportUrl: (format) => `/api/items/export?format=${format}`,
     making: { busy: false, problem: null, dismiss: noop },
     ...over,
   };
