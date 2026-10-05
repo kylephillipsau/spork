@@ -201,6 +201,14 @@ pub struct CaptureSubject {
     /// Packed in a round type, a bucket or a tin: measured across its top and
     /// base, photographed by its side and its lid (D213).
     pub round: bool,
+    /// The level NetSuite counts one of (D218): the item as it is sold,
+    /// offered first and named by its unit.
+    pub is_unit: bool,
+    /// Offered, not there (D218): a carton nobody has said the item comes in,
+    /// or the single product inside the pack or carton it is sold as, with
+    /// nothing recorded of it. It asks for nothing, and a screen shows it only
+    /// when somebody asks to measure it.
+    pub offered: bool,
     /// `own`, `style` or `mixed` — D108's vocabulary, and the reason it exists:
     /// a screen that cannot tell them apart reports a number nobody took
     /// against this code as though somebody had.
@@ -409,9 +417,10 @@ pub async fn screen(
                         .then(a.1.packaging_level.cmp(&b.1.packaging_level))
                 });
 
+                // What is only offered (D218) is not a thing to walk to.
                 let walk = classified
                     .into_iter()
-                    .filter(|(class, _)| *class != Class::Settled)
+                    .filter(|(class, s)| *class != Class::Settled && !s.offered)
                     .map(|(_, subject)| subject)
                     .take(limit as usize)
                     .collect();
@@ -440,6 +449,11 @@ async fn classified_subjects(
     sql: &str,
     params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
 ) -> Result<Vec<(Class, CaptureSubject)>, ApiError> {
+    // **No just-in-time compiling for this one.** The planner guesses the
+    // enumeration at millions of rows where there are ten thousand, and past
+    // its threshold it compiles the query first: 100 ms of compiling for a
+    // 40 ms read, on every item page (D218). For this transaction only.
+    tx.batch_execute("SET LOCAL jit = off").await?;
     let rows = tx.query(sql, params).await?;
     let now = Utc::now();
     let mut out = vec![];
@@ -531,8 +545,29 @@ async fn classified_subjects(
                 observed_at,
                 faces,
                 demand: r.get::<_, Option<i64>>(14).unwrap_or(0),
+                is_unit: false,
+                offered: false,
             },
         ));
+        // Which level is one in NetSuite (D218), and whether this one is it,
+        // or a single product inside it that nothing has been recorded of.
+        let unit: Option<String> = r.get(25);
+        let subject = &mut out.last_mut().expect("just pushed").1;
+        let own = subject.item_id.is_some() && subject.lot_id.is_none() && subject.item_part_id.is_none();
+        subject.is_unit = own && subject.packaging_level.as_deref() == Some(unit.as_deref().unwrap_or("each"));
+        let nothing = subject.gross_weight_g.is_none()
+            && subject.length_mm.is_none()
+            && subject.faces.is_empty()
+            && !subject.weight_absent
+            && !subject.dimensions_absent;
+        if own
+            && subject.packaging_level.as_deref() == Some("each")
+            && matches!(unit.as_deref(), Some("inner" | "carton"))
+            && nothing
+        {
+            subject.offered = true;
+            subject.wants.clear();
+        }
     }
     Ok(out)
 }
@@ -792,12 +827,17 @@ async fn assemble(
                 because: because(Class::Unrecorded, None).to_string(),
                 location_code: each.location_code.clone(),
                 soh: each.soh,
+                is_unit: false,
+                // Nobody has said it comes in one (D218): offered, not there.
+                offered: true,
             };
             found.insert(0, carton);
         }
     }
-    // The inner pack sits between the carton and the each (D185).
-    if known.packs.contains(&item_id) {
+    // The inner pack sits between the carton and the each (D185); the
+    // enumeration has it already when it is what NetSuite counts (D218).
+    let has_inner = found.iter().any(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("inner"));
+    if known.packs.contains(&item_id) && !has_inner {
         if let Some(inner) = inner_subject(tx, item_id).await? {
             let at = found
                 .iter()
@@ -840,10 +880,35 @@ async fn assemble(
             }
         }
     }
-    // A scan off a carton is the common case and the level the operator wants
-    // is usually the bigger one, so carton leads, then the each, then the parts
-    // — which are what to measure when the each turns out to have no box. Its
-    // runs that look different come last (D182).
+    // **The item as it is sold leads** (D218): its unit, then what it comes
+    // in, outward from it (its pack, then its carton), then what is inside
+    // it, nearest first; then its parts, which are what to measure when the
+    // each turns out to have no box, and its runs that look different last
+    // (D182). Stable, so a family's carton stays behind the item's own.
+    let size = |level: Option<&str>| match level {
+        Some("each") => 0i8,
+        Some("inner") => 1,
+        Some("carton") => 2,
+        _ => 0,
+    };
+    let unit = size(found.iter().find(|s| s.is_unit).and_then(|s| s.packaging_level.as_deref()));
+    let rank = |s: &CaptureSubject| -> i8 {
+        if s.is_unit {
+            0
+        } else if s.lot_id.is_some() {
+            30
+        } else if s.item_part_id.is_some() {
+            20
+        } else {
+            let at = size(s.packaging_level.as_deref());
+            if at > unit {
+                at - unit
+            } else {
+                10 + (unit - at)
+            }
+        }
+    };
+    found.sort_by_key(rank);
     Ok(found)
 }
 
@@ -1041,6 +1106,8 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         demand: 0,
         location_code: None,
         soh: 0,
+        is_unit: false,
+        offered: false,
     }
 }
 
@@ -1108,6 +1175,10 @@ WITH cfg AS (
      WHERE effective_from <= current_date
      ORDER BY item_id, effective_from DESC, id DESC
 ),
+-- Which level of each item is one in NetSuite (D218), read once.
+unit AS MATERIALIZED (
+    SELECT item_id, level::text AS level FROM item_unit_level
+),
 subject AS (
     -- Every item at `each`. A pair of boots is a definite thing on its own and
     -- needs no case pack, which is why `observable_item_config_ck` requires the
@@ -1134,14 +1205,27 @@ subject AS (
     -- family's carton speaks for it, or when somebody has already recorded
     -- against it: a carton copied off the prepack list with no count stated
     -- is still a carton with figures, and they are its own.
+    --
+    -- And whenever the carton is what NetSuite counts one of (D218): then it
+    -- is the item itself, as it is sold.
     SELECT i.id, NULL, NULL, NULL, 'carton', i.code, i.description, i.style_id, i.id
       FROM item i
-      JOIN cfg ON cfg.item_id = i.id
-     WHERE (cfg.inners_per_carton IS NOT NULL AND i.style_id IS NULL)
-        OR EXISTS (
-               SELECT 1 FROM observable o
-                 JOIN observation ob ON ob.observable_id = o.id
-                WHERE o.item_id = i.id AND o.packaging_level = 'carton')
+      LEFT JOIN cfg ON cfg.item_id = i.id
+      LEFT JOIN unit u ON u.item_id = i.id
+     WHERE (cfg.item_id IS NOT NULL
+            AND ((cfg.inners_per_carton IS NOT NULL AND i.style_id IS NULL)
+                 OR EXISTS (
+                        SELECT 1 FROM observable o
+                          JOIN observation ob ON ob.observable_id = o.id
+                         WHERE o.item_id = i.id AND o.packaging_level = 'carton')))
+        OR u.level = 'carton'
+    UNION ALL
+    -- An item's pack, when the pack is what NetSuite counts one of (D218): a
+    -- box of 100 earplugs is the item as it is sold.
+    SELECT i.id, NULL, NULL, NULL, 'inner', i.code, i.description, i.style_id, i.id
+      FROM item i
+      JOIN unit u ON u.item_id = i.id
+     WHERE u.level = 'inner'
     UNION ALL
     -- Every part of every item. D139: a pan and a handle are what carry the
     -- sizes, because the set they make has none. The parent's code so the two
@@ -1328,8 +1412,10 @@ SELECT sub.item_id, sub.item_style_id, sub.code, sub.description, sub.level,
        CASE WHEN sub.level = 'each' THEN coalesce(pc.n, 0) ELSE 0 END,
        loc.code,
        coalesce(hi.soh, hs.soh, 0)::bigint,
-       f.diameter_mm, f.base_diameter_mm, f.top_height_mm
+       f.diameter_mm, f.base_diameter_mm, f.top_height_mm,
+       un.level
   FROM subject sub
+  LEFT JOIN unit un ON un.item_id = coalesce(sub.item_id, sub.stock_item_id)
   LEFT JOIN figures f
          ON f.subject_key = coalesce(sub.item_id, sub.item_style_id, sub.item_part_id)
         AND f.level = sub.level

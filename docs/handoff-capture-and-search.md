@@ -193,6 +193,13 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   the real NetSuite (its standard `saleunit` is refused in SuiteQL). NetSuite
   also has `custitem_length`, `custitem_width`, `custitem_height`,
   `custitem_eachpercarton` and friends: where a write-back would go.
+- D218. Each item has a unit, the level that is one in NetSuite: said in
+  Spork (`item_unit`, `POST /items/{id}/unit`) or taken from its Pack Unit by
+  `unit_level_of` (migration 124, view `item_unit_level`). The item page leads
+  with it and keeps offers (an unsaid carton, a single product inside) as
+  quiet lines; the bench counts in NetSuite units (`bench::per_level`); the
+  capture sheet and exports use the unit's figures. Stage two: moving figures
+  and photos recorded on the wrong card, and the "needs" filters.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

@@ -108,8 +108,9 @@ pub struct BenchLine {
 pub struct PackUnit {
     /// `each`, `inner` or `carton`.
     pub level: String,
-    /// Eaches in one of it: one, or what the case pack in force puts in an
-    /// inner pack or a carton.
+    /// **Of what NetSuite counts, how many are in one of it** (D218): one of
+    /// the item's unit is one, its carton so many of them. A level below the
+    /// unit is never one of these: nobody orders one glove from a box.
     pub units: i64,
     /// It goes to the carrier as it is rather than into a box (D196), said or
     /// by default: a carton does, an each or an inner pack does not.
@@ -433,11 +434,17 @@ pub async fn bench_view(
                         });
                     let measured = crate::routes::measurements_of(tx, item_id).await?;
                     let case = case_pack(tx, item_id).await?;
+                    // What NetSuite counts one of (D218): what was ordered is in it.
+                    let unit: String = tx
+                        .query_opt("SELECT level::text FROM item_unit_level WHERE item_id = $1", &[&item_id])
+                        .await?
+                        .map(|r| r.get(0))
+                        .unwrap_or_else(|| "each".into());
                     out.push(BenchLine {
                         elsewhere,
-                        own_carton: own_carton(case.as_ref(), &measured),
+                        own_carton: own_carton(case.as_ref(), &measured, &unit),
                         picture: None,
-                        packs: packs_of(case.as_ref(), &measured),
+                        packs: packs_of(case.as_ref(), &measured, &unit),
                         line_id: l.get(0),
                         item_id,
                         item_code: l.get(1),
@@ -501,19 +508,39 @@ async fn case_pack(
         }))
 }
 
-/// A carton of this item, when its case pack in force says how many are in one.
+/// How many of what NetSuite counts are in one of each level (D218), each,
+/// inner, carton: one of the unit is one; a carton is so many of it; a level
+/// below the unit has none, because it never leaves on its own. A count
+/// nobody has said is none, and a level with none is not offered.
+fn per_level(case: Option<&CasePack>, unit: &str) -> [(&'static str, Option<i64>); 3] {
+    let per_inner = case.and_then(|c| c.per_inner).map(i64::from).filter(|n| *n > 0);
+    let inners = case.and_then(|c| c.inners).map(i64::from).filter(|n| *n > 0);
+    match unit {
+        // The carton is the unit: one of it is one, whatever it holds.
+        "carton" => [("each", None), ("inner", None), ("carton", Some(1))],
+        // The pack is the unit: a carton is so many packs, however many each
+        // pack holds, said or not.
+        "inner" => [("each", None), ("inner", Some(1)), ("carton", inners)],
+        _ => [
+            ("each", Some(1)),
+            ("inner", per_inner.filter(|n| *n > 1)),
+            ("carton", per_inner.zip(inners).map(|(p, i)| p * i)),
+        ],
+    }
+}
+
+/// A carton of this item, when it has one of a known count: in what NetSuite
+/// counts, so a carton that is the unit is one (D218).
 ///
 /// The carton's figures are [`crate::routes::measurements_of`]'s, so the bench
 /// and the item page cannot disagree about what a carton measures.
 fn own_carton(
     case: Option<&CasePack>,
     measured: &[crate::routes::ItemMeasurements],
+    unit: &str,
 ) -> Option<OwnCarton> {
     let c = case?;
-    let units = i64::from(c.per_inner?) * i64::from(c.inners?);
-    if units <= 0 {
-        return None;
-    }
+    let units = per_level(case, unit)[2].1?;
     let carton = measured.iter().find(|m| m.packaging_level == "carton");
     Some(OwnCarton {
         item_packing_config_id: c.id,
@@ -526,16 +553,14 @@ fn own_carton(
     })
 }
 
-/// One of it at each level it can leave at (D195, D196): an each always; an
-/// inner pack when the case pack puts more than one in it; a carton when the
-/// case pack counts one. Each with what is recorded at that level, and
-/// nothing guessed: the arrangement lists a level with no size as not
-/// measured. Its sides, whether it has no size, and whether it ships as it is
-/// are filled in by [`looks`], for every line at once.
-fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements]) -> Vec<PackUnit> {
-    let per_inner = case.and_then(|c| c.per_inner).map(i64::from).filter(|n| *n > 0);
-    let per_carton = case.and_then(|c| Some(i64::from(c.per_inner?) * i64::from(c.inners?))).filter(|n| *n > 0);
-    [("each", Some(1)), ("inner", per_inner.filter(|n| *n > 1)), ("carton", per_carton)]
+/// One of it at each level it can leave at (D195, D196, D218): its unit
+/// always, the one NetSuite counts; a pack or a carton above it when the case
+/// pack counts one. Each with what is recorded at that level, and nothing
+/// guessed: the arrangement lists a level with no size as not measured. Its
+/// sides, whether it has no size, and whether it ships as it is are filled in
+/// by [`looks`], for every line at once.
+fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements], unit: &str) -> Vec<PackUnit> {
+    per_level(case, unit)
         .into_iter()
         .filter_map(|(level, units)| {
             let units = units?;
@@ -927,4 +952,57 @@ pub async fn cartons_on(
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn case(per_inner: Option<i32>, inners: Option<i32>) -> CasePack {
+        CasePack { id: Uuid::nil(), per_inner, inners }
+    }
+
+    /// What one of each level is, in what NetSuite counts (D218).
+    fn units(c: Option<CasePack>, unit: &str) -> Vec<(String, i64)> {
+        packs_of(c.as_ref(), &[], unit).into_iter().map(|p| (p.level, p.units)).collect()
+    }
+
+    fn of(levels: &[(&str, i64)]) -> Vec<(String, i64)> {
+        levels.iter().map(|(l, n)| (l.to_string(), *n)).collect()
+    }
+
+    #[test]
+    fn a_carton_sold_as_one_is_one_whatever_it_holds() {
+        // Gloves, "ctn 1000": an order for two is two cartons, not two gloves.
+        assert_eq!(units(Some(case(Some(1), Some(1000))), "carton"), of(&[("carton", 1)]));
+        // Its count unsaid, it is still one carton.
+        assert_eq!(units(Some(case(None, None)), "carton"), of(&[("carton", 1)]));
+        assert_eq!(units(None, "carton"), of(&[("carton", 1)]));
+    }
+
+    #[test]
+    fn a_pack_sold_as_one_fills_a_carton_by_the_pack() {
+        // Earplugs, a box of 100 in cartons of 10 boxes; no single pair.
+        assert_eq!(units(Some(case(Some(100), Some(10))), "inner"), of(&[("inner", 1), ("carton", 10)]));
+        // How many are in a box unsaid: the carton is still ten boxes.
+        assert_eq!(units(Some(case(None, Some(10))), "inner"), of(&[("inner", 1), ("carton", 10)]));
+        assert_eq!(units(None, "inner"), of(&[("inner", 1)]));
+    }
+
+    #[test]
+    fn an_each_sold_as_one_is_as_it_was() {
+        assert_eq!(units(Some(case(Some(1), Some(6))), "each"), of(&[("each", 1), ("carton", 6)]));
+        assert_eq!(units(Some(case(Some(24), Some(6))), "each"), of(&[("each", 1), ("inner", 24), ("carton", 144)]));
+        assert_eq!(units(Some(case(None, Some(6))), "each"), of(&[("each", 1)]), "a carton of an unsaid count is not filled");
+        assert_eq!(units(None, "each"), of(&[("each", 1)]));
+    }
+
+    #[test]
+    fn a_carton_of_its_own_counts_what_netsuite_counts() {
+        let carton = |c: CasePack, unit| own_carton(Some(&c), &[], unit).map(|o| o.units);
+        assert_eq!(carton(case(Some(1), Some(1000)), "carton"), Some(1));
+        assert_eq!(carton(case(Some(100), Some(10)), "inner"), Some(10));
+        assert_eq!(carton(case(Some(1), Some(6)), "each"), Some(6));
+        assert_eq!(carton(case(None, Some(6)), "each"), None);
+    }
 }

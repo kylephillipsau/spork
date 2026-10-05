@@ -9,7 +9,7 @@ import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
 import { measurementsOf, type Figures } from "./figures";
 import { isRound } from "./box";
-import { NO_FIGURES, cartonHolds, isOwnCarton, photosOf, presentationNeeded, readHolds, sayFirst, subjectKey, type Face } from "./subjects";
+import { NO_FIGURES, cartonHolds, isOwnCarton, photosOf, presentationNeeded, readHoldsFor, sayFirst, subjectKey, type Face } from "./subjects";
 
 /**
  * One item's properties, as logic: what it is and what is known of it, and
@@ -158,6 +158,8 @@ export interface PropertiesDesk {
    * it was refused (the reason in `problem`).
    */
   flagBin: (said: BinFlag) => Promise<BinFlagged | null>;
+  /** Say which level is one in NetSuite (D218). True when said. */
+  sayUnit: (level: "each" | "inner" | "carton") => Promise<boolean>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -320,7 +322,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     // nothing, for a carton not said.
     const packing = read.kind === "ready" && isOwnCarton(subject) ? read.item.packing : null;
     const packs = (packing?.units_per_inner ?? 1) > 1;
-    const known = cartonHolds(packing);
+    // Sold by the pack, its carton is counted in packs (D218).
+    const byPack = read.kind === "ready" && read.item.unit.level === "inner";
+    const known = byPack ? (packing?.inners_per_carton ?? null) : cartonHolds(packing);
     setHolds(known === null ? "" : String(known));
     setPer(packs ? String(packing!.units_per_inner) : "");
     // Measuring starts from nothing typed; photographing after measuring keeps
@@ -349,7 +353,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
    */
   const sayCartonFirst = async (subject: CaptureSubject, act: Act) => {
     if (!isOwnCarton(subject) || !subject.item_id || read.kind !== "ready") return;
-    const typed = readHolds(holds, per);
+    const typed = readHoldsFor(read.item.unit.level, holds, per, read.item.packing);
     if ("problem" in typed) throw new ApiError(typed.problem, 400);
     if (!sayFirst(read.item.packing, typed.holds, typed.per)) return;
     await api.sayCarton(subject.item_id, { holds: typed.holds, per: typed.per, act: partOf(act, "carton") });
@@ -598,6 +602,19 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         if (!live.current) return;
         await reload();
       }),
+
+    sayUnit: async (level) => {
+      if (read.kind !== "ready") return false;
+      const item = read.item.item_id;
+      let done = false;
+      await press(`unit:${item}:${level}`, async (act) => {
+        await api.sayUnit(item, level, act);
+        done = true;
+        if (!live.current) return;
+        await reload();
+      });
+      return done;
+    },
 
     flagBin: async (said) => {
       if (read.kind !== "ready") return null;

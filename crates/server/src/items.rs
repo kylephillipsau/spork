@@ -94,6 +94,17 @@ pub struct ItemReported {
     pub source: String,
 }
 
+/// Which level of it is one in NetSuite (D218).
+#[derive(Serialize, Debug)]
+pub struct ItemUnit {
+    /// `each`, `inner` or `carton`.
+    pub level: String,
+    /// Said in Spork, rather than taken from NetSuite's Pack Unit.
+    pub said: bool,
+    /// NetSuite's Pack Unit, as it names it: "CTN", "Box", "Pair".
+    pub netsuite_unit: Option<String>,
+}
+
 /// Something said on the floor against NetSuite's bins, still open (D215).
 #[derive(Serialize, Debug)]
 pub struct ItemFlag {
@@ -120,6 +131,8 @@ pub struct ItemView {
     pub picture: Option<Picture>,
     pub measurements: Vec<ItemMeasurements>,
     pub packing: Option<ItemPacking>,
+    /// Which level of it is one in NetSuite: what it is sold as (D218).
+    pub unit: ItemUnit,
     /// This system's own record, in walking order.
     pub held: Vec<ItemHeld>,
     /// What NetSuite last reported, in walking order.
@@ -304,6 +317,15 @@ pub async fn item_page(
                     })
                     .collect();
 
+                let unit = tx
+                    .query_opt(
+                        "SELECT level::text, said, netsuite_unit FROM item_unit_level WHERE item_id = $1",
+                        &[&id],
+                    )
+                    .await?
+                    .map(|u| ItemUnit { level: u.get(0), said: u.get(1), netsuite_unit: u.get(2) })
+                    .unwrap_or(ItemUnit { level: "each".into(), said: false, netsuite_unit: None });
+
                 let flags = tx
                     .query(
                         "SELECT d.id, d.kind::text, l.id, l.code, d.observed_quantity::text, d.detected_at,
@@ -394,6 +416,7 @@ pub async fn item_page(
                     picture,
                     measurements,
                     packing,
+                    unit,
                     held,
                     reported,
                     flags,

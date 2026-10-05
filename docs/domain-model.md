@@ -13862,7 +13862,9 @@ between them is the case pack (`item_packing_config`), as it always was. What
 changes is who can say it: the person holding the carton, on the item's page.
 - Every item's page offers its carton, whatever is on file. Where no case pack
   or family speaks for one, the carton is shown with nothing known, and asks
-  for nothing until somebody says what it holds.
+  for nothing until somebody says what it holds. *Amended by D218:* that
+  carton is offered as a quiet "Comes in a carton?" under the item, not a card
+  of its own, until somebody asks to measure it.
 - Weighing, measuring or photographing that carton takes **how many in it**
   beside the figures. The press says the carton first
   (`POST /items/{id}/carton`) when none is on file, or when the count typed is
@@ -14090,6 +14092,10 @@ at again; pointing says what is true, that the carton is that printing.
 **How many in it**: a box of six bundles of 24 gloves is six packs of 24
 (`units_per_inner` 24, `inners_per_carton` 6), 144 of the item. Left blank,
 the carton holds the item loose, a pack of one.
+
+*Amended by D218:* for an item sold by the pack, its carton is typed as how
+many packs are in it and what a pack holds, and described in the item's
+words ("10 boxes of 100").
 
 **How many in it is the whole carton's count** (amended 2026-10-05): 144,
 not 6. The packs are worked out from it, and the screen says so ("That's 6
@@ -15116,8 +15122,8 @@ embedded (`sheet.rs`). It is named as the printed one was:
 `Foodcare_Weights_Dims_Capture_Melbourne_<date>.pdf`.
 
 - **The boxes hold what Spork has recorded**, to one decimal, for the unit the
-  item is sold in: the carton's figures for CTN (or carton, case), the each's
-  for anything else, and with no unit set, the carton's when it has any.
+  item is sold in: the level that is one in NetSuite (D218), the carton for a
+  CTN, the pack for a box of 100, the each for the rest.
   "none" where it was said to have no size or weight; empty where nothing is
   recorded, so the sheet is the record and the work left on it.
 - **SOH is what NetSuite has in the bin named**, the shelf the row sends
@@ -15136,3 +15142,59 @@ embedded (`sheet.rs`). It is named as the printed one was:
 **Why.** The sheet is how a list arrives and how the work on it is handed
 back. Exported in its own format with the figures in, it goes back to
 whoever sent it as the sheet they know.
+
+### D218: An item says which of its levels is one in NetSuite
+
+*Adopted 2026-10-05, with migration 124. Amends D178, D185, D195 and D217.*
+
+**The finding.** Spork's three levels are physical: the each is the single
+product, an inner pack holds so many, a carton so many packs. NetSuite counts
+an item in one unit, and that unit can be any of the three. Of Foodcare's
+items, 1,407 are sold by the Each, 615 by the CTN, 505 by the Pair, 86 by the
+Box and 36 by the Pack. Nothing in Spork said which level one of them was, so:
+- every item was offered a carton (D178), a catalogue as much as a glove;
+- a box of ten respirators was measured on the carton card, because "carton
+  of 10" read like "10/box";
+- the pack bench counted what was ordered in eaches (D195): an order for two
+  cartons of gloves, "ctn 1000", was two gloves, and listed as not measured
+  rather than as two cartons to send as they are.
+
+**Decision.** Each item has a **unit**: the level that is one of what NetSuite
+counts. Unsaid, it is taken from NetSuite's Pack Unit (D217) by one rule
+(`unit_level_of`): CTN, carton or case is the carton; Box or Pack is the inner
+pack, as DEJ-8040's box of 100 earplugs always was; everything else (Each,
+Pair, Roll, Drum, UNT) and nothing set is the each. It can be said in Spork
+over NetSuite's word, the newest saying winning (`item_unit`,
+`POST /items/{id}/unit`, the item page's **Sold as · Change**).
+`item_unit_level` holds the unit of every item either has spoken of; an item
+in neither is sold by the each.
+
+- **The item page leads with the unit**, named in the item's own words: "Box
+  of 100", "Carton of 1,000", "Pair", "Each", marked **One in NetSuite** when
+  there is more than one card. Then what it comes in, outward from it ("Carton
+  of 10 boxes"), then what is inside it.
+- **What is only offered stays out of the way.** A carton nobody has said the
+  item comes in, and the single product inside a pack or carton it is sold as
+  with nothing recorded, are quiet lines ("Comes in a carton?", "Measure a
+  single one from the box") rather than cards, until somebody asks. Measured,
+  a single one is a card of its own. Offered subjects ask for nothing, and the
+  capture walk leaves them out.
+- **The worklist lists the unit.** An item sold by the carton is offered its
+  carton to measure, and one sold by the box its box, where it listed the each
+  before.
+- **The pack bench counts in what NetSuite counts.** One of the unit is one;
+  a carton above it is so many of it, the count said in its case pack; a level
+  below it never leaves on its own. A CTN item's carton is one, and goes as it
+  is by D196's default; a box-sold item's carton is so many boxes.
+- **The capture sheet and the exports use the unit's figures.**
+
+**Kept as they were.** The three levels, their observations, and the case
+pack's counts, which still count the single product (`units_per_inner`) and
+packs to a carton (`inners_per_carton`); only what one of them means in
+NetSuite is new. A carton said by the prepack list for a CTN item is that
+item's unit, nothing to remove.
+
+**Not yet** (stage two). Figures and photos recorded on the wrong card, like
+the respirator's box on its carton, stay there until they can be moved: an
+act with history, as a photo's move is (D190). The items list's "needs"
+filters still count any level measured.

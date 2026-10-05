@@ -382,6 +382,12 @@ export interface CaptureSubject {
   box_shaped: boolean;
   /** Packed in a round type, a bucket or a tin: measured across, photographed by its side and lid (D213). */
   round: boolean;
+  /** The level NetSuite counts one of (D218): the item as it is sold, offered first. */
+  is_unit: boolean;
+  /** Offered, not there (D218): a carton nobody has said it comes in, or the
+   *  single product inside the pack or carton it is sold as, with nothing
+   *  recorded. Shown only when somebody asks to measure it. */
+  offered: boolean;
   /** `own`, `style` or `mixed` — D108. A screen that cannot tell them apart
    *  reports a number nobody took against this code as though somebody had. */
   source: string | null;
@@ -1373,6 +1379,15 @@ export interface ItemStyleRef {
 }
 
 /** What a carton holds, as the case pack in force says. Either count may be unknown. */
+/** Which level of an item is one in NetSuite: what it is sold as (D218). */
+export interface ItemUnit {
+  level: "each" | "inner" | "carton";
+  /** Said in Spork, rather than taken from NetSuite's Pack Unit. */
+  said: boolean;
+  /** NetSuite's Pack Unit, as it names it: "CTN", "Box", "Pair". */
+  netsuite_unit: string | null;
+}
+
 export interface ItemPacking {
   units_per_inner: number | null;
   inners_per_carton: number | null;
@@ -1439,6 +1454,8 @@ export interface ItemView {
   picture: Picture | null;
   measurements: ItemMeasurements[];
   packing: ItemPacking | null;
+  /** Which level of it is one in NetSuite: what it is sold as (D218). */
+  unit: ItemUnit;
   /** This system's own record, in walking order. */
   held: ItemHeld[];
   /** What NetSuite last reported, in walking order. */

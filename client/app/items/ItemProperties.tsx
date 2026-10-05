@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
   Drawer,
   EmptyState,
   Fact,
@@ -39,7 +40,10 @@ import {
   presentationNeeded,
   presentationOffered,
   readHolds,
+  readHoldsFor,
   subjectKey,
+  unitWord,
+  levelName,
   weighable,
   type Face,
   shown,
@@ -59,6 +63,14 @@ import s from "./items.module.css";
  * opens it in an [`ItemDrawer`] beside what it was doing.
  */
 export function ItemProperties({ item, desk }: { item: ItemView; desk: PropertiesDesk }) {
+  // **What is only offered stays out of the way** (D218): a carton nobody has
+  // said, a single product inside the box it is sold as. Each is a quiet line
+  // until somebody asks to measure it, or a form is already open on it.
+  const [asked, setAsked] = useState<Set<string>>(() => new Set());
+  const shownNow = (subject: CaptureSubject) =>
+    !subject.offered || asked.has(subjectKey(subject)) || desk.open?.key === subjectKey(subject);
+  const visible = item.subjects.filter(shownNow);
+  const offers = item.subjects.filter((subject) => !shownNow(subject));
   return (
     <Stack gap={4}>
       {desk.said && (
@@ -86,7 +98,25 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
           />
         </Card>
       ) : (
-        item.subjects.map((subject) => <Subject key={subjectKey(subject)} item={item} subject={subject} desk={desk} />)
+        visible.map((subject) => (
+          <Subject key={subjectKey(subject)} item={item} subject={subject} desk={desk} alone={visible.length === 1} />
+        ))
+      )}
+      {offers.length > 0 && (
+        <div className={s.offers}>
+          {offers.map((subject) => (
+            <Button
+              key={subjectKey(subject)}
+              size="sm"
+              variant="ghost"
+              onClick={() => setAsked((was) => new Set(was).add(subjectKey(subject)))}
+            >
+              {subject.packaging_level === "carton"
+                ? "Comes in a carton?"
+                : `Measure a single one${unitWord(item) === "Each" ? "" : ` from the ${unitWord(item).toLowerCase()}`}`}
+            </Button>
+          ))}
+        </div>
       )}
       <AddVariant desk={desk} />
       {desk.cropping && (
@@ -102,13 +132,25 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
   );
 }
 
-/** What it is: its photo and its family. What a carton of it holds is on the carton. */
+/** What it is: its photo, what it is sold as, and its family. What a carton of it holds is on the carton. */
 export function ItemSummary({ item, desk }: { item: ItemView; desk?: PropertiesDesk | undefined }) {
   const pictures = item.style?.picture_item_id === item.item_id;
+  const [changing, setChanging] = useState(false);
   return (
     <div className={s.summary}>
       <Photo key={item.item_id} item={item} />
       <Facts columns={1}>
+        <Fact label="Sold as" always>
+          {soldAs(item)}
+          {desk && (
+            <div>
+              <Button size="sm" disabled={desk.busy} onClick={() => setChanging(true)}>
+                Change
+              </Button>
+            </div>
+          )}
+          {desk && changing && <SoldAsDialog item={item} desk={desk} onClose={() => setChanging(false)} />}
+        </Fact>
         <Fact label="Family" always>
           {item.style ? (
             <>
@@ -199,6 +241,72 @@ export function ItemDrawer({
 }
 
 /**
+ * What one of it is, and what it comes in (D218): "Box of 100 · in cartons of
+ * 10 boxes". Whose word it is, when Spork said it rather than NetSuite.
+ */
+function soldAs(item: ItemView): ReactNode {
+  const unit = levelName(item.unit.level, item);
+  const carton =
+    item.unit.level !== "carton" && item.packing?.inners_per_carton
+      ? levelName("carton", item).replace(/^Carton of/, "in cartons of")
+      : null;
+  return (
+    <>
+      {unit}
+      {carton && <Faint> · {carton}</Faint>}
+      {item.unit.said ? <Faint> · said in Spork</Faint> : !item.unit.netsuite_unit && <Faint> · NetSuite doesn’t say</Faint>}
+    </>
+  );
+}
+
+const SOLD_AS: { level: "each" | "inner" | "carton"; label: string; hint: string }[] = [
+  { level: "each", label: "Single item", hint: "One is one thing: a catalogue, a pair of boots, a roll" },
+  { level: "inner", label: "Pack or box", hint: "One is a box or pack of several: a box of 100 earplugs" },
+  { level: "carton", label: "Carton", hint: "One is a whole carton: gloves by the carton of 1,000" },
+];
+
+/** Say which level is one in NetSuite (D218), over its Pack Unit. */
+function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: PropertiesDesk; onClose: () => void }) {
+  const [level, setLevel] = useState(item.unit.level);
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !desk.busy && onClose()}
+      width={440}
+      title="What is one of it?"
+      description={
+        item.unit.netsuite_unit
+          ? `What one of ${item.code} is when NetSuite counts it. NetSuite’s Pack Unit says “${item.unit.netsuite_unit}”.`
+          : `What one of ${item.code} is when NetSuite counts it. NetSuite’s Pack Unit is blank.`
+      }
+      footer={
+        <>
+          <Button onClick={onClose} disabled={desk.busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={desk.busy}
+            disabled={level === item.unit.level}
+            onClick={() => void desk.sayUnit(level).then((ok) => ok && onClose())}
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      <Tabs
+        aria-label="What one of it is"
+        value={level}
+        onValueChange={(v) => setLevel(v as typeof level)}
+        items={SOLD_AS.map((o) => ({ value: o.level, label: o.label }))}
+      />
+      <p className={s.note}>{SOLD_AS.find((o) => o.level === level)?.hint}</p>
+    </Dialog>
+  );
+}
+
+/**
  * An item code that opens the item's properties. A button, not a link: it
  * opens beside the work rather than leaving it.
  */
@@ -218,7 +326,18 @@ const ACTIONS: { action: Action; label: string; icon: ReactNode; when: (s: Captu
 ];
 
 /** One subject: what is known of it, its photographs, and what can be done to it. */
-function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
+function Subject({
+  item,
+  subject,
+  desk,
+  alone,
+}: {
+  item: ItemView;
+  subject: CaptureSubject;
+  desk: PropertiesDesk;
+  /** The only card on the page: what it is sold as goes without saying. */
+  alone: boolean;
+}) {
   const open = desk.open?.key === subjectKey(subject) ? desk.open.action : null;
   const photos = photosOf(item, subject);
   // A thing that is not a box is asked for every side only when somebody wants them.
@@ -233,16 +352,19 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
 
   return (
     <Card
-      title={nameOf(subject)}
+      title={nameOf(subject, item)}
       description={
         subject.source === "variant"
           ? `Shown from the variant ${subject.variant_code ?? ""}`
-          : carton && !item.packing
-            ? "Say how many it holds when you weigh or measure it"
-            : provenance(subject)
+          : subject.offered && subject.packaging_level === "each"
+            ? "Only if one is ever measured on its own: it is sold and packed as the whole"
+            : carton && !item.packing
+              ? "Say how many it holds when you weigh or measure it"
+              : provenance(subject)
       }
       actions={
         <>
+          {subject.is_unit && !alone && <Badge tone="info">One in NetSuite</Badge>}
           {needs.length > 0 && <Badge tone="warning">Needs {needs.join(", ")}</Badge>}
           {subject.lot_id && <VariantChoice item={item} subject={subject} desk={desk} />}
         </>
@@ -264,7 +386,11 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           {subject.packaging_level && <WayUp subject={subject} desk={desk} />}
           {carton && (
             <Fact label="Holds" always>
-              {item.packing?.inners_per_carton != null ? holdsInWords(item.packing) : <Faint>{holdsInWords(item.packing)}</Faint>}
+              {(() => {
+                // A box-sold item's carton holds boxes (D218).
+                const said = holdsInWords(item.packing, item.unit.level === "inner" ? unitWord(item) : "pack");
+                return item.packing?.inners_per_carton != null ? said : <Faint>{said}</Faint>;
+              })()}
             </Fact>
           )}
         </Facts>
@@ -290,8 +416,8 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
           </Button>
         ))}
       </Toolbar>
-      {open === "weigh" && <WeighForm subject={subject} desk={desk} />}
-      {open === "measure" && <MeasureForm subject={subject} desk={desk} />}
+      {open === "weigh" && <WeighForm item={item} subject={subject} desk={desk} />}
+      {open === "measure" && <MeasureForm item={item} subject={subject} desk={desk} />}
       {open === "photos" && (
         <div className={s.form}>
           <PackedIn subject={subject} desk={desk} />
@@ -323,7 +449,7 @@ function Subject({ item, subject, desk }: { item: ItemView; subject: CaptureSubj
 }
 
 /** A scale reading, in the unit the scale shows. */
-function WeighForm({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+function WeighForm({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
   return (
     <form
       className={s.form}
@@ -354,7 +480,7 @@ function WeighForm({ subject, desk }: { subject: CaptureSubject; desk: Propertie
             ]}
           />
         </div>
-        {isOwnCarton(subject) && <HoldsField desk={desk} />}
+        {isOwnCarton(subject) && <HoldsField desk={desk} item={item} />}
       </div>
       <div className={s.formActions}>
         <Button onClick={desk.close}>Cancel</Button>
@@ -380,7 +506,7 @@ const ROUND_FIELDS = [
   { field: "topHeight", label: "Top part’s height", hint: "Straight, under the rim" },
 ] as const;
 
-function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+function MeasureForm({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
   const f = desk.figures;
   const offered = presentationOffered(subject);
   return (
@@ -403,7 +529,7 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
             onChange={(e) => desk.type("weight", e.target.value)}
           />
         </div>
-        {isOwnCarton(subject) && <HoldsField desk={desk} />}
+        {isOwnCarton(subject) && <HoldsField desk={desk} item={item} />}
       </div>
       {!f.noDimensions && isRound(subject) && (
         <div className={s.dimensions}>
@@ -471,7 +597,40 @@ function MeasureForm({ subject, desk }: { subject: CaptureSubject; desk: Propert
  * How many of the item one carton holds (D178): the carton and the item in it,
  * said together. Blank says nothing of the count.
  */
-function HoldsField({ desk }: { desk: PropertiesDesk }) {
+function HoldsField({ desk, item }: { desk: PropertiesDesk; item: ItemView }) {
+  // Sold by the pack, its carton is so many packs, and a pack so many (D218).
+  if (item.unit.level === "inner") {
+    const word = unitWord(item).toLowerCase();
+    const many = /(x|s|sh|ch)$/.test(word) ? `${word}es` : `${word}s`;
+    const read = readHoldsFor("inner", desk.holds, desk.per, item.packing);
+    return (
+      <>
+        <div className={s.holds}>
+          <TextField
+            label={`How many ${many} in it`}
+            hint="The whole carton"
+            error={"problem" in read && desk.holds.trim() !== "" ? read.problem : undefined}
+            inputMode="numeric"
+            autoComplete="off"
+            trailing={many}
+            value={desk.holds}
+            onChange={(e) => desk.typeHolds(e.target.value)}
+          />
+        </div>
+        <div className={s.holds}>
+          <TextField
+            label={`Each ${word} holds`}
+            hint="Blank if not counted"
+            inputMode="numeric"
+            autoComplete="off"
+            trailing="× each"
+            value={desk.per}
+            onChange={(e) => desk.typePer(e.target.value)}
+          />
+        </div>
+      </>
+    );
+  }
   // The whole carton's count, and the packs worked out from it (D185).
   const read = readHolds(desk.holds, desk.per);
   const packs = "problem" in read || read.per === null || read.holds === null ? null : read;

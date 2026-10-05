@@ -99,6 +99,8 @@ pub struct ExportRow {
     pub family: Option<String>,
     /// What NetSuite says it is sold in, and its supplier's part number (D217).
     pub selling_unit: Option<String>,
+    /// Which level is one of that (D218): `each`, `inner` or `carton`.
+    pub unit_level: String,
     pub supplier_part: Option<String>,
     /// The bin to go to for it here (D180), and what NetSuite has in it.
     pub bin: Option<String>,
@@ -247,18 +249,14 @@ fn sheet_of(rows: &[ExportRow], context: &Context) -> crate::sheet::Sheet {
     }
 }
 
-/// The level whose figures go in the boxes: the carton for a unit that is
-/// one, the each for any other; with no unit set, the carton when it has
-/// figures and the each when it doesn't.
+/// The level whose figures go in the boxes: the one NetSuite counts one of
+/// (D218), the carton for a CTN, the pack for a box of 100, the each for the
+/// rest, as said or as NetSuite's Pack Unit has it.
 fn selling_level(r: &ExportRow) -> Option<&ExportLevel> {
-    let measured = |l: &&ExportLevel| {
-        l.weight_g.is_some() || l.length_mm.is_some() || l.weight_absent || l.dimensions_absent
-    };
-    match r.selling_unit.as_deref().map(str::to_lowercase).as_deref() {
-        Some("ctn" | "carton" | "cartons" | "ct" | "cs" | "case") => r.carton.as_ref(),
-        Some("inner" | "inner pack") => r.inner.as_ref(),
-        Some(_) => r.each.as_ref(),
-        None => r.carton.as_ref().filter(measured).or(r.each.as_ref()),
+    match r.unit_level.as_str() {
+        "carton" => r.carton.as_ref(),
+        "inner" => r.inner.as_ref(),
+        _ => r.each.as_ref(),
     }
 }
 
@@ -338,6 +336,13 @@ async fn rows_of(
         .await?
         .iter()
         .map(|r| (r.get(0), (r.get(1), r.get(2))))
+        .collect();
+    // Which level of each is one in NetSuite (D218).
+    let units: HashMap<Uuid, String> = tx
+        .query("SELECT item_id, level::text FROM item_unit_level WHERE item_id = ANY($1)", &[&ids])
+        .await?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
         .collect();
 
     let by_item = |rows: Vec<tokio_postgres::Row>| -> HashMap<Uuid, String> {
@@ -551,6 +556,7 @@ async fn rows_of(
             ExportRow {
                 item_id: i.item_id,
                 selling_unit,
+                unit_level: units.get(&i.item_id).cloned().unwrap_or_else(|| "each".into()),
                 supplier_part,
                 each: at("each"),
                 inner: at("inner"),

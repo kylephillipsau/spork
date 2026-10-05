@@ -60,6 +60,8 @@ const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "
   upright_source: "default",
   box_shaped: true,
   round: false,
+  is_unit: false,
+  offered: false,
   source: null,
   style_code: null,
   method: null,
@@ -94,6 +96,7 @@ const FAMILY_CARTON = subject({
 /** Its own each: weighed on a scale, not yet measured, photographed from the front. */
 const BRUSH_EACH = subject({
   item_id: BRUSH,
+  is_unit: true,
   code: "SKU-5120B",
   description: "Floor brush, 450 mm, blue",
   packaging_level: "each",
@@ -121,6 +124,7 @@ export const ITEM: ItemView = {
   picture: { digest: PHOTO, source: "own" },
   measurements: [],
   packing: { units_per_inner: 1, inners_per_carton: 8, effective_from: "2026-09-30" },
+  unit: { level: "each", said: false, netsuite_unit: "Each" },
   held: [
     {
       site_code: "NTH",
@@ -211,14 +215,22 @@ export const ITEM_UNKNOWN: ItemView = {
   picture: null,
   measurements: [],
   packing: null,
+  unit: { level: "each", said: false, netsuite_unit: null },
   held: [],
   reported: [],
   flags: [],
-  // Its own carton offered before anybody has said it has one (D178).
+  // Its own carton offered before anybody has said it has one (D178, D218).
   box_picture: null,
   subjects: [
-    subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "carton", wants: [] }),
-    subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "each" }),
+    subject({ item_id: TAPE_GUN, code: "SKU-8837", description: "Tape gun, 50 mm", packaging_level: "each", is_unit: true }),
+    subject({
+      item_id: TAPE_GUN,
+      code: "SKU-8837",
+      description: "Tape gun, 50 mm",
+      packaging_level: "carton",
+      wants: [],
+      offered: true,
+    }),
   ],
   photos: [],
 };
@@ -255,6 +267,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     shipAsIs: later,
     keepUpright: later,
     flagBin: async () => null,
+    sayUnit: async () => false,
     taken: [],
     sending: {},
     attach: noop,
@@ -279,6 +292,119 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     ...over,
   };
 }
+
+/** Fixed ids for the D218 items, which share nothing else. */
+const CATALOGUE = "01990000-0000-7000-8000-0000000c0a70";
+const GLOVES = "01990000-0000-7000-8000-0000000c0a71";
+const PLUGS = "01990000-0000-7000-8000-0000000c0a72";
+
+/**
+ * Sold by the each, and nothing said of a carton (D218): one card, and a
+ * carton only offered.
+ */
+export const SOLD_SINGLY: ItemView = {
+  ...ITEM_UNKNOWN,
+  item_id: CATALOGUE,
+  code: "Catalogue",
+  description: "Foodcare Industry Catalogue",
+  unit: { level: "each", said: false, netsuite_unit: "Each" },
+  subjects: [
+    subject({
+      item_id: CATALOGUE,
+      code: "Catalogue",
+      packaging_level: "each",
+      is_unit: true,
+      gross_weight_g: 940,
+      length_mm: 240,
+      width_mm: 172,
+      height_mm: 20,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-05T00:30:00Z",
+      faces: ["front", "back", "label"],
+      wants: [],
+      because: "settled",
+    }),
+    subject({ item_id: CATALOGUE, code: "Catalogue", packaging_level: "carton", wants: [], offered: true }),
+  ],
+};
+
+/** Sold by the carton of 1,000 (D218): the carton is the item; a single glove is offered. */
+export const SOLD_BY_CARTON: ItemView = {
+  ...ITEM_UNKNOWN,
+  item_id: GLOVES,
+  code: "DGN-4110-XL",
+  description: "Disposable Nitrile Powder Free Gloves - ctn 1000 - Black - XL",
+  unit: { level: "carton", said: false, netsuite_unit: "CTN" },
+  packing: { units_per_inner: 1, inners_per_carton: 1000, effective_from: "2026-09-30" },
+  subjects: [
+    subject({
+      item_id: GLOVES,
+      code: "DGN-4110-XL",
+      packaging_level: "carton",
+      is_unit: true,
+      gross_weight_g: 6600,
+      length_mm: 330,
+      width_mm: 400,
+      height_mm: 485,
+      method: "transcribed",
+      source: "own",
+      observed_at: "2026-09-30T08:59:00Z",
+      ships_as_is: true,
+      ships_as_is_source: "default",
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
+    subject({ item_id: GLOVES, code: "DGN-4110-XL", packaging_level: "each", wants: [], offered: true }),
+  ],
+};
+
+/**
+ * Sold by the box of 100 (D218), in cartons of ten boxes: the box is the item,
+ * the carton is ten of it, and a single pair is offered.
+ */
+export const SOLD_BY_BOX: ItemView = {
+  ...ITEM_UNKNOWN,
+  item_id: PLUGS,
+  code: "DEJ-8040",
+  description: "CS40 Soft Corded Metal Detectable Earplugs Non-Touch TPR Box 100",
+  unit: { level: "inner", said: false, netsuite_unit: "Box" },
+  packing: { units_per_inner: 100, inners_per_carton: 10, effective_from: "2026-10-02" },
+  subjects: [
+    subject({
+      item_id: PLUGS,
+      code: "DEJ-8040",
+      packaging_level: "inner",
+      is_unit: true,
+      gross_weight_g: 520,
+      length_mm: 205,
+      width_mm: 105,
+      height_mm: 95,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-02T03:00:00Z",
+      faces: ["front", "right", "top"],
+      wants: [],
+      because: "settled",
+    }),
+    subject({
+      item_id: PLUGS,
+      code: "DEJ-8040",
+      packaging_level: "carton",
+      gross_weight_g: 5400,
+      length_mm: 430,
+      width_mm: 220,
+      height_mm: 410,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-02T03:10:00Z",
+      ships_as_is: true,
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
+    subject({ item_id: PLUGS, code: "DEJ-8040", packaging_level: "each", wants: [], offered: true }),
+  ],
+};
 
 /**
  * Said on the floor against NetSuite's bins (D215): none in D-03-2, where
@@ -347,6 +473,7 @@ export const NO_BOX: ItemView = {
       code: "SKU-4410",
       packaging_level: "each",
       gross_weight_g: 400,
+      is_unit: true,
       packed_in: "BG",
       packed_in_source: "own",
       box_shaped: false,
@@ -384,6 +511,7 @@ export const BUCKET: ItemView = {
       packed_in_source: "own",
       box_shaped: false,
       round: true,
+      is_unit: true,
       method: "instrument",
       source: "own",
       observed_at: "2026-10-05T01:00:00Z",

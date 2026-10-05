@@ -851,6 +851,14 @@ export const api = {
   /** GS1's packaging types, the common ones first (D191). */
   packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),
 
+  /** Say which level of an item is one in NetSuite: what it is sold as (D218). */
+  sayUnit: (itemId: Uuid, level: "each" | "inner" | "carton", act: Act) =>
+    send<void>("POST", `/items/${encodeURIComponent(itemId)}/unit`, {
+      level,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
   /**
    * Say an item isn't in a bin NetSuite lists it in, or is in one it doesn't
    * (D215): a finding, for someone to put right in NetSuite.

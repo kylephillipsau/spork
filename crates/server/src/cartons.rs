@@ -366,3 +366,55 @@ mod tests {
         assert_eq!(total(Some(50), None), None);
     }
 }
+
+#[derive(serde::Deserialize, Debug)]
+pub struct SayUnitRequest {
+    /// `each`, `inner` or `carton`: which level of the item is one in NetSuite.
+    pub level: String,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Say which level of an item is one in NetSuite (D218): what it is sold as.
+/// The newest saying wins over NetSuite's Pack Unit; saying it again is the
+/// same act.
+#[post("/items/{id}/unit")]
+pub async fn say_unit(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<SayUnitRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let item_id = path.into_inner();
+    let body = body.into_inner();
+    if !matches!(body.level.as_str(), "each" | "inner" | "carton") {
+        return Err(ApiError::Rejected("an item is sold as its each, its pack or its carton".into()));
+    }
+    let ev = NewClientEvent {
+        tenant_id: who.tenant_id,
+        client_event_id: body.client_event_id,
+        site_id: who.site_id,
+        recorded_by_id: who.person_id,
+        submitted_at: body.occurred_at,
+    };
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item_id]).await?.ok_or(ApiError::NotFound)?;
+                if client_events::claim_act(tx, &ev).await?.is_replay() {
+                    return Ok(());
+                }
+                tx.execute(
+                    "INSERT INTO item_unit (tenant_id, item_id, level, client_event_id, recorded_by_id)
+                     VALUES ($1, $2, $3::text::packaging_level, $4, $5)",
+                    &[&ev.tenant_id, &item_id, &body.level, &ev.client_event_id, &ev.recorded_by_id],
+                )
+                .await?;
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}

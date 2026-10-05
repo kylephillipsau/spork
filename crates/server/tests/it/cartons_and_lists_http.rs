@@ -111,10 +111,14 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
         .iter()
         .filter_map(|s| s["packaging_level"].as_str())
         .collect();
-    assert_eq!(levels, ["carton", "each"], "the carton first, then the item itself: {before}");
-    let carton = &before["subjects"][0];
+    // The item as it is sold leads, and the carton nobody has said is only
+    // offered behind it (D218).
+    assert_eq!(levels, ["each", "carton"], "the item itself first, then a carton offered: {before}");
+    assert_eq!(before["subjects"][0]["is_unit"], true, "the each is what NetSuite counts here: {before}");
+    let carton = &before["subjects"][1];
     assert_eq!(carton["item_id"], item.to_string());
     assert_eq!(carton["wants"], json!([]), "a carton nobody has said asks for nothing: {carton}");
+    assert_eq!(carton["offered"], true, "and is offered, not there: {carton}");
     assert!(before["packing"].is_null(), "and no case pack is on file: {before}");
 
     // The writer still refuses it until somebody says there is one (D23).
@@ -193,7 +197,7 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
         .iter()
         .filter_map(|s| s["packaging_level"].as_str().map(str::to_string))
         .collect();
-    assert_eq!(levels, ["carton", "inner", "each"], "the bundle between the box and the glove");
+    assert_eq!(levels, ["each", "inner", "carton"], "the glove, its bundle, then the box of bundles (D218)");
     let (status, bundle) = post(
         "/observations".into(),
         json!({

@@ -108,6 +108,9 @@ import {
   BRUSH,
   ITEM,
   ITEM_FLAGGED,
+  SOLD_BY_BOX,
+  SOLD_BY_CARTON,
+  SOLD_SINGLY,
   ITEM_UNKNOWN,
   ITEMS_LISTED,
   ITEMS_NONE,
@@ -615,6 +618,17 @@ export const FIXTURES: readonly Screen[] = [
   // A bucket is measured across, top and base, and by the straight part under its rim (D213).
   app("f-item-bucket", "/fixtures/item/bucket", "Item — measuring a bucket", "floor", { screen: "item" }, () => (
     <ItemPage desk={MEASURING_BUCKET} />
+  )),
+  // D218: an item leads with what NetSuite counts one of; what is only
+  // offered (a carton nobody said, a single product inside) is a quiet line.
+  app("f-item-sold-singly", "/fixtures/item/sold-singly", "Item — sold singly", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(SOLD_SINGLY)} />
+  )),
+  app("f-item-sold-by-carton", "/fixtures/item/sold-by-carton", "Item — sold by the carton", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(SOLD_BY_CARTON)} />
+  )),
+  app("f-item-sold-by-box", "/fixtures/item/sold-by-box", "Item — sold by the box", "desk", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(SOLD_BY_BOX)} />
   )),
   // D215: what the floor says against NetSuite's bins, and the two questions.
   app("f-item-flagged", "/fixtures/item/flagged", "Item — not where NetSuite lists it", "floor", { screen: "item" }, () => (

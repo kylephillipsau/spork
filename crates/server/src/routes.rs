@@ -9457,6 +9457,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::items::item_page)
         .service(crate::listed::flag_bin)
         .service(crate::cartons::say_carton)
+        .service(crate::cartons::say_unit)
         .service(crate::cartons::add_lot)
         .service(crate::cartons::set_default_lot)
         .service(crate::cartons::set_family_picture)

@@ -527,3 +527,10 @@
   align-items: center;
   gap: var(--ui-space-2);
 }
+
+/* What is only offered (D218): quiet lines under the cards. */
+.offers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}

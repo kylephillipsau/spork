@@ -244,6 +244,7 @@ const PAIRS = [
   ["SearchAnswer", ["SearchAnswer"]],
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
+  ["ItemUnit", ["ItemUnit"]],
   ["ItemHeld", ["ItemHeld"]],
   ["ItemReported", ["ItemReported"]],
   ["ItemFlag", ["ItemFlag"]],

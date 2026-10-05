@@ -70,13 +70,72 @@ export function subjectKey(
   return `${s.item_id ?? s.item_style_id ?? s.item_part_id}:${s.packaging_level ?? "part"}`;
 }
 
-/** What to call it: "Carton", "Each", "Carton of the STY-7720 family", the part's own name, or "Variant: O/N 123". */
-export function nameOf(s: CaptureSubject): string {
+/**
+ * What to call it: the item's own levels in what it is sold as (D218), "Box
+ * of 100", "Carton of 10 boxes", "Single item"; a family's "Carton of the
+ * STY-7720 family"; a part by its name; or "Variant: O/N 123".
+ */
+export function nameOf(s: CaptureSubject, item?: Pick<ItemView, "item_id" | "unit" | "packing">): string {
   if (s.lot_id) return `Variant: ${s.lot_code ?? "unnamed"}`;
   if (s.item_part_id) return s.part_label ? sentence(s.part_label) : "Part";
-  if (s.packaging_level === "inner" && !s.item_style_id) return "Inner pack";
-  const level = sentence(s.packaging_level ?? "item");
-  return s.item_style_id ? `${level} of the ${s.code} family` : level;
+  const level = s.packaging_level;
+  if (item && !s.item_style_id && s.item_id === item.item_id && (level === "each" || level === "inner" || level === "carton")) {
+    return levelName(level, item);
+  }
+  if (level === "inner" && !s.item_style_id) return "Inner pack";
+  const named = sentence(level ?? "item");
+  return s.item_style_id ? `${named} of the ${s.code} family` : named;
+}
+
+/**
+ * What one of it is called in NetSuite (D218): its Pack Unit as a word, a
+ * CTN being a carton; or, with none, its level's name.
+ */
+export function unitWord(item: Pick<ItemView, "unit">): string {
+  const said = item.unit.netsuite_unit?.trim();
+  if (said) {
+    const u = said.toUpperCase();
+    if (u === "CTN" || u === "CS" || u === "CASE") return "Carton";
+    if (u === "UNT") return "Unit";
+    return sentence(said.toLowerCase());
+  }
+  return { each: "Each", inner: "Pack", carton: "Carton" }[item.unit.level];
+}
+
+/** A word for so many of a thing: "boxes", "packs", "each". */
+function plural(word: string, n: number): string {
+  const w = word.toLowerCase();
+  if (n === 1 || w === "each") return w;
+  return /(x|s|sh|ch)$/.test(w) ? `${w}es` : `${w}s`;
+}
+
+/**
+ * One of the item's own levels, named from what it is sold as (D218): the
+ * unit by NetSuite's word and what it holds, "Box of 100"; a carton by how
+ * many of that it holds, "Carton of 10 boxes"; a pack by its count; and the
+ * single product inside a pack or carton it is sold as, "Single item".
+ */
+export function levelName(level: "each" | "inner" | "carton", item: Pick<ItemView, "unit" | "packing">): string {
+  const unit = item.unit.level;
+  const word = unitWord(item);
+  const per = item.packing?.units_per_inner ?? null;
+  const inners = item.packing?.inners_per_carton ?? null;
+  const count = (n: number) => n.toLocaleString();
+  if (level === unit) {
+    if (unit === "inner" && per && per > 1) return `${word} of ${count(per)}`;
+    if (unit === "carton" && inners) {
+      const n = inners * (per ?? 1);
+      return n > 1 ? `${word} of ${count(n)}` : word;
+    }
+    return word;
+  }
+  if (level === "carton") {
+    if (!inners) return "Carton";
+    if (unit === "inner") return `Carton of ${count(inners)} ${plural(word, inners)}`;
+    return per && per > 1 ? `Carton of ${count(inners)} packs` : `Carton of ${count(inners)}`;
+  }
+  if (level === "inner") return per && per > 1 ? `Pack of ${count(per)}` : "Pack";
+  return "Single item";
 }
 
 /** Its newest photograph of each face, its own only. */
@@ -137,14 +196,15 @@ export function cartonHolds(p: Counts | null): number | null {
 }
 
 /** What a carton holds, in words: "16 × each", "6 packs of 50 (300 × each)", or that nobody has said. */
-export function holdsInWords(p: Counts | null): string {
+export function holdsInWords(p: Counts | null, pack = "pack"): string {
   if (!p) return "No carton on file yet";
   const n = p.inners_per_carton;
   const u = p.units_per_inner;
   if (n === null) return "Not said yet";
   if (u === 1) return `${n.toLocaleString()} × each`;
-  if (u === null) return `${n} packs, how many in each not said`;
-  return `${n} packs of ${u} (${(n * u).toLocaleString()} × each)`;
+  const packs = plural(pack, n);
+  if (u === null) return `${n} ${packs}, how many in each not said`;
+  return `${n} ${packs} of ${u} (${(n * u).toLocaleString()} × each)`;
 }
 
 /**
@@ -166,6 +226,27 @@ export function readHolds(typed: string, perTyped = ""): { holds: number | null;
     return { problem: `${total.toLocaleString()} isn’t a whole number of packs of ${per.toLocaleString()}.` };
   }
   return { holds: total / per, per };
+}
+
+/**
+ * A carton's count as typed for an item sold by the pack (D218): how many
+ * packs are in the carton, and, when said, how many are in a pack. Left blank,
+ * a pack holds what it held. Any other item's carton is typed as the whole
+ * carton's count ([`readHolds`]).
+ */
+export function readHoldsFor(
+  unit: "each" | "inner" | "carton",
+  typed: string,
+  perTyped: string,
+  packing: Pick<ItemPacking, "units_per_inner"> | null,
+): { holds: number | null; per: number | null } | { problem: string } {
+  if (unit !== "inner") return readHolds(typed, perTyped);
+  const t = typed.trim();
+  const p = perTyped.trim();
+  const whole = (v: string) => /^\d+$/.test(v) && Number(v) >= 1;
+  if (t && !whole(t)) return { problem: "How many packs it holds is a whole number, 1 or more." };
+  if (p && !whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
+  return { holds: t ? Number(t) : null, per: p ? Number(p) : (packing?.units_per_inner ?? null) };
 }
 
 /**

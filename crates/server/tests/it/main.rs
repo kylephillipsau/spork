@@ -55,6 +55,7 @@ mod setup_first_administrator;
 mod ships_as_is_http;
 mod sign_on;
 mod tenancy;
+mod unit_http;
 mod walk_route_http;
 mod weighing_http;
 mod where_you_are_working;
