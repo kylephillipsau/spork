@@ -346,8 +346,8 @@ class Unless3D extends Component<{ children: ReactNode }, { failed: boolean }> {
  * What the draft would make, before anything is made. Each place can be left
  * out, for a family of codes that is no rack at all: its bins stay in the tray
  * with the codes no pattern fitted. A rack can be made with a face on each
- * side, numbered round it (its last bay behind its first). The counts follow
- * the ticks.
+ * side, numbered round it (its last bay behind its first), and numbered from
+ * the right end of its front (D220). The counts follow the ticks.
  */
 function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk }) {
   const busy = desk.draft.kind === "working";
@@ -359,6 +359,7 @@ function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk })
   const places = making.length;
   const racks = making.filter((p) => p.split !== null).map((p) => p.name);
   const everyTwo = racks.length > 0 && racks.every((n) => desk.twoSided.has(n));
+  const everyRight = racks.length > 0 && racks.every((n) => desk.fromRight.has(n));
   const columns: Column<DraftedPlace>[] = [
     {
       key: "name",
@@ -382,6 +383,22 @@ function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk })
         ),
       width: "240px",
     },
+    {
+      key: "numbered",
+      header: "Numbered",
+      cell: (p) =>
+        p.bays > 1 ? (
+          <Checkbox
+            label="From the right"
+            checked={desk.fromRight.has(p.name)}
+            disabled={desk.leftOut.has(p.name)}
+            onCheckedChange={(on) => desk.setFromRight([p.name], on)}
+          />
+        ) : (
+          <Faint>One bay</Faint>
+        ),
+      width: "150px",
+    },
     ...DRAFT_COLUMNS,
   ];
   return (
@@ -390,9 +407,14 @@ function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk })
       padded={false}
       actions={
         racks.length > 1 ? (
-          <Button size="sm" disabled={busy} onClick={() => desk.setTwoSided(racks, !everyTwo)}>
-            {everyTwo ? "One side for every rack" : "Two sides for every rack"}
-          </Button>
+          <>
+            <Button size="sm" disabled={busy} onClick={() => desk.setTwoSided(racks, !everyTwo)}>
+              {everyTwo ? "One side for every rack" : "Two sides for every rack"}
+            </Button>
+            <Button size="sm" disabled={busy} onClick={() => desk.setFromRight(racks, !everyRight)}>
+              {everyRight ? "Every rack from the left" : "Every rack from the right"}
+            </Button>
+          </>
         ) : undefined
       }
     >
@@ -410,7 +432,8 @@ function Preview({ report, desk }: { report: DraftReport; desk: WarehouseDesk })
             ? `${report.inside_created ? "A new place called" : "Inside"} ${report.inside}${report.inside_created ? " holds them" : ""}, in rows you can arrange afterwards.`
             : "Nothing new to draw."}
           {report.places.length > 0 &&
-            " Untick a place that is no rack, and its bins stay off the layout. Tick Two sides for a rack with bins on both faces."}
+            " Untick a place that is no rack, and its bins stay off the layout. Tick Two sides for a rack with bins on both faces," +
+              " and From the right where its first bay is at the right end of its front as you face it."}
           {report.bins_filled > 0 && ` ${report.bins_filled} bins drop into places already there.`}
           {report.unplaced > 0 && ` Left over: ${sample(report.unplaced_sample, report.unplaced)}.`}
         </p>

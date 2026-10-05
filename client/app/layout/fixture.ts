@@ -230,12 +230,12 @@ export const DRAFTED: DraftReport = {
   inside: "Building",
   inside_created: true,
   places: [
-    { name: "Rack A", solid: true, pattern: "A-{bay:02}-{level}", bays: 30, levels: 5, bins: 300, sides: 1, split: ["01–15", "16–30"] },
-    { name: "Rack B", solid: true, pattern: "B-{bay:02}-{level}", bays: 30, levels: 5, bins: 296, sides: 1, split: ["01–15", "16–30"] },
-    { name: "Rack C", solid: true, pattern: "C-{bay:02}-{level}", bays: 20, levels: 4, bins: 160, sides: 1, split: ["01–10", "11–20"] },
-    { name: "Rack D", solid: true, pattern: "D-{bay:02}-{level}-{position}", bays: 24, levels: 3, bins: 480, sides: 1, split: ["01–12", "13–24"] },
-    { name: "DOCK", solid: false, pattern: "DOCK-{bay}", bays: 6, levels: 1, bins: 6, sides: 1, split: null },
-    { name: "Rack X", solid: true, pattern: "X-{bay}-{level:02}", bays: 1, levels: 1, bins: 1, sides: 1, split: null },
+    { name: "Rack A", solid: true, pattern: "A-{bay:02}-{level}", bays: 30, levels: 5, bins: 300, sides: 1, from_right: false, split: ["01–15", "16–30"] },
+    { name: "Rack B", solid: true, pattern: "B-{bay:02}-{level}", bays: 30, levels: 5, bins: 296, sides: 1, from_right: false, split: ["01–15", "16–30"] },
+    { name: "Rack C", solid: true, pattern: "C-{bay:02}-{level}", bays: 20, levels: 4, bins: 160, sides: 1, from_right: false, split: ["01–10", "11–20"] },
+    { name: "Rack D", solid: true, pattern: "D-{bay:02}-{level}-{position}", bays: 24, levels: 3, bins: 480, sides: 1, from_right: false, split: ["01–12", "13–24"] },
+    { name: "DOCK", solid: false, pattern: "DOCK-{bay}", bays: 6, levels: 1, bins: 6, sides: 1, from_right: false, split: null },
+    { name: "Rack X", solid: true, pattern: "X-{bay}-{level:02}", bays: 1, levels: 1, bins: 1, sides: 1, from_right: false, split: null },
   ],
   bins_filled: 0,
   bins_placed: 1243,
@@ -248,12 +248,12 @@ export const DRAFTED: DraftReport = {
 export const LAID_OUT: LayoutView = {
   site_code: "NORTH",
   places: boxed([
-    { place_id: MAIN, parent_id: null, name: "Main", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
-    { place_id: RACK_C, parent_id: MAIN, name: "Rack C", solid: true, bays: 5, levels: 4, rows: 1, positions: [1, 1, 1, 1], sides: 1, reach_levels: 1, pattern: "C-{bay:02}-{level}", bins: 18 },
-    { place_id: RACK_D, parent_id: MAIN, name: "Rack D", solid: true, bays: 4, levels: 3, rows: 1, positions: [1, 1, 1], sides: 1, reach_levels: 1, pattern: "D-{bay:02}-{level}-{position}", bins: 20 },
-    { place_id: RETURNS, parent_id: MAIN, name: "Returns (reserved)", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
-    { place_id: DOCK, parent_id: MAIN, name: "Dock", solid: false, bays: 6, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: "DOCK-{bay}", bins: 6 },
-    { place_id: RACK_E, parent_id: MAIN, name: "Rack E", solid: true, bays: 6, levels: 3, rows: 1, positions: [1, 1, 1], sides: 2, reach_levels: 1, pattern: "E-{bay:02}-{level}", bins: 34 },
+    { place_id: MAIN, parent_id: null, name: "Main", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, from_right: false, reach_levels: 1, pattern: null, bins: 0 },
+    { place_id: RACK_C, parent_id: MAIN, name: "Rack C", solid: true, bays: 5, levels: 4, rows: 1, positions: [1, 1, 1, 1], sides: 1, from_right: false, reach_levels: 1, pattern: "C-{bay:02}-{level}", bins: 18 },
+    { place_id: RACK_D, parent_id: MAIN, name: "Rack D", solid: true, bays: 4, levels: 3, rows: 1, positions: [1, 1, 1], sides: 1, from_right: false, reach_levels: 1, pattern: "D-{bay:02}-{level}-{position}", bins: 20 },
+    { place_id: RETURNS, parent_id: MAIN, name: "Returns (reserved)", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, from_right: false, reach_levels: 1, pattern: null, bins: 0 },
+    { place_id: DOCK, parent_id: MAIN, name: "Dock", solid: false, bays: 6, levels: 1, rows: 1, positions: [1], sides: 1, from_right: false, reach_levels: 1, pattern: "DOCK-{bay}", bins: 6 },
+    { place_id: RACK_E, parent_id: MAIN, name: "Rack E", solid: true, bays: 6, levels: 3, rows: 1, positions: [1, 1, 1], sides: 2, from_right: false, reach_levels: 1, pattern: "E-{bay:02}-{level}", bins: 34 },
   ], PLAN),
   bins: 81,
   unplaced: 3,
@@ -312,7 +312,7 @@ const DRAFT_PLACES: { place: Bare; shape: PlanShape }[] = (() => {
     const at = y;
     y += sides + 2;
     return {
-      place: { place_id: id, parent_id: BUILDING_ID, name, solid, bays: columns, levels, rows: 1, positions: Array<number>(levels).fill(1), sides, reach_levels: 1, pattern, bins: bays * levels - (i % 4) },
+      place: { place_id: id, parent_id: BUILDING_ID, name, solid, bays: columns, levels, rows: 1, positions: Array<number>(levels).fill(1), sides, from_right: false, reach_levels: 1, pattern, bins: bays * levels - (i % 4) },
       shape: { place_id: id, name, solid, nesting: 1, corners: rect(1, at, columns, sides), z: 0, height: solid ? levels : 1, frame: { x: 1, y: at, z: 0, turn: 0 } },
     };
   });
@@ -330,7 +330,7 @@ export const DRAFTED_SITE: LayoutView = {
   site_code: "NORTH",
   places: boxed(
     [
-      { place_id: BUILDING_ID, parent_id: null, name: "Building", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, reach_levels: 1, pattern: null, bins: 0 },
+      { place_id: BUILDING_ID, parent_id: null, name: "Building", solid: false, bays: 1, levels: 1, rows: 1, positions: [1], sides: 1, from_right: false, reach_levels: 1, pattern: null, bins: 0 },
       ...DRAFT_PLACES.map((p) => p.place),
     ],
     DRAFTED_PLAN,
@@ -442,7 +442,7 @@ export const FOUND_BINS: BinsList = {
 
 export function fixtureWarehouse(
   value: LayoutView,
-  opts: { draft?: DraftState; chosen?: Chosen; bins?: BinsList; asked?: string; leftOut?: string[]; twoSided?: string[] } = {},
+  opts: { draft?: DraftState; chosen?: Chosen; bins?: BinsList; asked?: string; leftOut?: string[]; twoSided?: string[]; fromRight?: string[] } = {},
 ): WarehouseDesk {
   const asked = opts.asked ?? "";
   return {
@@ -455,6 +455,8 @@ export function fixtureWarehouse(
     leaveOut: () => {},
     twoSided: new Set(opts.twoSided ?? []),
     setTwoSided: () => {},
+    fromRight: new Set(opts.fromRight ?? []),
+    setFromRight: () => {},
     chosen: opts.chosen ?? null,
     choose: () => {},
     bins: opts.bins ? { kind: "ready", value: opts.bins } : { kind: "idle" },

@@ -205,6 +205,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   they were, photos refiled with their cuts and marked moved. Refused onto a
   card with records of its own. The items list's needs/has filters count the
   unit's figures.
+- D220. A rack is numbered from either end of its front (`place.from_right`,
+  migration 125). The draft's preview asks (**From the right**, **Every rack
+  from the right**), and the plan editor's **Numbered from** turns a rack
+  already made round: its bins keep their names, each moved to the mirror of
+  its column. Cells stay counted from the front's left, so only labels change.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

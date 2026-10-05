@@ -1019,12 +1019,12 @@ export const api = {
    * Draft the layout from the bin list. **A dry run unless `apply`**, like the
    * imports: the report is what applying does, because it is the apply undone.
    */
-  draftLayout: (q: { apply?: boolean; leaveOut?: string[]; twoSided?: string[] }) =>
+  draftLayout: (q: { apply?: boolean; leaveOut?: string[]; twoSided?: string[]; fromRight?: string[] }) =>
     send<DraftReport>(
       "POST",
       `/layout/draft${q.apply ? "?apply=true" : ""}`,
-      q.leaveOut?.length || q.twoSided?.length
-        ? ({ leave_out: q.leaveOut ?? [], two_sided: q.twoSided ?? [] } satisfies DraftRequest)
+      q.leaveOut?.length || q.twoSided?.length || q.fromRight?.length
+        ? ({ leave_out: q.leaveOut ?? [], two_sided: q.twoSided ?? [], from_right: q.fromRight ?? [] } satisfies DraftRequest)
         : undefined,
     ),
 

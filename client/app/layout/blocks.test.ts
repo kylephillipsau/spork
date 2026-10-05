@@ -37,6 +37,7 @@ const place = (place_id: string, bays: number, levels: number, rows = 1): Layout
   rows,
   positions: Array<number>(levels).fill(1),
   sides: 1,
+  from_right: false,
   reach_levels: 1,
   pattern: null,
   bins: 0,

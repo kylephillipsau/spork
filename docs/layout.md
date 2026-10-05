@@ -74,6 +74,22 @@ The bin codes cannot say a rack has two sides, so the draft's preview asks.
 Tick **Two sides** on a rack, or press **Two sides for every rack**. With an
 odd number of bays the front takes the one over.
 
+## Which end the numbering starts
+
+A rack is numbered from one end of its front, and the bin codes cannot say
+which. Spork reads them from the left unless told otherwise. Where a warehouse
+starts at the right, `C-01` is at the right end of the front as you face it,
+the labels run leftwards to `C-16`, round the left end, and back along the
+other side to `C-32`, which is behind `C-01` at the right end. Facing the
+back, it reads `32` to `17` left to right.
+
+The draft's preview asks: tick **From the right** on a place, or press
+**Every rack from the right**. A rack already on the layout is put right in
+the editor (below) with **Numbered from**. Only the labels turn round: a
+cell's bay is still its column counted from the front's left, so what stands
+behind what is unchanged, and each bin keeps its name, in the bay its name is
+on now (D220).
+
 Scan `E-36-01` and the rack face opens on the back, drawn as you would see it
 standing there: 19 to 36 left to right, `E-36` lit at the end behind `E-01`.
 **Front** and **Back** switch between the sides, and the plan below marks the
@@ -116,6 +132,10 @@ position and size in cells.
 
 You can add a wall, a column, a dock, a packing station or an area. You can
 take away a place that holds no bins.
+
+A rack's **Numbered from** says which end of its front its first bay is at,
+and a dot on its front marks it. To renumber every rack at once, press
+**Choose every rack** and change it for all of them.
 
 Nothing is saved until **Save**, and **Undo** takes back one change at a
 time. Bins move with their racks, because each is in a bay and a level of its

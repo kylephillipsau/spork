@@ -132,7 +132,7 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
 
     // ── a place the person knows is no rack is left out, and a rack with
     //    two sides is made as two ─────────────────────────────────────────
-    let leave = serde_json::json!({ "leave_out": ["Rack LX"], "two_sided": ["Rack LW"] });
+    let leave = serde_json::json!({ "leave_out": ["Rack LX"], "two_sided": ["Rack LW"], "from_right": ["Rack LW"] });
     let (status, stale) = call(
         &app,
         test::TestRequest::post()
@@ -181,12 +181,14 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
         .get(0);
     assert_eq!(lx, 0, "a place left out was made");
 
-    // Rack LW is one rack two columns long with a face on each side: LW-04 on
-    // the back of the first column, behind LW-01, and the back reading 03, 04
-    // as you face it.
+    // Rack LW is one rack two columns long with a face on each side, numbered
+    // from the right (D220): LW-01 at the front's right end, in the second
+    // column, LW-04 behind it, the front reading 02, 01 as you face it and the
+    // back 04, 03.
     let made = applied["places"].as_array().unwrap();
     let lw = made.iter().find(|p| p["name"] == "Rack LW").expect("Rack LW, once");
     assert_eq!((lw["bays"].as_i64(), lw["sides"].as_i64(), lw["bins"].as_i64()), (Some(2), Some(2), Some(4)), "{lw}");
+    assert_eq!(lw["from_right"], true, "{lw}");
     let back: String = db
         .query_one("SELECT id::text FROM location WHERE code = 'LW-04-1'", &[])
         .await
@@ -196,9 +198,9 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
         call(&app, test::TestRequest::get().uri(&format!("/bins/{back}")).insert_header(auth.clone())).await;
     assert_eq!(lw4["place"]["name"], "Rack LW", "{lw4}");
     assert_eq!(lw4["place"]["sides"], 2, "{lw4}");
-    assert_eq!((lw4["cell"]["bay"].as_i64(), lw4["cell"]["side"].as_i64()), (Some(1), Some(2)), "behind LW-01: {lw4}");
-    assert_eq!(lw4["place"]["bay_labels"], serde_json::json!(["01", "02"]), "{lw4}");
-    assert_eq!(lw4["place"]["back_labels"], serde_json::json!(["03", "04"]), "{lw4}");
+    assert_eq!((lw4["cell"]["bay"].as_i64(), lw4["cell"]["side"].as_i64()), (Some(2), Some(2)), "behind LW-01: {lw4}");
+    assert_eq!(lw4["place"]["bay_labels"], serde_json::json!(["02", "01"]), "{lw4}");
+    assert_eq!(lw4["place"]["back_labels"], serde_json::json!(["04", "03"]), "{lw4}");
     let front: String = db
         .query_one("SELECT id::text FROM location WHERE code = 'LW-01-1'", &[])
         .await
@@ -206,7 +208,7 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
         .get(0);
     let (_, lw1) =
         call(&app, test::TestRequest::get().uri(&format!("/bins/{front}")).insert_header(auth.clone())).await;
-    assert_eq!((lw1["cell"]["bay"].as_i64(), lw1["cell"]["side"].as_i64()), (Some(1), Some(1)), "{lw1}");
+    assert_eq!((lw1["cell"]["bay"].as_i64(), lw1["cell"]["side"].as_i64()), (Some(2), Some(1)), "{lw1}");
     let rack_lw = lw4["place"]["place_id"].as_str().unwrap().to_string();
     let (_, listed) =
         call(&app, test::TestRequest::get().uri(&format!("/bins?place={rack_lw}")).insert_header(auth.clone())).await;
@@ -331,8 +333,8 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     let lw4 = drawn.iter().find(|b| b["code"] == "LW-04-1").expect("a bin on the back of a rack");
     assert_eq!(
         (lw4["side"].as_i64(), lw4["bay"].as_i64(), lw4["level"].as_i64()),
-        (Some(2), Some(1), Some(1)),
-        "behind LW-01, in column 1: {lw4}"
+        (Some(2), Some(2), Some(1)),
+        "behind LW-01, in column 2 at the right end: {lw4}"
     );
     let floor = drawn.iter().find(|b| b["code"] == "LT-03-1").unwrap();
     assert_eq!(floor["reported_items"], 1, "{floor}");
@@ -343,6 +345,7 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     let (_, laid) = call(&app, test::TestRequest::get().uri("/layout").insert_header(auth.clone())).await;
     let lw_place = laid["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack LW").unwrap();
     assert_eq!(lw_place["positions"], serde_json::json!([1]), "one bin to a bay on its one level: {lw_place}");
+    assert_eq!(lw_place["from_right"], true, "{lw_place}");
 
     // ── what is not there says so ────────────────────────────────────────
     let (status, _) = call(

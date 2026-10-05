@@ -15237,3 +15237,45 @@ goes: figures, said-absent figures, photos and their cuts
 
 **Not yet.** Moving one event, or one photo, rather than the card's worth;
 moving to another item, or to a family.
+
+### D220: A rack is numbered from either end of its front
+
+*Adopted 2026-10-06, with migration 125. Amends D173 and D209.*
+
+**The finding.** The draft read every rack from the left: `C-01` at the left
+end of the front as you face it, on to `C-16` at the right, round the right
+end and back to `C-32` behind `C-01`. The user's warehouse numbers from the
+other end. `C-01` is at the front's right end and `C-32` behind it, so the bin
+map drew every rack the wrong way round.
+
+**Decision.** A place says which end of its front its numbering starts at
+(`place.from_right`, `Grid::from_right`).
+
+- **Only the labels turn round.** A cell's bay is still its column counted
+  from the front's left as the front is faced, on either side. What stands
+  behind what, where a bin is drawn and how far a walk is, are worked out from
+  the column as before. `Grid::label_number` counts along from the first
+  label's end, so the back still runs on from the front's last, and the last
+  label is still behind the first.
+- **The draft asks.** The bin codes cannot say which end, as they cannot say
+  two sides. The preview has **From the right** on each place with more than
+  one bay, and **Every rack from the right** (`DraftRequest.from_right`). A
+  place asked for is the same codes read on its grid, so its bins are found
+  again by name.
+- **The editor can turn it round afterwards.** **Numbered from** in the plan
+  editor (D209), for one rack or every rack chosen. It is the one part of a
+  grid the editor takes (`PlaceChanged.from_right`), because it moves no bin
+  on the floor: each bin keeps its name and goes to the cell the name is on
+  now, the mirror of its column. A bin the place's pattern does not name
+  refuses the change rather than being left where its labels no longer say.
+  The change is kept in `place_change` with the rest of the place.
+
+**Why.** The user applied the draft and saw it in 3D: "the warehouse has its
+bins in the reverse direction, so 1 starts on the front right face and then 32
+ends at the back of the right face. There needs to be a way to specify the
+numbering direction when importing it" (2026-10-06). The draft was already
+applied, so asking at import alone would leave the racks already made wrong
+with no way to fix them but drawing the site again.
+
+**Not decided.** A rack whose levels are numbered from the top, or whose
+back is numbered from the same end as its front rather than round.

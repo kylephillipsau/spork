@@ -337,7 +337,7 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
               </text>
             );
           })}
-        {picked && picked.corners.length === 4 && <Front shape={picked} sides={desk.selected?.sides ?? 1} px={px} />}
+        {picked && picked.corners.length === 4 && desk.selected && <Front shape={picked} d={desk.selected} px={px} />}
         {desk.selected && desk.selected.parent_id && (
           <Gaps d={desk.selected} gaps={clearances(desk.drafts, desk.selected)} parent={parentOf(desk.selected)} cellMm={desk.cellMm} px={px} />
         )}
@@ -353,11 +353,15 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
 
 /**
  * Which side of the chosen place is its front: the face its first bins open
- * onto, and what turning it changes. A rack with two sides says so of its back.
+ * onto, and what turning it changes. A rack with two sides says so of its back,
+ * and a dot on the front marks the end its numbering starts at (D220).
  */
-function Front({ shape, sides, px }: { shape: PlanShape; sides: number; px: number }) {
+function Front({ shape, d: place, px }: { shape: PlanShape; d: Draft; px: number }) {
   const [a, b, c, d] = shape.corners as [Point, Point, Point, Point];
   const out = unit([a[0] - d[0], a[1] - d[1]]);
+  const [start, end] = place.from_right ? [b, a] : [a, b];
+  const along = unit([end[0] - start[0], end[1] - start[1]]);
+  const first: Point = [start[0] + along[0] * 7 * px, start[1] + along[1] * 7 * px];
   const label = (p: Point, q: Point, normal: Point, text: string) => {
     const m: Point = [(p[0] + q[0]) / 2 + normal[0] * 14 * px, (p[1] + q[1]) / 2 + normal[1] * 14 * px];
     return (
@@ -370,7 +374,8 @@ function Front({ shape, sides, px }: { shape: PlanShape; sides: number; px: numb
     <g pointerEvents="none">
       <line x1={a[0]} y1={-a[1]} x2={b[0]} y2={-b[1]} className={s.front} vectorEffect="non-scaling-stroke" />
       {label(a, b, out, "Front")}
-      {sides === 2 && label(c, d, [-out[0], -out[1]], "Back")}
+      {place.sides === 2 && label(c, d, [-out[0], -out[1]], "Back")}
+      {place.bays > 1 && <circle cx={first[0]} cy={-first[1]} r={4 * px} className={s.first} />}
     </g>
   );
 }
@@ -535,6 +540,7 @@ function One({ desk, d }: { desk: PlanDesk; d: Draft }) {
           ]}
           onValueChange={(v) => desk.change(d.place_id, (x) => ({ ...x, solid: v === "solid" }))}
         />
+        {d.bays > 1 && <Numbering desk={desk} places={[d]} />}
         <div className={s.pair}>
           <NumberField label={parent ? "From its left" : "Across"} unit={unit} value={shown(d.box.x, mm)} step={step} onCommit={set("x")} />
           <NumberField label={parent ? "From its front" : "Up the plan"} unit={unit} value={shown(d.box.y, mm)} step={step} onCommit={set("y")} />
@@ -600,6 +606,7 @@ function Several({ desk }: { desk: PlanDesk }) {
   const numbers = [left, front, aisle].map((t) => Number.parseFloat(t));
   const ready = parents.size === 1 && numbers.every((n) => Number.isFinite(n)) && numbers[2]! >= 0;
   const sized = racks.filter((d) => d.solid && d.bays > 1);
+  const numbered = desk.chosen.filter((d) => d.bays > 1);
 
   return (
     <Card title={`${desk.chosen.length} places chosen`} description="Shift-click a place to add it or take it out. Drag any of them to move them all.">
@@ -644,9 +651,36 @@ function Several({ desk }: { desk: PlanDesk }) {
             Set out {racks.length} in a row
           </Button>
         </fieldset>
+        {numbered.length > 0 && <Numbering desk={desk} places={numbered} />}
         {sized.length > 0 && <MakeForm desk={desk} racks={sized} more={[]} />}
       </div>
     </Card>
+  );
+}
+
+/**
+ * Which end of its front a place's labels start at, as you face it (D220).
+ * Its bins keep their names: on Save each goes to the bay its name is on, so a
+ * rack drafted the wrong way round is put right here.
+ */
+function Numbering({ desk, places }: { desk: PlanDesk; places: Draft[] }) {
+  const right = places.filter((d) => d.from_right).length;
+  return (
+    <Select
+      label="Numbered from"
+      value={right === places.length ? "right" : right === 0 ? "left" : ""}
+      placeholder="Some from each end"
+      hint={
+        places.length === 1
+          ? "Its first bay, as you face the front. The dot on the plan marks it."
+          : "Each one's first bay, as you face its front."
+      }
+      options={[
+        { value: "left", label: "The left end" },
+        { value: "right", label: "The right end" },
+      ]}
+      onValueChange={(v) => desk.change(places.map((d) => d.place_id), (x) => ({ ...x, from_right: v === "right" }))}
+    />
   );
 }
 

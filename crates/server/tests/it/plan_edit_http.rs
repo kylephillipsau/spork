@@ -245,5 +245,71 @@ async fn the_plan_editor_moves_draws_and_keeps_its_history() {
         "moved from 1 to 10, the wall drawn, then taken away"
     );
 
+    // ── a rack numbered from its other end (D220) ───────────────────────
+    // Rack PF read from the left: PE-F01 and PE-F02 along the front, PE-F03
+    // and PE-F04 back along the other side, PE-F04 behind PE-F01. Numbered
+    // from the right, every bin keeps its name and goes to the mirror of its
+    // column, which is where that name is now.
+    db.batch_execute(&format!(
+        "INSERT INTO place (id, tenant_id, site_id, parent_id, name, solid, x, y, length, depth, height,
+                            bays, levels, sides, bin_pattern)
+         VALUES ('9e0e0000-0000-0000-0000-000000000003', '{TENANT}', '{SITE}', '9e0e0000-0000-0000-0000-000000000001',
+                 'Rack PF', true, 1, 12, 2, 2, 1, 2, 1, 2, 'PE-F{{bay:02}}');
+         INSERT INTO location (tenant_id, site_id, code, kind, active, place_id, slot_bay, slot_level, slot_row, slot_position, slot_side)
+         SELECT '{TENANT}', '{SITE}', v.code, 'pick_face', true, '9e0e0000-0000-0000-0000-000000000003', v.bay, 1, 1, 1, v.side
+           FROM (VALUES ('PE-F01', 1, 1::int2), ('PE-F02', 2, 1::int2), ('PE-F03', 2, 2::int2), ('PE-F04', 1, 2::int2)) v(code, bay, side);"
+    ))
+    .await
+    .expect("a rack with two sides, numbered from the left");
+    let numbered = |view: &Value, name: &str, from_right: bool| {
+        let p = view["places"].as_array().unwrap().iter().find(|p| p["name"] == name).unwrap().clone();
+        serde_json::json!({
+            "client_event_id": uuid::Uuid::new_v4(), "occurred_at": "2026-10-06T01:00:00Z", "version": view["version"],
+            "changed": [{ "place_id": p["place_id"], "name": name, "solid": p["solid"], "x": p["x"], "y": p["y"], "z": p["z"],
+                          "length": p["length"], "depth": p["depth"], "height": p["height"], "turn": p["turn"],
+                          "from_right": from_right }],
+        })
+    };
+    let layout = read(&app).await;
+    let pf = layout["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack PF").unwrap().clone();
+    assert_eq!(pf["from_right"], false, "{pf}");
+    let (status, saved) = save(&app, numbered(&layout, "Rack PF", true)).await;
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!(
+        cells_of(&db, "PE-F%").await,
+        vec![("PE-F01".into(), 2, 1), ("PE-F02".into(), 1, 1), ("PE-F03".into(), 1, 2), ("PE-F04".into(), 2, 2)],
+        "PE-F01 at the front's right end, PE-F04 behind it"
+    );
+    let (_, page) = call(&app, test::TestRequest::get().uri(&format!("/places/{}", pf["place_id"].as_str().unwrap())).insert_header(auth.clone())).await;
+    assert_eq!((page["bay_labels"].clone(), page["back_labels"].clone()), (serde_json::json!(["02", "01"]), serde_json::json!(["04", "03"])), "{page}");
+    let after = read(&app).await;
+    assert_eq!(after["places"].as_array().unwrap().iter().find(|p| p["name"] == "Rack PF").unwrap()["from_right"], true);
+    let kept = db
+        .query_one(
+            "SELECT before->>'from_right', after->>'from_right' FROM place_change
+              WHERE place_id = '9e0e0000-0000-0000-0000-000000000003'",
+            &[],
+        )
+        .await
+        .expect("kept in the history");
+    assert_eq!((kept.get::<_, Option<String>>(0), kept.get::<_, Option<String>>(1)), (Some("false".into()), Some("true".into())));
+
+    // Rack LE holds PE-01-1, which its pattern does not name: refused, and
+    // nothing moves.
+    let (status, refused) = save(&app, numbered(&after, "Rack LE", true)).await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("PE-01-1"), "{refused}");
+    assert_eq!(cells_of(&db, "PE-01-%").await, vec![("PE-01-1".into(), 1, 1)]);
+
     clear(&db).await;
+}
+
+/// Bins whose codes are like this, with the column and side each is in.
+async fn cells_of(db: &tokio_postgres::Client, like: &str) -> Vec<(String, i32, i16)> {
+    db.query("SELECT code, slot_bay, slot_side FROM location WHERE code LIKE $1 ORDER BY code", &[&like])
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| (r.get(0), r.get(1), r.get(2)))
+        .collect()
 }

@@ -32,8 +32,8 @@ export interface PlanDesk {
   select: (placeId: Uuid | null, add?: boolean) => void;
   /** Choose these places. */
   selectAll: (placeIds: Uuid[]) => void;
-  /** Change a place, as one step to undo. */
-  change: (placeId: Uuid, next: (d: Draft) => Draft) => void;
+  /** Change a place, or several, as one step to undo. */
+  change: (placeIds: Uuid | readonly Uuid[], next: (d: Draft) => Draft) => void;
   /** Put places where they go, as one step to undo. */
   place: (boxes: ReadonlyMap<Uuid, PlaceBox>) => void;
   /** A drag begins: one undo step for the whole of it. */
@@ -142,7 +142,10 @@ export function usePlanEditor(): PlanDesk {
       else setSelection([id]);
     },
     selectAll: setSelection,
-    change: (id, next) => step(latest.current.map((d) => (d.place_id === id ? next(d) : d))),
+    change: (ids, next) => {
+      const changing = new Set(typeof ids === "string" ? [ids] : ids);
+      step(latest.current.map((d) => (changing.has(d.place_id) ? next(d) : d)));
+    },
     place: (boxes) => step(latest.current.map((d) => ({ ...d, box: boxes.get(d.place_id) ?? d.box }))),
     begin: () => {
       setPast((p) => [...p.slice(-99), latest.current]);
@@ -165,6 +168,7 @@ export function usePlanEditor(): PlanDesk {
           box: { x, y, z: 0, length: preset.length, depth: preset.depth, height: preset.height, turn: 0 },
           outline: null,
           sides: 1,
+          from_right: false,
           bays: 1,
           levels: 1,
           bins: 0,
@@ -191,6 +195,7 @@ export function usePlanEditor(): PlanDesk {
           box: { x, y, z: 0, length: size, depth: size, height: size / 2, turn: 0 },
           outline: null,
           sides: 1,
+          from_right: false,
           bays: 1,
           levels: 1,
           bins: 0,

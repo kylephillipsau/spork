@@ -11,7 +11,9 @@ import type { Frame, LayoutView, PlanShape, Uuid } from "@domain/types";
  *
  * **Bins never move.** A bin's cell is a bay and a level of its place, so a
  * rack moved, turned or stretched carries its bins with it. Nothing here
- * touches a grid.
+ * touches a grid but which end of its front a place is numbered from (D220),
+ * and that moves no bin on the floor: each keeps its name, and the server
+ * puts it in the bay its name is on now.
  */
 
 export type Point = [number, number];
@@ -37,6 +39,8 @@ export interface Draft {
   outline: Point[] | null;
   /** Bins on two faces, so it stays solid. */
   sides: number;
+  /** Its first label is at the right end of its front (D220). */
+  from_right: boolean;
   /** Its grid, which sizing from bays reads and nothing here changes. */
   bays: number;
   levels: number;
@@ -116,6 +120,7 @@ export function draftsOf(view: LayoutView): Draft[] {
       box: { x: p.x, y: p.y, z: p.z, length: p.length, depth: p.depth, height: p.height, turn: p.turn },
       outline: p.outlined && shape ? shape.corners.map((c) => within(shape.frame, c)) : null,
       sides: p.sides,
+      from_right: p.from_right,
       bays: p.bays,
       levels: p.levels,
       bins: p.bins + (children.has(p.place_id) ? 1 : 0),
@@ -219,10 +224,12 @@ export function freeName(drafts: readonly Draft[], parent: Uuid | null, base: st
   for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
 }
 
+/** A place drawn: its name, what it is, and its box. */
+type Drawn = { place_id: Uuid; name: string; solid: boolean } & PlaceBox;
 /** A place as a save sends it: `POST /layout/edit`'s `changed`. */
-export type PlaceChanged = { place_id: Uuid; name: string; solid: boolean } & PlaceBox;
+export type PlaceChanged = Drawn & { from_right: boolean };
 /** And its `added`, which also says what the place is inside. */
-export type PlaceAdded = PlaceChanged & { parent_id: Uuid | null };
+export type PlaceAdded = Drawn & { parent_id: Uuid | null };
 /** And its `spots`: a bin from the tray on a spot of its own. */
 export type SpotAdded = { place_id: Uuid; location_id: Uuid; parent_id: Uuid | null; solid: boolean } & PlaceBox;
 
@@ -245,7 +252,8 @@ export function changesOf(view: LayoutView, drafts: readonly Draft[]): Changes {
     const row = { place_id: d.place_id, name: d.name.trim(), solid: d.solid, ...d.box };
     if (!before && d.holds) spots.push({ place_id: d.place_id, location_id: d.holds.location_id, parent_id: d.parent_id, solid: d.solid, ...d.box });
     else if (!before) added.push({ ...row, parent_id: d.parent_id });
-    else if (before.name !== row.name || before.solid !== d.solid || !sameBox(before.box, d.box)) changed.push(row);
+    else if (before.name !== row.name || before.solid !== d.solid || before.from_right !== d.from_right || !sameBox(before.box, d.box))
+      changed.push({ ...row, from_right: d.from_right });
   }
   const removed = [...was.keys()].filter((id) => !now.has(id));
   return { changed, added, removed, spots };

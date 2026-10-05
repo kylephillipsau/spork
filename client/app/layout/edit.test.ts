@@ -18,6 +18,7 @@ const draft = (place_id: string, parent_id: string | null, over: Partial<PlaceBo
   box: box(over),
   outline: null,
   sides: 1,
+  from_right: false,
   bays: 1,
   levels: 1,
   bins: 0,
@@ -79,6 +80,15 @@ test("a save sends what changed, what was drawn, and what was taken away", () =>
   assert.deepEqual(c.changed.map((p) => [p.name, p.turn]), [["Rack C", 90]]);
   assert.deepEqual(c.added.map((p) => [p.name, p.parent_id]), [["Wall", main!.place_id]]);
   assert.deepEqual(c.removed, [returns!.place_id]);
+});
+
+test("a rack numbered from its other end is a change, and says which end (D220)", () => {
+  const drafts = draftsOf(LAID_OUT);
+  const rackE = drafts.find((d) => d.name === "Rack E")!;
+  assert.equal(rackE.from_right, false);
+  const c = changesOf(LAID_OUT, drafts.map((d) => (d === rackE ? { ...d, from_right: true } : d)));
+  assert.deepEqual(c.changed.map((p) => [p.name, p.from_right, p.turn]), [["Rack E", true, rackE.box.turn]]);
+  assert.equal(changeCount(LAID_OUT, drafts.map((d) => (d === rackE ? { ...d, from_right: false } : d))), 0, "back as it was is no change");
 });
 
 test("a new place takes a name nothing beside it has", () => {

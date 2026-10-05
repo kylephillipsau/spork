@@ -76,7 +76,7 @@ struct Row {
 
 const PLACE_COLUMNS: &str = "id, parent_id, name, solid, x, y, z, length, depth, height, turn,
                              outline, bays, levels, rows, positions, first_bay, bay_step,
-                             first_level, bin_pattern, sides, reach_levels";
+                             first_level, bin_pattern, sides, reach_levels, from_right";
 
 fn row(r: &tokio_postgres::Row) -> Row {
     Row {
@@ -101,6 +101,7 @@ fn row(r: &tokio_postgres::Row) -> Row {
             bay_step: r.get(17),
             first_level: r.get(18),
             sides: r.get::<_, i16>(20) as i32,
+            from_right: r.get(22),
         },
         pattern: r.get(19),
         reach_levels: r.get::<_, i16>(21) as i32,
@@ -441,6 +442,8 @@ pub struct LayoutPlace {
     pub rows: i32,
     /// 1, or 2 for a rack with a face on each side.
     pub sides: i32,
+    /// Its first label is at the right end of its front (D220).
+    pub from_right: bool,
     /// How many bins share a bay at each level, lowest first: where the map
     /// splits a bay (D208).
     pub positions: Vec<i32>,
@@ -596,6 +599,7 @@ pub async fn site_layout(
                         levels: p.grid.levels,
                         rows: p.grid.rows,
                         sides: p.grid.sides,
+                        from_right: p.grid.from_right,
                         positions: (1..=p.grid.levels).map(|l| p.grid.positions_at(l)).collect(),
                         pattern: p.pattern,
                         reach_levels: p.reach_levels,
@@ -1004,6 +1008,8 @@ pub struct DraftedPlace {
     pub bins: usize,
     /// 2 when it was made as a rack with a face on each side.
     pub sides: i32,
+    /// True when it was made numbered from the right end of its front (D220).
+    pub from_right: bool,
     /// How its bays would share out between two sides, as its labels read
     /// (`["01–18", "19–36"]`); none for a place that cannot have two.
     pub split: Option<[String; 2]>,
@@ -1049,6 +1055,10 @@ pub struct DraftRequest {
     /// (`layout::two_sides`), by the names the preview gave them.
     #[serde(default)]
     pub two_sided: Vec<String>,
+    /// Places numbered from the right end of their front, leftwards (D220),
+    /// by the names the preview gave them.
+    #[serde(default)]
+    pub from_right: Vec<String>,
 }
 
 /// How a proposed place's bays would share out between two sides, as its
@@ -1083,6 +1093,11 @@ fn unused_name(used: &mut HashSet<String>, base: &str) -> String {
     name
 }
 
+/// Where each name a pattern gives is on this grid: the cell it spells.
+fn cells_named(pattern: &Pattern, grid: &Grid) -> Result<HashMap<String, GridCell>, String> {
+    Ok(pattern.names(grid)?.into_iter().map(|(cell, name)| (name, cell)).collect())
+}
+
 /// Put the bins that are not on the layout into it.
 ///
 /// First into the places already there, where a place's pattern names a bin
@@ -1094,7 +1109,8 @@ fn unused_name(used: &mut HashSet<String>, base: &str) -> String {
 ///
 /// A place named in `leave_out` is not made and takes no row; its bins stay
 /// in the tray. A rack named in `two_sided` is made as its two sides, back to
-/// back. The names are worked out the same way whatever is asked, so the
+/// back, and a place named in `from_right` is numbered from the right end of
+/// its front. The names are worked out the same way whatever is asked, so the
 /// names a preview showed are the names an apply matches. A name the draft
 /// does not propose is refused rather than ignored, because a bin list that
 /// changed since the preview could otherwise make what was left out under
@@ -1185,7 +1201,7 @@ pub async fn draft(
         let name = unused_name(&mut used, &d.name);
         named.push((d, name));
     }
-    for wanted in asked.leave_out.iter().chain(&asked.two_sided) {
+    for wanted in asked.leave_out.iter().chain(&asked.two_sided).chain(&asked.from_right) {
         if !named.iter().any(|(_, name)| name == wanted) {
             return Err(ApiError::Rejected(format!(
                 "the draft no longer proposes {wanted}; preview it again"
@@ -1203,32 +1219,35 @@ pub async fn draft(
     });
     unmatched.sort();
 
-    // What will be made: each family's place, with two sides where asked. A
-    // rack with two is the same codes read on a grid half as long, so its bins
-    // are found again by name, each in the cell its pattern spells it in.
+    // What will be made: each family's place, with two sides and numbered
+    // from the right where asked. Either is the same codes read on another
+    // grid, so its bins are found again by name, each in the cell its pattern
+    // spells it in.
     let mut making: Vec<(&layout::Drafted, String, Grid, Vec<(&str, GridCell)>)> = vec![];
     for (d, name) in named {
-        if !asked.two_sided.contains(&name) {
+        let mut grid = if asked.two_sided.contains(&name) {
+            layout::two_sides(&d.grid)
+                .filter(|_| d.solid)
+                .ok_or_else(|| ApiError::Rejected(format!("{name} has no bays to put on two sides")))?
+        } else {
+            d.grid.clone()
+        };
+        grid.from_right = asked.from_right.contains(&name);
+        if grid == d.grid {
             let bins = d.bins.iter().map(|(code, cell)| (code.as_str(), *cell)).collect();
-            making.push((d, name, d.grid.clone(), bins));
+            making.push((d, name, grid, bins));
             continue;
         }
-        let Some(grid) = layout::two_sides(&d.grid).filter(|_| d.solid) else {
-            return Err(ApiError::Rejected(format!("{name} has no bays to put on two sides")));
-        };
-        let by_name: HashMap<String, GridCell> = Pattern::parse(&d.pattern)
-            .and_then(|p| p.names(&grid))
-            .map_err(|e| ApiError::Rejected(format!("{name} cannot be read on two sides: {e}")))?
-            .into_iter()
-            .map(|(cell, code)| (code, cell))
-            .collect();
+        let by_name = Pattern::parse(&d.pattern)
+            .and_then(|p| cells_named(&p, &grid))
+            .map_err(|e| ApiError::Rejected(format!("{name} cannot be read that way: {e}")))?;
         let bins: Vec<(&str, GridCell)> = d
             .bins
             .iter()
             .filter_map(|(code, _)| by_name.get(code).map(|cell| (code.as_str(), *cell)))
             .collect();
         if bins.len() != d.bins.len() {
-            return Err(ApiError::Rejected(format!("{name} has codes its two sides do not name")));
+            return Err(ApiError::Rejected(format!("{name} has codes it would not name that way")));
         }
         making.push((d, name, grid, bins));
     }
@@ -1294,14 +1313,15 @@ pub async fn draft(
                 .query_one(
                     "INSERT INTO place (tenant_id, site_id, parent_id, name, solid, x, y, length,
                                         depth, height, bays, levels, rows, positions, bin_pattern,
-                                        first_bay, bay_step, first_level, sides)
+                                        first_bay, bay_step, first_level, sides, from_right)
                      VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                             $15, $16, $17, $18)
+                             $15, $16, $17, $18, $19)
                      RETURNING id",
                     &[
                         &tenant, &site, &container_id, &name, &d.solid, &at, &length, &depth,
                         &height, &grid.bays, &grid.levels, &grid.rows, &positions, &d.pattern,
                         &grid.first_bay, &grid.bay_step, &grid.first_level, &sides,
+                        &grid.from_right,
                     ],
                 )
                 .await?
@@ -1318,6 +1338,7 @@ pub async fn draft(
                 levels: grid.levels,
                 bins: bins.len(),
                 sides: grid.sides,
+                from_right: grid.from_right,
                 split: if grid.sides == 1 { split_of(d) } else { None },
             });
         }
@@ -1420,9 +1441,9 @@ pub struct PlaceBox {
     pub turn: f64,
 }
 
-/// A place as the editor left it. Its grid is not here: changing bays,
-/// levels or the naming pattern would move or rename bins, and the editor
-/// moves none.
+/// A place as the editor left it. Its grid is not here, but for which end its
+/// numbering starts: changing bays, levels or the naming pattern would rename
+/// bins or put them in other places, and the editor does neither.
 #[derive(Deserialize, Debug)]
 pub struct PlaceChanged {
     pub place_id: Uuid,
@@ -1430,6 +1451,9 @@ pub struct PlaceChanged {
     pub solid: bool,
     #[serde(flatten)]
     pub at: PlaceBox,
+    /// Numbered from the right end of its front (D220). Absent: as it was.
+    #[serde(default)]
+    pub from_right: Option<bool>,
 }
 
 /// A place drawn in the editor: a wall, a column, a dock, a packing station.
@@ -1500,13 +1524,60 @@ fn checked(at: PlaceBox, what: &str) -> Result<PlaceBox, ApiError> {
     Ok(PlaceBox { turn: at.turn.round().rem_euclid(360.0), ..at })
 }
 
-/// How a place is kept in its history: its name, kind and box.
-fn as_kept(parent: Option<Uuid>, name: &str, solid: bool, at: &PlaceBox) -> serde_json::Value {
+/// How a place is kept in its history: its name, kind and box, and which end
+/// it is numbered from.
+fn as_kept(parent: Option<Uuid>, name: &str, solid: bool, at: &PlaceBox, from_right: bool) -> serde_json::Value {
     serde_json::json!({
         "parent_id": parent, "name": name, "solid": solid,
         "x": at.x, "y": at.y, "z": at.z,
         "length": at.length, "depth": at.depth, "height": at.height, "turn": at.turn,
+        "from_right": from_right,
     })
+}
+
+/// Number a place from the other end of its front (D220).
+///
+/// **Nothing moves on the floor.** The place's labels were the wrong way
+/// round, so each bin, keeping its name, goes to the cell that name is on
+/// now: the mirror of its column, on the same side and level. A bin its
+/// pattern does not name is refused rather than left where its labels no
+/// longer say.
+async fn renumber(tx: &Transaction<'_>, was: &Row, from_right: bool) -> Result<(), ApiError> {
+    let bins: Vec<(Uuid, String)> = tx
+        .query("SELECT id, code FROM location WHERE place_id = $1", &[&was.id])
+        .await?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
+    if bins.is_empty() {
+        return Ok(());
+    }
+    let name = &was.name;
+    let refused = |why: String| ApiError::Rejected(format!("{name} can't be numbered from its other end: {why}"));
+    let pattern = was
+        .pattern
+        .as_deref()
+        .and_then(|s| Pattern::parse(s).ok())
+        .ok_or_else(|| refused("it has no pattern its bins are named by".into()))?;
+    let by_name = cells_named(&pattern, &Grid { from_right, ..was.grid.clone() }).map_err(refused)?;
+    let cells = bins
+        .iter()
+        .map(|(id, code)| match by_name.get(code) {
+            Some(cell) => Ok((*id, was.id, *cell)),
+            None => Err(refused(format!("{code} is in it, and isn't a name its pattern gives"))),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    // Off and back on: a swap made in one statement collides with itself on
+    // location_slot_key.
+    tx.execute(
+        "UPDATE location
+            SET place_id = NULL, slot_side = NULL, slot_bay = NULL, slot_level = NULL,
+                slot_row = NULL, slot_position = NULL
+          WHERE place_id = $1",
+        &[&was.id],
+    )
+    .await?;
+    put(tx, &cells).await
 }
 
 /// A database refusal the person can act on, in their words.
@@ -1526,7 +1597,9 @@ fn said(e: tokio_postgres::Error, name: &str) -> ApiError {
 ///
 /// **Bins never move.** A place's box is where it is drawn; a bin's cell is a
 /// bay and a level of its place, so moving, turning or stretching a rack
-/// carries its bins with it. Its grid is not editable here at all.
+/// carries its bins with it. Of its grid, only which end its numbering starts
+/// can be changed here, and that moves no bin on the floor: each keeps its
+/// name, in the cell the name is on now (D220).
 ///
 /// **Against the layout the editor read.** If the layout has changed since,
 /// by another editor, a draft or a rack's reach, the save is refused, so
@@ -1614,19 +1687,24 @@ pub async fn edit_layout(
                         return Err(ApiError::Rejected(format!("{name} has bins on two sides, so it stays solid")));
                     }
                     let before = PlaceBox { x: was.x, y: was.y, z: was.z, length: was.length, depth: was.depth, height: was.height, turn: was.turn };
+                    let from_right = c.from_right.unwrap_or(was.grid.from_right);
                     tx.execute(
                         "UPDATE place SET name = $2, solid = $3, x = $4, y = $5, z = $6,
-                                          length = $7, depth = $8, height = $9, turn = $10
+                                          length = $7, depth = $8, height = $9, turn = $10,
+                                          from_right = $11
                           WHERE id = $1",
-                        &[&c.place_id, &name, &c.solid, &at.x, &at.y, &at.z, &at.length, &at.depth, &at.height, &(at.turn as i16)],
+                        &[&c.place_id, &name, &c.solid, &at.x, &at.y, &at.z, &at.length, &at.depth, &at.height, &(at.turn as i16), &from_right],
                     )
                     .await
                     .map_err(|e| said(e, name))?;
+                    if from_right != was.grid.from_right {
+                        renumber(tx, was, from_right).await?;
+                    }
                     record(
                         c.place_id,
                         "changed",
-                        Some(as_kept(was.parent_id, &was.name, was.solid, &before)),
-                        Some(as_kept(was.parent_id, name, c.solid, &at)),
+                        Some(as_kept(was.parent_id, &was.name, was.solid, &before, was.grid.from_right)),
+                        Some(as_kept(was.parent_id, name, c.solid, &at, from_right)),
                     )
                     .await?;
                 }
@@ -1650,7 +1728,7 @@ pub async fn edit_layout(
                     )
                     .await
                     .map_err(|e| said(e, name))?;
-                    record(a.place_id, "added", None, Some(as_kept(a.parent_id, name, a.solid, &at))).await?;
+                    record(a.place_id, "added", None, Some(as_kept(a.parent_id, name, a.solid, &at, false))).await?;
                 }
 
                 // A bin from the tray, on a spot of its own: one cell, named for
@@ -1689,7 +1767,7 @@ pub async fn edit_layout(
                     if moved == 0 {
                         return Err(ApiError::Rejected(format!("{code} is on the layout already, so it stays where it is")));
                     }
-                    let mut after = as_kept(spot.parent_id, &code, spot.solid, &at);
+                    let mut after = as_kept(spot.parent_id, &code, spot.solid, &at, false);
                     after["bin"] = serde_json::json!(code);
                     record(spot.place_id, "added", None, Some(after)).await?;
                 }
@@ -1729,7 +1807,7 @@ pub async fn edit_layout(
                 for was in gone {
                     tx.execute("DELETE FROM place WHERE id = $1", &[&was.id]).await?;
                     let before = PlaceBox { x: was.x, y: was.y, z: was.z, length: was.length, depth: was.depth, height: was.height, turn: was.turn };
-                    record(was.id, "removed", Some(as_kept(was.parent_id, &was.name, was.solid, &before)), None).await?;
+                    record(was.id, "removed", Some(as_kept(was.parent_id, &was.name, was.solid, &before, was.grid.from_right)), None).await?;
                 }
 
                 Ok(LayoutEdited {

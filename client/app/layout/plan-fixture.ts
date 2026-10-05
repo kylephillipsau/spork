@@ -65,7 +65,7 @@ export function fixturePlanEdited(over: Partial<PlanDesk> = {}): PlanDesk {
   const read = draftsOf(DRAFTED_SITE);
   const building = read.find((d) => d.parent_id === null)!;
   const drafts: Draft[] = [
-    ...read.map((d) => (d.name === "Rack G" ? { ...d, box: { ...turned(d.box, 90), x: d.box.x + 14 } } : d)),
+    ...read.map((d) => (d.name === "Rack G" ? { ...d, box: { ...turned(d.box, 90), x: d.box.x + 14 }, from_right: true } : d)),
     {
       place_id: "01990000-0000-7000-8000-0000000ba11c",
       parent_id: building.place_id,
@@ -74,6 +74,7 @@ export function fixturePlanEdited(over: Partial<PlanDesk> = {}): PlanDesk {
       box: { x: 0, y: building.box.depth - 0.5, z: 0, length: building.box.length, depth: 0.5, height: 4, turn: 0 },
       outline: null,
       sides: 1,
+      from_right: false,
       bays: 1,
       levels: 1,
       bins: 0,

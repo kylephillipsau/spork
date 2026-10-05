@@ -706,6 +706,7 @@ export const FIXTURES: readonly Screen[] = [
         draft: { kind: "previewed", report: DRAFTED },
         leftOut: ["Rack X"],
         twoSided: ["Rack A", "Rack B", "Rack C"],
+        fromRight: ["Rack A", "Rack B", "Rack C"],
       })}
     />
   )),

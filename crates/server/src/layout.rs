@@ -29,9 +29,9 @@ use serde::Serialize;
 /// A cell of a place's grid, each coordinate counted from 1.
 ///
 /// `bay` is the column along the place, counted from the front's left as the
-/// front is faced, on either side; `side` is 1 for the front and 2 for the
-/// back of a rack with two. So the cell behind another is the same column on
-/// the other side.
+/// front is faced, on either side and whichever end its numbering starts; `side`
+/// is 1 for the front and 2 for the back of a rack with two. So the cell behind
+/// another is the same column on the other side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct GridCell {
     pub bay: i32,
@@ -54,11 +54,24 @@ pub struct Grid {
     pub first_level: i32,
     /// 1, or 2 for a rack with a face on each side, numbered round it.
     pub sides: i32,
+    /// Its first label is at the right end of its front, and the labels run
+    /// leftwards (D220). Otherwise they start at the left.
+    pub from_right: bool,
 }
 
 impl Grid {
     pub fn single() -> Grid {
-        Grid { bays: 1, levels: 1, rows: 1, positions: vec![], first_bay: 1, bay_step: 1, first_level: 1, sides: 1 }
+        Grid {
+            bays: 1,
+            levels: 1,
+            rows: 1,
+            positions: vec![],
+            first_bay: 1,
+            bay_step: 1,
+            first_level: 1,
+            sides: 1,
+            from_right: false,
+        }
     }
 
     /// How many bins share a bay at this level (counted from 1).
@@ -97,20 +110,19 @@ impl Grid {
         out
     }
 
-    /// The number on the label of the front's bay in this column.
-    pub fn bay_number(&self, bay: i32) -> i32 {
-        self.first_bay + (bay - 1) * self.bay_step
-    }
-
-    /// The number on the label of this column's bay on this side. The back is
-    /// numbered round: on from the front's last, the other way along, so the
-    /// back of the first column, behind the front's first bay, is the last of
-    /// all (E-36 behind E-01).
+    /// The number on the label of this column's bay on this side.
+    ///
+    /// The front is numbered from the end its numbering starts at: the left,
+    /// or the right (D220). The back is numbered round: on from the front's
+    /// last, the other way along, so behind the front's first bay is the last
+    /// of all (E-36 behind E-01).
     pub fn label_number(&self, side: i32, bay: i32) -> i32 {
+        // How far along the front's numbering this column is, from 1.
+        let along = if self.from_right { self.bays + 1 - bay } else { bay };
         if side == 2 {
-            self.first_bay + (2 * self.bays - bay) * self.bay_step
+            self.first_bay + (2 * self.bays - along) * self.bay_step
         } else {
-            self.bay_number(bay)
+            self.first_bay + (along - 1) * self.bay_step
         }
     }
 
@@ -344,7 +356,8 @@ fn from_letters(s: &str) -> Option<i32> {
 }
 
 /// The labels along a place's face, as its racks would print them: the bay
-/// numbers across the front, the level numbers up.
+/// numbers across the front, left to right as you face it, and the level
+/// numbers up.
 pub fn labels(grid: &Grid, pattern: Option<&Pattern>) -> (Vec<String>, Vec<String>) {
     let bays = (1..=grid.bays).map(|b| bay_label(grid, pattern, 1, b)).collect();
     let levels = (1..=grid.levels).map(|l| level_label(grid, pattern, l)).collect();
@@ -352,8 +365,8 @@ pub fn labels(grid: &Grid, pattern: Option<&Pattern>) -> (Vec<String>, Vec<Strin
 }
 
 /// The labels along the back of a rack with two sides, left to right as you
-/// face the back: from the front's last column round to its first. Nothing for
-/// a place with one side.
+/// face the back: the column at the front's right end first. Nothing for a
+/// place with one side.
 pub fn back_labels(grid: &Grid, pattern: Option<&Pattern>) -> Vec<String> {
     if grid.sides < 2 {
         return vec![];
@@ -690,6 +703,7 @@ pub fn draft(bins: &[(String, bool)]) -> Draft {
             bay_step,
             first_level: min_l,
             sides: 1,
+            from_right: false,
         };
         let mut position_style = Style::Plain;
         if n == 4 {
@@ -843,6 +857,41 @@ mod tests {
         assert!(two_sides(&e).is_none(), "and two sides are not split again");
         assert!(!e.contains(GridCell { side: 3, ..at(1, 1) }));
         assert!(Grid { sides: 3, ..grid(2, 1) }.problems().iter().any(|p| p.contains("one side or two")));
+    }
+
+    #[test]
+    fn a_rack_numbered_from_the_right_reads_the_other_way() {
+        // Rack C: C-01 at the front's right end, leftwards to C-16, round the
+        // left end, and back along the other side to C-32, behind C-01.
+        let p = Pattern::parse("C-{bay:02}-{level:02}").unwrap();
+        let c = Grid { from_right: true, ..two_sides(&grid(32, 4)).unwrap() };
+        let at = |bay, side| GridCell { bay, level: 1, row: 1, position: 1, side };
+        let named = |cell| p.render(&c, cell).unwrap();
+        assert_eq!((named(at(16, 1)), named(at(16, 2))), ("C-01-01".to_string(), "C-32-01".to_string()));
+        assert_eq!((named(at(1, 1)), named(at(1, 2))), ("C-16-01".to_string(), "C-17-01".to_string()));
+        // Each side reads as you face it: the front 16 down to 01, and the
+        // back, whose left is the front's right end, 32 down to 17.
+        let (front, _) = labels(&c, Some(&p));
+        assert_eq!((front[0].as_str(), front[15].as_str()), ("16", "01"));
+        let back = back_labels(&c, Some(&p));
+        assert_eq!((back[0].as_str(), back[15].as_str()), ("32", "17"));
+        assert_eq!(whereabouts(&c, Some(&p), at(16, 2)), "back, bay 32, level 01");
+        // The same codes as from the left, each in the mirror of its column.
+        let left = two_sides(&grid(32, 4)).unwrap();
+        let mut ours: Vec<(String, GridCell)> = p.names(&c).unwrap().into_iter().map(|(cell, n)| (n, cell)).collect();
+        let mut theirs: Vec<(String, GridCell)> = p.names(&left).unwrap().into_iter().map(|(cell, n)| (n, cell)).collect();
+        ours.sort();
+        theirs.sort();
+        assert_eq!(ours.len(), theirs.len());
+        for ((a, ca), (b, cb)) in ours.iter().zip(&theirs) {
+            assert_eq!((a, ca.bay), (b, 17 - cb.bay), "{a} is mirrored");
+            assert_eq!((ca.side, ca.level), (cb.side, cb.level));
+        }
+
+        // One side, by twos: the right end is the first.
+        let odd = Grid { first_bay: 1, bay_step: 2, from_right: true, ..grid(3, 1) };
+        assert_eq!(labels(&odd, None).0, ["5", "3", "1"]);
+        assert!(back_labels(&odd, None).is_empty());
     }
 
     #[test]

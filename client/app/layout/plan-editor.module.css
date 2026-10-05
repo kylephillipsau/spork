@@ -96,6 +96,11 @@
   stroke: var(--ui-warning);
   stroke-width: 3;
 }
+/* Where a place's numbering starts, on its front (D220). */
+.first {
+  fill: var(--ui-warning);
+  pointer-events: none;
+}
 .side {
   fill: var(--ui-warning);
   font-weight: 700;

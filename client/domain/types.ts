@@ -1704,6 +1704,8 @@ export interface LayoutPlace {
   rows: number;
   /** 1, or 2 for a rack with a face on each side. */
   sides: number;
+  /** Its first label is at the right end of its front (D220). */
+  from_right: boolean;
   /** How many bins share a bay at each level, lowest first (D208). */
   positions: number[];
   pattern: string | null;
@@ -1785,6 +1787,8 @@ export interface DraftedPlace {
   bins: number;
   /** 2 when it was made as a rack with a face on each side. */
   sides: number;
+  /** True when it was made numbered from the right end of its front (D220). */
+  from_right: boolean;
   /**
    * How its bays would share out between two sides, as its labels read
    * (`["01–18", "19–36"]`); null for a place that cannot have two.
@@ -1816,6 +1820,8 @@ export interface DraftRequest {
   leave_out: string[];
   /** Racks with a face on each side, numbered round them. */
   two_sided: string[];
+  /** Places numbered from the right end of their front, leftwards (D220). */
+  from_right: string[];
 }
 
 /** `GET /workspace/people`: one person of the workspace, current or past (D205). */
