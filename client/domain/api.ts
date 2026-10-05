@@ -3,6 +3,7 @@ import type { AuthenticationOptions, RegistrationOptions } from "./webauthn";
 import type {
   ApiToken,
   BinFlagged,
+  Refiled,
   CeremonyBegun,
   BenchScreen,
   BoundBarcode,
@@ -850,6 +851,15 @@ export const api = {
 
   /** GS1's packaging types, the common ones first (D191). */
   packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),
+
+  /** Move what one card of an item holds to another of its cards (D219). */
+  refile: (itemId: Uuid, from: "each" | "inner" | "carton", to: "each" | "inner" | "carton", act: Act) =>
+    send<Refiled>("POST", `/items/${encodeURIComponent(itemId)}/refile`, {
+      from,
+      to,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
 
   /** Say which level of an item is one in NetSuite: what it is sold as (D218). */
   sayUnit: (itemId: Uuid, level: "each" | "inner" | "carton", act: Act) =>

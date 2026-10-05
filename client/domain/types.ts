@@ -1379,6 +1379,16 @@ export interface ItemStyleRef {
 }
 
 /** What a carton holds, as the case pack in force says. Either count may be unknown. */
+/** What moving one card's records to another made (D219). */
+export interface Refiled {
+  /** Figures copied to the right card, and retracted on the wrong one. */
+  figures: number;
+  /** Photos filed again on the right card. */
+  photos: number;
+  /** The act was recorded before: nothing was done again. */
+  replay: boolean;
+}
+
 /** Which level of an item is one in NetSuite: what it is sold as (D218). */
 export interface ItemUnit {
   level: "each" | "inner" | "carton";

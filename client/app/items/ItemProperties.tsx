@@ -241,6 +241,97 @@ export function ItemDrawer({
 }
 
 /**
+ * Whether a card's records can be moved to another of the item's cards
+ * (D219): one of the item's own levels with something recorded on it.
+ */
+function movable(item: ItemView, s: CaptureSubject): boolean {
+  return ownLevel(item, s) && recorded(s);
+}
+
+function ownLevel(item: ItemView, s: CaptureSubject): boolean {
+  const level = s.packaging_level;
+  return (
+    s.item_id === item.item_id &&
+    !s.item_style_id &&
+    !s.lot_id &&
+    !s.item_part_id &&
+    (level === "each" || level === "inner" || level === "carton")
+  );
+}
+
+/** Something recorded against the card itself: a family's figures or a variant's shown on it are not its own. */
+function recorded(s: CaptureSubject): boolean {
+  if (s.source === "style" || s.source === "variant") return false;
+  return s.gross_weight_g !== null || s.length_mm !== null || s.weight_absent || s.dimensions_absent || s.faces.length > 0;
+}
+
+/**
+ * Move a card's figures and photos to the card they belong on (D219): a box
+ * of ten weighed on the carton card, put on the box's. Kept with when and how
+ * they were taken; nothing is rewritten.
+ */
+function MoveDialog({
+  item,
+  subject,
+  desk,
+  onClose,
+}: {
+  item: ItemView;
+  subject: CaptureSubject;
+  desk: PropertiesDesk;
+  onClose: () => void;
+}) {
+  const here = nameOf(subject, item);
+  const choices = (["each", "inner", "carton"] as const)
+    .filter((level) => level !== subject.packaging_level)
+    .map((level) => ({ value: level, label: levelName(level, item) }));
+  // A card with records of its own was measured as itself, and is not filled over.
+  const taken = new Set(
+    item.subjects.filter((x) => ownLevel(item, x) && recorded(x)).map((x) => x.packaging_level),
+  );
+  const [to, setTo] = useState<(typeof choices)[number]["value"]>(
+    (choices.find((c) => !taken.has(c.value)) ?? choices[0]!).value,
+  );
+  const name = choices.find((c) => c.value === to)?.label ?? to;
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !desk.busy && onClose()}
+      width={460}
+      title="Move to another card"
+      description={`What’s recorded on ${here} moves to the card it belongs on: figures, photos and their cuts, kept with when and how they were taken. ${here} is left with nothing.`}
+      footer={
+        <>
+          <Button onClick={onClose} disabled={desk.busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={desk.busy}
+            disabled={taken.has(to)}
+            onClick={() => void desk.refile(subject, to, name).then((ok) => ok && onClose())}
+          >
+            Move to {name}
+          </Button>
+        </>
+      }
+    >
+      <Stack gap={3}>
+        {desk.problem && (
+          <Alert tone="danger" onDismiss={desk.dismiss}>
+            {desk.problem}
+          </Alert>
+        )}
+        <Tabs aria-label="Move to" value={to} onValueChange={(v) => setTo(v as typeof to)} items={choices} />
+        {taken.has(to) && (
+          <p className={s.note}>{name} has figures or photos of its own. Move those away first, or record over them.</p>
+        )}
+      </Stack>
+    </Dialog>
+  );
+}
+
+/**
  * What one of it is, and what it comes in (D218): "Box of 100 · in cartons of
  * 10 boxes". Whose word it is, when Spork said it rather than NetSuite.
  */
@@ -342,6 +433,7 @@ function Subject({
   const photos = photosOf(item, subject);
   // A thing that is not a box is asked for every side only when somebody wants them.
   const [sides, setSides] = useState(false);
+  const [moving, setMoving] = useState(false);
   // An item's own carton is a box of so many of it (D178).
   const carton = isOwnCarton(subject);
   const needs = [
@@ -415,7 +507,13 @@ function Subject({
             {a.label}
           </Button>
         ))}
+        {movable(item, subject) && (
+          <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => setMoving(true)}>
+            Move…
+          </Button>
+        )}
       </Toolbar>
+      {moving && <MoveDialog item={item} subject={subject} desk={desk} onClose={() => setMoving(false)} />}
       {open === "weigh" && <WeighForm item={item} subject={subject} desk={desk} />}
       {open === "measure" && <MeasureForm item={item} subject={subject} desk={desk} />}
       {open === "photos" && (

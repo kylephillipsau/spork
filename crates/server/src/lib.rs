@@ -58,6 +58,7 @@ pub mod receiving_list;
 pub mod picking_list;
 pub mod pictures;
 pub mod receiving;
+pub mod refile;
 pub mod revalidation;
 pub mod routes;
 pub mod routing;

@@ -216,6 +216,51 @@ async fn an_item_leads_with_what_netsuite_counts_one_of() {
         "an item is sold as its each, its pack or its carton"
     );
 
+    // ── what still needs weighing is the unit (D218) ──────────────────────
+    let (status, said) = call(test::TestRequest::post().uri("/observations").set_json(json!({
+        "item_id": gloves, "packaging_level": "carton",
+        "measurements": [{ "metric": "gross_weight", "entered_value": "6.6", "unit": "kg" }],
+        "method": "instrument", "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-05T03:00:00Z",
+    })))
+    .await;
+    assert_eq!(status, 200, "{said}");
+    db.execute(
+        "SELECT projection_observation_current_rebuild(current_tenant())",
+        &[],
+    )
+    .await
+    .expect("the fold");
+    let (status, listed) =
+        call(test::TestRequest::get().uri(&format!("/items?needs=weighing&q={n}"))).await;
+    assert_eq!(status, 200, "{listed}");
+    let codes: Vec<&str> = listed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["code"].as_str().unwrap())
+        .collect();
+    assert!(
+        !codes.contains(&format!("GLV-{n}").as_str()),
+        "its carton weighed, the glove is: {codes:?}"
+    );
+    assert!(
+        codes.contains(&format!("PLG-{n}").as_str()),
+        "a single pair weighed is not the box: {codes:?}"
+    );
+    let (_, listed) =
+        call(test::TestRequest::get().uri(&format!("/items?has=measured&q={n}"))).await;
+    let codes: Vec<&str> = listed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        codes,
+        vec![format!("GLV-{n}").as_str()],
+        "measured is the unit measured"
+    );
+
     // ── what the export calls one ──────────────────────────────────────────
     let (status, rows) =
         call(test::TestRequest::get().uri(&format!("/items/export?format=json&q={n}"))).await;

@@ -15194,7 +15194,46 @@ packs to a carton (`inners_per_carton`); only what one of them means in
 NetSuite is new. A carton said by the prepack list for a CTN item is that
 item's unit, nothing to remove.
 
-**Not yet** (stage two). Figures and photos recorded on the wrong card, like
-the respirator's box on its carton, stay there until they can be moved: an
-act with history, as a photo's move is (D190). The items list's "needs"
-filters still count any level measured.
+*Amended by D219:* figures and photos recorded on the wrong card, like the
+respirator's box on its carton, can be moved to the right one, and the items
+list's "needs" and "has" filters count the unit.
+
+### D219: What was recorded on the wrong card is moved to the right one
+
+*Adopted 2026-10-05. Amends D218. No migration.*
+
+**The finding.** Before an item said what it was sold as (D218), a box of ten
+P2 respirators was weighed, measured, photographed and cut on its item's
+carton card, because "carton of 10" read like "10/box". What was recorded is
+true of the box. It is filed against the carton, so the box shows nothing,
+and the carton shows a box's figures. And the items list's "needs weighing"
+counted an item weighed when any of its levels was, so an earplug weighed
+alone took a box of 100 off the list.
+
+**Decision.** A card's records can be **moved** to another level of the same
+item: **Move…** on the card, choose where they belong, and everything on it
+goes: figures, said-absent figures, photos and their cuts
+(`POST /items/{id}/refile`, `refile.rs`).
+
+- **Nothing is rewritten.** Each event on the old card with anything live on
+  it is mirrored on the new one: the same moment and method, the same
+  arrangement, `ingestion_channel` derived and `derived_from_event_id`
+  naming it. Each live figure is copied into its mirror and retracted where it
+  was, by a retraction naming it, so no older figure surfaces there in its
+  place. Each photo not moved before is filed again in its mirror with its
+  newest cut, and the old one marked moved to it (`observation_image_move`,
+  D190), "same as" sides following it. Who moved it and when is the act's.
+- **The card it goes to is the item's at that level under the case pack in
+  force** (D23).
+- **A card with records of its own is refused**, rather than two sets mixed:
+  move those away first, or record over them. So is a card with nothing to
+  move, and a family's or a variant's figures shown on a card, which are not
+  the card's.
+- **The items list counts the unit.** "Needs weighing", "needs measuring",
+  "has measured" and the row's words are the unit's figures (D218): an item
+  sold by the carton is weighed when its carton is, and one sold by the box
+  is not weighed because a single one inside it was. Photographs still count
+  any level.
+
+**Not yet.** Moving one event, or one photo, rather than the card's worth;
+moving to another item, or to a family.

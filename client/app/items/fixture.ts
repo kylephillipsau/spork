@@ -268,6 +268,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     keepUpright: later,
     flagBin: async () => null,
     sayUnit: async () => false,
+    refile: async () => false,
     taken: [],
     sending: {},
     attach: noop,

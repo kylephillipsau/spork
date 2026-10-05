@@ -198,8 +198,13 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   `unit_level_of` (migration 124, view `item_unit_level`). The item page leads
   with it and keeps offers (an unsaid carton, a single product inside) as
   quiet lines; the bench counts in NetSuite units (`bench::per_level`); the
-  capture sheet and exports use the unit's figures. Stage two: moving figures
-  and photos recorded on the wrong card, and the "needs" filters.
+  capture sheet and exports use the unit's figures.
+- D219. **Move…** on an item's card moves everything recorded on it to
+  another of its levels (`refile.rs`, `POST /items/{id}/refile`): events
+  mirrored with `derived_from_event_id`, figures copied and retracted where
+  they were, photos refiled with their cuts and marked moved. Refused onto a
+  card with records of its own. The items list's needs/has filters count the
+  unit's figures.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

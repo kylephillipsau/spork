@@ -757,6 +757,9 @@ pub(crate) async fn list_rows(
         Order::Listed => (LISTED, "le.position, n.code"),
     };
     // Asked as yes or no: whether a measured figure exists.
+    // **Measured means the unit is** (D219): an item sold by the carton
+    // needs its carton weighed, not a single glove, and is measured when its
+    // carton is. Needs, has, and the row's own words all say the same.
     let measured = |metrics: &str| {
         format!(
             "EXISTS (SELECT 1 FROM observable o
@@ -765,30 +768,37 @@ pub(crate) async fn list_rows(
                       WHERE (o.item_id = c.id
                              OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
                         AND m.code IN ({metrics})
+                        AND o.packaging_level::text = c.unit
                         AND (oc.absent_reason IS NOT NULL
                              OR oc.method::text IN {MEASURED_METHODS}))"
         )
     };
     let weighed = measured("'gross_weight'");
     let sized = measured("'length', 'width', 'height'");
-    // Its each has all three lengths recorded, its own or its
-    // family's, or is said to have none (D138): the pack bench can
-    // place it, or knows to put it in loose (D197).
-    let each_sized = "EXISTS (SELECT 1 FROM observable o
+    // Its unit has all three lengths recorded, its own or its family's, or
+    // is said to have none (D138): the pack bench can place what was
+    // ordered, or knows to put it in loose (D197, D218).
+    let unit_sized = "EXISTS (SELECT 1 FROM observable o
                        JOIN observation_current oc ON oc.observable_id = o.id
                        JOIN metric m ON m.id = oc.metric_id
                       WHERE (o.item_id = c.id
                              OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
-                        AND o.packaging_level = 'each'
+                        AND o.packaging_level::text = c.unit
                         AND m.code IN ('length', 'width', 'height')
                         AND (oc.value_numeric IS NOT NULL OR oc.absent_reason IS NOT NULL)
                      HAVING count(DISTINCT m.code) = 3)";
     let sql = format!(
         "WITH {picture},
          {TO_PACK},
+         -- Which level of each item is one in NetSuite (D218), read once.
+         unit AS MATERIALIZED (
+             SELECT item_id, level::text AS level FROM item_unit_level
+         ),
          candidates AS (
-             SELECT i.id, i.code, i.description, i.active, i.style_id
+             SELECT i.id, i.code, i.description, i.active, i.style_id,
+                    coalesce(u.level, 'each') AS unit
                FROM item i
+               LEFT JOIN unit u ON u.item_id = i.id
               WHERE ($1::text IS NULL OR i.code ILIKE $1 OR i.description ILIKE $1
                      OR EXISTS (SELECT 1 FROM item_barcode b
                                  WHERE b.item_id = i.id AND b.barcode = ANY($2::text[])))
@@ -814,9 +824,9 @@ pub(crate) async fn list_rows(
                      OR EXISTS (SELECT 1 FROM picture p WHERE p.item_id = c.id))
                 AND (NOT $14::bool
                      OR (EXISTS (SELECT 1 FROM to_pack tp WHERE tp.item_id = c.id)
-                         AND NOT {each_sized}
+                         AND NOT {unit_sized}
                          AND NOT (SELECT s.as_it_is
-                                    FROM ships_as_is(c.id, NULL, NULL, NULL, 'each') s)))
+                                    FROM ships_as_is(c.id, NULL, NULL, NULL, c.unit::packaging_level) s)))
          ),
          page AS (
              SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
@@ -849,8 +859,10 @@ pub(crate) async fn list_rows(
                                    THEN 2 ELSE 1 END AS grade
                          FROM observable o
                          JOIN observation_current oc ON oc.observable_id = o.id
-                        WHERE o.item_id = n.id
-                           OR (n.style_id IS NOT NULL AND o.item_style_id = n.style_id)) g
+                        WHERE (o.item_id = n.id
+                               OR (n.style_id IS NOT NULL AND o.item_style_id = n.style_id))
+                          -- The unit's, as what still needs doing is (D219).
+                          AND o.packaging_level::text = n.unit) g
                  JOIN metric m ON m.id = g.metric_id
            ) fig ON true
            LEFT JOIN LATERAL (
