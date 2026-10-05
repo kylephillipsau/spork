@@ -298,6 +298,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
 const CATALOGUE = "01990000-0000-7000-8000-0000000c0a70";
 const GLOVES = "01990000-0000-7000-8000-0000000c0a71";
 const PLUGS = "01990000-0000-7000-8000-0000000c0a72";
+const RESPIRATOR = "01990000-0000-7000-8000-0000000c0a73";
 
 /**
  * Sold by the each, and nothing said of a carton (D218): one card, and a
@@ -404,6 +405,45 @@ export const SOLD_BY_BOX: ItemView = {
       because: "incomplete",
     }),
     subject({ item_id: PLUGS, code: "DEJ-8040", packaging_level: "each", wants: [], offered: true }),
+  ],
+};
+
+/**
+ * A box of ten P2 respirators weighed, measured and photographed on its
+ * carton card before the item said it is sold by the box (D219): the box is
+ * the unit with nothing on it, and the carton holds the box's figures.
+ */
+export const MISFILED: ItemView = {
+  ...ITEM_UNKNOWN,
+  item_id: RESPIRATOR,
+  code: "P2R-0010",
+  description: "Portwest P2 Respirator With Valve 10/box",
+  unit: { level: "inner", said: true, netsuite_unit: "Box" },
+  packing: { units_per_inner: 10, inners_per_carton: 10, effective_from: "2026-10-05" },
+  subjects: [
+    subject({
+      item_id: RESPIRATOR,
+      code: "P2R-0010",
+      packaging_level: "inner",
+      is_unit: true,
+      because: "never-measured",
+    }),
+    subject({
+      item_id: RESPIRATOR,
+      code: "P2R-0010",
+      packaging_level: "carton",
+      gross_weight_g: 230,
+      length_mm: 140,
+      width_mm: 130,
+      height_mm: 165,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-01T02:40:00Z",
+      faces: ["front"],
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
+    subject({ item_id: RESPIRATOR, code: "P2R-0010", packaging_level: "each", wants: [], offered: true }),
   ],
 };
 

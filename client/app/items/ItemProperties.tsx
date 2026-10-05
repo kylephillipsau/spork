@@ -242,10 +242,25 @@ export function ItemDrawer({
 
 /**
  * Whether a card's records can be moved to another of the item's cards
- * (D219): one of the item's own levels with something recorded on it.
+ * (D219): one of the item's own levels with something recorded on it, and
+ * another level to move them to.
  */
 function movable(item: ItemView, s: CaptureSubject): boolean {
-  return ownLevel(item, s) && recorded(s);
+  return ownLevel(item, s) && recorded(s) && destinations(item, s).length > 0;
+}
+
+type Level = "each" | "inner" | "carton";
+
+/**
+ * The item's other levels a card's records could go to: those it has a card
+ * for, shown or offered. A pack or carton is only a definite thing under a
+ * case pack (D23), so with none said there is only the single product.
+ */
+function destinations(item: ItemView, s: CaptureSubject): Level[] {
+  const there = new Set(item.subjects.filter((x) => ownLevel(item, x)).map((x) => x.packaging_level));
+  return (["each", "inner", "carton"] as const).filter(
+    (level) => level !== s.packaging_level && there.has(level) && (level === "each" || item.packing !== null),
+  );
 }
 
 function ownLevel(item: ItemView, s: CaptureSubject): boolean {
@@ -270,7 +285,7 @@ function recorded(s: CaptureSubject): boolean {
  * of ten weighed on the carton card, put on the box's. Kept with when and how
  * they were taken; nothing is rewritten.
  */
-function MoveDialog({
+export function MoveDialog({
   item,
   subject,
   desk,
@@ -282,15 +297,15 @@ function MoveDialog({
   onClose: () => void;
 }) {
   const here = nameOf(subject, item);
-  const choices = (["each", "inner", "carton"] as const)
-    .filter((level) => level !== subject.packaging_level)
-    .map((level) => ({ value: level, label: levelName(level, item) }));
+  const choices = destinations(item, subject).map((level) => ({ value: level, label: levelName(level, item) }));
   // A card with records of its own was measured as itself, and is not filled over.
   const taken = new Set(
     item.subjects.filter((x) => ownLevel(item, x) && recorded(x)).map((x) => x.packaging_level),
   );
-  const [to, setTo] = useState<(typeof choices)[number]["value"]>(
-    (choices.find((c) => !taken.has(c.value)) ?? choices[0]!).value,
+  // What it is sold as, when that card is empty: where a misfiled box most often belongs.
+  const open = choices.filter((c) => !taken.has(c.value));
+  const [to, setTo] = useState<Level>(
+    (open.find((c) => c.value === item.unit.level) ?? open[0] ?? choices[0]!).value,
   );
   const name = choices.find((c) => c.value === to)?.label ?? to;
   return (
@@ -299,7 +314,7 @@ function MoveDialog({
       onOpenChange={(open) => !open && !desk.busy && onClose()}
       width={460}
       title="Move to another card"
-      description={`What’s recorded on ${here} moves to the card it belongs on: figures, photos and their cuts, kept with when and how they were taken. ${here} is left with nothing.`}
+      description={`Everything recorded on ${here} moves to the card it belongs on, with when and how it was taken.`}
       footer={
         <>
           <Button onClick={onClose} disabled={desk.busy}>

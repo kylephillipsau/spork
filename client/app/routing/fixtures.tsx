@@ -104,10 +104,12 @@ import { BACKUP_READY, fixtureBackup } from "@app/admin/backup-fixture";
 import { PeoplePage } from "@app/admin/PeoplePage";
 import { PEOPLE_READY, fixturePeople } from "@app/admin/people-fixture";
 import { ItemPage } from "@app/items/ItemPage";
+import { MoveDialog } from "@app/items/ItemProperties";
 import {
   BRUSH,
   ITEM,
   ITEM_FLAGGED,
+  MISFILED,
   SOLD_BY_BOX,
   SOLD_BY_CARTON,
   SOLD_SINGLY,
@@ -630,6 +632,20 @@ export const FIXTURES: readonly Screen[] = [
   app("f-item-sold-by-box", "/fixtures/item/sold-by-box", "Item — sold by the box", "desk", { screen: "item" }, () => (
     <ItemPage desk={fixtureProperties(SOLD_BY_BOX)} />
   )),
+  // D219: a box recorded on its carton's card, and moving it to the box.
+  app("f-item-misfiled", "/fixtures/item/misfiled", "Item — recorded on the wrong card", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(MISFILED)} />
+  )),
+  app("f-item-moving", "/fixtures/item/moving", "Item — moving to the right card", "floor", { screen: "item" }, () => {
+    const desk = fixtureProperties(MISFILED);
+    const carton = MISFILED.subjects.find((x) => x.packaging_level === "carton")!;
+    return (
+      <>
+        <ItemPage desk={desk} />
+        <MoveDialog item={MISFILED} subject={carton} desk={desk} onClose={() => {}} />
+      </>
+    );
+  }),
   // D215: what the floor says against NetSuite's bins, and the two questions.
   app("f-item-flagged", "/fixtures/item/flagged", "Item — not where NetSuite lists it", "floor", { screen: "item" }, () => (
     <ItemPage desk={fixtureProperties(ITEM_FLAGGED)} />
