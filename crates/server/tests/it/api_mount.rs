@@ -101,7 +101,9 @@ async fn the_api_answers_under_api_and_nowhere_else() {
     //    to keep, and it answers at `/print`.
     let resp = test::call_service(
         &app,
-        test::TestRequest::get().uri("/print/style.css").to_request(),
+        test::TestRequest::get()
+            .uri("/print/style.css")
+            .to_request(),
     )
     .await;
     assert!(
@@ -114,4 +116,25 @@ async fn the_api_answers_under_api_and_nowhere_else() {
     )
     .await;
     assert_eq!(gone.status(), 404, "`/app` is retired, not merely unlinked");
+
+    // 6. **An answer may be a frame in an isolated page.** The backup downloads
+    //    through a hidden frame, and the client is cross-origin isolated:
+    //    without this, Firefox refused the download (`NS_ERROR_DOM_COEP_FAILED`).
+    //    A refusal shown in that frame needs it as much as the file does.
+    let resp = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri("/api/backup")
+            .set_form([("password", "not signed in")])
+            .to_request(),
+    )
+    .await;
+    assert_eq!(resp.status().as_u16(), 401);
+    assert_eq!(
+        resp.headers()
+            .get("cross-origin-embedder-policy")
+            .map(|v| v.to_str().unwrap()),
+        Some("require-corp"),
+        "every /api answer may be embedded in the isolated client"
+    );
 }

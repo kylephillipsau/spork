@@ -9557,9 +9557,21 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 /// Terminating unmatched `/api/*` here is what makes a root-mounted client safe.
 /// A request for an endpoint that does not exist gets an empty 404 and stays
 /// diagnosable, whatever is mounted underneath it.
+///
+/// # Every answer says it may be embedded in an isolated page
+///
+/// The client is cross-origin isolated so the face-finder can have threads
+/// (`assets.rs`, D177). A page like that loads a frame only when the frame's
+/// own response asks for the same isolation, and the backup is downloaded
+/// through a hidden frame (D193): without the header Firefox refused the
+/// download, and showed `NS_ERROR_DOM_COEP_FAILED` in its place. Said of every
+/// `/api` answer, a refusal shown in that frame is allowed too, and any later
+/// download done the same way. On anything that isn't a document it means
+/// nothing.
 pub fn mount(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api")
+            .wrap(actix_web::middleware::DefaultHeaders::new().add(("cross-origin-embedder-policy", "require-corp")))
             .configure(configure)
             .default_service(web::to(|| async { HttpResponse::NotFound().finish() })),
     );
