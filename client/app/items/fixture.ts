@@ -195,7 +195,7 @@ export const ITEM: ItemView = {
       image_id: image(10 + i),
       digest: PHOTO,
       captured_at: "2026-09-30T04:20:00Z",
-      cut: face === "front" ? { digest: CUT, corners: [0.12, 0.2, 0.9, 0.16, 0.94, 0.86, 0.08, 0.9] } : null,
+      cut: face === "front" ? { digest: CUT, corners: [0.08, 0.3, 0.92, 0.28, 0.94, 0.68, 0.06, 0.7] } : null,
       same_as: null,
     })),
   ],
@@ -385,7 +385,8 @@ export const RECROPPING = fixtureProperties(ITEM, {
     face: "front",
     image_id: image(10),
     digest: PHOTO,
-    corners: [0.12, 0.2, 0.9, 0.16, 0.94, 0.86, 0.08, 0.9],
+    // Its front, 52 × 24 cm, marked the right way round (D214).
+    corners: [0.08, 0.3, 0.92, 0.28, 0.94, 0.68, 0.06, 0.7],
   },
 });
 

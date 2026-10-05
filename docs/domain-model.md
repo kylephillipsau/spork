@@ -14978,7 +14978,9 @@ photographed are checked against it before the cut is kept (`lieOf`):
   right. Its top edge is drawn amber in both.
 - **Neither**: the corners match its shape neither way round, which turning
   won't fix. The screens say to check it is that face and that the corners
-  are on its corners.
+  are on its corners, its top edge amber too.
+
+Corners not yet placed, by a person or the face-finder, are not checked.
 
 A face not measured, a label, or a thing that isn't a box has nothing to check
 against: it is cut to its corners, so turning can't squash it, and the screen

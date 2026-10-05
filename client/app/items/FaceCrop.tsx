@@ -120,7 +120,11 @@ export function FaceCrop({
   const ratio = loaded ? ratioOf(loaded.image, quad, aspect) : 1;
   const whole = isFace(quad);
   // The corners against the face as measured (D214): checked, then kept.
-  const shot = loaded && whole ? aspectOf(quad, loaded.image.naturalWidth, loaded.image.naturalHeight) : null;
+  // Not while they are still where they start: nobody, and no face-finder,
+  // has put them anywhere yet. `START` itself is the state until then; every
+  // move, find and turn makes a new quad.
+  const placed = cropping.corners !== null || quad !== START;
+  const shot = loaded && whole && placed ? aspectOf(quad, loaded.image.naturalWidth, loaded.image.naturalHeight) : null;
   const lie = shot !== null && aspect !== null ? lieOf(shot, aspect) : null;
   const said = shot !== null ? lieSaid(lie, face, measuredFace(cropping.subject, cropping.face)) : null;
   const out = said?.out ?? false;
