@@ -71,19 +71,29 @@ pub enum Problem {
     CellHasNoHolder,
     NegativeCount,
     /// Soft: count matches system; nothing to write.
-    ZeroVariance { quantity: i64 },
+    ZeroVariance {
+        quantity: i64,
+    },
     /// Record-error vocabulary belongs on the correction path.
-    RecordErrorReason { code: String },
-    UnknownReasonClass { class: String },
+    RecordErrorReason {
+        code: String,
+    },
+    UnknownReasonClass {
+        class: String,
+    },
     MissingReason,
     FindingNotFound,
     FindingWrongTenant,
     FindingAlreadyResolved,
     /// Soft: resolving a non–count_variance finding.
-    FindingUnexpectedKind { kind: String },
+    FindingUnexpectedKind {
+        kind: String,
+    },
     /// Hard: a finding about NetSuite's report (D215). Spork holds no cell
     /// to adjust; it is put right in NetSuite and accepted.
-    FindingIsNetSuites { kind: String },
+    FindingIsNetSuites {
+        kind: String,
+    },
     /// Finding's stock_count names a different cell than this adjust.
     FindingCellMismatch,
     /// Soft: no finding linked; resolution is unattached to investigation.
@@ -193,7 +203,9 @@ pub fn check(
                     problems.push(Problem::FindingAlreadyResolved);
                 }
                 if crate::listed::is_netsuites(&f.kind) {
-                    problems.push(Problem::FindingIsNetSuites { kind: f.kind.clone() });
+                    problems.push(Problem::FindingIsNetSuites {
+                        kind: f.kind.clone(),
+                    });
                 } else if f.kind != "count_variance" {
                     problems.push(Problem::FindingUnexpectedKind {
                         kind: f.kind.clone(),
@@ -236,9 +248,7 @@ pub fn check(
     } else if delta > 0 {
         Some(Direction::Increase { quantity: delta })
     } else {
-        Some(Direction::Decrease {
-            quantity: -delta,
-        })
+        Some(Direction::Decrease { quantity: -delta })
     };
 
     (problems, direction)
@@ -363,7 +373,12 @@ mod tests {
             let mut f = finding();
             f.kind = kind.into();
             let (problems, _) = check(&p, Some(&cell(50)), Some(&f));
-            assert!(problems.iter().any(|x| matches!(x, Problem::FindingIsNetSuites { .. }) && is_hard(x)), "{kind}");
+            assert!(
+                problems
+                    .iter()
+                    .any(|x| matches!(x, Problem::FindingIsNetSuites { .. }) && is_hard(x)),
+                "{kind}"
+            );
         }
     }
 

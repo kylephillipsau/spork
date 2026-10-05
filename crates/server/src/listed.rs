@@ -75,11 +75,23 @@ struct Bin {
     site_id: Uuid,
 }
 
-async fn bin_of(tx: &Transaction<'_>, site: Option<Uuid>, body: &FlagRequest) -> Result<Bin, ApiError> {
+async fn bin_of(
+    tx: &Transaction<'_>,
+    site: Option<Uuid>,
+    body: &FlagRequest,
+) -> Result<Bin, ApiError> {
     let row = match (body.location_id, body.bin_code.as_deref().map(str::trim)) {
-        (Some(id), _) => tx.query_opt("SELECT id, code, site_id FROM location WHERE id = $1", &[&id]).await?,
+        (Some(id), _) => {
+            tx.query_opt(
+                "SELECT id, code, site_id FROM location WHERE id = $1",
+                &[&id],
+            )
+            .await?
+        }
         (None, Some(code)) if !code.is_empty() => {
-            let site = site.ok_or_else(|| ApiError::Rejected("choose the warehouse you're working at first".into()))?;
+            let site = site.ok_or_else(|| {
+                ApiError::Rejected("choose the warehouse you're working at first".into())
+            })?;
             let found = tx
                 .query_opt(
                     "SELECT id, code, site_id FROM location WHERE site_id = $1 AND lower(code) = lower($2)",
@@ -87,14 +99,20 @@ async fn bin_of(tx: &Transaction<'_>, site: Option<Uuid>, body: &FlagRequest) ->
                 )
                 .await?;
             if found.is_none() {
-                return Err(ApiError::Rejected(format!("there's no bin {code} at this warehouse")));
+                return Err(ApiError::Rejected(format!(
+                    "there's no bin {code} at this warehouse"
+                )));
             }
             found
         }
         _ => return Err(ApiError::Rejected("say which bin".into())),
     };
     let r = row.ok_or(ApiError::NotFound)?;
-    Ok(Bin { id: r.get(0), code: r.get(1), site_id: r.get(2) })
+    Ok(Bin {
+        id: r.get(0),
+        code: r.get(1),
+        site_id: r.get(2),
+    })
 }
 
 /// Say an item isn't in a bin NetSuite lists it in, or is in one it doesn't.
@@ -114,10 +132,14 @@ pub async fn flag_bin(
         _ => return Err(ApiError::Rejected("say not_here or found_here".into())),
     };
     if body.quantity.is_some_and(|q| q < 1) {
-        return Err(ApiError::Rejected("how many were found is a whole number, 1 or more".into()));
+        return Err(ApiError::Rejected(
+            "how many were found is a whole number, 1 or more".into(),
+        ));
     }
     if kind == KINDS[0] && body.quantity.is_some() {
-        return Err(ApiError::Rejected("none was there, so there is no count to give".into()));
+        return Err(ApiError::Rejected(
+            "none was there, so there is no count to give".into(),
+        ));
     }
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
