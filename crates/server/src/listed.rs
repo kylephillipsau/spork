@@ -158,23 +158,33 @@ pub async fn flag_bin(
                     return Ok(BinFlagged { discrepancy_id: r.get(0), already: true, bin_code: bin.code });
                 }
 
-                // NetSuite's newest word on this bin, and where else it lists the item.
+                // NetSuite's newest word on this bin, and where else it lists
+                // the item. **The newest row, then whether it lists any**: a
+                // stale feed's row saying 12 must not outrank a newer one
+                // saying none.
                 let listed = tx
                     .query_opt(
-                        "SELECT rs.on_hand::text, to_char(rs.as_at AT TIME ZONE s.timezone, 'FMDD Mon HH24:MI')
-                           FROM reported_stock rs JOIN site s ON s.id = rs.site_id
-                          WHERE rs.item_id = $1 AND rs.location_id = $2 AND rs.on_hand > 0
-                          ORDER BY rs.as_at DESC LIMIT 1",
+                        "SELECT on_hand_text, at FROM (
+                             SELECT rs.on_hand, rs.on_hand::text AS on_hand_text,
+                                    to_char(rs.as_at AT TIME ZONE s.timezone, 'FMDD Mon HH24:MI') AS at
+                               FROM reported_stock rs JOIN site s ON s.id = rs.site_id
+                              WHERE rs.item_id = $1 AND rs.location_id = $2
+                              ORDER BY rs.as_at DESC LIMIT 1) newest
+                          WHERE on_hand > 0",
                         &[&item, &bin.id],
                     )
                     .await?
                     .map(|r| (r.get::<_, String>(0), r.get::<_, String>(1)));
                 let elsewhere: Vec<String> = tx
                     .query(
-                        "SELECT DISTINCT ON (l.id) l.code || ' (' || rs.on_hand::text || ')'
-                           FROM reported_stock rs JOIN location l ON l.id = rs.location_id
-                          WHERE rs.item_id = $1 AND rs.site_id = $2 AND rs.location_id <> $3 AND rs.on_hand > 0
-                          ORDER BY l.id, rs.as_at DESC",
+                        "SELECT said FROM (
+                             SELECT DISTINCT ON (l.id) l.code || ' (' || rs.on_hand::text || ')' AS said,
+                                    rs.on_hand, l.code
+                               FROM reported_stock rs JOIN location l ON l.id = rs.location_id
+                              WHERE rs.item_id = $1 AND rs.site_id = $2 AND rs.location_id <> $3
+                              ORDER BY l.id, rs.as_at DESC) newest
+                          WHERE on_hand > 0
+                          ORDER BY code",
                         &[&item, &bin.site_id, &bin.id],
                     )
                     .await?

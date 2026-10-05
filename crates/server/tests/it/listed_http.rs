@@ -55,6 +55,16 @@ async fn not_where_netsuite_lists_it_is_a_finding_said_once() {
     let (listed_code, other_code) = (format!("L{n}-01"), format!("L{n}-02"));
     let listed = bin(listed_code.clone()).await;
     let other = bin(other_code.clone()).await;
+    // Emptied: an older feed's row still says 7, NetSuite's newest says none.
+    let emptied = bin(format!("L{n}-03")).await;
+    db.execute(
+        "INSERT INTO reported_stock (tenant_id, site_id, item_id, location_id, on_hand, as_at, source)
+         VALUES (current_tenant(), $1, $2, $3, 7, now() - interval '2 days', 'netsuite-inventory-balance-manual'),
+                (current_tenant(), $1, $2, $3, 0, now() - interval '3 minutes', 'netsuite-inventory-balance')",
+        &[&site, &item, &emptied],
+    )
+    .await
+    .expect("an emptied bin's balance");
     db.execute(
         "INSERT INTO reported_stock (tenant_id, site_id, item_id, location_id, on_hand, available, as_at, source)
          VALUES (current_tenant(), $1, $2, $3, 12, 12, now() - interval '3 minutes', 'netsuite-inventory-balance')",
@@ -137,6 +147,8 @@ async fn not_where_netsuite_lists_it_is_a_finding_said_once() {
     };
     refused(json!({ "said": "not_here", "location_id": other, "client_event_id": Uuid::new_v4(), "occurred_at": now }),
             "NetSuite doesn't list it there").await;
+    refused(json!({ "said": "not_here", "location_id": emptied, "client_event_id": Uuid::new_v4(), "occurred_at": now }),
+            "NetSuite's newest balance lists none there, whatever an older feed said").await;
     refused(json!({ "said": "found_here", "location_id": listed, "client_event_id": Uuid::new_v4(), "occurred_at": now }),
             "NetSuite already lists it there").await;
     refused(json!({ "said": "found_here", "bin_code": "NO-SUCH-BIN", "client_event_id": Uuid::new_v4(), "occurred_at": now }),
@@ -178,6 +190,6 @@ async fn not_where_netsuite_lists_it_is_a_finding_said_once() {
     ] {
         db.execute(sql, &[&item]).await.expect(sql);
     }
-    db.execute("DELETE FROM location WHERE id = ANY($1)", &[&vec![listed, other]]).await.expect("the bins");
+    db.execute("DELETE FROM location WHERE id = ANY($1)", &[&vec![listed, other, emptied]]).await.expect("the bins");
     db.execute("DELETE FROM item WHERE id = $1", &[&item]).await.expect("the item");
 }
