@@ -6,3 +6,5 @@ src-tauri/tauri.ios.conf.json
 *.p12
 *.mobileprovision
 *.cer
+spork-debug.apk
+spork-debug.apk.idsig

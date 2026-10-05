@@ -144,3 +144,11 @@
   text-overflow: ellipsis;
   font-family: var(--ui-font-mono);
 }
+
+/* The app's server, unreachable: above every screen until it answers. */
+.unreachable {
+  display: grid;
+  gap: var(--ui-space-3);
+  max-width: 32rem;
+  margin-bottom: var(--ui-space-6);
+}

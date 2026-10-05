@@ -106,6 +106,15 @@ cd mobile && npx tauri android build --debug --target aarch64 --apk
 The Tab Ultra is `arm64-v8a` on Android 11, so `--target aarch64` is all it
 needs. The APK lands under `src-tauri/gen/android/app/build/outputs/apk/`.
 
+**Then slim it: `mobile/slim-apk.sh`.** A debug build's library keeps every
+crate's debug symbols, about 400 MB of APK. Over Tailscale that took long
+enough for the tablet to switch wireless debugging off mid-install. The script
+strips them and signs it again with the same debug key, writing
+`mobile/spork-debug.apk` (about 45 MB). Install that one.
+
+The app is not drawn edge to edge (`MainActivity.kt`): under the Boox's
+status bar, the header and its account menu were hidden.
+
 **Installing over Tailscale.** On the tablet, Settings › Developer options ›
 Wireless debugging. Pair once with the code it shows, then connect to the
 port it shows now. Use the tablet's **Tailscale** address, not the wifi one the
@@ -115,14 +124,17 @@ wireless debugging is switched off, which Android does by itself now and then.
 ```sh
 adb pair <tailscale-ip>:<pairing-port> <code>     # once
 adb connect <tailscale-ip>:<port>
-adb -s <tailscale-ip>:<port> install -r <apk>
+adb -s <tailscale-ip>:<port> install -r mobile/spork-debug.apk
 ```
 
 **Which server.** The app's sign-in screen asks for it the first time (a
 work computer started with `scripts\local.ps1 start -Lan` prints the address
 to use, port 18080) and keeps it on the device; **Change** under the form sets
-another. Plain HTTP is allowed only to private networks — the warehouse wifi,
-Tailscale, `.local` names — and HTTPS anywhere (`capabilities/default.json`).
+another. When the server can't be reached, every screen says so above it,
+with **Try again** and the address to change: the app keeps its sign-in, so it
+opens to its screens rather than to sign-in. Plain HTTP is allowed only to
+private networks — the warehouse wifi, Tailscale, `.local` names — and HTTPS
+anywhere (`capabilities/default.json`).
 
 ## Pointing it at a different server
 

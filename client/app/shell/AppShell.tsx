@@ -13,6 +13,7 @@ import type { SiteRow } from "@domain/types";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { UserMenu } from "./UserMenu";
 import { useSession } from "@app/session/SessionContext";
+import { Unreachable } from "@app/session/Unreachable";
 import s from "./app-shell.module.css";
 
 const COLLAPSED_KEY = "spork.sidebar.collapsed";
@@ -147,6 +148,7 @@ export function AppShell({
           </div>
         </header>
         <main className={s.content} id="main">
+          <Unreachable />
           {children}
         </main>
       </div>
