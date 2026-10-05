@@ -15124,9 +15124,12 @@ embedded (`sheet.rs`). It is named as the printed one was:
   somebody to, as the printed sheet had it; with no bin, all of it here.
 - **Unit and Supplier Part No. are NetSuite's**, held as `reported_item`, a
   report with its age replaced by each load of its feed, as migration 86
-  holds the balance. The Spork Bridge (0.7.0) reads them every six hours for
-  the items with stock at its location (`BUILTIN.DF(saleunit)` and
-  `vendorname`) and loads them through `POST /import/item-details`. No unit
+  holds the balance. The Spork Bridge (0.7.1) reads them every six hours for
+  the items with stock at its location and loads them through
+  `POST /import/item-details`. They are Foodcare's custom fields, Pack Unit
+  (`custitem_packunit`) and Alternative Code (`custitem_alternativecode`):
+  NetSuite's standard sale unit isn't in SuiteQL there, `vendorname` is
+  empty, and these two matched the printed sheet item for item. No unit
   is "not set" and no part is "-", as printed. The CSV and workbook gain
   both, and the bin's own quantity.
 

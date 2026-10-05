@@ -188,8 +188,11 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - D217. Export → Capture sheet (PDF): the printed capture sheet's exact
   layout (`sheet.rs`, metrics in `pdf_metrics.rs`) with recorded figures in
   the boxes. Unit and Supplier Part No. are `reported_item` (migration 123),
-  loaded by Spork Bridge 0.7.0 via `POST /import/item-details`; its SuiteQL
-  (`saleunit`, `vendorname`) is untested against the real NetSuite.
+  loaded by Spork Bridge 0.7.1 via `POST /import/item-details` from the
+  custom fields `custitem_packunit` and `custitem_alternativecode`, probed in
+  the real NetSuite (its standard `saleunit` is refused in SuiteQL). NetSuite
+  also has `custitem_length`, `custitem_width`, `custitem_height`,
+  `custitem_eachpercarton` and friends: where a write-back would go.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

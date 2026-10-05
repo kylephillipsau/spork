@@ -17,12 +17,13 @@ use tokio_postgres::Transaction;
 use uuid::Uuid;
 
 const ITEM: &[&str] = &["Item", "Item Code", "Code", "Name"];
-const UNIT: &[&str] = &["Unit", "Sale Unit", "Selling Unit", "Units"];
+const UNIT: &[&str] = &["Unit", "Pack Unit", "Sale Unit", "Selling Unit", "Units"];
 const SUPPLIER_PART: &[&str] = &[
     "Supplier Part No.",
     "Supplier Part",
-    "Vendor Name",
+    "Alternative Code",
     "Vendor Code",
+    "Vendor Name",
     "Vendor Part",
 ];
 
@@ -204,6 +205,10 @@ mod tests {
 
     #[test]
     fn netsuites_own_names_are_read_and_a_file_with_neither_is_refused() {
+        let rows =
+            read("Name,Pack Unit,Alternative Code\nPBL-9558B,Roll,PBL-9558B\n".as_bytes()).unwrap();
+        assert_eq!(rows[0].selling_unit.as_deref(), Some("Roll"));
+        assert_eq!(rows[0].supplier_part.as_deref(), Some("PBL-9558B"));
         let rows = read("Name,Sale Unit,Vendor Name\nU.KTS,Roll,KTS\n".as_bytes()).unwrap();
         assert_eq!(rows[0].selling_unit.as_deref(), Some("Roll"));
         assert_eq!(rows[0].supplier_part.as_deref(), Some("KTS"));
