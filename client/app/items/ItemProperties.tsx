@@ -482,6 +482,7 @@ export function ItemLine({
   description,
   picture,
   onOpen,
+  note,
   done = false,
 }: {
   code: string;
@@ -489,6 +490,8 @@ export function ItemLine({
   description?: string | undefined;
   picture: Picture | null;
   onOpen?: (() => void) | undefined;
+  /** A word about it on this row, under what it is: which kit it is part of (D223). */
+  note?: string | undefined;
   /** Dealt with, so drawn quieter. */
   done?: boolean | undefined;
 }) {
@@ -500,6 +503,7 @@ export function ItemLine({
         {/* An item made from a code alone has the code as its description;
             saying it twice is noise. */}
         {description && description !== code && <span className={s.itemDesc}>{description}</span>}
+        {note && <span className={s.itemNote}>{note}</span>}
       </span>
     </span>
   );

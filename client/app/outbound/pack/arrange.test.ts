@@ -42,6 +42,7 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
     own_carton: null,
     picture: null,
     packs,
+    kit: null,
     ...over,
   };
 }

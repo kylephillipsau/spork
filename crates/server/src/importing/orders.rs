@@ -25,6 +25,14 @@
 //! before senders said (by order and site, with no id) is adopted by the first
 //! send that does, rather than duplicated.
 //!
+//! # A kit is ordered, and its parts are packed (D223)
+//!
+//! NetSuite sells some things as kits, and an item fulfilment carries the
+//! kit's line and then a line for each part. A line says which it is
+//! ([`Role`]). The kit's own line is loaded as what was ordered and commits
+//! nothing, so nothing downstream counts it as goods; a part is an ordinary
+//! line that says which kit it is part of.
+//!
 //! # Idempotent, and first write wins
 //!
 //! Orders are keyed by document number, lines by `(order, item, line number)`,
@@ -67,6 +75,60 @@ pub struct Line {
     /// Which document this line came from, when the sender knows (D172). The
     /// export does not, and loads by order and site as it always has.
     pub source: Option<Source>,
+    /// Goods, a kit's own line, or one of a kit's parts (D223).
+    pub role: Role,
+}
+
+/// What a line is to the work (D223).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Role {
+    /// Goods to pick and pack: every line, unless the sender says otherwise.
+    #[default]
+    Goods,
+    /// A kit's own line: what the customer ordered, never stocked, and no
+    /// work. Its parts are the goods.
+    Kit,
+    /// One of a kit's parts: goods, and which kit, by the kit line's item and
+    /// line number on the same order.
+    PartOf { item: String, line_no: i32 },
+}
+
+/// One line of an item fulfilment, in the sender's words, as far as kits go.
+pub struct Sent<'a> {
+    /// The line's own key in the item fulfilment.
+    pub key: Option<&'a str>,
+    /// The key of the kit line it is part of, when it is one of a kit's parts.
+    pub kit_line: Option<&'a str>,
+    /// NetSuite's type for its item: `Kit`, `InvtPart`, …
+    pub item_type: Option<&'a str>,
+    /// The item's code, through [`crate::orders::item_code`], and the order line.
+    pub item: String,
+    pub line_no: i32,
+}
+
+/// What each line of one item fulfilment is (D223), from what the sender says.
+///
+/// A line is a kit's when its item's type says so, or when a line says it is
+/// part of it; a line naming another line in the same send is one of its
+/// parts. A part naming a line the send doesn't have is taken as goods, and a
+/// line naming itself is the kit.
+pub fn roles(lines: &[Sent]) -> Vec<Role> {
+    let named: HashSet<&str> = lines.iter().filter_map(|l| l.kit_line).collect();
+    lines
+        .iter()
+        .map(|l| {
+            let kit = l.kit_line.filter(|k| l.key != Some(*k)).and_then(|k| lines.iter().find(|x| x.key == Some(k)));
+            if let Some(kit) = kit {
+                return Role::PartOf { item: kit.item.clone(), line_no: kit.line_no };
+            }
+            let kit_type = l.item_type.is_some_and(|t| t.trim().eq_ignore_ascii_case("kit"));
+            if kit_type || l.key.is_some_and(|k| named.contains(k)) {
+                Role::Kit
+            } else {
+                Role::Goods
+            }
+        })
+        .collect()
 }
 
 /// Where a line came from, in the channel's own keys.
@@ -121,6 +183,8 @@ pub struct Differs {
     pub item: String,
     pub on_file: i64,
     pub arrived: i64,
+    /// `ordered`, `to_pick`, or `kit`: a kit's own line committed before the
+    /// sender said it was one, which stays committed (D223).
     pub field: &'static str,
 }
 
@@ -136,6 +200,8 @@ pub struct OrdersLoaded {
     /// Fulfilments loaded before their document was known, now matched to it.
     pub fulfilments_adopted: u64,
     pub commitments_created: u64,
+    /// Lines that learnt which kit they are part of (D223).
+    pub parts_of_kits: u64,
     /// Lines that loaded, or were already on file.
     pub lines_loaded: usize,
     /// Units still to pick across the lines that loaded.
@@ -340,6 +406,8 @@ async fn write(
 
     // ---- orders, lines, commitments ----
     let mut order_ids: HashMap<&str, Uuid> = HashMap::new();
+    // Each part's line, its order, and its kit's item and line (D223).
+    let mut parts: Vec<(Uuid, Uuid, Uuid, i32)> = vec![];
     // Keyed by order, site and, when the line names one, the item fulfilment.
     let mut fulfilment_ids: HashMap<(Uuid, Uuid, Option<String>), Uuid> = HashMap::new();
 
@@ -486,58 +554,90 @@ async fn write(
             }
         };
         out.lines_loaded += 1;
+        if let Role::PartOf { item: kit, line_no } = &l.role {
+            if let Some(&kit_item) = item_ids.get(kit) {
+                parts.push((line_id, order_id, kit_item, *line_no));
+            }
+        }
 
         // What is still to pick. Nothing outstanding means no commitment:
-        // `fulfilment_line_quantity_ck` insists on more than zero, rightly.
-        if l.outstanding > 0 {
-            let external_line = l.source.as_ref().and_then(|s| s.line.as_deref());
-            let committed = tx
-                .query_opt(
-                    "SELECT quantity, id FROM fulfilment_line
-                      WHERE fulfilment_id = $1 AND order_line_id = $2",
-                    &[&fulfilment_id, &line_id],
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-            match committed {
-                Some(row) => {
-                    let on_file: i64 = row.get(0);
-                    // A commitment loaded before its line key was known learns it.
-                    if let Some(key) = external_line {
-                        let id: Uuid = row.get(1);
-                        tx.execute(
-                            "UPDATE fulfilment_line SET external_line = $2
-                              WHERE id = $1 AND external_line IS NULL",
-                            &[&id, &key],
-                        )
-                        .await
-                        .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
-                    }
-                    if on_file != l.outstanding {
-                        out.differs.push(Differs {
-                            doc: l.doc.clone(),
-                            line: l.line_no,
-                            item: l.item.clone(),
-                            on_file,
-                            arrived: l.outstanding,
-                            field: "to_pick",
-                        });
-                    }
+        // `fulfilment_line_quantity_ck` insists on more than zero, rightly. A
+        // kit's own line is no work, whatever the document says is to pick.
+        let outstanding = if l.role == Role::Kit { 0 } else { l.outstanding };
+        let external_line = l.source.as_ref().and_then(|s| s.line.as_deref());
+        let committed = tx
+            .query_opt(
+                "SELECT quantity, id FROM fulfilment_line
+                  WHERE fulfilment_id = $1 AND order_line_id = $2",
+                &[&fulfilment_id, &line_id],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        match committed {
+            Some(row) => {
+                let on_file: i64 = row.get(0);
+                // A commitment loaded before its line key was known learns it.
+                if let Some(key) = external_line {
+                    let id: Uuid = row.get(1);
+                    tx.execute(
+                        "UPDATE fulfilment_line SET external_line = $2
+                          WHERE id = $1 AND external_line IS NULL",
+                        &[&id, &key],
+                    )
+                    .await
+                    .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
                 }
-                None => {
-                    out.commitments_created += tx
-                        .execute(
-                            "INSERT INTO fulfilment_line (tenant_id, fulfilment_id,
-                                 order_line_id, quantity, external_line)
-                             VALUES ($1, $2, $3, $4, $5)",
-                            &[&tenant, &fulfilment_id, &line_id, &l.outstanding, &external_line],
-                        )
-                        .await
-                        .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
+                // A kit's line committed before the sender said it was one
+                // stays committed, as every commitment made does, and is said.
+                if l.role == Role::Kit {
+                    out.differs.push(Differs {
+                        doc: l.doc.clone(),
+                        line: l.line_no,
+                        item: l.item.clone(),
+                        on_file,
+                        arrived: 0,
+                        field: "kit",
+                    });
+                } else if on_file != outstanding && outstanding > 0 {
+                    out.differs.push(Differs {
+                        doc: l.doc.clone(),
+                        line: l.line_no,
+                        item: l.item.clone(),
+                        on_file,
+                        arrived: outstanding,
+                        field: "to_pick",
+                    });
                 }
             }
-            out.units_to_pick += l.outstanding;
+            None if outstanding > 0 => {
+                out.commitments_created += tx
+                    .execute(
+                        "INSERT INTO fulfilment_line (tenant_id, fulfilment_id,
+                             order_line_id, quantity, external_line)
+                         VALUES ($1, $2, $3, $4, $5)",
+                        &[&tenant, &fulfilment_id, &line_id, &outstanding, &external_line],
+                    )
+                    .await
+                    .map_err(|e| format!("fulfilment_line {} {}: {e}", l.doc, l.item))?;
+            }
+            None => {}
         }
+        out.units_to_pick += outstanding;
+    }
+
+    // Each part learns its kit: the kit's line on the same order. Only into an
+    // empty column, as an order learns its id.
+    for (part, order_id, kit_item, kit_line) in parts {
+        out.parts_of_kits += tx
+            .execute(
+                "UPDATE order_line p SET kit_line_id = k.id
+                   FROM order_line k
+                  WHERE p.id = $1 AND p.kit_line_id IS NULL
+                    AND k.order_id = $2 AND k.item_id = $3 AND k.line_number = $4 AND k.id <> p.id",
+                &[&part, &order_id, &kit_item, &kit_line],
+            )
+            .await
+            .map_err(|e| format!("order_line kit: {e}"))?;
     }
 
     Ok(out)
@@ -626,4 +726,40 @@ async fn fulfilment_for_document(
         .await?
         .get(0);
     Ok((id, true, false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sent<'a>(key: &'a str, kit_line: Option<&'a str>, item_type: Option<&'a str>, item: &str, line_no: i32) -> Sent<'a> {
+        Sent { key: Some(key), kit_line, item_type, item: item.into(), line_no }
+    }
+
+    #[test]
+    fn a_kit_is_its_own_line_and_its_parts_say_so() {
+        // A kit and its two parts, then the same kit again in red, then goods.
+        let lines = [
+            sent("0", None, Some("Kit"), "SPR-B", 1),
+            sent("1", Some("0"), Some("InvtPart"), "HEAD-B", 2),
+            sent("4", Some("0"), Some("InvtPart"), "BOTTLE", 3),
+            sent("7", None, None, "SPR-R", 4),
+            sent("8", Some("7"), None, "HEAD-R", 5),
+            sent("9", None, Some("InvtPart"), "GLOVE", 6),
+        ];
+        let part = |item: &str, line_no| Role::PartOf { item: item.into(), line_no };
+        assert_eq!(
+            roles(&lines),
+            vec![Role::Kit, part("SPR-B", 1), part("SPR-B", 1), Role::Kit, part("SPR-R", 4), Role::Goods],
+            "a kit by its type, or by a part naming it"
+        );
+        // A part naming a line the send doesn't have is goods, not a guess.
+        assert_eq!(roles(&[sent("1", Some("99"), None, "HEAD-B", 2)]), vec![Role::Goods]);
+        assert_eq!(roles(&[sent("0", None, Some(" kit "), "SPR-B", 1)]), vec![Role::Kit], "however it is written");
+        // A kit line NetSuite names as its own kit is the kit, not a part of itself.
+        assert_eq!(
+            roles(&[sent("0", Some("0"), None, "SPR-B", 1), sent("1", Some("0"), None, "HEAD-B", 2)]),
+            vec![Role::Kit, part("SPR-B", 1)]
+        );
+    }
 }

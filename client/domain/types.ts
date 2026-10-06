@@ -42,6 +42,16 @@ export interface BenchLine {
   /** One of it at each level it can leave at (D195): an each; an inner pack and
    *  a carton when the case pack counts them. Whether each ships as it is (D196). */
   packs: PackUnit[];
+  /** The kit it is a part of, when it is one (D223). The kit's own line is no work and isn't a line here. */
+  kit: KitOf | null;
+}
+
+/** The kit a bench line is a part of, as the order has it (D223). */
+export interface KitOf {
+  item_code: string;
+  description: string | null;
+  /** How many of the kit were ordered. */
+  ordered: number;
 }
 
 /** One of an item at a packaging level, as a suggested arrangement places it (D195). */

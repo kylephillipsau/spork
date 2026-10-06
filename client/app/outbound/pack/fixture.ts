@@ -30,6 +30,7 @@ export const PACK_FIXTURE: BenchScreen = {
       elsewhere: null,
       own_carton: null,
       picture: null,
+      kit: null,
       packs: [],
       cells: [
         {
@@ -50,6 +51,7 @@ export const PACK_FIXTURE: BenchScreen = {
       elsewhere: null,
       own_carton: null,
       picture: null,
+      kit: null,
       packs: [],
       cells: [
         {
@@ -71,6 +73,7 @@ export const PACK_FIXTURE: BenchScreen = {
       own_carton: null,
       picture: null,
       // Measured as an each, so the suggestion has something to arrange.
+      kit: { item_code: "PPE-KIT-06", description: "Apron and oversleeves kit", ordered: 6 },
       packs: [
         {
           level: "each",
@@ -110,6 +113,7 @@ export const PACK_FIXTURE: BenchScreen = {
       cells: [],
       picture: null,
       // Ten to a carton, and a carton ships as it is unless somebody says not (D196).
+      kit: { item_code: "PPE-KIT-06", description: "Apron and oversleeves kit", ordered: 6 },
       packs: [
         {
           level: "carton",

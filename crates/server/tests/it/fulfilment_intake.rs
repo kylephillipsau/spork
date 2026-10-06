@@ -445,3 +445,147 @@ async fn a_fulfilment_finished_elsewhere_is_closed_here() {
     common::ok_json(&app, call("POST", "/import/fulfilment?apply=true", Some(back)), "picked again").await;
     assert!(listed(&open(&app).await), "picked again is open again");
 }
+
+/// A kit is ordered, and its parts are packed (D223): the kit's own line
+/// commits nothing and records no picks; its parts are the goods, and the
+/// bench shows them under it. A kit sent before the sender said it was one
+/// stays committed, and the send says so.
+#[actix_web::test]
+async fn a_kit_is_ordered_and_its_parts_are_packed() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+
+    let session = common::bearer(&app).await;
+    let minted: Value = common::ok_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/tokens")
+            .insert_header(("authorization", session.clone()))
+            .set_json(json!({ "label": "the bridge, kits, from a test" }))
+            .to_request(),
+        "POST /tokens",
+    )
+    .await;
+    let token = format!("Bearer {}", minted["token"].as_str().unwrap());
+
+    let run = &Uuid::new_v4().simple().to_string()[..8];
+    let (kit, head, bottle) = (format!("KIT-{run}"), format!("HEAD-{run}"), format!("BOTTLE-{run}"));
+    // The kit, then its parts, as the bridge sends them: by line key.
+    let body = |order: &str, if_id: &str, said: bool| {
+        let (kit_type, part_of) = if said { (json!("Kit"), json!("0")) } else { (Value::Null, Value::Null) };
+        json!({
+            "order": order, "customer": format!("Kit Test {run}"),
+            "order_id": format!("so-{if_id}"), "fulfilment_id": if_id, "fulfilment_number": format!("IF-{if_id}"),
+            "status": "Picked", "observed_at": "2026-10-06T09:00:00Z",
+            "lines": [
+                { "line": 1, "item": kit, "description": "Sprayer and bottle", "location": "Melbourne Warehouse",
+                  "quantity": 10, "external_line": "0", "item_type": kit_type },
+                { "line": 2, "item": head, "description": "Trigger head", "location": "Melbourne Warehouse",
+                  "quantity": 10, "external_line": "1", "kit_line": part_of, "item_type": "InvtPart" },
+                { "line": 3, "item": bottle, "description": "1L bottle", "location": "Melbourne Warehouse",
+                  "quantity": 10, "external_line": "4", "kit_line": part_of, "item_type": "InvtPart" },
+            ]
+        })
+    };
+    let send = |b: Value| {
+        test::TestRequest::post()
+            .uri("/import/fulfilment?apply=true")
+            .insert_header(("authorization", token.clone()))
+            .set_payload(b.to_string())
+            .to_request()
+    };
+    let (db, connection) = tokio_postgres::connect(&u, tokio_postgres::NoTls).await.expect("connect");
+    tokio::spawn(async move { let _ = connection.await; });
+    // Each line of the order: its item, its kit's item, and what it commits.
+    let lines = |order: String| {
+        let db = &db;
+        async move {
+            db.query(
+                "SELECT i.code, ki.code, fl.quantity
+                   FROM order_line ol
+                   JOIN \"order\" o ON o.id = ol.order_id
+                   JOIN item i ON i.id = ol.item_id
+                   LEFT JOIN order_line kl ON kl.id = ol.kit_line_id
+                   LEFT JOIN item ki ON ki.id = kl.item_id
+                   LEFT JOIN fulfilment_line fl ON fl.order_line_id = ol.id
+                  WHERE o.confirmation_number = $1
+                  ORDER BY ol.line_number",
+                &[&order],
+            )
+            .await
+            .expect("the lines")
+            .iter()
+            .map(|r| (r.get::<_, String>(0), r.get::<_, Option<String>>(1), r.get::<_, Option<i64>>(2)))
+            .collect::<Vec<_>>()
+        }
+    };
+
+    // ── sent saying which is the kit ─────────────────────────────────────
+    let order = format!("S-kit-{run}");
+    let sent = common::ok_json(&app, send(body(&order, &format!("if-kit-{run}"), true)), "kit").await;
+    assert_eq!(
+        (sent["loaded"]["units_to_pick"].as_i64(), sent["loaded"]["parts_of_kits"].as_i64()),
+        (Some(20), Some(2)),
+        "the parts are the goods: {sent}"
+    );
+    assert_eq!(sent["picks"]["recorded"], json!(2), "picks on the parts, none on the kit: {sent}");
+    assert_eq!(sent["picks"]["unmatched"], json!([]), "{sent}");
+    assert_eq!(
+        lines(order.clone()).await,
+        vec![
+            (kit.clone(), None, None),
+            (head.clone(), Some(kit.clone()), Some(10)),
+            (bottle.clone(), Some(kit.clone()), Some(10)),
+        ],
+        "the kit is ordered and commits nothing; its parts say whose they are"
+    );
+
+    // ── the bench: the parts, under their kit ────────────────────────────
+    let fulfilment: Uuid = db
+        .query_one("SELECT id FROM fulfilment WHERE external_id = $1", &[&format!("if-kit-{run}")])
+        .await
+        .expect("the fulfilment")
+        .get(0);
+    let bench = common::ok_json(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/fulfilments/{fulfilment}/bench"))
+            .insert_header(("authorization", session.clone()))
+            .to_request(),
+        "the bench",
+    )
+    .await;
+    let on_bench: Vec<(String, Value)> = bench["lines"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no lines: {bench}"))
+        .iter()
+        .map(|l| (l["item_code"].as_str().unwrap().to_string(), l["kit"]["item_code"].clone()))
+        .collect();
+    assert_eq!(on_bench, vec![(bottle.clone(), json!(kit)), (head.clone(), json!(kit))], "{bench}");
+    assert_eq!(bench["lines"][0]["kit"]["ordered"], 10);
+
+    // ── sent before the sender said, then again saying ───────────────────
+    let before = format!("S-old-{run}");
+    let if_old = format!("if-old-{run}");
+    common::ok_json(&app, send(body(&before, &if_old, false)), "unsaid").await;
+    let again = common::ok_json(&app, send(body(&before, &if_old, true)), "said").await;
+    assert_eq!(again["loaded"]["parts_of_kits"], 2, "the parts learn their kit: {again}");
+    let differs = again["loaded"]["differs"].as_array().unwrap();
+    assert!(
+        differs.iter().any(|d| d["item"] == json!(kit) && d["field"] == "kit" && d["on_file"] == 10),
+        "the kit's commitment stays, and is said: {again}"
+    );
+    assert_eq!(
+        lines(before).await,
+        vec![
+            (kit.clone(), None, Some(10)),
+            (head.clone(), Some(kit.clone()), Some(10)),
+            (bottle.clone(), Some(kit.clone()), Some(10)),
+        ]
+    );
+}

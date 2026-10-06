@@ -119,6 +119,7 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
           description={l.description ?? undefined}
           picture={l.picture}
           onOpen={() => setLooking(l.item_id)}
+          note={l.kit ? `Part of ${l.kit.item_code} × ${l.kit.ordered}` : undefined}
           done={l.remaining === 0}
         />
       ),

@@ -7085,6 +7085,13 @@ pub struct FulfilmentIntakeLine {
     /// picked item fulfilment means all of `quantity`.
     #[serde(default)]
     pub picked: Option<f64>,
+    /// NetSuite's type for the line's item: `Kit`, `InvtPart`, … (D223).
+    #[serde(default)]
+    pub item_type: Option<String>,
+    /// On one of a kit's parts, the `external_line` of the kit's own line in
+    /// the same send (D223).
+    #[serde(default)]
+    pub kit_line: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -7228,10 +7235,25 @@ pub async fn import_fulfilment(
         return Err(ApiError::Rejected("the fulfilment has no lines".into()));
     }
     let customer = crate::orders::customer_name(&intake.customer);
+    // Which lines are kits, and which are their parts (D223).
+    let roles = crate::importing::orders::roles(
+        &intake
+            .lines
+            .iter()
+            .map(|l| crate::importing::orders::Sent {
+                key: l.external_line.as_deref(),
+                kit_line: l.kit_line.as_deref(),
+                item_type: l.item_type.as_deref(),
+                item: crate::orders::item_code(&l.item),
+                line_no: l.line,
+            })
+            .collect::<Vec<_>>(),
+    );
     let rows: Vec<crate::importing::orders::Line> = intake
         .lines
         .iter()
-        .map(|l| {
+        .zip(&roles)
+        .map(|(l, role)| {
             let quantity = l.quantity.round() as i64;
             crate::importing::orders::Line {
                 doc: order.clone(),
@@ -7250,6 +7272,7 @@ pub async fn import_fulfilment(
                     fulfilment_number: intake.fulfilment_number.clone(),
                     line: l.external_line.clone(),
                 }),
+                role: role.clone(),
             }
         })
         .collect();
@@ -7266,10 +7289,13 @@ pub async fn import_fulfilment(
         intake.fulfilment_number.as_deref(),
         intake.observed_at,
         intake.picked_by.as_deref(),
+        // A kit's own line is no work, so nothing is picked on it here.
         &intake
             .lines
             .iter()
-            .map(|l| (l.external_line.clone(), l.picked.unwrap_or(l.quantity).round() as i64))
+            .zip(&roles)
+            .filter(|(_, role)| **role != crate::importing::orders::Role::Kit)
+            .map(|(l, _)| (l.external_line.clone(), l.picked.unwrap_or(l.quantity).round() as i64))
             .collect::<Vec<_>>(),
     );
     let reopen: Option<String> = report.as_ref().map(|r| r.fulfilment_id.clone());

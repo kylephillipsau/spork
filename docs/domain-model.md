@@ -15347,3 +15347,43 @@ beside its parts. The bridge is to say which lines are a kit's parts
 (`item_type`, `kit_line` on each fulfilment line); the intake stores what it
 is sent and does not read them yet. How the bench and the packing plan treat
 a kit waits on whether kits ship assembled or as loose parts.
+
+### D223: A kit is ordered, and its parts are packed
+
+*Adopted 2026-10-06, with migration 126. Answers D222's "not yet".*
+
+**The finding.** NetSuite sells some things as kits: a trigger sprayer and its
+bottle under one code, never stocked as one. An item fulfilment carries the
+kit's line and then a line for each part, each part picked from its own bin.
+Spork read every line as goods, so the bench asked for the kit to be packed
+beside its parts, the packing plan counted the goods twice, and handing the
+kit over would have put stock of a thing nobody holds on the ledger.
+
+**Decision.** A line is goods, a kit's own line, or one of a kit's parts
+(`importing::orders::Role`).
+
+- **The bridge says which.** Each fulfilment line carries NetSuite's
+  `item_type` and, on a part, `kit_line`: the key of its kit's line in the
+  same send. A line is a kit's when its type is `Kit` (in any case) or a line
+  names it. A part naming a line the send doesn't have is goods, and a line
+  naming itself is the kit (`roles`, pure and tested).
+- **A kit's own line is on the order and no work.** The loader gives it
+  nothing to pick, whatever the document says, and the intake records no
+  picks against it. So no reader of the work (the bench, the pack queue, the
+  packing plan, picking, the progress folds) needs to know what a kit is.
+- **A part says which kit it is part of** (`order_line.kit_line_id`, a line of
+  the same order, held by the composite key). The bench sorts a kit's parts
+  together and says "Part of KIT × n" under each. They ship loose, so the
+  packing plan places the parts and nothing of the kit.
+- **A kit line committed before the bridge said stays committed.** A
+  commitment made is kept as a fact (migration 14), so the loader does not
+  withdraw it. The send reports it in `differs` with `field: "kit"`, and the
+  bench sorts it above its parts. Its parts learn their kit all the same.
+
+**Why.** The user, 2026-10-06: "how the heck are the products for [an order]
+even meant to be arranged in spork? [The kit] is one line and it contains two
+more lines for one item." And: "They ship as a loose head and bottle."
+
+**Not decided.** A kit that ships assembled, which would pack the kit at its
+own size and not its parts: a property of the kit, when one does. What the
+customer's packing list says of a kit: it lists the parts in each carton.

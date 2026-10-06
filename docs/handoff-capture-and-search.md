@@ -221,8 +221,14 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   dialog finds the item by its code (`GET /resolve?expect=item`)
   and offers its cards. Move… now shows on any card with its own records,
   so an item with one card (a kit sold by the each) can be put right too.
-  Kits themselves are not modelled yet: the bridge is to send `item_type` and
-  `kit_line` on each fulfilment line, which the intake stores and ignores.
+- D223 (migration 126). A kit is ordered and its parts are packed, loose. The
+  bridge sends `item_type` and `kit_line` on each fulfilment line;
+  `importing::orders::roles` reads them into a `Role` per line. A kit's own
+  line is loaded with nothing to pick and no picks recorded, so it is on the
+  order and nowhere in the work. A part's `order_line.kit_line_id` names its
+  kit, and the bench says "Part of KIT × n" under it. A kit line committed
+  before the bridge said stays committed and is reported in `differs`
+  (`field: "kit"`).
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

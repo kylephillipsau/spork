@@ -129,6 +129,8 @@ async fn main() -> Result<(), String> {
             location: g(LOCATION),
             date: g(DATE),
             source: None,
+            // The export doesn't say which lines are kits.
+            role: orders::Role::Goods,
         });
     }
 

@@ -96,6 +96,18 @@ pub struct BenchLine {
     /// how many are in one. Whether each ships as it is (D196) says whether it
     /// goes into a box at all.
     pub packs: Vec<PackUnit>,
+    /// The kit it is a part of, when it is one (D223). The kit's own line is
+    /// no work and isn't a line here; its parts say what was ordered.
+    pub kit: Option<KitOf>,
+}
+
+/// The kit a line is a part of, as the order has it (D223).
+#[derive(Serialize)]
+pub struct KitOf {
+    pub item_code: String,
+    pub description: Option<String>,
+    /// How many of the kit were ordered.
+    pub ordered: i64,
 }
 
 /// One of an item at a packaging level, as a suggested arrangement places it
@@ -358,10 +370,14 @@ pub async fn bench_view(
                 let lines = tx
                     .query(
                         "SELECT fl.id, i.code, i.description, ol.item_id,
-                                fl.quantity - greatest(fl.picked_quantity, bx.q), fl.quantity
+                                fl.quantity - greatest(fl.picked_quantity, bx.q), fl.quantity,
+                                ki.code, ki.description, kl.quantity_ordered
                            FROM fulfilment_line fl
                            JOIN order_line ol ON ol.id = fl.order_line_id
                            JOIN item i ON i.id = ol.item_id
+                           -- The kit it is a part of (D223).
+                           LEFT JOIN order_line kl ON kl.id = ol.kit_line_id
+                           LEFT JOIN item ki ON ki.id = kl.item_id
                            LEFT JOIN LATERAL (
                                SELECT coalesce(sum(v.effective_quantity), 0)::bigint AS q
                                  FROM stock_movement m
@@ -370,7 +386,8 @@ pub async fn bench_view(
                                 WHERE m.fulfilment_line_id = fl.id
                                   AND m.to_package_id IS NOT NULL) bx ON true
                           WHERE fl.fulfilment_id = $1
-                          ORDER BY i.code",
+                          -- A kit's parts together, where the kit's code sorts.
+                          ORDER BY coalesce(ki.code, i.code), kl.id NULLS FIRST, i.code",
                         &[&fulfilment_id],
                     )
                     .await?;
@@ -451,6 +468,11 @@ pub async fn bench_view(
                         description: l.get(2),
                         remaining: l.get(4),
                         committed: l.get(5),
+                        kit: l.get::<_, Option<String>>(6).map(|item_code| KitOf {
+                            item_code,
+                            description: l.get(7),
+                            ordered: l.get(8),
+                        }),
                         cells: cells
                             .iter()
                             .map(|c| Cell {

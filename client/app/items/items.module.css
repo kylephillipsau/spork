@@ -176,6 +176,14 @@
   text-overflow: ellipsis;
 }
 
+.itemNote {
+  display: block;
+  overflow: hidden;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-xs);
+  text-overflow: ellipsis;
+}
+
 /* Another item, found by its code: the field, and Find beside it. */
 .findItem {
   display: flex;

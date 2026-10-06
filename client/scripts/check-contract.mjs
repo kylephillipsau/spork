@@ -225,6 +225,7 @@ const PAIRS = [
   ["PlaceView", ["PlaceView"]],
   ["BinView", ["BinView"]],
   ["BinItem", ["BinItem"]],
+  ["KitOf", ["KitOf"]],
   ["BinContent", ["BinContent"]],
   ["BinRow", ["BinRow"]],
   ["BinsList", ["BinsList"]],
