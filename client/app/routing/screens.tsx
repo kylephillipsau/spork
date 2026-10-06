@@ -71,6 +71,8 @@ import { mapFrom, useMap } from "@app/layout/useMap";
 import { ItemPage } from "@app/items/ItemPage";
 import { useItemProperties } from "@app/items/useItemProperties";
 import { ItemsPage } from "@app/items/ItemsPage";
+import { SearchPage } from "@app/scan/SearchPage";
+import { useSearchResults } from "@app/scan/useSearchResults";
 import { PhotosPage } from "@app/items/PhotosPage";
 import { usePhotoQueue } from "@app/items/usePhotoQueue";
 import { askedFrom, useItems } from "@app/items/useItems";
@@ -276,6 +278,11 @@ function LiveBin({ bin }: { bin: string }) {
   return <BinPage desk={useBin(bin)} />;
 }
 
+/** Everything a search matches. The question arrives in the query string. */
+function LiveSearch() {
+  return <SearchPage desk={useSearchResults(new URLSearchParams(window.location.search).get("q") ?? "")} />;
+}
+
 /** Every item. The question arrives in the query string, as the orders search's does. */
 function LiveItems() {
   return <ItemsPage desk={useItems(askedFrom(window.location.search))} />;
@@ -351,6 +358,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   order: (params) => <LiveOrder order={params["order"] ?? ""} />,
   bin: (params) => <LiveBin bin={params["bin"] ?? ""} />,
   place: (params) => <LivePlace place={params["place"] ?? ""} />,
+  search: () => <LiveSearch />,
   items: () => <LiveItems />,
   item: (params) => <LiveItem item={params["item"] ?? ""} />,
   photos: () => <LivePhotos />,

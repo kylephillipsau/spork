@@ -1,6 +1,7 @@
 import type { Found } from "@domain/types";
 import type { Landing } from "./destination";
 import type { ChromeScan } from "./useScan";
+import type { SearchDesk } from "./useSearchResults";
 
 /**
  * The locator, with no network.
@@ -51,3 +52,18 @@ export const UNRECOGNISED: Landing = { kind: "unrecognised", scanned: "j@#f0 8" 
 
 /** Read correctly, and there is no screen for what it is. */
 export const NO_SCREEN: Landing = { kind: "nowhere", scanned: "PALLET-A", what: "package" };
+
+/** Enter on a family's code: its members, and a bin named like them, on a page (D227). */
+export const SEARCH_FAMILY: SearchDesk = {
+  q: "SKU-5120",
+  read: {
+    kind: "ready",
+    value: [
+      found("item", 1, "SKU-5120B", "Floor brush, 450 mm, blue"),
+      found("item", 2, "SKU-5120R", "Floor brush, 450 mm, red"),
+      found("item", 3, "SKU-5120G", "Floor brush, 450 mm, green"),
+      found("item", 4, "SKU-5120Y", "Floor brush, 450 mm, yellow"),
+      found("bin", 5, "C-51-20", "Bin · Rack C"),
+    ],
+  },
+};

@@ -1,0 +1,26 @@
+/* Everything a search matches (D227). */
+
+.icon {
+  display: inline-flex;
+  color: var(--ui-text-muted);
+}
+.icon svg {
+  width: var(--ui-icon);
+  height: var(--ui-icon);
+}
+
+.title {
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  font-size: var(--ui-text-sm);
+}
+.more svg {
+  width: 1em;
+  height: 1em;
+}

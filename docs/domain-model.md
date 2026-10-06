@@ -15480,3 +15480,24 @@ carton's card and Photos to crop already do. The refusal now says what to do:
 "nothing says what a carton of this item holds on [day], so its pack isn't
 yet a definite thing to measure: say what its carton holds first".
 
+
+### D227: Enter on a search that matches many lands on a page of them
+
+*Adopted 2026-10-06, with no migration. Amends D189.*
+
+**Decision.** Enter in the header's search, on what is not one code (D111),
+opens the one thing it matches, or, when it matches more than one, a page of
+everything it matches (`/search?q=`): items, bins and orders grouped as the
+header groups them, up to fifty, the items with a way into the item list to
+narrow or export. A family's code is its members, not the first of them.
+Enter before the search has answered goes to the page too. Only when the
+search has answered that nothing matches does the header say so (D111).
+
+**And the box takes codes.** Every search field, the header's and the kit's,
+neither capitalises its first letter nor corrects what is typed to a word
+(`autoCapitalize="off"`, `autoCorrect="off"`, no spell check): on an iPhone a
+typed `sku` became `Sku`, and a code became a word.
+
+**Why.** The user, 2026-10-06: "if you search for a product family, entering
+the search should not take you to the first item from the family, but instead
+take you to a results page so that you can view the matching search results."

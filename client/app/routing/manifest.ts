@@ -101,6 +101,8 @@ export const SCREENS: readonly ScreenSpec[] = [
   // the floor and the answer is read standing in the aisle.
   spec("bin", "/bins/:bin", "Bin", "floor"),
   spec("place", "/places/:place", "Place", "floor"),
+  // Everything a search matches, where Enter on it lands (D227).
+  spec("search", "/search", "Search", "desk"),
   // Every item, searched and narrowed; the literal above the pattern.
   spec("items", "/items", "Items", "desk"),
   // What an item is and where it lives: where a scanned product lands (D111).

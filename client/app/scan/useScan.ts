@@ -31,7 +31,10 @@ export interface ChromeScan {
   /** What the global search found for what is typed, as it is typed (D189); null before it answers. */
   results: Found[] | null;
   type: (next: string) => void;
-  /** Enter: the result picked with the arrows, or what was typed as one code (D111), or the best result. */
+  /**
+   * Enter: the result picked with the arrows, or what was typed as one code
+   * (D111), or the one thing the search found, or a page of all it found (D227).
+   */
   scan: (picked?: Found | null) => Promise<void>;
   /** Open a result. */
   open: (found: Found) => void;
@@ -99,37 +102,47 @@ export function useChromeScan(): ChromeScan {
     [navigate],
   );
 
+  const go = useCallback(
+    (path: string) => {
+      setValue("");
+      setLanding(null);
+      setResults(null);
+      navigate(path);
+    },
+    [navigate],
+  );
+
   const scan = useCallback(
     async (picked?: Found | null) => {
       if (picked) return open(picked);
       const scanned = value.trim();
       if (!scanned || busy) return;
+      // Not one code: the one thing the search found, or a page of all it
+      // found, a family's members rather than the first of them (D227). Said
+      // here only when the search has answered that nothing matches.
+      const searched = (otherwise: () => void) => {
+        if (results?.length === 1) open(results[0]!);
+        else if (results === null || results.length > 1) go(`/search?q=${encodeURIComponent(scanned)}`);
+        else otherwise();
+      };
       setBusy(true);
       try {
         const landed = destinationFor(await api.resolve(scanned));
-        if (landed.kind === "go") {
-          setValue("");
-          setLanding(null);
-          setResults(null);
-          navigate(landed.path);
-        } else if (landed.kind !== "choose" && results && results.length > 0) {
-          // Not one code: the best of what the search found.
-          open(results[0]!);
-        } else {
-          setLanding(landed);
-        }
+        if (landed.kind === "go") go(landed.path);
+        else if (landed.kind === "choose") setLanding(landed);
+        else searched(() => setLanding(landed));
       } catch (error) {
-        if (results && results.length > 0) open(results[0]!);
-        else
+        searched(() =>
           setLanding({
             kind: "unrecognised",
             scanned: error instanceof ApiError ? error.message : scanned,
-          });
+          }),
+        );
       } finally {
         setBusy(false);
       }
     },
-    [value, busy, navigate, results, open],
+    [value, busy, results, open, go],
   );
 
   return {

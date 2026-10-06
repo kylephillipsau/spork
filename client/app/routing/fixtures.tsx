@@ -31,6 +31,8 @@ import { DASHBOARD, DASHBOARD_NO_SITE, DASHBOARD_QUIET } from "@app/home/dashboa
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
 import { PACK_FILLING, PACK_FIXTURE, PACK_LOOSE } from "@app/outbound/pack/fixture";
+import { SearchPage } from "@app/scan/SearchPage";
+import { SEARCH_FAMILY } from "@app/scan/fixture";
 import { PackQueuePage } from "@app/outbound/pack/PackQueuePage";
 import { CLEAR, QUEUE, fixtureQueue } from "@app/outbound/pack/queue-fixture";
 
@@ -380,6 +382,8 @@ export const FIXTURES: readonly Screen[] = [
     <Dashboard dash={DASHBOARD} site="MEL" />
   )),
 
+  // Enter in the search on a family's code: its members, not the first of them (D227).
+  app("f-search-results", "/fixtures/search-results", "Search — a family", "desk", { screen: "search" }, () => <SearchPage desk={SEARCH_FAMILY} />),
   app("f-pack", "/fixtures/pack", "Pack order", "bench", { screen: "pack-one" }, () => packBench()),
   // A site that has not said where it packs or whose stock it holds (migration
   // 97): the bench says so before anybody tries to start a carton.

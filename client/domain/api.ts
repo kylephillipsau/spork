@@ -973,7 +973,8 @@ export const api = {
   suggestBox: (id: Uuid, suggested: boolean) => send<void>("POST", `/package-types/${encodeURIComponent(id)}/suggested`, { suggested }),
 
   /** Bins, items and orders matching what was typed, best first (D189). */
-  search: (q: string) => send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, limit?: number) =>
+    send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ""}`),
 
   /** The lists of items worked at this site, newest first (D179). */
   itemLists: () => send<ItemListRow[]>("GET", "/item-lists"),

@@ -83,8 +83,14 @@ export function TextArea({ label, hint, error, id, className, ...area }: TextAre
 }
 
 /** A text field with a search icon; the usual list filter. */
+/**
+ * A field to search with. What is typed is usually a code, so a phone neither
+ * capitalises its first letter nor corrects it to a word.
+ */
 export function SearchField(props: Omit<TextFieldProps, "leading" | "type">) {
-  return <TextField type="search" leading={<Search />} {...props} />;
+  return (
+    <TextField type="search" leading={<Search />} autoCapitalize="off" autoCorrect="off" spellCheck={false} {...props} />
+  );
 }
 
 export interface Option {

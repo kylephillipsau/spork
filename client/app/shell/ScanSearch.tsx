@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Boxes, CircleAlert, ClipboardList, MapPin, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CircleAlert, Search, X } from "lucide-react";
 
 import { Kbd, Link, Spinner, cx } from "@ui/index";
 import type { Found } from "@domain/types";
 import { href } from "@app/routing/location";
 import { useChromeScan, type ChromeScan } from "@app/scan/useScan";
+import { FOUND_GROUPS as GROUPS } from "@app/scan/found";
 
 import s from "./header.module.css";
 
@@ -14,20 +15,15 @@ import s from "./header.module.css";
  * **Typing searches.** Bins, items and orders are found by any part of a code
  * or any word as it is typed, grouped by what they are, and picked with the
  * arrows or a tap. **Enter on a whole code goes to it**: a barcode wedge types
- * and presses Enter, so a scan lands where it always did, and Enter on
- * anything else opens the best match.
+ * and presses Enter, so a scan lands where it always did. Enter on anything
+ * else opens the one thing it matches, or a page of everything it matches: a
+ * family's code is its members, not the first of them.
  *
  * On a phone the box is a magnifier in the header, and opens the search over
  * the whole screen, the keyboard up and the results below it.
  *
  * It never takes focus by itself (D117): Ctrl+K or `/` does.
  */
-
-const GROUPS: { kind: Found["kind"]; label: string; icon: ReactNode }[] = [
-  { kind: "item", label: "Items", icon: <Boxes aria-hidden /> },
-  { kind: "bin", label: "Bins", icon: <MapPin aria-hidden /> },
-  { kind: "order", label: "Orders", icon: <ClipboardList aria-hidden /> },
-];
 
 export function ScanSearch({ fixed, opened = false }: { fixed?: ChromeScan | undefined; opened?: boolean }) {
   const live = useChromeScan();
@@ -127,6 +123,9 @@ export function ScanSearch({ fixed, opened = false }: { fixed?: ChromeScan | und
           role="combobox"
           aria-autocomplete="list"
           autoComplete="off"
+          // A code, not a word: a phone neither capitalises it nor corrects it.
+          autoCapitalize="off"
+          autoCorrect="off"
           spellCheck={false}
           enterKeyHint="search"
         />

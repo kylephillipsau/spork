@@ -249,6 +249,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - D226. Weighing, measuring or photographing an item's own pack with no case
   pack on file says one first, its counts unsaid, as the carton already did:
   an item sold by the box could not have its box measured.
+- D227. Enter in the header's search on what matches more than one thing opens
+  `/search?q=` (`app/scan/SearchPage.tsx`), every match grouped as the header
+  groups them (`app/scan/found.tsx`); one match still opens it. Search fields
+  neither capitalise nor autocorrect on a phone.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.
