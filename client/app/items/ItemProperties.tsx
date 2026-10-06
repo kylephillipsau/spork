@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState, type ReactNode } from "react";
-import { Barcode, Camera, ChevronLeft, ChevronRight, Crop, ImageOff, Ruler, Scale } from "lucide-react";
+import { Barcode, Camera, ChevronLeft, ChevronRight, Crop, ImageOff, Images, Ruler, Scale } from "lucide-react";
 
 import {
   Alert,
@@ -983,7 +983,8 @@ function BarcodesForm({ subject, desk }: { subject: CaptureSubject; desk: Proper
  * that photo: the box appears from the second side. With the camera open every
  * face to ask for has a shutter, and the box turns to the side just taken: a
  * file input with `capture="environment"` opens the rear camera on a handheld
- * and a file picker at a desk.
+ * and a file picker at a desk. Beside it, From photos chooses one already
+ * taken, from the phone's photos.
  */
 function Photos({
   subject,
@@ -1035,6 +1036,7 @@ function Photos({
                   </Button>
                 )}
                 {desk && <Shutter face={face} name={name} subject={subject} desk={desk} taken={desk.taken.includes(face)} />}
+                {desk && <FromPhotos faces={[face]} name={name} subject={subject} desk={desk} />}
                 {desk && photo && !photo.same_as && box && (
                   <Button
                     size="sm"
@@ -1172,7 +1174,8 @@ const OPPOSITE: Partial<Record<Face, Face>> = { back: "front", left: "right", bo
  */
 function NextSide({ subject, desk, order }: { subject: CaptureSubject; desk: PropertiesDesk; order: readonly Face[] }) {
   const [skipped, setSkipped] = useState<Face[]>([]);
-  const next = order.find((f) => !desk.taken.includes(f) && !skipped.includes(f));
+  const left = order.filter((f) => !desk.taken.includes(f) && !skipped.includes(f));
+  const next = left[0];
   const done = order.filter((f) => desk.taken.includes(f)).length;
   const on = Object.values(desk.sending).filter((v) => v === "sending").length;
   // A side printed like its opposite, already taken, is said rather than shot (D183).
@@ -1183,6 +1186,7 @@ function NextSide({ subject, desk, order }: { subject: CaptureSubject; desk: Pro
       {next ? (
         <>
           <Shutter face={next} name={faceName(next, subject)} subject={subject} desk={desk} taken={false} big />
+          <FromPhotos faces={left} name={faceName(next, subject)} subject={subject} desk={desk} />
           {copy && isBox(subject) && <Button onClick={() => desk.same(subject, next, copy)}>Same as {copy}</Button>}
           <Button onClick={() => setSkipped((k) => [...k, next])}>Skip</Button>
         </>
@@ -1196,7 +1200,7 @@ function NextSide({ subject, desk, order }: { subject: CaptureSubject; desk: Pro
   );
 }
 
-/** A label dressed as a button around a hidden file input: a button cannot open a camera. */
+/** The camera, for one side. */
 function Shutter({
   face,
   name,
@@ -1214,20 +1218,77 @@ function Shutter({
   big?: boolean;
 }) {
   return (
-    <label className={cx(s.shutter, big && s.shutterBig)} aria-disabled={desk.busy || undefined}>
-      <span className={s.hidden}>Take the {name.toLowerCase()}</span>
-      <Camera aria-hidden />
-      <span aria-hidden="true">{big ? `Take the ${name.toLowerCase()}` : taken ? "Again" : "Take"}</span>
+    <FilePress
+      label={`Take the ${name.toLowerCase()}`}
+      text={big ? `Take the ${name.toLowerCase()}` : taken ? "Again" : "Take"}
+      icon={<Camera aria-hidden />}
+      camera
+      big={big}
+      disabled={desk.busy}
+      chosen={([file]) => desk.attach(subject, face, file!)}
+    />
+  );
+}
+
+/**
+ * Photos already taken, chosen from the phone's photos: one for one side, or,
+ * for the sides still to take, several at once, each the next side in the walk
+ * round in the order they were chosen.
+ */
+function FromPhotos({ faces, name, subject, desk }: { faces: readonly Face[]; name: string; subject: CaptureSubject; desk: PropertiesDesk }) {
+  const one = faces.length === 1;
+  return (
+    <FilePress
+      label={one ? `Choose a photo of the ${name.toLowerCase()}` : `Choose photos of the sides still to take, from the ${name.toLowerCase()} on`}
+      text={one ? "Choose" : "From photos"}
+      icon={<Images aria-hidden />}
+      multiple={!one}
+      disabled={desk.busy}
+      chosen={(files) => files.slice(0, faces.length).forEach((file, i) => desk.attach(subject, faces[i]!, file))}
+    />
+  );
+}
+
+/**
+ * A label dressed as a button around a hidden file input: a button can open
+ * neither a camera nor the phone's photos. `camera` opens the rear camera on a
+ * handheld; without it, the photos to choose from.
+ */
+function FilePress({
+  label,
+  text,
+  icon,
+  camera = false,
+  multiple = false,
+  big = false,
+  disabled,
+  chosen,
+}: {
+  label: string;
+  text: string;
+  icon: ReactNode;
+  camera?: boolean;
+  multiple?: boolean;
+  big?: boolean;
+  disabled: boolean;
+  chosen: (files: File[]) => void;
+}) {
+  return (
+    <label className={cx(s.shutter, big && s.shutterBig)} aria-disabled={disabled || undefined}>
+      <span className={s.hidden}>{label}</span>
+      {icon}
+      <span aria-hidden="true">{text}</span>
       <input
         type="file"
         accept="image/*"
-        capture="environment"
-        disabled={desk.busy}
+        {...(camera ? { capture: "environment" as const } : {})}
+        multiple={multiple}
+        disabled={disabled}
         onChange={(e) => {
-          const file = e.currentTarget.files?.[0];
+          const files = Array.from(e.currentTarget.files ?? []);
           // Cleared so the same file twice still fires: a retake is a new row (D132).
           e.currentTarget.value = "";
-          if (file) desk.attach(subject, face, file);
+          if (files.length > 0) chosen(files);
         }}
       />
     </label>

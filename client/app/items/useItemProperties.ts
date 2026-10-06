@@ -357,9 +357,18 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
    * Say what the item's own carton holds, when the act needs it said first:
    * no carton on file, or a count typed that is not the one on file. A part
    * of the press it is in, so a retry is the same act.
+   *
+   * The item's own pack needs a case pack as much as its carton does (D23):
+   * an item sold by the box has its box measured before anybody has said what
+   * a carton of it holds, so one is said with its counts unsaid.
    */
   const sayCartonFirst = async (subject: CaptureSubject, act: Act) => {
-    if (!isOwnCarton(subject) || !subject.item_id || read.kind !== "ready") return;
+    if (!subject.item_id || read.kind !== "ready") return;
+    if (subject.packaging_level === "inner" && !subject.lot_id && !subject.item_style_id) {
+      if (!read.item.packing) await api.sayCarton(subject.item_id, { holds: null, act: partOf(act, "carton") });
+      return;
+    }
+    if (!isOwnCarton(subject)) return;
     const typed = readHoldsFor(read.item.unit.level, holds, per, read.item.packing);
     if ("problem" in typed) throw new ApiError(typed.problem, 400);
     if (!sayFirst(read.item.packing, typed.holds, typed.per)) return;

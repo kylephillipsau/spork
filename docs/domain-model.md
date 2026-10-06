@@ -15445,3 +15445,38 @@ bench is a helper: what it can hand over is the parcels' sizes and weights.
 carrier's own factor and rates. The shape of things with no fixed shape
 (D138): a space they take, so they can be arranged rather than put in round
 the rest.
+
+### D225: A side can be photographed from the phone's photos
+
+*Adopted 2026-10-06, with no migration. Extends D181.*
+
+**Decision.** Photographing a thing, each side has **Choose** beside its
+camera button: it takes a photo already on the phone. The big button for the
+next side has **From photos** beside it, which takes several at once: in the
+order they were chosen, each is the next side still to take in the walk round
+(front, right, back, left, top, bottom, then the label). The box then shows
+them on its sides, and any one can be taken again, chosen again or cropped.
+They are sent as photographs taken are: one behind another, the first making
+the look the rest join.
+
+**Why.** The camera opens at once from Take (`capture="environment"`), and a
+phone then offers no way to its photos. The user, 2026-10-06: "I'd like to be
+able to submit photos of each side of a box from my gallery on my mobile."
+
+### D226: An item's own pack is measured before anything is said of its carton
+
+*Adopted 2026-10-06, with no migration. Amends D178, D218.*
+
+**The finding.** A box of 50 pens, sold by the box (D218), has its box as the
+card to measure. Recording it was refused: a pack is only a definite thing
+under a case pack (D23), and nothing had said there is one. The item page
+said a case pack first for the carton's card, never for the pack's. The
+refusal itself named a table and said "a inner".
+
+**Decision.** Weighing, measuring or photographing the item's own pack, with
+no case pack on file, first says one with nothing said of its counts:
+"there is a carton, and nobody has said what is in it" (D178), as the
+carton's card and Photos to crop already do. The refusal now says what to do:
+"nothing says what a carton of this item holds on [day], so its pack isn't
+yet a definite thing to measure: say what its carton holds first".
+

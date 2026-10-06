@@ -242,6 +242,13 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   Import tokens uses as well).
 - Light mode's highlighted row in a menu or a select is `--ui-accent-soft`,
   now `#e0e7ff`, strong enough to see on white.
+- D225. Photographing, every side has Choose beside its camera button, for a
+  photo already on the phone, and the next-side button has From photos, which
+  takes several at once and fills the sides still to take in walk order
+  (`FromPhotos` and `FilePress` in `ItemProperties.tsx`).
+- D226. Weighing, measuring or photographing an item's own pack with no case
+  pack on file says one first, its counts unsaid, as the carton already did:
+  an item sold by the box could not have its box measured.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

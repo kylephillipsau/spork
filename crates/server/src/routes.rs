@@ -7957,10 +7957,11 @@ pub async fn observable_for(
                 .map(|r| r.get(0));
             if found.is_none() {
                 return Err(ApiError::Rejected(format!(
-                    "no item_packing_config in force for that {} at {}, so a \
-                     {level} of it is not yet a definite thing to measure",
-                    if styled { "style" } else { "item" },
-                    occurred_at.date_naive()
+                    "nothing says what a carton of this {} holds on {}, so its {} isn't yet a \
+                     definite thing to measure: say what its carton holds first",
+                    if styled { "family" } else { "item" },
+                    occurred_at.date_naive(),
+                    if level == "inner" { "pack" } else { level.as_str() },
                 )));
             }
             found

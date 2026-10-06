@@ -160,6 +160,29 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
     let (status, _) = say(Uuid::nil(), json!(4), Uuid::new_v4()).await;
     assert_eq!(status, 404, "an item nobody holds");
 
+    // ── a box of pens sold by the box, its pack measured before anything is
+    //    said of its carton: a case pack with nothing said makes it definite
+    let pens = made(format!("CTN-{n}-B")).await;
+    let measure_box = || {
+        post(
+            "/observations".into(),
+            json!({
+                "item_id": pens, "packaging_level": "inner",
+                "measurements": [{ "metric": "gross_weight", "entered_value": "0.66", "unit": "kg" }],
+                "method": "instrument", "ingestion_channel": "keyed",
+                "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z",
+            }),
+        )
+    };
+    let (status, refused) = measure_box().await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("say what its carton holds first"), "in words a person can act on: {refused}");
+    let (status, said) = say(pens, Value::Null, Uuid::new_v4()).await;
+    assert_eq!(status, 200, "{said}");
+    assert!(said["inners_per_carton"].is_null() && said["units_per_inner"].is_null(), "nothing said of it: {said}");
+    let (status, measured) = measure_box().await;
+    assert_eq!(status, 200, "the box is a definite thing now: {measured}");
+
     // ── a carton the loader knew of, count unsaid, is filled in ──────────
     let listed = made(format!("CTN-{n}-L")).await;
     let loaded: Uuid = db
