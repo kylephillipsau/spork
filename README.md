@@ -1,7 +1,7 @@
 # Spork
 
 A warehouse management system for pallet operations: receiving, put away,
-picking and despatch, recorded from handheld scanners. Rust and PostgreSQL on
+picking, packing and despatch, recorded from handheld scanners. Rust and PostgreSQL on
 the server, React on the client, Tauri on the handhelds. One deployment serves
 more than one company, from the first migration rather than added later.
 
@@ -82,18 +82,31 @@ has already written to.
 ## NetSuite
 
 Spork takes work from NetSuite without writing to it. The Spork Bridge
-userscript (in the separate `warehouse-scripts` repo) reads item fulfilments the
-handheld has marked Picked, using SuiteQL as the signed-in user, and sends each
-to `POST /api/import/fulfilment` with an import token minted under Import
-tokens. Spork records these as picks made elsewhere (D172), ready to pack. It
-runs while a NetSuite tab is open, and shows nothing unless it can't sync.
+userscript (in the separate `warehouse-scripts` repo) runs while a NetSuite tab
+is open, reads NetSuite with SuiteQL as the signed-in user, and sends what it
+finds with an import token minted under Import tokens:
+- item fulfilments the handheld has marked Picked, to
+  `POST /api/import/fulfilment`. Spork records them as picks made elsewhere
+  (D172), ready to pack; a kit's own line is no work and its parts are packed
+  (D223);
+- which of those NetSuite has since packed, shipped or deleted, so Spork
+  closes them (D187);
+- the inventory balance, every five minutes (D212);
+- each item's Pack Unit and supplier part number (D217).
+
+It shows nothing unless it can't sync.
 
 The rest comes from NetSuite's CSV exports:
 - the item master and the bin list, uploaded under Import;
-- the prepack list and the inventory balance, loaded from the terminal.
+- the prepack list, and the inventory balance when the Bridge isn't running,
+  loaded from the terminal.
 
 NetSuite's balance is kept as its report, beside Spork's own ledger and never
 merged into it. [docs/local.md](docs/local.md) has the commands.
+
+Carriers and labels are booked in NetSuite and MachShip. The pack bench plans
+the boxes and lists each parcel's size and weight, ready to copy into the
+booking (D224).
 
 ## Backups
 

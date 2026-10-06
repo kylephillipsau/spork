@@ -310,10 +310,11 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of a hundred and five endpoints and a projection
-scheduler. Above that is a React client of twenty-five screens, and two retired
+policy resolver. Above it sits an API of a hundred and twenty-four endpoints and a
+projection scheduler. Above that is a React client of thirty screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
-- the pack bench and its queue, picking, receiving, put away and despatch;
+- the pack bench and its queue, which plans the boxes and the freight they make
+  (D224), picking, receiving, put away and despatch;
 - orders, items and the warehouse, each with a page per order, item, place and
   bin;
 - an item's weight, size and photographs, recorded at the item. A photograph
@@ -321,8 +322,10 @@ addresses, `/weigh` and `/capture`, that lead to the item list (D174):
   it and a person checks it (D176, D177), at a computer for a phone's photos
   (D181), and drawn on a 3D box. An item's
   carton is a box of so many of it, said at the item and measured apart from
-  it (D178), and a sheet of items to measure is a list to work down (D179);
-- one search in the header for items, bins and orders (D189);
+  it (D178), and a sheet of items to measure is a list to work down (D179). An
+  item is matched from another of its family (D228);
+- one search in the header for items, bins and orders (D189), and a page of
+  everything it matches (D227);
 - the findings queue;
 - the administrative screens behind them.
 
@@ -331,11 +334,12 @@ the width it has.
 
 The gap worth naming is still on the writing half of that API, though it is much
 smaller. In August, fourteen of thirty-seven writing endpoints had never been
-exercised over HTTP. Now five of fifty-six are never called by an HTTP test:
-- accepting a discrepancy;
+exercised over HTTP. Now eight of seventy-two are never called by an HTTP test:
 - investigating a discrepancy;
 - the item import;
-- putting one package inside another;
+- placing a package, opening one, and putting one inside another;
+- releasing an allocation;
+- refreshing the projections by hand;
 - finishing a passkey sign-in.
 
 Fifty-seven questions remain

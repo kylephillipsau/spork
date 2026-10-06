@@ -1,17 +1,24 @@
 # Handoff: capture, crops, search and backups
 
-Written 2026-10-02. Read this first. The earlier handoff,
-[handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md), still covers the
-toolchain, tests, layout and packing.
+Written 2026-10-02, brought up to date 2026-10-06. Read this first. The
+earlier handoff, [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md),
+still covers the toolchain, tests, layout and packing.
 
 ## State
 
-- Spork `main` is pushed, through D193.
-- `warehouse-scripts` is pushed. Spork Bridge 0.4.0 is published.
-- The database is at migration 112 after the next `local.ps1 start`.
-- The full server suite last passed before D191. Since then only the affected
-  test files have run: packaging, capture, pictures and backup. A full run was
-  stopped for low memory. Run it on a fresh database.
+- Spork `main` is pushed, through D229.
+- `warehouse-scripts` is pushed. Spork Bridge 0.8.0 is published: it sends
+  each line's item type and a kit part's kit line (D223).
+- The database is at migration 126 after the next `local.ps1 start`. Nothing
+  since D223 adds one.
+- 2026-10-06, on a fresh database: every migration up and down; the server's
+  unit tests (283) and integration tests (154) all pass; the client's tests,
+  laws, contract and render (133 fixtures) pass.
+- The invariants: S7 and S10 fail, as they have since migrations 118 and 119
+  (a trigger that is not a projection's, a jsonb column). After the
+  integration suite has written to the database, J1 also finds two GLOVE-M
+  stock cells that disagree with the movement ledger; on the fresh database
+  it passes. Not yet looked into.
 
 ## What landed
 
@@ -285,6 +292,14 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - People (D205): an administrator adds people with a first password, gives them a role and takes them out, which ends their sessions. Only two roles exist, administrator and operator. Finer roles are still Q176.
 - A non-box item can be photographed but not trimmed: its photo is used as
   taken. A white-background cutout is the planned next step for those.
+- Match… (D228) copies figures and photos only. What a card is packed in,
+  whether it ships as it is and which way up it goes are not copied; say them
+  on the card.
+- A carton count put right (D229) keeps no record of the wrong count: the case
+  pack's row names the act that corrected it.
+- The search page (D227) shows no pictures; `Found` carries none.
+- Freight is scored by parcel count or chargeable weight (D224). No carrier's
+  rates are known yet, so neither is a price.
 
 ## Next
 
@@ -300,3 +315,5 @@ Each item is one decision in [domain-model.md](./domain-model.md).
    each rack make, row starts and aisles, and which aisle each rack's 01
    faces. Then set each rack's reach on the bin map.
 6. Cut a non-box item's photo out onto white at the computer.
+7. Freight by price: carriers' rates as a third objective beside fewest
+   parcels and least chargeable weight (D224), chosen in configuration.
