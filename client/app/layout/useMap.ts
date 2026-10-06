@@ -5,7 +5,7 @@ import { useSite } from "@app/session/SessionContext";
 import { useChanges } from "@app/changes";
 import { href } from "@app/routing/location";
 import { api, reason } from "@domain/api";
-import type { BinRow, LayoutPlace, LayoutView, MapBin, MapBins, Uuid, WalkRoute } from "@domain/types";
+import type { BinView, LayoutPlace, LayoutView, MapBin, MapBins, Uuid, WalkRoute } from "@domain/types";
 
 import { LAYERS, type Layer } from "./layers";
 import type { Read } from "./usePlace";
@@ -36,8 +36,8 @@ export interface MapDesk {
   find: (bin: MapBin) => void;
   /** Bumped each time the view should fly to what is chosen. */
   flight: number;
-  /** What the chosen bin holds, by both records. */
-  detail: Read<BinRow | null> | { kind: "idle" };
+  /** The chosen bin as its own read has it: where it is, and what is on it (D221). */
+  detail: Read<BinView> | { kind: "idle" };
   /** Say how many of the chosen bin's rack's levels are reached from the floor. */
   setReach: (levels: number) => Promise<void>;
   busy: boolean;
@@ -136,26 +136,24 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
     window.history.replaceState(null, "", href(`/map?${p.toString()}`));
   }, [chosenId, layer]);
 
-  // The chosen bin's contents, read on their own: the map reads only counts.
-  const code = chosen?.code ?? null;
+  // The chosen bin, read on its own: the map reads only counts.
+  const binId = chosen?.location_id ?? null;
   useEffect(() => {
-    if (!code) {
+    if (!binId) {
       setDetail({ kind: "idle" });
       return;
     }
     const n = ++asking.current;
     setDetail({ kind: "loading" });
     api
-      .bins({ q: code })
-      .then((list) => {
-        if (live.current && n === asking.current) {
-          setDetail({ kind: "ready", value: list.bins.find((b) => b.code === code) ?? null });
-        }
+      .bin(binId)
+      .then((value) => {
+        if (live.current && n === asking.current) setDetail({ kind: "ready", value });
       })
       .catch((error) => {
         if (live.current && n === asking.current) setDetail({ kind: "failed", message: reason(error, "Could not read what is in it.") });
       });
-  }, [code, live]);
+  }, [binId, live]);
 
   return {
     read,

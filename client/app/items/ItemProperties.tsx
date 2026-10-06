@@ -22,7 +22,7 @@ import {
   cx,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import type { CaptureSubject, ItemView, PackagingType, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, ItemView, PackagingType, Picture, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
@@ -421,6 +421,39 @@ export function ItemCode({ code, onOpen }: { code: string; onOpen: () => void })
     <button type="button" className={s.itemCode} onClick={onOpen} title={`${code}: size, weight and photos`}>
       {code}
     </button>
+  );
+}
+
+/**
+ * An item on a row of work: its photograph, its code, which opens its
+ * properties, and what it is. Anything that lists items to find or handle
+ * draws them this way: the packing bench and the bin map's card (D221).
+ */
+export function ItemLine({
+  code,
+  description,
+  picture,
+  onOpen,
+  done = false,
+}: {
+  code: string;
+  /** Said under the code; left out where the row has no room for it. */
+  description?: string | undefined;
+  picture: Picture | null;
+  onOpen: () => void;
+  /** Dealt with, so drawn quieter. */
+  done?: boolean | undefined;
+}) {
+  return (
+    <span className={s.itemLine}>
+      <Thumb picture={picture} alt={description ?? code} />
+      <span className={cx(s.itemText, done && s.itemDone)}>
+        <ItemCode code={code} onOpen={onOpen} />
+        {/* An item made from a code alone has the code as its description;
+            saying it twice is noise. */}
+        {description && description !== code && <span className={s.itemDesc}>{description}</span>}
+      </span>
+    </span>
   );
 }
 

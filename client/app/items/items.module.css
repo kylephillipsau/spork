@@ -155,6 +155,27 @@
   text-decoration: underline;
 }
 
+/* An item on a row of work: its picture, then its code and what it is. */
+.itemLine {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  min-width: 0;
+}
+.itemText {
+  min-width: 0;
+}
+.itemDone {
+  color: var(--ui-text-faint);
+}
+.itemDesc {
+  display: block;
+  overflow: hidden;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+  text-overflow: ellipsis;
+}
+
 .known {
   display: flex;
   flex-direction: column;

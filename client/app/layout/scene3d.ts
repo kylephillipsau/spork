@@ -32,7 +32,7 @@ import {
 import { Stage, type Pose } from "@app/common/stage3d";
 
 import type { BinCell, Block, Point3, Scene3D } from "./blocks";
-import { MIX, toneOf, type Layer, type Tone } from "./layers";
+import { HOLLOW, MIX, toneOf, type Layer, type Tone } from "./layers";
 
 /**
  * The site in 3D, drawn by three.js (D173). Turned, moved and zoomed; nothing
@@ -162,6 +162,12 @@ export class SiteScene {
     hover: new LineBasicMaterial(),
     bin: new MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
     ghost: new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.13, depthWrite: false }),
+    // An empty bin (D221): a see-through box and its edges, fainter still
+    // behind the rack in focus.
+    hollow: new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: HOLLOW, depthWrite: false }),
+    ghostHollow: new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: HOLLOW / 4, depthWrite: false }),
+    edge: new LineBasicMaterial({ vertexColors: true }),
+    ghostEdge: new LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.2, depthWrite: false }),
     route: new MeshBasicMaterial({ side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
   };
 
@@ -171,10 +177,11 @@ export class SiteScene {
   /** Places whose bins are drawn: their block steps back to an outline. */
   private withBins = new Set<string>();
   /**
-   * The bins as drawn: one solid group, and, while a bin is chosen, a faint
-   * one of every other rack's, so the racks across the aisle don't hide it.
+   * The bins as drawn: full ones and empty ones, and, while a bin is chosen,
+   * every other rack's faint, so the racks across the aisle don't hide it.
+   * An empty bin's group has its edges too.
    */
-  private groups: { mesh: InstancedMesh; cells: BinCell[] }[] = [];
+  private groups: { mesh: InstancedMesh; cells: BinCell[]; faint: boolean; edges: LineSegments | null }[] = [];
   /** The place whose bins are in front, while a bin is chosen there. */
   private focus: string | null = null;
   /** The walk drawn on the floor, and where it starts (D211). */
@@ -183,6 +190,8 @@ export class SiteScene {
   private chosenBin: string | null = null;
   private hoveredBin: string | null = null;
   private tones = {} as Record<Tone, Color>;
+  /** A hollow bin's edges: its tone's token, unmixed. */
+  private edgeTones = {} as Record<Tone, Color>;
   private readonly chosenMark = new LineSegments(new EdgesGeometry(new BoxGeometry(1, 1, 1)), this.materials.chosenLine);
   private readonly hoverMark = new LineSegments(new EdgesGeometry(new BoxGeometry(1, 1, 1)), this.materials.hover);
 
@@ -266,29 +275,36 @@ export class SiteScene {
     this.stage.invalidate();
   }
 
-  /** The groups for the bins and the focus as they are. */
+  /** The groups for the bins, the focus and the layer as they are. */
   private build(): void {
     this.dropGroups();
-    const solid = this.focus ? this.cells.filter((c) => c.bin.place_id === this.focus) : this.cells;
-    const faint = this.focus ? this.cells.filter((c) => c.bin.place_id !== this.focus) : [];
-    for (const [cells, material] of [
-      [solid, this.materials.bin],
-      [faint, this.materials.ghost],
-    ] as const) {
-      if (cells.length === 0) continue;
-      const box = new BoxGeometry(1, 1, 1);
-      shadeFaces(box);
-      const mesh = new InstancedMesh(box, material, cells.length);
-      const m = new Matrix4();
-      cells.forEach((c, i) => mesh.setMatrixAt(i, cellMatrix(c, 1, m)));
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      // The faint ones after the solid, so they are laid over it, not under.
-      mesh.renderOrder = material === this.materials.ghost ? 1 : 0;
-      this.groups.push({ mesh, cells });
-      this.world.add(mesh);
+    const m = this.materials;
+    const hollow = (c: BinCell) => MIX[toneOf(c.bin, this.layer)].hollow === true;
+    for (const faint of [false, true]) {
+      const cells = this.cells.filter((c) => (this.focus !== null && c.bin.place_id !== this.focus) === faint);
+      this.group(cells.filter((c) => !hollow(c)), faint, faint ? m.ghost : m.bin, null);
+      this.group(cells.filter(hollow), faint, faint ? m.ghostHollow : m.hollow, faint ? m.ghostEdge : m.edge);
     }
     this.colourBins();
+  }
+
+  /** One group of bins, a box each, and their edges when they are hollow. */
+  private group(cells: BinCell[], faint: boolean, material: MeshBasicMaterial, edgeMaterial: LineBasicMaterial | null): void {
+    if (cells.length === 0) return;
+    const box = new BoxGeometry(1, 1, 1);
+    shadeFaces(box);
+    const mesh = new InstancedMesh(box, material, cells.length);
+    const at = new Matrix4();
+    cells.forEach((c, i) => mesh.setMatrixAt(i, cellMatrix(c, 1, at)));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    // The faint ones after the solid, so they are laid over it, not under.
+    mesh.renderOrder = faint ? 1 : 0;
+    const edges = edgeMaterial ? edgesOf(cells, edgeMaterial) : null;
+    if (edges) edges.renderOrder = mesh.renderOrder;
+    this.groups.push({ mesh, cells, faint, edges });
+    this.world.add(mesh);
+    if (edges) this.world.add(edges);
   }
 
   /**
@@ -335,11 +351,11 @@ export class SiteScene {
     this.stage.invalidate();
   }
 
-  /** Colour the bins by this layer. */
+  /** Colour the bins by this layer, and hollow the ones it says are empty. */
   setLayer(layer: Layer): void {
     if (layer === this.layer) return;
     this.layer = layer;
-    this.colourBins();
+    this.build();
     this.stage.invalidate();
   }
 
@@ -509,19 +525,26 @@ export class SiteScene {
     const surface = this.stage.token("--ui-surface");
     for (const [tone, { token, share }] of Object.entries(MIX) as [Tone, { token: string; share: number }][]) {
       this.tones[tone] = mix(surface, this.stage.token(token), share);
+      this.edgeTones[tone] = this.stage.token(token);
     }
     this.colourBins();
   }
 
-  /** Each bin in its layer's tone, and the chosen one in the accent. */
+  /** Each bin in its layer's tone, and the chosen one in the accent; a hollow one's edges too. */
   private colourBins(): void {
     const c = new Color();
-    for (const { mesh, cells } of this.groups) {
+    for (const { mesh, cells, edges } of this.groups) {
+      const lines = edges?.geometry.getAttribute("color");
       cells.forEach((cell, i) => {
-        c.copy(cell.bin.location_id === this.chosenBin ? this.palette.chosen : this.tones[toneOf(cell.bin, this.layer)]);
-        mesh.setColorAt(i, c);
+        const chosen = cell.bin.location_id === this.chosenBin;
+        const tone = toneOf(cell.bin, this.layer);
+        mesh.setColorAt(i, c.copy(chosen ? this.palette.chosen : this.tones[tone]));
+        if (!lines) return;
+        c.copy(chosen ? this.palette.chosen : this.edgeTones[tone]);
+        for (let k = 0; k < EDGE_ENDS; k++) lines.setXYZ(i * EDGE_ENDS + k, c.r, c.g, c.b);
       });
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      if (lines) lines.needsUpdate = true;
     }
   }
 
@@ -542,10 +565,14 @@ export class SiteScene {
   }
 
   private dropGroups(): void {
-    for (const { mesh } of this.groups) {
+    for (const { mesh, edges } of this.groups) {
       this.world.remove(mesh);
       mesh.geometry.dispose();
       mesh.dispose();
+      if (edges) {
+        this.world.remove(edges);
+        edges.geometry.dispose();
+      }
     }
     this.groups = [];
   }
@@ -557,7 +584,10 @@ export class SiteScene {
       d.grid?.geometry.dispose();
     }
     this.world.clear();
-    for (const { mesh } of this.groups) this.world.add(mesh);
+    for (const { mesh, edges } of this.groups) {
+      this.world.add(mesh);
+      if (edges) this.world.add(edges);
+    }
     this.drawn = [];
   }
 
@@ -639,12 +669,16 @@ export class SiteScene {
   private binAt(e: PointerEvent): string | null {
     if (this.groups.length === 0) return null;
     this.aim(e);
-    // The solid group first: a faint bin in front doesn't take the pointer
-    // from the rack in focus behind it.
-    for (const { mesh, cells } of this.groups) {
-      const [hit] = this.raycaster.intersectObject(mesh, false);
-      const cell = hit?.instanceId === undefined ? undefined : cells[hit.instanceId];
-      if (cell) return cell.bin.location_id;
+    // The nearest of the rack in focus, full or empty, first: a faint bin in
+    // front doesn't take the pointer from the rack in focus behind it.
+    for (const faint of [false, true]) {
+      let near: { distance: number; id: string } | null = null;
+      for (const { mesh, cells } of this.groups.filter((g) => g.faint === faint)) {
+        const [hit] = this.raycaster.intersectObject(mesh, false);
+        const cell = hit?.instanceId === undefined ? undefined : cells[hit.instanceId];
+        if (hit && cell && (!near || hit.distance < near.distance)) near = { distance: hit.distance, id: cell.bin.location_id };
+      }
+      if (near) return near.id;
     }
     return null;
   }
@@ -719,6 +753,25 @@ function shadeFaces(g: BufferGeometry): void {
   g.setAttribute("color", new BufferAttribute(shades, 3));
 }
 
+
+/** A box's twelve edges, as the pairs of corners a LineSegments draws. */
+const EDGES = new EdgesGeometry(new BoxGeometry(1, 1, 1)).getAttribute("position");
+const EDGE_ENDS = EDGES.count;
+
+/** Every cell's box's edges, as one set of lines coloured cell by cell. */
+function edgesOf(cells: BinCell[], material: LineBasicMaterial): LineSegments {
+  const positions = new Float32Array(cells.length * EDGE_ENDS * 3);
+  const at = new Matrix4();
+  const v = new Vector3();
+  cells.forEach((c, i) => {
+    cellMatrix(c, 1, at);
+    for (let k = 0; k < EDGE_ENDS; k++) v.fromBufferAttribute(EDGES, k).applyMatrix4(at).toArray(positions, (i * EDGE_ENDS + k) * 3);
+  });
+  const g = new BufferGeometry();
+  g.setAttribute("position", new BufferAttribute(positions, 3));
+  g.setAttribute("color", new BufferAttribute(new Float32Array(positions.length), 3));
+  return new LineSegments(g, material);
+}
 
 /** A cell's box as a matrix, grown by `grow` (an outline sits just outside it). */
 function cellMatrix(c: BinCell, grow: number, out: Matrix4): Matrix4 {

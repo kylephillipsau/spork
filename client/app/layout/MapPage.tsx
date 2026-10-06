@@ -4,9 +4,11 @@ import { ArrowRight } from "lucide-react";
 import { Alert, Badge, Checkbox, Link, Page, PageHeader, SearchField, Select, Skeleton, Tabs } from "@ui/index";
 import { href } from "@app/routing/location";
 import { ago } from "@app/common/cells";
-import type { MapBin, WalkRoute } from "@domain/types";
+import { ItemDrawer, ItemLine } from "@app/items/ItemProperties";
+import type { BinView, MapBin, Uuid, WalkRoute } from "@domain/types";
 
 import { findBins, LAYERS, LEGEND, swatch, type Layer } from "./layers";
+import { sayWhere } from "./PlacePage";
 import type { MapDesk } from "./useMap";
 import s from "./map.module.css";
 
@@ -15,8 +17,9 @@ const Map3D = lazy(() => import("./Map3D"));
 /**
  * The bin map (D208): every bin on the site where it sits, coloured by what is
  * on it or by whether it can be reached from the floor. Search for a bin and
- * the view flies to its face; click one and its card says what is in it. The
- * card is also where a rack's reach is set, a rack at a time.
+ * the view flies to its face; click one and its card says what is in it, each
+ * item opening beside the map as it does on the packing bench (D221). The card
+ * is also where a rack's reach is set, a rack at a time.
  */
 export function MapPage({ desk }: { desk: MapDesk }) {
   const [typed, setTyped] = useState("");
@@ -98,7 +101,7 @@ export function MapPage({ desk }: { desk: MapDesk }) {
             <ul className={s.keys}>
               {LEGEND[desk.layer].map((k) => (
                 <li key={k.tone}>
-                  <span className={s.swatch} style={{ background: swatch(k.tone) }} aria-hidden />
+                  <span className={s.swatch} style={swatch(k.tone)} aria-hidden />
                   {k.label}
                 </li>
               ))}
@@ -151,8 +154,6 @@ function Chosen({ desk }: { desk: MapDesk }) {
 
   const place = desk.place;
   const detail = desk.detail.kind === "ready" ? desk.detail.value : null;
-  const shown = detail?.reported ?? [];
-  const more = (detail?.reported_items ?? bin.reported_items) - shown.length;
   const levels = place?.levels ?? 0;
   const reach = [
     { value: "0", label: "None of it" },
@@ -168,35 +169,19 @@ function Chosen({ desk }: { desk: MapDesk }) {
         <h2 className={s.cardCode}>{bin.code}</h2>
         <Badge tone={bin.within_reach ? "success" : "warning"}>{bin.within_reach ? "From the floor" : "Ladder or forklift"}</Badge>
       </div>
-      <p className={s.muted}>
-        {place?.name}
-        {detail?.whereabouts ? `, ${detail.whereabouts}` : ""}
-      </p>
+      <p className={s.muted}>{detail?.place && detail.cell ? sayWhere(detail.place, detail.cell) : place?.name}</p>
 
-      <h3 className={s.cardSection}>{site?.bins.reported_as_at ? `NetSuite's count, ${ago(site.bins.reported_as_at)} ago` : "NetSuite's count"}</h3>
+      <h3 className={s.cardSection}>On this shelf</h3>
       {desk.detail.kind === "loading" ? (
         <Skeleton width="70%" />
       ) : desk.detail.kind === "failed" ? (
         <p className={s.muted}>{desk.detail.message}</p>
-      ) : shown.length === 0 ? (
-        <p className={s.muted}>Nothing on this shelf.</p>
+      ) : detail && detail.contents.length > 0 ? (
+        <Contents bin={detail} />
       ) : (
-        <ul className={s.items}>
-          {shown.map((r) => (
-            <li key={r.item_id}>
-              <Link href={href(`/items/${r.item_id}`)} className={s.code}>
-                {r.item_code}
-              </Link>
-              <span className={s.qty}>{Number(r.on_hand).toLocaleString()}</span>
-            </li>
-          ))}
-          {more > 0 && <li className={s.muted}>and {more} more</li>}
-        </ul>
+        <p className={s.muted}>Nothing on this shelf.</p>
       )}
-      <dl className={s.facts}>
-        <dt>Spork's records</dt>
-        <dd>{bin.held > 0 ? `${bin.held.toLocaleString()} units` : "Nothing yet"}</dd>
-      </dl>
+      <p className={s.source}>{countSentence(site?.bins.reported_as_at ?? null)}</p>
 
       {place && (
         <div className={s.reach}>
@@ -219,6 +204,39 @@ function Chosen({ desk }: { desk: MapDesk }) {
         Open the rack face <ArrowRight aria-hidden />
       </Link>
     </div>
+  );
+}
+
+/**
+ * What is on the chosen bin, an item to a row as the packing bench draws
+ * them: its photo, its code, which opens its properties beside the map, and
+ * what it is; then NetSuite's count of it, and Spork's when it holds some.
+ */
+function Contents({ bin }: { bin: BinView }) {
+  const [looking, setLooking] = useState<Uuid | null>(null);
+  const items = bin.contents;
+  const at = items.findIndex((i) => i.item_id === looking);
+  const step = (by: number) => {
+    const to = items[at + by];
+    return to ? () => setLooking(to.item_id) : null;
+  };
+  const more = bin.contents_total - items.length;
+  return (
+    <>
+      <ul className={s.items}>
+        {items.map((i) => (
+          <li key={i.item_id}>
+            <ItemLine code={i.item_code} description={i.description} picture={i.picture} onOpen={() => setLooking(i.item_id)} />
+            <span className={s.counts}>
+              <span className={s.qty}>{i.on_hand === null ? "—" : Number(i.on_hand).toLocaleString()}</span>
+              {i.held > 0 && <span className={s.held}>Spork {i.held.toLocaleString()}</span>}
+            </span>
+          </li>
+        ))}
+        {more > 0 && <li className={s.muted}>and {more.toLocaleString()} more</li>}
+      </ul>
+      <ItemDrawer itemId={looking} onClose={() => setLooking(null)} previous={step(-1)} next={step(1)} />
+    </>
   );
 }
 

@@ -30,7 +30,13 @@
 //! `package_event`'s own winning-row rule — applied here. A retake is a new row
 //! and the new one is what the shelf looks like now.
 
+use std::collections::HashMap;
+
 use serde::Serialize;
+use tokio_postgres::Transaction;
+use uuid::Uuid;
+
+use crate::error::ApiError;
 
 /// A picture offered for recognition, and whose it is.
 #[derive(Serialize, Debug, Clone)]
@@ -131,6 +137,17 @@ picture AS (
      WHERE p.digest IS NOT NULL
      ORDER BY p.item_id, p.rank, p.at DESC NULLS LAST
 )";
+
+/// These items' pictures, by item: one read however many a screen lists. An
+/// item with none is not in the map.
+pub async fn of(tx: &Transaction<'_>, items: &[Uuid]) -> Result<HashMap<Uuid, Picture>, ApiError> {
+    Ok(tx
+        .query(&format!("WITH {PICTURE_CTE} SELECT item_id, digest, source FROM picture WHERE item_id = ANY($1)"), &[&items])
+        .await?
+        .iter()
+        .filter_map(|r| from_row(r.get(1), r.get(2)).map(|p| (r.get(0), p)))
+        .collect())
+}
 
 /// Build a [`Picture`] from a row's digest and source columns.
 ///

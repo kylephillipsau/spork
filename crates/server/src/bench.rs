@@ -585,18 +585,7 @@ fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements
 /// have no size, in three reads for the whole screen rather than three a line.
 async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) -> Result<(), ApiError> {
     let ids: Vec<Uuid> = lines.iter().map(|l| l.item_id).collect();
-    let pictured: HashMap<Uuid, Picture> = tx
-        .query(
-            &format!(
-                "WITH {} SELECT item_id, digest, source FROM picture WHERE item_id = ANY($1)",
-                pictures::PICTURE_CTE
-            ),
-            &[&ids],
-        )
-        .await?
-        .iter()
-        .filter_map(|r| pictures::from_row(r.get(1), r.get(2)).map(|p| (r.get(0), p)))
-        .collect();
+    let pictured = pictures::of(tx, &ids).await?;
     // The newest cut of each side of its own each or inner (D176), not one
     // moved to another subject. Only cut faces: an uncut photo is the bench
     // behind the box as much as the box.

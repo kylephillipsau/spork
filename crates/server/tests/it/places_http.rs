@@ -264,6 +264,22 @@ async fn a_draft_lays_out_the_bin_list_and_a_bin_lands_on_its_rack() {
     let bare = bins.iter().find(|b| b["code"] == "LT-01-1").unwrap();
     assert_eq!(bare["reported_items"], 0, "nothing reported is none, not an error: {bare}");
     assert_eq!(bare["reported"], Value::Array(vec![]));
+
+    // ── what is on a bin, item by item, as the bin map's card shows it (D221)
+    let (_, full) = call(&app, test::TestRequest::get().uri(&format!("/bins/{}", b["location_id"].as_str().unwrap())).insert_header(auth.clone())).await;
+    let on: Vec<(String, String, i64)> = full["contents"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no contents in {full}"))
+        .iter()
+        .map(|i| (i["item_code"].as_str().unwrap().into(), i["on_hand"].as_str().unwrap().into(), i["held"].as_i64().unwrap()))
+        .collect();
+    assert_eq!(on, vec![("LT-ITEM-2".into(), "30".into(), 0), ("LT-ITEM-1".into(), "4".into(), 0)], "the most first: {full}");
+    assert_eq!(full["contents_total"], 2);
+    assert_eq!(full["contents"][0]["description"], "For the bins list");
+    assert!(full["contents"][0]["picture"].is_null(), "nobody has photographed it: {full}");
+    let (_, empty) = call(&app, test::TestRequest::get().uri(&format!("/bins/{}", bare["location_id"].as_str().unwrap())).insert_header(auth.clone())).await;
+    assert_eq!((empty["contents"].clone(), empty["contents_total"].clone()), (Value::Array(vec![]), Value::from(0)), "{empty}");
+
     let (_, tray) = call(&app, test::TestRequest::get().uri("/bins?unplaced=true").insert_header(auth.clone())).await;
     let tray = tray["bins"].as_array().unwrap();
     assert!(tray.iter().any(|b| b["code"] == "LT-FLOOR"), "the bins the draft left");

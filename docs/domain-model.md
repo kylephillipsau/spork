@@ -15279,3 +15279,36 @@ with no way to fix them but drawing the site again.
 
 **Not decided.** A rack whose levels are numbered from the top, or whose
 back is numbered from the same end as its front rather than round.
+
+### D221: On the bin map an empty bin is hollow, and an item on a bin opens as it does at the bench
+
+*Adopted 2026-10-06, with no migration. Amends D208.*
+
+**Decision.**
+
+- **An empty bin is a hollow box.** On the What's here layer, a bin with
+  nothing on it by either record is drawn see-through, with its edges, so the
+  shelves behind it show through and a full bin stands out as solid. Hollow
+  is a property of the Empty tone (`MIX.empty.hollow` in `layers.ts`). The
+  scene and the legend's swatch both read it, as they already read its colour.
+  The Reach layer reads every bin alike, so nothing is hollow there.
+- **A bin's card lists what is on it, item by item.** Each item is drawn as
+  the packing bench draws one (`ItemLine`): its photo (D141), its code, which
+  opens its properties in the item drawer beside the map with Previous and
+  Next through the bin's items (D174), and its description. Beside it are
+  NetSuite's newest count of it there (D215) and, when Spork's own ledger
+  holds some, Spork's. The most NetSuite counts comes first. A catch-all bin
+  lists fifty and counts the rest.
+- **The bin's own read says it.** `GET /bins/{id}` carries `contents` and
+  `contents_total`. The card reads the bin by its id, and says where it is
+  with the rack face's own words (`sayWhere`). It no longer searches the bin
+  list for its code. A list of items' pictures is one read, `pictures::of`,
+  for the bench, the item page and the bin.
+
+**Why.** The user, 2026-10-06: "In the 3D bin map, if a bin is empty, it
+should have a transparent box. We should also be able to view the item in the
+bin with more detail like we can in the packing or item view." They asked for
+it to be built DRY and KISS, with one implementation of each part.
+
+**Not yet.** The rack face (`/bins/{id}`, where a scan lands) receives the
+same contents and doesn't show them yet.

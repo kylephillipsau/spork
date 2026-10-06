@@ -224,6 +224,7 @@ const PAIRS = [
   ["PlanShape", ["PlanShape"]],
   ["PlaceView", ["PlaceView"]],
   ["BinView", ["BinView"]],
+  ["BinItem", ["BinItem"]],
   ["BinContent", ["BinContent"]],
   ["BinRow", ["BinRow"]],
   ["BinsList", ["BinsList"]],

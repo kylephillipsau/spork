@@ -24,9 +24,8 @@ import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OwnCarton, 
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { Faint } from "@app/common/cells";
-import { Thumb } from "@app/common/Thumb";
 import { kg } from "@app/common/format";
-import { ItemCode, ItemDrawer } from "@app/items/ItemProperties";
+import { ItemDrawer, ItemLine } from "@app/items/ItemProperties";
 
 import { piecesOf, type AsIs } from "./arrange";
 import { Suggestion, shipLabel } from "./Suggestion";
@@ -115,15 +114,13 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       key: "item",
       header: "Item",
       cell: (l) => (
-        <span className={s.itemCell}>
-          <Thumb picture={l.picture} alt={l.description ?? l.item_code} />
-          <span className={l.remaining === 0 ? `${s.itemText} ${s.done}` : s.itemText}>
-            <ItemCode code={l.item_code} onOpen={() => setLooking(l.item_id)} />
-            {/* An item made from a code alone has the code as its description;
-                saying it twice is noise. */}
-            {l.description && l.description !== l.item_code && <span className={s.desc}>{l.description}</span>}
-          </span>
-        </span>
+        <ItemLine
+          code={l.item_code}
+          description={l.description ?? undefined}
+          picture={l.picture}
+          onOpen={() => setLooking(l.item_id)}
+          done={l.remaining === 0}
+        />
       ),
       grow: true,
     },
@@ -349,12 +346,7 @@ function Carton({
     {
       key: "item",
       header: "Item",
-      cell: (r) => (
-        <span className={s.itemCell}>
-          <Thumb picture={pictures.get(r.item_id) ?? null} alt={r.description ?? r.item_code} />
-          <ItemCode code={r.item_code} onOpen={() => look(r.item_id)} />
-        </span>
-      ),
+      cell: (r) => <ItemLine code={r.item_code} picture={pictures.get(r.item_id) ?? null} onOpen={() => look(r.item_id)} />,
       grow: true,
     },
     { key: "lot", header: "Lot", cell: (r) => r.lot_code ?? <Faint>—</Faint>, mono: true, width: "110px" },

@@ -228,16 +228,7 @@ pub async fn item_page(
                     picture_item_id: r.get(6),
                 });
 
-                let picture = tx
-                    .query_opt(
-                        &format!(
-                            "WITH {} SELECT digest, source FROM picture WHERE item_id = $1",
-                            pictures::PICTURE_CTE
-                        ),
-                        &[&id],
-                    )
-                    .await?
-                    .and_then(|p| pictures::from_row(p.get(0), p.get(1)));
+                let picture = pictures::of(tx, &[id]).await?.remove(&id);
 
                 let measurements = measurements_of(tx, id).await?;
 

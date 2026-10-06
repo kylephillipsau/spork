@@ -102,6 +102,8 @@ export const BIN: BinView = {
   active: true,
   cell: target.cell,
   place: RACK_C_VIEW,
+  contents: [],
+  contents_total: 0,
 };
 
 /**
@@ -148,6 +150,8 @@ export const BIN_BACK: BinView = {
   active: true,
   cell: behind.cell,
   place: RACK_E_VIEW,
+  contents: [],
+  contents_total: 0,
 };
 
 export const BIN_UNPLACED: BinView = {
@@ -157,6 +161,8 @@ export const BIN_UNPLACED: BinView = {
   active: true,
   cell: null,
   place: null,
+  contents: [],
+  contents_total: 0,
 };
 
 /** A shelf whose bottom level holds three small bins a bay. */

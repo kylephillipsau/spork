@@ -36,7 +36,14 @@ test("reach is the floor or a ladder", () => {
 
 test("every tone a legend shows has a mix, and the swatch is that mix in CSS", () => {
   for (const entries of Object.values(LEGEND)) for (const { tone } of entries) assert.ok(MIX[tone]);
-  assert.equal(swatch("two"), "color-mix(in srgb, var(--ui-info) 60%, var(--ui-surface))");
+  assert.deepEqual(swatch("two"), { background: "color-mix(in srgb, var(--ui-info) 60%, var(--ui-surface))" });
+});
+
+test("an empty shelf is a hollow box, and its swatch is one too (D221)", () => {
+  assert.equal(MIX[toneOf(bin("A"), "stock")].hollow, true);
+  assert.equal(MIX[toneOf(bin("A", { held: 1 }), "stock")].hollow, undefined, "anything on it fills it");
+  assert.equal(MIX[toneOf(bin("A"), "reach")].hollow, undefined, "reach is read from every bin alike");
+  assert.deepEqual(swatch("empty"), { background: "color-mix(in srgb, var(--ui-border-strong) 15%, transparent)", borderColor: "var(--ui-border-strong)" });
 });
 
 test("a search finds the code exactly first, then by its start, then anywhere, without minding dashes", () => {

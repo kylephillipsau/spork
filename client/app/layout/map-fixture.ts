@@ -1,4 +1,4 @@
-import type { BinRow, MapBin, MapBins } from "@domain/types";
+import type { BinView, MapBin, MapBins, PlaceView } from "@domain/types";
 
 import { DRAFTED_SITE } from "./fixture";
 import type { MapDesk, MapSite } from "./useMap";
@@ -49,22 +49,56 @@ export const MAP_SITE: MapSite = { layout: DRAFTED_SITE, bins: BINS };
 export const MAP_CHOSEN: MapBin =
   BINS.bins.find((b) => b.code.startsWith("G-") && b.side === 2 && b.level === 2 && b.reported_items === 2) ?? BINS.bins[0]!;
 
-export const MAP_CHOSEN_DETAIL: BinRow = {
+/** Rack G as its own read has it: two sides, numbered round from the front's left. */
+const RACK_G = DRAFTED_SITE.places.find((p) => p.place_id === MAP_CHOSEN.place_id)!;
+const two = (n: number) => String(n).padStart(2, "0");
+const RACK_G_VIEW: PlaceView = {
+  place_id: RACK_G.place_id,
+  name: RACK_G.name,
+  solid: RACK_G.solid,
+  bays: RACK_G.bays,
+  levels: RACK_G.levels,
+  rows: RACK_G.rows,
+  positions: RACK_G.positions,
+  pattern: RACK_G.pattern,
+  sides: RACK_G.sides,
+  reach_levels: RACK_G.reach_levels,
+  bay_labels: Array.from({ length: RACK_G.bays }, (_, i) => two(i + 1)),
+  back_labels: RACK_G.sides === 2 ? Array.from({ length: RACK_G.bays }, (_, i) => two(RACK_G.bays + 1 + i)) : [],
+  level_labels: Array.from({ length: RACK_G.levels }, (_, i) => String(i + 1)),
+  trail: [],
+  children: [],
+  bins: [],
+  plan: DRAFTED_SITE.plan,
+};
+
+/** The chosen bin's own read: two kinds of glove, one photographed, and some of one in Spork's ledger. */
+export const MAP_CHOSEN_DETAIL: BinView = {
   location_id: MAP_CHOSEN.location_id,
   code: MAP_CHOSEN.code,
   kind: "pick_face",
-  place_id: MAP_CHOSEN.place_id,
-  place_name: "Rack G",
+  active: true,
   cell: { bay: MAP_CHOSEN.bay, level: MAP_CHOSEN.level, row: 1, position: 1, side: MAP_CHOSEN.side },
-  whereabouts: `back, bay ${MAP_CHOSEN.code.split("-")[1]}, level ${MAP_CHOSEN.level}`,
-  pick_sequence: null,
-  within_reach: MAP_CHOSEN.within_reach,
-  reported: [
-    { item_id: "17e10000-0000-0000-0000-000000000003", item_code: "GLOVE-M", on_hand: "24" },
-    { item_id: "17e10000-0000-0000-0000-000000000004", item_code: "GLOVE-L", on_hand: "12" },
+  place: RACK_G_VIEW,
+  contents: [
+    {
+      item_id: "17e10000-0000-0000-0000-000000000003",
+      item_code: "GLOVE-M",
+      description: "Nitrile gloves, medium, box of 100",
+      picture: { digest: "ebf4f635a17d10d6eb46ba680b70142419aa3220f228001a036d311a22ee9d2a", source: "own" },
+      on_hand: "24",
+      held: 0,
+    },
+    {
+      item_id: "17e10000-0000-0000-0000-000000000004",
+      item_code: "GLOVE-L",
+      description: "Nitrile gloves, large, box of 100",
+      picture: null,
+      on_hand: "12",
+      held: 6,
+    },
   ],
-  reported_items: 2,
-  held: 0,
+  contents_total: 2,
 };
 
 export function fixtureMap(over: Partial<MapDesk> = {}): MapDesk {

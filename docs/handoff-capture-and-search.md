@@ -210,6 +210,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   from the right**), and the plan editor's **Numbered from** turns a rack
   already made round: its bins keep their names, each moved to the mirror of
   its column. Cells stay counted from the front's left, so only labels change.
+- D221. On the bin map an empty bin is a hollow box (`MIX.empty.hollow`, read
+  by the scene and the legend alike), and the chosen bin's card lists what is
+  on it as the packing bench does: `ItemLine` (photo, code that opens the
+  `ItemDrawer`, description), NetSuite's count and Spork's. The card reads
+  `GET /bins/{id}`, which now carries `contents`; `pictures::of` is the one
+  read for a list of items' pictures.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

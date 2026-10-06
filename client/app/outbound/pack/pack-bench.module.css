@@ -23,16 +23,6 @@
 }
 
 /* ---- lines ---- */
-.desc {
-  display: block;
-  overflow: hidden;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-text-sm);
-  text-overflow: ellipsis;
-}
-.done {
-  color: var(--ui-text-faint);
-}
 .add {
   display: inline-flex;
   align-items: center;
@@ -105,16 +95,6 @@
   gap: var(--ui-space-1-5);
 }
 
-/* ---- what a line is: its picture, then its code ---- */
-.itemCell {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-3);
-  min-width: 0;
-}
-.itemText {
-  min-width: 0;
-}
 .code {
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);

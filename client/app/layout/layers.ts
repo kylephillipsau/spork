@@ -32,9 +32,12 @@ export function toneOf(bin: MapBin, layer: Layer): Tone {
  * Each tone as a theme token mixed into the surface, by how much of the token.
  * The scene mixes the same two colours in three.js, and the legend with CSS
  * `color-mix`, so the two can't drift apart and both follow the theme.
+ *
+ * A hollow tone is drawn as an empty box (D221): a see-through fill with its
+ * edges in the token, so the shelves behind it show through.
  */
-export const MIX: Record<Tone, { token: string; share: number }> = {
-  empty: { token: "--ui-border-strong", share: 0.55 },
+export const MIX: Record<Tone, { token: string; share: number; hollow?: true }> = {
+  empty: { token: "--ui-border-strong", share: 0.55, hollow: true },
   one: { token: "--ui-info", share: 0.35 },
   two: { token: "--ui-info", share: 0.6 },
   many: { token: "--ui-info", share: 0.9 },
@@ -56,10 +59,14 @@ export const LEGEND: Record<Layer, { tone: Tone; label: string }[]> = {
   ],
 };
 
-/** The legend's swatch: the same mix, in CSS. */
-export function swatch(tone: Tone): string {
-  const { token, share } = MIX[tone];
-  return `color-mix(in srgb, var(${token}) ${Math.round(share * 100)}%, var(--ui-surface))`;
+/** How much of a hollow box's fill shows: enough to see the box, little enough to see through it. */
+export const HOLLOW = 0.15;
+
+/** The legend's swatch: the same mix, in CSS, or the same empty box. */
+export function swatch(tone: Tone): { background: string; borderColor?: string } {
+  const { token, share, hollow } = MIX[tone];
+  if (hollow) return { background: `color-mix(in srgb, var(${token}) ${HOLLOW * 100}%, transparent)`, borderColor: `var(${token})` };
+  return { background: `color-mix(in srgb, var(${token}) ${Math.round(share * 100)}%, var(--ui-surface))` };
 }
 
 /**

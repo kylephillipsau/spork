@@ -1691,6 +1691,22 @@ export interface BinView {
   /** Its cell, when it is on the layout. */
   cell: GridCell | null;
   place: PlaceView | null;
+  /** What is on it by either record, the most NetSuite counts first; at most 50 (D221). */
+  contents: BinItem[];
+  /** How many items are on it in all. */
+  contents_total: number;
+}
+
+/** One item on a bin: what it looks like, and how much of it each record says is here (D221). */
+export interface BinItem {
+  item_id: Uuid;
+  item_code: string;
+  description: string;
+  picture: Picture | null;
+  /** NetSuite's newest count of it here, as text; null when only Spork's ledger has it here. */
+  on_hand: string | null;
+  /** What Spork's own ledger holds of it here. */
+  held: number;
 }
 
 /** One place in the site's list. */

@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::layout::{self, GridCell, Frame, Grid, Pattern};
+use crate::pictures::{self, Picture};
 use crate::routes::caller;
 use crate::tenancy::TenantScope;
 use crate::client_events::{claim_act, NewClientEvent};
@@ -210,6 +211,76 @@ pub struct BinView {
     /// Its cell, when it is on the layout.
     pub cell: Option<GridCell>,
     pub place: Option<PlaceView>,
+    /// What is on it by either record, the most NetSuite counts first; at most
+    /// [`ITEMS_ON_A_BIN`] of them (D221).
+    pub contents: Vec<BinItem>,
+    /// How many items are on it in all.
+    pub contents_total: i64,
+}
+
+/// One item on a bin, as a screen shows it to find it by: what it looks like,
+/// and how much of it each record says is here (D221).
+#[derive(Serialize, Debug)]
+pub struct BinItem {
+    pub item_id: Uuid,
+    pub item_code: String,
+    pub description: String,
+    pub picture: Option<Picture>,
+    /// NetSuite's newest count of it here, as text; none when only this
+    /// system's own ledger has it here.
+    pub on_hand: Option<String>,
+    /// What this system's own ledger holds of it here.
+    pub held: i64,
+}
+
+/// How many items a bin's read lists. Most bins hold a handful; a catch-all
+/// bin can hold hundreds, which are counted instead.
+const ITEMS_ON_A_BIN: i64 = 50;
+
+/// What is on a bin by either record: NetSuite's newest count of each item
+/// (D215), and what this system's ledger holds; and how many items in all.
+async fn contents_of(tx: &Transaction<'_>, bin: Uuid) -> Result<(Vec<BinItem>, i64), ApiError> {
+    let rows = tx
+        .query(
+            "WITH said AS (
+                 SELECT DISTINCT ON (rs.item_id) rs.item_id, rs.on_hand
+                   FROM reported_stock rs
+                  WHERE rs.location_id = $1
+                  ORDER BY rs.item_id, rs.as_at DESC
+             ), held AS (
+                 SELECT s.item_id, sum(s.quantity)::bigint AS q
+                   FROM stock s
+                  WHERE s.holder_location_id = $1 AND s.quantity > 0
+                  GROUP BY s.item_id
+             )
+             SELECT i.id, i.code, i.description, said.on_hand::text, coalesce(held.q, 0)::bigint,
+                    count(*) OVER ()
+               FROM said
+               FULL JOIN held ON held.item_id = said.item_id
+               JOIN item i ON i.id = coalesce(said.item_id, held.item_id)
+              ORDER BY said.on_hand DESC NULLS LAST, held.q DESC NULLS LAST, i.code
+              LIMIT $2",
+            &[&bin, &ITEMS_ON_A_BIN],
+        )
+        .await?;
+    let total = rows.first().map(|r| r.get(5)).unwrap_or(0);
+    let ids: Vec<Uuid> = rows.iter().map(|r| r.get(0)).collect();
+    let mut pictured = pictures::of(tx, &ids).await?;
+    let items = rows
+        .iter()
+        .map(|r| {
+            let item_id: Uuid = r.get(0);
+            BinItem {
+                item_id,
+                item_code: r.get(1),
+                description: r.get(2),
+                picture: pictured.remove(&item_id),
+                on_hand: r.get(3),
+                held: r.get(4),
+            }
+        })
+        .collect();
+    Ok((items, total))
 }
 
 /// Build a place's page from the site's places.
@@ -361,11 +432,11 @@ async fn place_view(
     }))
 }
 
-/// A bin, the cell it is in, and the place around it.
+/// A bin, the cell it is in, the place around it, and what is on it.
 ///
 /// **A scan lands here.** D111's locator resolves a location code to its id;
 /// this is the page that answers "where is it", which is the question a bin
-/// code is scanned to ask.
+/// code is scanned to ask. The bin map's card reads it too (D221).
 #[get("/bins/{location_id}")]
 pub async fn bin_page(
     req: HttpRequest,
@@ -401,6 +472,7 @@ pub async fn bin_page(
                     Some(p) => place_view(tx, p).await?,
                     None => None,
                 };
+                let (contents, contents_total) = contents_of(tx, id).await?;
                 Ok(BinView {
                     location_id: id,
                     code: r.get(0),
@@ -408,6 +480,8 @@ pub async fn bin_page(
                     active: r.get(2),
                     cell,
                     place,
+                    contents,
+                    contents_total,
                 })
             })
         })
