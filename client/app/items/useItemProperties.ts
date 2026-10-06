@@ -9,7 +9,19 @@ import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
 import { measurementsOf, type Figures } from "./figures";
 import { isRound } from "./box";
-import { NO_FIGURES, cartonHolds, isOwnCarton, photosOf, presentationNeeded, readHoldsFor, sayFirst, subjectKey, type Face } from "./subjects";
+import {
+  NO_FIGURES,
+  cartonHolds,
+  holdsInWords,
+  isOwnCarton,
+  photosOf,
+  presentationNeeded,
+  readHoldsFor,
+  sayFirst,
+  subjectKey,
+  unitWord,
+  type Face,
+} from "./subjects";
 
 /**
  * One item's properties, as logic: what it is and what is known of it, and
@@ -48,7 +60,7 @@ const drawing = () => import("./boxPicture");
 
 export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } | { kind: "failed"; message: string };
 
-export type Action = "weigh" | "measure" | "photos" | "barcodes";
+export type Action = "weigh" | "measure" | "photos" | "barcodes" | "holds";
 
 /** Which subject has which action open. */
 export interface Open {
@@ -102,6 +114,11 @@ export interface PropertiesDesk {
   typeHolds: (next: string) => void;
   per: string;
   typePer: (next: string) => void;
+  /**
+   * Say again what its carton holds, the count on file having been said
+   * wrongly (D229): the same carton, described right.
+   */
+  correctHolds: () => Promise<void>;
 
   figures: Figures;
   type: (field: "weight" | "length" | "width" | "height" | "top" | "base" | "topHeight", next: string) => void;
@@ -509,6 +526,23 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     typeHolds: setHolds,
     per,
     typePer: setPer,
+    correctHolds: () =>
+      press(`holds:${holds.trim()}:${per.trim()}`, async (act) => {
+        if (read.kind !== "ready") return;
+        const item = read.item;
+        const typed = readHoldsFor(item.unit.level, holds, per, item.packing);
+        if ("problem" in typed) throw new ApiError(typed.problem, 400);
+        if (typed.holds === null) throw new ApiError("Say how many it holds.", 400);
+        const said = await api.sayCarton(item.item_id, { holds: typed.holds, per: typed.per, correction: true, act });
+        if (!live.current) return;
+        setOpen(null);
+        const pack = item.unit.level === "inner" ? unitWord(item) : "pack";
+        setSaid({
+          tone: "success",
+          text: said.changed ? `A carton holds ${holdsInWords(said, pack)} now.` : "That is what was on file.",
+        });
+        await reload();
+      }),
 
     figures,
     type: (field, next) => setFigures((f) => ({ ...f, [field]: next })),

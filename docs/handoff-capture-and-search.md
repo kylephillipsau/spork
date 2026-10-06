@@ -261,6 +261,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   A pack's or carton's size moved or copied onto an each is said to be as
   supplied; the move to another item's each (D222) had left it unsaid, which
   J72 reports.
+- D229. A carton's Holds has Change (`HoldsForm` in `ItemProperties.tsx`),
+  which puts a wrongly said count right on the case pack in force
+  (`correction` on `POST /items/{id}/carton`) rather than starting a new one
+  from today, so what was measured under it stays.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

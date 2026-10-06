@@ -1,5 +1,5 @@
-//! A carton said at the item (D178), and a list of items to work through
-//! (D179), over HTTP.
+//! A carton said at the item (D178), and put right when it was said wrongly
+//! (D229), and a list of items to work through (D179), over HTTP.
 //!
 //! An item is modelled as itself and its carton as a box of so many of it.
 //! Its page offers the carton whatever is on file, and saying how many it
@@ -238,6 +238,25 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
     )
     .await;
     assert_eq!(status, 400, "packs of 24, but how many packs?");
+
+    // ── a count said wrongly is put right (D229): ten bundles, not six. The
+    //    same carton, so the bundle weighed under it is still its own
+    let (status, right) = post(
+        format!("/items/{gloves}/carton"),
+        json!({ "holds": 10, "per": 24, "correction": true,
+                "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-06T00:00:00Z" }),
+    )
+    .await;
+    assert_eq!(status, 200, "{right}");
+    assert_eq!(right["item_packing_config_id"], packs["item_packing_config_id"], "the same carton, said right: {right}");
+    assert_eq!((right["inners_per_carton"].as_i64(), right["units_per_inner"].as_i64()), (Some(10), Some(24)));
+    assert_eq!(right["effective_from"], packs["effective_from"], "from when it always was");
+    let versions: i64 = db
+        .query_one("SELECT count(*) FROM item_packing_config WHERE item_id = $1", &[&gloves])
+        .await
+        .expect("its cartons")
+        .get(0);
+    assert_eq!(versions, 1, "no second carton beside the wrong one");
 
     // ── an empty count makes a carton and says nothing of what is in it ──
     let unsaid = made(format!("CTN-{n}-U")).await;

@@ -15534,3 +15534,26 @@ different count is refused, since a carton of 24 is not a carton of 12.
 **Why.** The user, 2026-10-06: "Most of the items in the same family have
 identical faces except one, where a label might be a different colour or
 something."
+
+### D229: A carton's count said wrongly is put right, not said again
+
+*Adopted 2026-10-06, with no migration. Amends D178.*
+
+**The finding.** An item sold by the box of 100 had its carton said as a
+thousand boxes, typed for ten. The count could only be changed inside Weigh
+or Measure on the carton's card, and a different count there is a different
+carton from that day (D23): the wrong one stayed in force for every day
+before, and a correction made the same day as the mistake left two case packs
+in force on one day, with nothing to say which was newer.
+
+**Decision.** The carton's **Holds** has **Change**: the same fields as
+weighing it, the count on file to start from, and Save puts that count right
+(`POST /items/{id}/carton` with `correction`). It is the same carton, said
+right: the case pack in force is amended where it is, from when it always
+was, as a count never said is filled in. What was weighed, measured and
+photographed of the carton and of what is in it was recorded against that case
+pack, so it stays. A carton that has really changed is still said by weighing
+or measuring one with its count, and is a new version from that day.
+
+**Why.** The user, 2026-10-06: "I should also be able to easily adjust how
+many boxes are in a box".

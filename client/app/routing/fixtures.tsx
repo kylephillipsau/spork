@@ -114,6 +114,7 @@ import {
   MEASURED_AS_KIT,
   MISFILED,
   SOLD_BY_BOX,
+  CORRECTING_HOLDS,
   SOLD_BY_CARTON,
   SOLD_SINGLY,
   ITEM_UNKNOWN,
@@ -665,6 +666,10 @@ export const FIXTURES: readonly Screen[] = [
       </>
     );
   }),
+  // D229: a carton said wrongly, put right from its Holds.
+  app("f-item-holds", "/fixtures/item/holds", "Item — a carton said wrongly", "floor", { screen: "item" }, () => (
+    <ItemPage desk={CORRECTING_HOLDS} />
+  )),
   // D228: its family, and matching it from the green one.
   app("f-item-matching", "/fixtures/item/matching", "Item — matching from its family", "floor", { screen: "item" }, () => {
     const desk = fixtureProperties(ITEM);

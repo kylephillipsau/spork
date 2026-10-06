@@ -16,6 +16,9 @@
 //! - **A carton that holds a different count**: that is a different carton
 //!   (D23), so it is a new version from the day it was said. The old one still
 //!   explains what was measured against it.
+//! - **A count said wrongly, corrected** (D229): a carton of 1,000 boxes typed
+//!   for one of 10. It is the same carton, described right, so the count in
+//!   force is put right where it is, and what was measured of it stays its own.
 //!
 //! Saying what is already on file changes nothing, and says so.
 
@@ -42,6 +45,10 @@ pub struct SayCartonRequest {
     /// When the carton holds packs: how many of the item are in each pack, and
     /// `holds` counts the packs (D185). Absent: `holds` counts the item.
     pub per: Option<i32>,
+    /// The count in force was said wrongly (D229): put it right, rather than
+    /// say a different carton from today.
+    #[serde(default)]
+    pub correction: bool,
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
 }
@@ -67,7 +74,8 @@ fn total(units_per_inner: Option<i32>, inners_per_carton: Option<i32>) -> Option
 enum Change {
     Nothing,
     Make,
-    FillIn(Uuid),
+    /// The carton on file, its count said now: never said, or said wrongly.
+    Amend(Uuid),
     Version,
 }
 
@@ -156,7 +164,8 @@ pub async fn say_carton(
                         match (on_file, body.holds) {
                             (_, None) => Change::Nothing,
                             (was, Some(_)) if was == wanted => Change::Nothing,
-                            ((_, None), Some(_)) => Change::FillIn(c.get(0)),
+                            ((_, None), Some(_)) => Change::Amend(c.get(0)),
+                            (_, Some(_)) if body.correction => Change::Amend(c.get(0)),
                             ((_, Some(_)), Some(_)) => Change::Version,
                         }
                     }
@@ -173,8 +182,8 @@ pub async fn say_carton(
 
                 const RETURNING: &str = "RETURNING id, units_per_inner, inners_per_carton, effective_from";
                 let row = match change {
-                    // The count, never said, now is: the same carton.
-                    Change::FillIn(id) => {
+                    // The count, never said or said wrongly, now is: the same carton.
+                    Change::Amend(id) => {
                         tx.query_one(
                             &format!(
                                 "UPDATE item_packing_config

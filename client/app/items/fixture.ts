@@ -306,6 +306,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     sayUnit: async () => false,
     refile: async () => false,
     matchFamily: async () => false,
+    correctHolds: later,
     findItem: async () => null,
     taken: [],
     sending: {},
@@ -545,6 +546,23 @@ export const ITEM_FLAGGED: ItemView = {
 };
 
 /** The each being measured: an each says how it was arranged, and may say it has no box. */
+/**
+ * A carton said wrongly (D229): a thousand boxes typed for ten boxes of 100,
+ * being put right from its Holds.
+ */
+const SAID_WRONG: ItemView = {
+  ...SOLD_BY_BOX,
+  code: "ABC-2040",
+  description: "Corded earplugs, box of 100",
+  packing: { units_per_inner: 100, inners_per_carton: 1000, effective_from: "2026-09-30" },
+  subjects: SOLD_BY_BOX.subjects.map((x) => ({ ...x, code: "ABC-2040" })),
+};
+export const CORRECTING_HOLDS = fixtureProperties(SAID_WRONG, {
+  open: { key: `${PLUGS}:carton`, action: "holds" },
+  holds: "10",
+  per: "100",
+});
+
 export const MEASURING = fixtureProperties(ITEM, {
   open: { key: `${BRUSH}:each`, action: "measure" },
   figures: { ...NO_FIGURES, weight: "0.52", length: "45", width: "", height: "" },

@@ -714,6 +714,18 @@ function Subject({
                 const said = holdsInWords(item.packing, item.unit.level === "inner" ? unitWord(item) : "pack");
                 return item.packing?.inners_per_carton != null ? said : <Faint>{said}</Faint>;
               })()}
+              {item.packing?.inners_per_carton != null && (
+                <div>
+                  <Button
+                    size="sm"
+                    aria-pressed={open === "holds"}
+                    disabled={desk.busy}
+                    onClick={() => (open === "holds" ? desk.close() : desk.show(subject, "holds"))}
+                  >
+                    Change
+                  </Button>
+                </div>
+              )}
             </Fact>
           )}
         </Facts>
@@ -773,7 +785,36 @@ function Subject({
         </div>
       )}
       {open === "barcodes" && <BarcodesForm subject={subject} desk={desk} />}
+      {open === "holds" && <HoldsForm item={item} desk={desk} />}
     </Card>
+  );
+}
+
+/**
+ * What its carton holds, said again because it was said wrongly (D229): a
+ * thousand boxes typed for ten. The same carton, so what was weighed,
+ * measured and photographed of it, and of what is in it, stays.
+ */
+function HoldsForm({ item, desk }: { item: ItemView; desk: PropertiesDesk }) {
+  return (
+    <form
+      className={s.form}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void desk.correctHolds();
+      }}
+    >
+      <div className={s.fields}>
+        <HoldsField desk={desk} item={item} />
+      </div>
+      <p className={s.note}>Puts right what was said of this carton. What was weighed, measured and photographed stays.</p>
+      <div className={s.formActions}>
+        <Button onClick={desk.close}>Cancel</Button>
+        <Button type="submit" variant="primary" loading={desk.busy} disabled={!desk.holds.trim()}>
+          Save
+        </Button>
+      </div>
+    </form>
   );
 }
 
