@@ -109,6 +109,7 @@ import {
   BRUSH,
   ITEM,
   ITEM_FLAGGED,
+  MEASURED_AS_KIT,
   MISFILED,
   SOLD_BY_BOX,
   SOLD_BY_CARTON,
@@ -643,6 +644,16 @@ export const FIXTURES: readonly Screen[] = [
       <>
         <ItemPage desk={desk} />
         <MoveDialog item={MISFILED} subject={carton} desk={desk} onClose={() => {}} />
+      </>
+    );
+  }),
+  // D222: a kit measured as though it were its part, moving to the part's own item.
+  app("f-item-moving-elsewhere", "/fixtures/item/moving-elsewhere", "Item — moving to another item", "floor", { screen: "item" }, () => {
+    const desk = fixtureProperties(MEASURED_AS_KIT);
+    return (
+      <>
+        <ItemPage desk={desk} />
+        <MoveDialog item={MEASURED_AS_KIT} subject={MEASURED_AS_KIT.subjects[0]!} desk={desk} onClose={() => {}} />
       </>
     );
   }),

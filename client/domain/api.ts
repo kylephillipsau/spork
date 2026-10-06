@@ -852,11 +852,17 @@ export const api = {
   /** GS1's packaging types, the common ones first (D191). */
   packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),
 
-  /** Move what one card of an item holds to another of its cards (D219). */
-  refile: (itemId: Uuid, from: "each" | "inner" | "carton", to: "each" | "inner" | "carton", act: Act) =>
+  /** Move what one card of an item holds to another of its cards (D219), or another item's (D222). */
+  refile: (
+    itemId: Uuid,
+    from: "each" | "inner" | "carton",
+    to: { item: Uuid; level: "each" | "inner" | "carton" },
+    act: Act,
+  ) =>
     send<Refiled>("POST", `/items/${encodeURIComponent(itemId)}/refile`, {
       from,
-      to,
+      to: to.level,
+      to_item: to.item,
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),

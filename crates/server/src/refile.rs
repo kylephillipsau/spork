@@ -7,7 +7,13 @@
 //! another level of the same item.
 //!
 //! **Nothing is rewritten.** Observations are facts somebody recorded, and the
-//! history of where they were filed is part of them:
+//! history of where they were filed is part of them.
+//!
+//! **Or to another item (D222).** A kit's part measured on the kit's card,
+//! which is no physical thing, is true of the part, an item of its own. The
+//! same move takes it there.
+//!
+//! What a move does:
 //!
 //! - each event on the wrong card with anything live on it is mirrored on the
 //!   right one: same moment, same method, same arrangement, and
@@ -43,6 +49,9 @@ pub struct RefileRequest {
     /// `inner` or `carton`.
     pub from: String,
     pub to: String,
+    /// The item whose card it belongs on, when that is another item (D222).
+    #[serde(default)]
+    pub to_item: Option<Uuid>,
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
 }
@@ -67,7 +76,7 @@ const LIVE: &str = "o.retracts_observation_id IS NULL
 const UNMOVED: &str =
     "NOT EXISTS (SELECT 1 FROM observation_image_move m WHERE m.observation_image_id = i.id)";
 
-/// Move what one card of an item holds to another card of it.
+/// Move what one card of an item holds to another card of it, or of another item.
 #[post("/items/{id}/refile")]
 pub async fn refile(
     req: HttpRequest,
@@ -84,7 +93,8 @@ pub async fn refile(
             "a card is the item's each, its pack or its carton".into(),
         ));
     }
-    if body.from == body.to {
+    let to_item = body.to_item.unwrap_or(item);
+    if body.from == body.to && to_item == item {
         return Err(ApiError::Rejected("that is the card it is on".into()));
     }
     let ev = NewClientEvent {
@@ -99,6 +109,9 @@ pub async fn refile(
         .run(move |tx| {
             Box::pin(async move {
                 tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item]).await?.ok_or(ApiError::NotFound)?;
+                if tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&to_item]).await?.is_none() {
+                    return Err(ApiError::Rejected("the item it would move to isn't in the catalogue".into()));
+                }
                 if client_events::claim_act(tx, &ev).await?.is_replay() {
                     return Ok(Refiled { figures: 0, photos: 0, replay: true });
                 }
@@ -107,8 +120,8 @@ pub async fn refile(
                 let person = ev.recorded_by_id;
                 let tenant = ev.tenant_id;
 
-                // What is live on each card, by its level.
-                let holds = |level: &'static str| {
+                // What is live on a card: an item's, at a level.
+                let holds = |item: Uuid, level: &'static str| {
                     let sql = format!(
                         "SELECT (SELECT count(*) FROM observable s
                                    JOIN observation o ON o.observable_id = s.id
@@ -123,7 +136,7 @@ pub async fn refile(
                         Ok::<(i64, i64), ApiError>((r.get(0), r.get(1)))
                     }
                 };
-                let (figures, photos) = holds(match from {
+                let (figures, photos) = holds(item, match from {
                     "each" => "'each'",
                     "inner" => "'inner'",
                     _ => "'carton'",
@@ -132,7 +145,7 @@ pub async fn refile(
                 if figures == 0 && photos == 0 {
                     return Err(ApiError::Rejected("there is nothing recorded on that card to move".into()));
                 }
-                let (there, pictured) = holds(match to {
+                let (there, pictured) = holds(to_item, match to {
                     "each" => "'each'",
                     "inner" => "'inner'",
                     _ => "'carton'",
@@ -149,7 +162,7 @@ pub async fn refile(
                     package_id: None,
                     location_id: None,
                     lot_id: None,
-                    item_id: Some(item),
+                    item_id: Some(to_item),
                     item_style_id: None,
                     item_part_id: None,
                     packaging_level: Some(to.to_string()),

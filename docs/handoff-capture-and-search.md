@@ -216,6 +216,13 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   `ItemDrawer`, description), NetSuite's count and Spork's. The card reads
   `GET /bins/{id}`, which now carries `contents`; `pictures::of` is the one
   read for a list of items' pictures.
+- D222. **Move…** can take a card's records to another item's card:
+  `to_item` on `POST /items/{id}/refile`, the same copy-and-retract. The
+  dialog finds the item by its code (`GET /resolve?expect=item`)
+  and offers its cards. Move… now shows on any card with its own records,
+  so an item with one card (a kit sold by the each) can be put right too.
+  Kits themselves are not modelled yet: the bridge is to send `item_type` and
+  `kit_line` on each fulfilment line, which the intake stores and ignores.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

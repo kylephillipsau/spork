@@ -176,6 +176,16 @@
   text-overflow: ellipsis;
 }
 
+/* Another item, found by its code: the field, and Find beside it. */
+.findItem {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ui-space-2);
+}
+.findItem > :first-child {
+  flex: 1;
+}
+
 .known {
   display: flex;
   flex-direction: column;

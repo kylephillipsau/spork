@@ -15312,3 +15312,38 @@ it to be built DRY and KISS, with one implementation of each part.
 
 **Not yet.** The rack face (`/bins/{id}`, where a scan lands) receives the
 same contents and doesn't show them yet.
+
+### D222: What was recorded on the wrong item is moved to the right one
+
+*Adopted 2026-10-06, with no migration. Extends D219.*
+
+**The finding.** A NetSuite kit was measured as though it were one of its
+parts. The kit is sold and never stocked; its parts are items of their own,
+picked from their own bins. What was recorded on the kit's card is true of
+the part, and filed against an item that is no physical thing.
+
+**Decision.** **Move…** can take a card's records to a card of another item
+(`to_item` on `POST /items/{id}/refile`). It is D219's move: events mirrored
+with `derived_from_event_id`, figures copied and retracted where they were,
+photos refiled with their cuts and marked moved. Only the item of the card
+they go to differs.
+
+- **The other item is found by its code** through the locator
+  (`GET /resolve?expect=item`), which takes one of its barcodes as well. The dialog then offers that item's
+  cards, as it offers this item's.
+- **A card with records of its own is refused**, as in D219.
+- **Move… shows on any card with records of its own**, since another item is
+  always somewhere to go. Before this it needed another level of the same
+  item, so an item sold by the each with no case pack, which is how a kit
+  reads, could not be put right.
+
+**Why.** The user, 2026-10-06: "I might have measured the trigger heads as
+[the kit] instead of [the trigger head], so I will need a way to move the
+measurement from one item to another."
+
+**Not yet.** Kits. An order line for a kit and the lines for its parts arrive
+from NetSuite as separate lines, so the bench asks for the kit to be packed
+beside its parts. The bridge is to say which lines are a kit's parts
+(`item_type`, `kit_line` on each fulfilment line); the intake stores what it
+is sent and does not read them yet. How the bench and the packing plan treat
+a kit waits on whether kits ship assembled or as loose parts.

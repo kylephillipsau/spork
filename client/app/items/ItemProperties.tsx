@@ -241,25 +241,29 @@ export function ItemDrawer({
 }
 
 /**
- * Whether a card's records can be moved to another of the item's cards
- * (D219): one of the item's own levels with something recorded on it, and
- * another level to move them to.
+ * Whether a card's records can be moved (D219): one of the item's own levels
+ * with something recorded on it. Another of its cards, or another item's
+ * (D222), is where they go.
  */
 function movable(item: ItemView, s: CaptureSubject): boolean {
-  return ownLevel(item, s) && recorded(s) && destinations(item, s).length > 0;
+  return ownLevel(item, s) && recorded(s);
 }
 
 type Level = "each" | "inner" | "carton";
 
 /**
- * The item's other levels a card's records could go to: those it has a card
- * for, shown or offered. A pack or carton is only a definite thing under a
- * case pack (D23), so with none said there is only the single product.
+ * The levels of an item a card's records could go to: those it has a card
+ * for, shown or offered, other than the card itself. A pack or carton is only
+ * a definite thing under a case pack (D23), so with none said there is only
+ * the single product.
  */
 function destinations(item: ItemView, s: CaptureSubject): Level[] {
   const there = new Set(item.subjects.filter((x) => ownLevel(item, x)).map((x) => x.packaging_level));
   return (["each", "inner", "carton"] as const).filter(
-    (level) => level !== s.packaging_level && there.has(level) && (level === "each" || item.packing !== null),
+    (level) =>
+      !(item.item_id === s.item_id && level === s.packaging_level) &&
+      there.has(level) &&
+      (level === "each" || item.packing !== null),
   );
 }
 
@@ -282,8 +286,9 @@ function recorded(s: CaptureSubject): boolean {
 
 /**
  * Move a card's figures and photos to the card they belong on (D219): a box
- * of ten weighed on the carton card, put on the box's. Kept with when and how
- * they were taken; nothing is rewritten.
+ * of ten weighed on the carton card, put on the box's; or a kit's part
+ * measured on the kit's card, put on the part's own item (D222). Kept with
+ * when and how they were taken; nothing is rewritten.
  */
 export function MoveDialog({
   item,
@@ -297,17 +302,24 @@ export function MoveDialog({
   onClose: () => void;
 }) {
   const here = nameOf(subject, item);
-  const choices = destinations(item, subject).map((level) => ({ value: level, label: levelName(level, item) }));
+  const ownCards = destinations(item, subject).length > 0;
+  const [elsewhere, setElsewhere] = useState(!ownCards);
+  // The other item, once found by its code.
+  const [other, setOther] = useState<ItemView | null>(null);
+  const [code, setCode] = useState("");
+  const into = elsewhere ? other : item;
+  const choices = into ? destinations(into, subject).map((level) => ({ value: level, label: levelName(level, into) })) : [];
   // A card with records of its own was measured as itself, and is not filled over.
-  const taken = new Set(
-    item.subjects.filter((x) => ownLevel(item, x) && recorded(x)).map((x) => x.packaging_level),
-  );
+  const taken = new Set(into ? into.subjects.filter((x) => ownLevel(into, x) && recorded(x)).map((x) => x.packaging_level) : []);
   // What it is sold as, when that card is empty: where a misfiled box most often belongs.
   const open = choices.filter((c) => !taken.has(c.value));
-  const [to, setTo] = useState<Level>(
-    (open.find((c) => c.value === item.unit.level) ?? open[0] ?? choices[0]!).value,
-  );
-  const name = choices.find((c) => c.value === to)?.label ?? to;
+  const [picked, setPicked] = useState<Level | null>(null);
+  const to = choices.find((c) => c.value === picked)?.value ?? (open.find((c) => c.value === into?.unit.level) ?? open[0] ?? choices[0])?.value;
+  const level = choices.find((c) => c.value === to)?.label ?? to;
+  const name = elsewhere && into ? `${into.code} · ${level}` : level;
+  const find = () => {
+    if (code.trim()) void desk.findItem(code).then(setOther);
+  };
   return (
     <Dialog
       open
@@ -323,10 +335,10 @@ export function MoveDialog({
           <Button
             variant="primary"
             loading={desk.busy}
-            disabled={taken.has(to)}
-            onClick={() => void desk.refile(subject, to, name).then((ok) => ok && onClose())}
+            disabled={!into || !to || taken.has(to)}
+            onClick={() => into && to && void desk.refile(subject, { item: into.item_id, level: to }, name ?? to).then((ok) => ok && onClose())}
           >
-            Move to {name}
+            {into && to ? `Move to ${name}` : "Move"}
           </Button>
         </>
       }
@@ -337,8 +349,43 @@ export function MoveDialog({
             {desk.problem}
           </Alert>
         )}
-        <Tabs aria-label="Move to" value={to} onValueChange={(v) => setTo(v as typeof to)} items={choices} />
-        {taken.has(to) && (
+        {ownCards && (
+          <Tabs
+            aria-label="Which item"
+            value={elsewhere ? "other" : "this"}
+            onValueChange={(v) => setElsewhere(v === "other")}
+            items={[
+              { value: "this", label: "This item" },
+              { value: "other", label: "Another item" },
+            ]}
+          />
+        )}
+        {elsewhere && (
+          <form
+            className={s.findItem}
+            onSubmit={(e) => {
+              e.preventDefault();
+              find();
+            }}
+          >
+            <TextField
+              label="The item it belongs to"
+              placeholder="Its code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoFocus
+            />
+            <Button type="submit" disabled={desk.busy || !code.trim()}>
+              Find
+            </Button>
+          </form>
+        )}
+        {elsewhere && other && <ItemLine code={other.code} description={other.description} picture={other.picture} />}
+        {into && choices.length > 0 && (
+          <Tabs aria-label="Move to" value={to ?? ""} onValueChange={(v) => setPicked(v as Level)} items={choices} />
+        )}
+        {into && choices.length === 0 && <p className={s.note}>{into.code} has no card to move these to.</p>}
+        {to && taken.has(to) && (
           <p className={s.note}>{name} has figures or photos of its own. Move those away first, or record over them.</p>
         )}
       </Stack>
@@ -426,8 +473,9 @@ export function ItemCode({ code, onOpen }: { code: string; onOpen: () => void })
 
 /**
  * An item on a row of work: its photograph, its code, which opens its
- * properties, and what it is. Anything that lists items to find or handle
- * draws them this way: the packing bench and the bin map's card (D221).
+ * properties when there is somewhere to open them, and what it is. Anything
+ * that lists items to find or handle draws them this way: the packing bench,
+ * the bin map's card (D221), and the item a card's records are moving to (D222).
  */
 export function ItemLine({
   code,
@@ -440,7 +488,7 @@ export function ItemLine({
   /** Said under the code; left out where the row has no room for it. */
   description?: string | undefined;
   picture: Picture | null;
-  onOpen: () => void;
+  onOpen?: (() => void) | undefined;
   /** Dealt with, so drawn quieter. */
   done?: boolean | undefined;
 }) {
@@ -448,7 +496,7 @@ export function ItemLine({
     <span className={s.itemLine}>
       <Thumb picture={picture} alt={description ?? code} />
       <span className={cx(s.itemText, done && s.itemDone)}>
-        <ItemCode code={code} onOpen={onOpen} />
+        {onOpen ? <ItemCode code={code} onOpen={onOpen} /> : <span className={s.code}>{code}</span>}
         {/* An item made from a code alone has the code as its description;
             saying it twice is noise. */}
         {description && description !== code && <span className={s.itemDesc}>{description}</span>}

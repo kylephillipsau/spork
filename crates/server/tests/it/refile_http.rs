@@ -272,4 +272,40 @@ async fn a_box_measured_on_the_carton_card_is_moved_to_the_box() {
     assert_eq!(status, 400);
     let (status, _) = refile("inner", "pallet", Uuid::new_v4()).await;
     assert_eq!(status, 400);
+
+    // ── to another item's card (D222): a kit's part measured on the kit ─
+    let part: Uuid = db
+        .query_one(
+            "INSERT INTO item (tenant_id, code, description, base_unit_id, tracking)
+             SELECT current_tenant(), $1, 'Valve for a P2 respirator', u.id, 'none' FROM unit u WHERE u.code = 'ea'
+             RETURNING id",
+            &[&format!("P2V-{n}")],
+        )
+        .await
+        .expect("the other item")
+        .get(0);
+    let elsewhere = |to_item: Uuid, act: Uuid| {
+        post(
+            format!("/items/{item}/refile"),
+            json!({ "from": "inner", "to": "each", "to_item": to_item, "client_event_id": act, "occurred_at": now }),
+        )
+    };
+    let (status, moved) = elsewhere(part, Uuid::new_v4()).await;
+    assert_eq!(status, 200, "{moved}");
+    assert_eq!((moved["figures"].as_i64(), moved["photos"].as_i64()), (Some(4), Some(1)), "{moved}");
+    fold().await;
+    let (_, there) = call(test::TestRequest::get().uri(&format!("/items/{part}"))).await;
+    let each = there["subjects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["item_id"] == part.to_string() && s["packaging_level"] == "each" && s["lot_id"].is_null())
+        .unwrap_or_else(|| panic!("its each card: {there}"))
+        .clone();
+    assert_eq!(each["gross_weight_g"], 230, "the figures are the other item's now: {each}");
+    assert!(card(&page().await, "inner")["gross_weight_g"].is_null(), "and gone from the box");
+    let (status, said) = elsewhere(part, Uuid::new_v4()).await;
+    assert_eq!(status, 400, "nothing left to move: {said}");
+    let (status, said) = elsewhere(Uuid::new_v4(), Uuid::new_v4()).await;
+    assert_eq!(status, 400, "an item that isn't in the catalogue: {said}");
 }

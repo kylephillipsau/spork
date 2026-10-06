@@ -269,6 +269,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     flagBin: async () => null,
     sayUnit: async () => false,
     refile: async () => false,
+    findItem: async () => null,
     taken: [],
     sending: {},
     attach: noop,
@@ -405,6 +406,37 @@ export const SOLD_BY_BOX: ItemView = {
       because: "incomplete",
     }),
     subject({ item_id: PLUGS, code: "DEJ-8040", packaging_level: "each", wants: [], offered: true }),
+  ],
+};
+
+/**
+ * A kit measured as though it were its part (D222): a sprayer kit is no
+ * physical thing, and the head measured on its card belongs on the head's
+ * own item. Sold by the each with no case pack, so it has no other card.
+ */
+export const MEASURED_AS_KIT: ItemView = {
+  ...ITEM_UNKNOWN,
+  item_id: "17e10000-0000-0000-0000-0000000000a7",
+  code: "SPR-1000",
+  description: "Trigger sprayer with 1L bottle (kit)",
+  unit: { level: "each", said: false, netsuite_unit: "Each" },
+  packing: null,
+  subjects: [
+    subject({
+      item_id: "17e10000-0000-0000-0000-0000000000a7",
+      code: "SPR-1000",
+      packaging_level: "each",
+      is_unit: true,
+      gross_weight_g: 95,
+      length_mm: 225,
+      width_mm: 60,
+      height_mm: 110,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-02T01:10:00Z",
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
   ],
 };
 

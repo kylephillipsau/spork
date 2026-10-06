@@ -160,8 +160,13 @@ export interface PropertiesDesk {
   flagBin: (said: BinFlag) => Promise<BinFlagged | null>;
   /** Say which level is one in NetSuite (D218). True when said. */
   sayUnit: (level: "each" | "inner" | "carton") => Promise<boolean>;
-  /** Move what is recorded on one of the item's cards to another (D219). True when moved. */
-  refile: (subject: CaptureSubject, to: "each" | "inner" | "carton", name: string) => Promise<boolean>;
+  /**
+   * Move what is recorded on one of the item's cards to another of its cards
+   * (D219), or another item's (D222). True when moved.
+   */
+  refile: (subject: CaptureSubject, to: { item: Uuid; level: "each" | "inner" | "carton" }, name: string) => Promise<boolean>;
+  /** Another item, by its code: where a card's records may belong (D222). Null, said in `problem`, when none. */
+  findItem: (code: string) => Promise<ItemView | null>;
 
   barcodes: BoundBarcode[];
   binding: string;
@@ -623,7 +628,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       if (read.kind !== "ready" || (from !== "each" && from !== "inner" && from !== "carton")) return false;
       const item = read.item.item_id;
       let done = false;
-      await press(`refile:${item}:${from}:${to}`, async (act) => {
+      await press(`refile:${item}:${from}:${to.item}:${to.level}`, async (act) => {
         const moved = await api.refile(item, from, to, act);
         done = true;
         if (!live.current) return;
@@ -637,6 +642,16 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         await reload();
       });
       return done;
+    },
+
+    findItem: async (code) => {
+      let found: ItemView | null = null;
+      await press(`find:${code.trim()}`, async () => {
+        const hit = (await api.resolve(code.trim(), "item")).subjects.find((s) => s.kind === "item");
+        if (!hit) throw new ApiError(`No item has the code ${code.trim()}.`, 400);
+        found = await api.item(hit.id);
+      });
+      return found;
     },
 
     flagBin: async (said) => {
