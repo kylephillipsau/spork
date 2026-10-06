@@ -21,6 +21,7 @@ import {
 } from "@ui/index";
 import { useNavigate } from "@app/routing/Router";
 import { Faint } from "@app/common/cells";
+import { keep, recall } from "@app/common/remembered";
 import type { BinRow, DraftReport, DraftedPlace, LayoutPlace, LayoutView, PlanShape } from "@domain/types";
 
 import type { Chosen, WarehouseDesk } from "./useWarehouse";
@@ -303,21 +304,13 @@ const SHOWN_3D = "spork.warehouse.3d";
  */
 function useShown3D(): [boolean, () => void] {
   const [shown, setShown] = useState(() => {
-    try {
-      const v = localStorage.getItem(SHOWN_3D);
-      if (v === "1" || v === "0") return v === "1";
-    } catch {
-      // not remembered: fall through to the default
-    }
+    const v = recall(SHOWN_3D, ["1", "0"]);
+    if (v) return v === "1";
     return typeof matchMedia === "function" && matchMedia("(min-width: 1100px)").matches;
   });
   const toggle = () =>
     setShown((was) => {
-      try {
-        localStorage.setItem(SHOWN_3D, was ? "0" : "1");
-      } catch {
-        // not remembered, still toggled
-      }
+      keep(SHOWN_3D, was ? "0" : "1");
       return !was;
     });
   return [shown, toggle];

@@ -30,7 +30,7 @@ import { Dashboard } from "@app/home/Dashboard";
 import { DASHBOARD, DASHBOARD_NO_SITE, DASHBOARD_QUIET } from "@app/home/dashboard-fixture";
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
-import { PACK_FILLING, PACK_FIXTURE } from "@app/outbound/pack/fixture";
+import { PACK_FILLING, PACK_FIXTURE, PACK_LOOSE } from "@app/outbound/pack/fixture";
 import { PackQueuePage } from "@app/outbound/pack/PackQueuePage";
 import { CLEAR, QUEUE, fixtureQueue } from "@app/outbound/pack/queue-fixture";
 
@@ -386,6 +386,10 @@ export const FIXTURES: readonly Screen[] = [
   // A small box open with two aprons in it: the suggestion fills it first (D198).
   app("f-pack-filling", "/fixtures/pack/filling", "Pack order — filling a carton", "bench", { screen: "pack-one" }, () =>
     packBench(PACK_FILLING),
+  ),
+  // Cartons as they came and loose things not measured: what the loose things weigh (D224).
+  app("f-pack-loose", "/fixtures/pack/loose", "Pack order — loose things to box by hand", "bench", { screen: "pack-one" }, () =>
+    packBench(PACK_LOOSE),
   ),
   app("f-pack-unready", "/fixtures/pack/unready", "Pack order — site not set up", "bench", { screen: "pack-one" }, () =>
     packBench({

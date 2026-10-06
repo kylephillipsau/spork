@@ -9499,6 +9499,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::shipping::say_upright)
         .service(crate::shipping::suggest_box)
         .service(crate::shipping::box_weight)
+        .service(crate::shipping::box_empty_weight)
         .service(crate::backup::backup_summary)
         .service(crate::backup::download_backup)
         .service(crate::search::global_search)

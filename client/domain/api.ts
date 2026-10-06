@@ -965,6 +965,10 @@ export const api = {
   boxWeight: (id: Uuid, grams: number | null) =>
     send<void>("POST", `/package-types/${encodeURIComponent(id)}/max-weight`, { max_payload_g: grams }),
 
+  /** Say what a box weighs empty, in grams, or null until one is weighed (D224). */
+  boxEmptyWeight: (id: Uuid, grams: number | null) =>
+    send<void>("POST", `/package-types/${encodeURIComponent(id)}/empty-weight`, { tare_weight_g: grams }),
+
   /** Say whether the pack bench's suggestion may choose a box (D196). */
   suggestBox: (id: Uuid, suggested: boolean) => send<void>("POST", `/package-types/${encodeURIComponent(id)}/suggested`, { suggested }),
 

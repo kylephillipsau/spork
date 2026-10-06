@@ -1,13 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Boxes, ChevronLeft, ChevronRight, Circle, CircleCheck, Package, PackageCheck, PackageOpen, Ruler, TriangleAlert } from "lucide-react";
+import { Boxes, Check, ChevronLeft, ChevronRight, Circle, CircleCheck, Copy, Package, PackageCheck, PackageOpen, Ruler, TriangleAlert } from "lucide-react";
 
-import { Badge, Button, Card, Skeleton, Tabs, Toolbar, Spacer } from "@ui/index";
+import { Badge, Button, Card, Skeleton, Tabs, Toolbar, Spacer, useToast } from "@ui/index";
 import { imageUrl } from "@domain/api";
 import type { BenchScreen, Picture, Uuid } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { kg } from "@app/common/format";
+import { keep, recall } from "@app/common/remembered";
+import { copyText } from "@app/common/copy";
 
 import { arrange, contentsOf, type Aside, type AsIs, type BoxPlan, type Dims, type Kind, type Layer, type OpenCarton } from "./arrange";
+import { bookingCm, bookingText, gathered, type Freight } from "./freight";
 import { wholeOrder, type OrderLine, type OrderView, type Parcel, type ParcelState } from "./order";
 import type { ParcelShape } from "./pack3d";
 import { tone } from "./tones";
@@ -16,10 +19,15 @@ import s from "./pack-bench.module.css";
 
 const PackView = lazy(() => import("./PackView"));
 
+/** The plan as this browser last showed it: in 3D until somebody chooses the list. */
+const VIEW = "spork.pack.view";
+const VIEWS = ["3d", "plan"] as const;
+type View = (typeof VIEWS)[number];
+
 /**
  * The whole order as it will leave, checked off as it goes (D202), and the box
  * for what is left on the bench and how it goes in (D195), layer by
- * layer from the bottom, as a plan from above or in 3D. Made from what is
+ * layer from the bottom, in 3D or as a plan from above. Made from what is
  * recorded: what has no size is listed with a way to measure it, and the
  * suggestion is made again when the drawer closes.
  *
@@ -49,7 +57,8 @@ export function Suggestion({
   // The whole order first (D202); a box's own layers one tab along.
   const [which, setWhich] = useState<"order" | number>("order");
   const [step, setStep] = useState(0);
-  const [view, setView] = useState<"plan" | "3d">("plan");
+  // 3D first: what the goods will look like packed, at a glance.
+  const [view, setView] = useState<View>(() => recall(VIEW, VIEWS) ?? "3d");
 
   const box: BoxPlan | undefined = which === "order" ? undefined : plan.boxes[Math.min(which, plan.boxes.length - 1)];
   const layers = box?.layers ?? [];
@@ -75,10 +84,13 @@ export function Suggestion({
         <Tabs
           aria-label="Show it as"
           value={view}
-          onValueChange={(v) => setView(v as "plan" | "3d")}
+          onValueChange={(v) => {
+            setView(v as View);
+            keep(VIEW, v);
+          }}
           items={[
-            { value: "plan", label: box ? "Layers" : "List" },
             { value: "3d", label: "3D" },
+            { value: "plan", label: box ? "Layers" : "List" },
           ]}
         />
       }
@@ -119,6 +131,7 @@ export function Suggestion({
               boxes={plan.boxes}
             />
           )}
+          <Booking freight={order.freight} />
         </div>
       )}
 
@@ -235,7 +248,7 @@ function orderShapes(o: OrderView): ParcelShape[] {
     if (!p.size) return;
     if (p.layers) out.push({ size: p.size, layers: p.layers, outline: true });
     else if (p.asIs) for (let n = 0; n < p.count; n++) out.push(closed(p.size, p.asIs.item_code, p.index ?? i, p.faces));
-    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, {}));
+    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, p.faces));
   });
   return out;
 }
@@ -302,6 +315,7 @@ function WholeOrder({
                 {p.title}
               </span>
               <span className={s.note}>{[p.detail, contentsWords(p)].filter(Boolean).join(" · ")}</span>
+              <span className={s.note}>{freightWords(p)}</span>
             </span>
             <Badge tone={p.state === "sealed" ? "success" : p.state === "open" ? "accent" : "neutral"}>{STATE_WORDS[p.state]}</Badge>
             {p.asIs ? (
@@ -326,6 +340,59 @@ function WholeOrder({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** "400 × 300 × 190 mm · 4.200 kg weighed", or what the record's weight leaves out. */
+function freightWords(p: Parcel): string {
+  const size = p.size ? `${p.size.join(" × ")} mm` : "No size";
+  const weight = p.weight_g === null ? "not weighed" : `${kg(p.weight_g)}${p.weighed ? " weighed" : ""}`;
+  const note = p.weightNote && p.weight_g !== null ? ` (${p.weightNote})` : "";
+  return `${size} · ${p.count > 1 ? `${weight} each` : weight}${note}`;
+}
+
+/**
+ * The order's parcels as a booking takes them (D224): how many alike, their
+ * size in whole centimetres and what one weighs, and Copy, which puts them on
+ * the clipboard a parcel type to a line, in columns.
+ */
+function Booking({ freight }: { freight: Freight[] }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  const rows = gathered(freight);
+  if (rows.length === 0) return null;
+  const count = rows.reduce((t, r) => t + r.count, 0);
+  const weighs = rows.every((r) => r.weight_g !== null) ? rows.reduce((t, r) => t + r.weight_g! * r.count, 0) : null;
+  return (
+    <div className={s.booking}>
+      <span className={s.asidesTitle}>For the booking</span>
+      <ul className={s.bookingRows} aria-label="Parcels for the booking">
+        {rows.map((r) => (
+          <li key={`${r.count}:${r.size?.join("x") ?? ""}:${r.weight_g ?? ""}`}>
+            <span className={s.bookingCount}>{r.count} ×</span>
+            <span>{r.size ? `${r.size.map(bookingCm).join(" × ")} cm` : "No size"}</span>
+            <span className={s.bookingWeight}>{r.weight_g === null ? "not weighed" : kg(r.weight_g)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className={s.bookingFoot}>
+        <span className={s.note}>
+          {count} {count === 1 ? "parcel" : "parcels"} · {weighs === null ? "some not weighed" : kg(weighs)}
+        </span>
+        <Button
+          size="sm"
+          icon={copied ? <Check /> : <Copy />}
+          onClick={() =>
+            void copyText(bookingText(freight)).then(
+              () => setCopied(true),
+              () => toast({ title: "Could not copy", description: "Select the rows and copy them by hand.", tone: "danger" }),
+            )
+          }
+        >
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -358,6 +425,7 @@ function openOf(screen: BenchScreen, id: Uuid | null): OpenCarton | null {
     name: c.package_type,
     size: c.stated_size,
     max_payload_g: preset.max_payload_g,
+    tare_weight_g: preset.tare_weight_g,
     contents: c.contents.map((r) => ({ item_id: r.item_id, quantity: r.quantity })),
   };
 }
@@ -491,16 +559,27 @@ function Asides({ plan, pictures, look }: { plan: ReturnType<typeof arrange>; pi
     ...plan.loose.map((a) => ({ key: `l${a.line}`, aside: a, why: <Badge>No size to measure</Badge> })),
   ];
   if (rows.length === 0) return null;
+  // Loose goods to box by hand: what they weigh, so a box of them can be weighed against it (D224).
+  const units = rows.reduce((t, r) => t + r.aside.units, 0);
+  const weighed = rows.filter((r) => r.aside.weight_g !== null);
+  const weight = weighed.reduce((t, r) => t + r.aside.weight_g!, 0);
+  const unweighed = units - weighed.reduce((t, r) => t + r.aside.units, 0);
   return (
     <div className={s.asides}>
       <span className={s.asidesTitle}>Not in the suggestion</span>
+      <span className={s.note}>
+        {units} {units === 1 ? "unit" : "units"} to box by hand
+        {weighed.length === 0 ? ", not weighed" : ` · ${kg(weight)}${unweighed > 0 ? `, and ${unweighed} not weighed` : ""}`}
+      </span>
       <ul className={s.asideList}>
         {rows.map(({ key, aside, why, act }) => (
           <li key={key} className={s.asideRow}>
             <Thumb picture={pictures.get(aside.item_id) ?? null} alt={aside.item_code} />
             <span className={s.asideWhat}>
               <span className={s.code}>{aside.item_code}</span>
-              <span className={s.note}>{aside.units} units</span>
+              <span className={s.note}>
+                {aside.units} units · {aside.weight_g === null ? "not weighed" : kg(aside.weight_g)}
+              </span>
             </span>
             {why}
             {act}

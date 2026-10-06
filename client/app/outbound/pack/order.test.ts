@@ -54,6 +54,17 @@ test("each parcel says what is in it and what is to go in", () => {
   assert.equal(asIs.count, 2);
 });
 
+test("a product's own carton looks like the product's carton, and a box type like a box", () => {
+  const screen = structuredClone(PACK_FIXTURE);
+  const sleeves = screen.lines.find((l) => l.item_code === "SLV-PE-BLU")!;
+  const front = { front: "f0", top: "70" };
+  sleeves.packs = sleeves.packs.map((p) => (p.level === "carton" ? { ...p, faces: front } : p));
+  const o = view(screen);
+  assert.deepEqual(o.parcels.find((p) => p.title === "Carton 4")!.faces, front, "its own carton, already made");
+  assert.deepEqual(o.parcels.find((p) => p.state === "as-is")!.faces, front, "and the ones still to ship");
+  assert.deepEqual(o.parcels.find((p) => p.title === "Carton 1")!.faces, {}, "a small box is a box");
+});
+
 test("filling the open carton, what is in it is packed and the rest is planned in it (D198)", () => {
   const c = PACK_FILLING.cartons[1]!;
   const o = view(PACK_FILLING, {
@@ -62,6 +73,7 @@ test("filling the open carton, what is in it is packed and the rest is planned i
     name: c.package_type!,
     size: c.stated_size!,
     max_payload_g: null,
+    tare_weight_g: null,
     contents: c.contents.map((r) => ({ item_id: r.item_id, quantity: r.quantity })),
   });
   const carton = o.parcels.find((p) => p.title === "Carton 2")!;
@@ -93,4 +105,20 @@ test("what cannot be placed is listed, and what is in no carton nor plan is miss
   assert.deepEqual([unmeasured!.unplaced, unmeasured!.missing], [5, 0]);
   assert.deepEqual([picked!.unplaced, picked!.notBoxed, picked!.missing], [3, 2, 0]);
   assert.equal(o.missing, 0);
+});
+
+test("every parcel says its size and what one weighs, and the booking is made from them (D224)", () => {
+  const o = view(PACK_FIXTURE);
+  const weighs = o.parcels.map((p) => [p.title, p.weight_g, p.weighed, p.weightNote]);
+  assert.deepEqual(weighs, [
+    ["Carton 1", 4200, true, null],
+    ["Carton 2", 25360, false, null],
+    ["Carton 3", null, false, "not weighed"],
+    ["Carton 4", 3600, false, null],
+    ["small box", 1080, false, "box not weighed"],
+    ["SLV-PE-BLU carton", 3600, false, null],
+  ]);
+  const asIs = o.freight.find((f) => f.count === 2)!;
+  assert.deepEqual(asIs, { count: 2, size: [420, 310, 260], weight_g: 3600 }, "two alike, each its own weight");
+  assert.equal(o.freight.reduce((t, f) => t + f.count, 0), 7, "every parcel the order leaves as");
 });

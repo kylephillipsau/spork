@@ -149,9 +149,37 @@ function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBenc
       sort: (b) => (b.length_mm ?? 0) * (b.width_mm ?? 0) * (b.height_mm ?? 0),
     },
     {
+      key: "empty",
+      header: "Empty",
+      cell: (b) =>
+        fits(b) ? (
+          <Kilograms
+            label={`What ${b.name} weighs empty`}
+            grams={b.tare_weight_g}
+            placeholder="Not weighed"
+            disabled={bench.busy}
+            save={(g) => void bench.boxEmptyWeight(b.id, g)}
+          />
+        ) : (
+          <Faint>—</Faint>
+        ),
+      width: "150px",
+    },
+    {
       key: "weight",
       header: "Max weight",
-      cell: (b) => (fits(b) ? <BoxWeight box={b} bench={bench} /> : <Faint>—</Faint>),
+      cell: (b) =>
+        fits(b) ? (
+          <Kilograms
+            label={`Max weight of ${b.name}`}
+            grams={b.max_payload_g}
+            placeholder="No limit"
+            disabled={bench.busy}
+            save={(g) => void bench.boxWeight(b.id, g)}
+          />
+        ) : (
+          <Faint>—</Faint>
+        ),
       width: "150px",
     },
     {
@@ -175,7 +203,7 @@ function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBenc
     <Card
       title="Boxes"
       count={own.length}
-      description="The boxes you pack into. The pack bench suggests the smallest ticked box that takes everything, no heavier than its max weight; any box can still be chosen by hand."
+      description="The boxes you pack into. The pack bench suggests ticked boxes, no heavier than their max weight, and weighs a box of goods as its goods and its empty weight; any box can still be chosen by hand."
       padded={false}
     >
       <DataTable aria-label="Boxes" columns={columns} rows={own} rowKey={(b) => b.id} empty={<EmptyState title="No boxes yet" description="Boxes arrive with the packaging presets import." />} />
@@ -184,13 +212,26 @@ function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBenc
 }
 
 /**
- * A box's weight limit, in kilograms as a scale reads, saved on Enter or on
- * leaving the field (D199). Empty is no limit.
+ * A weight of a box, in kilograms as a scale reads, saved on Enter or on
+ * leaving the field: the most its goods may weigh (D199), or what it weighs
+ * empty (D224). Empty says nothing.
  */
-function BoxWeight({ box, bench }: { box: PackageTypeRow; bench: WorkspaceBench }) {
-  const said = box.max_payload_g === null ? "" : String(box.max_payload_g / 1000);
+function Kilograms({
+  label,
+  grams,
+  placeholder,
+  disabled,
+  save,
+}: {
+  label: string;
+  grams: number | null;
+  placeholder: string;
+  disabled: boolean;
+  save: (grams: number | null) => void;
+}) {
+  const said = grams === null ? "" : String(grams / 1000);
   const [typed, setTyped] = useState(said);
-  const save = () => {
+  const commit = () => {
     const t = typed.trim();
     if (t === said) return;
     const kg = Number(t);
@@ -198,20 +239,20 @@ function BoxWeight({ box, bench }: { box: PackageTypeRow; bench: WorkspaceBench 
       setTyped(said);
       return;
     }
-    void bench.boxWeight(box.id, t === "" ? null : Math.round(kg * 1000));
+    save(t === "" ? null : Math.round(kg * 1000));
   };
   return (
     <TextField
-      aria-label={`Max weight of ${box.name}`}
+      aria-label={label}
       inputMode="decimal"
-      placeholder="No limit"
+      placeholder={placeholder}
       trailing="kg"
       value={typed}
-      disabled={bench.busy}
+      disabled={disabled}
       onChange={(e) => setTyped(e.target.value)}
-      onBlur={save}
+      onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") save();
+        if (e.key === "Enter") commit();
       }}
     />
   );

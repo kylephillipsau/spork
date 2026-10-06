@@ -483,3 +483,16 @@ impl Drop for FileGuard {
         }
     }
 }
+
+/// A PNG with a real IHDR of this size, padded so each one has its own address:
+/// enough for the image store to read its size and keep it apart from another.
+pub fn png(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    bytes.extend_from_slice(&13u32.to_be_bytes());
+    bytes.extend_from_slice(b"IHDR");
+    bytes.extend_from_slice(&width.to_be_bytes());
+    bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.extend_from_slice(&[0; 40]);
+    bytes.extend_from_slice(uuid::Uuid::new_v4().as_bytes());
+    bytes
+}

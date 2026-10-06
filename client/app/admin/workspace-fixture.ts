@@ -79,5 +79,6 @@ export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
     boxes: state.kind === "ready" ? BOXES : null,
     suggest: noop,
     boxWeight: noop,
+    boxEmptyWeight: noop,
   };
 }

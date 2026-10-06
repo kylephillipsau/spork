@@ -17,18 +17,6 @@ use common::{pool, url};
 
 const TENANT: &str = "11111111-1111-1111-1111-111111111111";
 
-/// A PNG with a real IHDR, padded so each one has its own address.
-fn png(pad: u8) -> Vec<u8> {
-    let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
-    bytes.extend_from_slice(&13u32.to_be_bytes());
-    bytes.extend_from_slice(b"IHDR");
-    bytes.extend_from_slice(&1200u32.to_be_bytes());
-    bytes.extend_from_slice(&900u32.to_be_bytes());
-    bytes.extend_from_slice(&[pad; 40]);
-    bytes.extend_from_slice(Uuid::new_v4().as_bytes());
-    bytes
-}
-
 #[actix_web::test]
 async fn a_box_measured_on_the_carton_card_is_moved_to_the_box() {
     let _file = common::file_gate(module_path!());
@@ -133,7 +121,7 @@ async fn a_box_measured_on_the_carton_card_is_moved_to_the_box() {
         test::TestRequest::post()
             .uri(&format!("/observations/{event}/images/front"))
             .insert_header(("content-type", "image/png"))
-            .set_payload(png(3)),
+            .set_payload(common::png(1200, 900)),
     )
     .await;
     assert_eq!(status, 200, "{photo}");

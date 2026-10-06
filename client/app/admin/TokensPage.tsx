@@ -4,6 +4,7 @@ import { Check, Copy, KeyRound, Plus } from "lucide-react";
 import { Alert, Badge, Button, Card, DataTable, Dialog, EmptyState, Page, PageHeader, TextField, useToast, type Column } from "@ui/index";
 import type { ApiToken } from "@domain/types";
 import { Faint, shortDate } from "@app/common/cells";
+import { copyText } from "@app/common/copy";
 
 import { standing, type TokensBench } from "./useTokens";
 import s from "./settings.module.css";
@@ -179,7 +180,7 @@ function Minted({ token, label, onDone }: { token: string; label: string; onDone
           size="sm"
           icon={copied ? <Check /> : <Copy />}
           onClick={() => {
-            void navigator.clipboard?.writeText(token).then(
+            void copyText(token).then(
               () => {
                 setCopied(true);
                 toast({ title: "Token copied", tone: "success" });

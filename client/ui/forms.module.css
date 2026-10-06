@@ -186,7 +186,7 @@
   user-select: none;
 }
 .selectItem[data-highlighted] {
-  background: var(--ui-surface-hover);
+  background: var(--ui-accent-soft);
 }
 .selectItem[data-disabled] {
   opacity: 0.5;

@@ -109,6 +109,8 @@ export interface Preset {
   suggested: boolean;
   /** The most the goods in it may weigh, when the workspace says (D199). */
   max_payload_g: number | null;
+  /** What it weighs empty, when the workspace says (D224). */
+  tare_weight_g: number | null;
 }
 
 /** `GET /package-types`: a box preset as Workspace lists it. */

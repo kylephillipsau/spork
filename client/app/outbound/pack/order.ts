@@ -1,6 +1,7 @@
 import type { BenchScreen, CartonSummary, Picture, Uuid } from "@domain/types";
 
-import type { Arrangement, AsIs, Aside, Dims, Layer } from "./arrange";
+import { boxFreight, type Arrangement, type AsIs, type Aside, type BoxPlan, type Dims, type Layer } from "./arrange.ts";
+import type { Freight } from "./freight";
 
 /**
  * The whole order as it will leave (D202): every parcel, packed or planned,
@@ -11,6 +12,10 @@ import type { Arrangement, AsIs, Aside, Dims, Layer } from "./arrange";
  * then its units are planned (a suggested box, round one, or a parcel as it
  * is), listed as not placeable (not measured, too big), or picked and not in a
  * carton yet. What is none of those is missing, and said to be.
+ *
+ * Every parcel says its size and what one weighs (D224): on the scale once it
+ * has been, else by the record, goods and box. The order's parcels as freight
+ * are what a booking is made from.
  *
  * No React here, so a test runner can read it.
  */
@@ -48,6 +53,11 @@ export interface Parcel {
   /** Its line's place, for its colour, when it is one of a product. */
   index: number | null;
   faces: AsIs["faces"];
+  /** What one weighs: on the scale when `weighed`, else by the record; null when nothing says (D224). */
+  weight_g: number | null;
+  weighed: boolean;
+  /** What the record's weight leaves out, when anything: "2 not weighed, box not weighed". */
+  weightNote: string | null;
 }
 
 export interface OrderLine {
@@ -74,6 +84,8 @@ export interface OrderLine {
 
 export interface OrderView {
   parcels: Parcel[];
+  /** Every parcel as a carrier sees it: what a booking is made from (D224). */
+  freight: Freight[];
   lines: OrderLine[];
   committed: number;
   packed: number;
@@ -84,6 +96,32 @@ export interface OrderView {
 }
 
 const LEVEL_WORDS = { each: "as it is", inner: "inner pack", carton: "carton" } as const;
+
+/**
+ * A carton that is one of a product as it is (D196) looks like the product at
+ * that level: its sides, as photographed and cut. A box type has none.
+ */
+function facesOf(screen: BenchScreen, c: CartonSummary): Parcel["faces"] {
+  if (!c.own_carton_of) return {};
+  const line = screen.lines.find((l) => l.item_code === c.own_carton_of);
+  return line?.packs.find((p) => p.level === (c.own_level ?? "carton"))?.faces ?? {};
+}
+
+/** What a box's weight by the record leaves out: pieces nobody weighed, and the box itself. */
+function boxNote(b: BoxPlan): string | null {
+  const parts = [];
+  if (b.unweighed > 0) parts.push(`${b.unweighed} not weighed`);
+  if (b.tare_g === null) parts.push("box not weighed");
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/** A carton's weight: on the scale, else what it is filling up to, else what its record expects. */
+function cartonWeight(c: CartonSummary, filling: BoxPlan | null): Pick<Parcel, "weight_g" | "weighed" | "weightNote"> {
+  if (c.gross_weight_g !== null) return { weight_g: c.gross_weight_g, weighed: true, weightNote: null };
+  if (filling) return { weight_g: boxFreight(filling).weight_g, weighed: false, weightNote: boxNote(filling) };
+  const recorded = c.listed_weight_g ?? c.expected?.grams ?? null;
+  return { weight_g: recorded, weighed: false, weightNote: recorded === null ? "not weighed" : null };
+}
 
 function cartonDetail(c: CartonSummary): string | null {
   if (c.own_carton_of) return `${c.own_carton_of} ${LEVEL_WORDS[c.own_level ?? "carton"]}`;
@@ -140,7 +178,8 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       loose: filling && plan.looseBox === box ? plan.placedLoose : [],
       layers: filling ? filling.layers : null,
       index: null,
-      faces: {},
+      faces: facesOf(screen, c),
+      ...cartonWeight(c, filling),
     });
   }
 
@@ -161,6 +200,9 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       layers: b.layers,
       index: null,
       faces: {},
+      weight_g: boxFreight(b).weight_g,
+      weighed: false,
+      weightNote: boxNote(b),
     });
   });
   for (const a of plan.asIs) {
@@ -178,6 +220,9 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       layers: null,
       index: a.index,
       faces: a.faces,
+      weight_g: a.weight_g === null ? null : a.weight_g / a.count,
+      weighed: false,
+      weightNote: a.weight_g === null ? "not weighed" : null,
     });
   }
 
@@ -234,6 +279,7 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
   const sum = (f: (l: OrderLine) => number) => lines.reduce((t, l) => t + f(l), 0);
   return {
     parcels,
+    freight: parcels.map((p) => ({ count: p.count, size: p.size, weight_g: p.weight_g })),
     lines,
     committed: sum((l) => l.committed),
     packed: sum((l) => l.packed),

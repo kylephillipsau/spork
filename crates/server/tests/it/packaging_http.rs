@@ -14,18 +14,6 @@ use common::{pool, url};
 
 const TENANT: &str = "11111111-1111-1111-1111-111111111111";
 
-/// A PNG with a real IHDR, padded so each one has its own address.
-fn png(width: u32, height: u32, pad: u8) -> Vec<u8> {
-    let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
-    bytes.extend_from_slice(&13u32.to_be_bytes());
-    bytes.extend_from_slice(b"IHDR");
-    bytes.extend_from_slice(&width.to_be_bytes());
-    bytes.extend_from_slice(&height.to_be_bytes());
-    bytes.extend_from_slice(&[pad; 40]);
-    bytes.extend_from_slice(Uuid::new_v4().as_bytes());
-    bytes
-}
-
 #[actix_web::test]
 async fn a_thing_packed_without_six_sides_is_photographed_not_drawn() {
     let _file = common::file_gate(module_path!());
@@ -137,7 +125,7 @@ async fn a_thing_packed_without_six_sides_is_photographed_not_drawn() {
         test::TestRequest::post()
             .uri(&format!("/observations/{look_id}/images/front"))
             .insert_header(("content-type", "image/png"))
-            .set_payload(png(1200, 1600, 7)),
+            .set_payload(common::png(1200, 1600)),
     )
     .await;
     assert_eq!(status, 200, "{photo}");
@@ -157,7 +145,7 @@ async fn a_thing_packed_without_six_sides_is_photographed_not_drawn() {
     .await;
     assert_eq!(status, 200, "{cut}");
     let (status, drawn) = call(
-        test::TestRequest::post().uri("/images").insert_header(("content-type", "image/png")).set_payload(png(512, 512, 9)),
+        test::TestRequest::post().uri("/images").insert_header(("content-type", "image/png")).set_payload(common::png(512, 512)),
     )
     .await;
     assert_eq!(status, 200, "{drawn}");

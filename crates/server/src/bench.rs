@@ -210,6 +210,8 @@ pub struct Preset {
     pub suggested: bool,
     /// The most the goods in it may weigh, when the workspace says (D199).
     pub max_payload_g: Option<i64>,
+    /// What it weighs empty, when the workspace says (D224).
+    pub tare_weight_g: Option<i64>,
 }
 
 /// The preset's answer to how big a carton is, when it has one.
@@ -603,14 +605,16 @@ fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements
         .collect()
 }
 
-/// Each line's picture, and its eaches' and inners' sides and whether they
-/// have no size, in three reads for the whole screen rather than three a line.
+/// Each line's picture, the sides of each of its levels, and whether an each
+/// or an inner has no size, in a few reads for the whole screen rather than a
+/// few a line.
 async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) -> Result<(), ApiError> {
     let ids: Vec<Uuid> = lines.iter().map(|l| l.item_id).collect();
     let pictured = pictures::of(tx, &ids).await?;
-    // The newest cut of each side of its own each or inner (D176), not one
-    // moved to another subject. Only cut faces: an uncut photo is the bench
-    // behind the box as much as the box.
+    // The newest cut of each side of its own each, inner or carton (D176), not
+    // one moved to another subject: a carton that ships as it is is drawn as
+    // itself. Only cut faces: an uncut photo is the bench behind the box as
+    // much as the box.
     let mut faces: HashMap<(Uuid, String), BTreeMap<String, String>> = HashMap::new();
     for r in tx
         .query(
@@ -625,7 +629,7 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
                      ORDER BY c.recorded_at DESC, c.id DESC
                      LIMIT 1) x ON true
               WHERE o.item_id = ANY($1)
-                AND o.packaging_level IN ('each', 'inner')
+                AND o.packaging_level IN ('each', 'inner', 'carton')
                 AND oi.face IN ('front', 'back', 'left', 'right', 'top', 'bottom')
                 AND NOT EXISTS (SELECT 1 FROM observation_image_move mv
                                  WHERE mv.observation_image_id = oi.id)
@@ -728,7 +732,8 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                         "SELECT id, name,
                                 dimensions_fixed AND coalesce(carrier_package_code, '')
                                     NOT IN ('PAL', 'SKI', 'SKD'),
-                                length_mm, width_mm, height_mm, suggested, max_payload_g
+                                length_mm, width_mm, height_mm, suggested, max_payload_g,
+                                tare_weight_g
                            FROM package_type
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
@@ -750,6 +755,7 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                         },
                         suggested: r.get(6),
                         max_payload_g: r.get(7),
+                        tare_weight_g: r.get(8),
                     })
                     .collect::<Vec<_>>())
             })

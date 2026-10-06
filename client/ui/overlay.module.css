@@ -133,7 +133,7 @@
   user-select: none;
 }
 .menuItem[data-highlighted] {
-  background: var(--ui-surface-hover);
+  background: var(--ui-accent-soft);
 }
 .menuDanger {
   color: var(--ui-danger);

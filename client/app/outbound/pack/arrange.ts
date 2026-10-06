@@ -1,5 +1,7 @@
 import type { BenchLine, PackUnit, Preset, StatedSize, Uuid } from "@domain/types";
 
+import { DEFAULT_OBJECTIVE, type Freight, type Objective } from "./freight.ts";
+
 /**
  * How what is left to pack would go into boxes (D195): which box, and what goes
  * where in it, layer by layer from the bottom.
@@ -16,6 +18,9 @@ import type { BenchLine, PackUnit, Preset, StatedSize, Uuid } from "@domain/type
  * top of the shorter things in it, largest first. It is a heuristic, not the
  * best packing there is: good enough to choose a box by, and simple enough that
  * the layers it makes can be followed with the goods in hand.
+ *
+ * **Which boxes is a setting** (D224): the ways tried are scored by an
+ * objective, fewest parcels unless the workspace says otherwise.
  *
  * No React and no three.js here, so a test runner can read it.
  */
@@ -101,6 +106,8 @@ export interface BoxPlan {
    *  many pieces or loose units have no weight. */
   weight_g: number;
   unweighed: number;
+  /** What the box weighs empty, when the workspace says (D224). */
+  tare_g: number | null;
 }
 
 export interface Arrangement {
@@ -362,7 +369,8 @@ function split(
       if (alone) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size, faces: unit.faces, index });
       else if (size) pieces.push({ kind: kindOf(line, index, unit, size), count });
       else if (unit.no_size) loose.push(aside(count, unit));
-      else unmeasured.push(aside(count));
+      // Not measured, but what it weighs is what the record says all the same (D224).
+      else unmeasured.push(aside(count, unit));
       units -= count * unit.units;
     }
     // Nothing recorded of its each at all: it is not measured.
@@ -396,6 +404,8 @@ export interface OpenCarton {
   size: StatedSize;
   /** The most its goods may weigh, when its box says (D199). */
   max_payload_g: number | null;
+  /** What its box weighs empty, when said (D224). */
+  tare_weight_g: number | null;
   contents: { item_id: Uuid; quantity: number }[];
 }
 
@@ -408,40 +418,33 @@ function plan(preset: Preset & { size: StatedSize }, layers: Layer[]): BoxPlan {
     fill: placed.reduce((t, p) => t + volume(p.dims), 0) / volume(dims(preset.size)),
     weight_g: placed.reduce((t, p) => t + (p.kind.weight_g ?? 0), 0),
     unweighed: placed.filter((p) => p.kind.weight_g === null).length,
+    tare_g: preset.tare_weight_g,
   };
 }
 
-function bulk(left: Left[]): number {
-  return left.reduce((t, e) => t + e.count * volume(e.kind.size), 0);
+/** A box as a carrier sees it (D224): its size, and its goods and itself by the record. */
+export function boxFreight(b: BoxPlan): Freight {
+  return { count: 1, size: dims(b.preset.size), weight_g: b.weight_g + (b.tare_g ?? 0) };
 }
 
-/**
- * The boxes for what is left on the bench: the smallest box that takes it
- * all, or, when none does, the box that takes the most (the smaller of two that
- * take as much), and again for the rest.
- */
-export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton | null = null): Arrangement {
-  const kindOf = kinds();
-  const { pieces, asIs, loose, unmeasured } = split(lines, (l) => l.remaining, false, kindOf);
-  // Only the boxes the workspace lets it choose (D196).
-  const boxes = presets
-    .filter((p): p is Preset & { size: StatedSize } => p.size !== null && p.suggested)
-    .sort((a, b) => volume(dims(a.size)) - volume(dims(b.size)));
-  const none: Arrangement = { boxes: [], asIs, unmeasured, oversize: [], loose, placedLoose: [], looseBox: null, tooMany: false };
-  if (pieces.reduce((t, p) => t + p.count, 0) > MOST_PIECES) return { ...none, tooMany: true };
+/** One way of boxing what is left: its boxes, and what fitted none of them. */
+interface Candidate {
+  plans: BoxPlan[];
+  left: Left[];
+}
 
+type Box = Preset & { size: StatedSize };
+
+/**
+ * The smallest box that takes it all, or, when none does, the box that takes
+ * the most (the smaller of two that take as much), and again for the rest.
+ */
+function greedy(pieces: Left[], boxes: Box[]): Candidate {
   const plans: BoxPlan[] = [];
   let rest = pieces;
-  const extraLoose: Aside[] = [];
-  if (open) {
-    const filled = fillOpen(open, lines, pieces, kindOf);
-    plans.push(filled.plan);
-    extraLoose.push(...filled.loose);
-    rest = filled.rest;
-  }
   while (rest.length > 0 && plans.length < 50) {
     const total = bulk(rest);
-    let chosen: { box: Preset & { size: StatedSize }; layers: Layer[]; left: Left[] } | null = null;
+    let chosen: { box: Box; layers: Layer[]; left: Left[] } | null = null;
     for (const box of boxes) {
       if (volume(dims(box.size)) < total) continue;
       const p = pack(dims(box.size), rest, box.max_payload_g);
@@ -463,6 +466,77 @@ export function arrange(lines: BenchLine[], presets: Preset[], open: OpenCarton 
     }
     if (!chosen) break;
     plans.push(plan(chosen.box, chosen.layers));
+    rest = chosen.left;
+  }
+  return { plans, left: rest };
+}
+
+/** Boxes of one kind only, filled one after another until nothing more goes in. */
+function uniform(pieces: Left[], box: Box): Candidate {
+  const plans: BoxPlan[] = [];
+  let rest = pieces;
+  while (rest.length > 0 && plans.length < 50) {
+    const p = pack(dims(box.size), rest, box.max_payload_g);
+    if (bulk(p.left) === bulk(rest)) break;
+    plans.push(plan(box, p.layers));
+    rest = p.left;
+  }
+  return { plans, left: rest };
+}
+
+/** Past this many pieces, only the first way is tried: the others cost more than they save. */
+const MOST_TRIED = 300;
+
+/**
+ * The best way to box `pieces` by `objective` (D224): of the ways tried, the
+ * one that leaves least unboxed, then costs least.
+ */
+function best(pieces: Left[], boxes: Box[], objective: Objective): Candidate {
+  const tried = [greedy(pieces, boxes)];
+  if (pieces.reduce((t, p) => t + p.count, 0) <= MOST_TRIED) for (const box of boxes) tried.push(uniform(pieces, box));
+  const score = (c: Candidate) => [bulk(c.left), objective.cost(c.plans.map(boxFreight))] as const;
+  return tried.reduce((a, b) => {
+    const [la, ca] = score(a);
+    const [lb, cb] = score(b);
+    return lb < la || (lb === la && cb < ca) ? b : a;
+  });
+}
+
+function bulk(left: Left[]): number {
+  return left.reduce((t, e) => t + e.count * volume(e.kind.size), 0);
+}
+
+/**
+ * The boxes for what is left on the bench, the open carton first (D198), the
+ * rest boxed the way `objective` prices lowest (D224).
+ */
+export function arrange(
+  lines: BenchLine[],
+  presets: Preset[],
+  open: OpenCarton | null = null,
+  objective: Objective = DEFAULT_OBJECTIVE,
+): Arrangement {
+  const kindOf = kinds();
+  const { pieces, asIs, loose, unmeasured } = split(lines, (l) => l.remaining, false, kindOf);
+  // Only the boxes the workspace lets it choose (D196).
+  const boxes = presets
+    .filter((p): p is Box => p.size !== null && p.suggested)
+    .sort((a, b) => volume(dims(a.size)) - volume(dims(b.size)));
+  const none: Arrangement = { boxes: [], asIs, unmeasured, oversize: [], loose, placedLoose: [], looseBox: null, tooMany: false };
+  if (pieces.reduce((t, p) => t + p.count, 0) > MOST_PIECES) return { ...none, tooMany: true };
+
+  const plans: BoxPlan[] = [];
+  let rest = pieces;
+  const extraLoose: Aside[] = [];
+  if (open) {
+    const filled = fillOpen(open, lines, pieces, kindOf);
+    plans.push(filled.plan);
+    extraLoose.push(...filled.loose);
+    rest = filled.rest;
+  }
+  if (rest.length > 0) {
+    const chosen = best(rest, boxes, objective);
+    plans.push(...chosen.plans);
     rest = chosen.left;
   }
 
@@ -543,7 +617,7 @@ function fillOpen(
   const rest = packed.left
     .map((e) => ({ kind: e.kind, count: Math.min(e.count, stillToPack.get(e.kind) ?? 0) }))
     .filter((e) => e.count > 0);
-  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g };
+  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g, tare_weight_g: open.tare_weight_g };
   return {
     plan: { ...plan(preset, packed.layers), carton: { id: open.id, sequence: open.sequence } },
     rest,

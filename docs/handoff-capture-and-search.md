@@ -229,6 +229,19 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   kit, and the bench says "Part of KIT × n" under it. A kit line committed
   before the bridge said stays committed and is reported in `differs`
   (`field: "kit"`).
+- D224. What an order leaves as is freight (`client/app/outbound/pack/freight.ts`):
+  each parcel's count, outside size and weight, read three ways. The
+  suggestion scores candidate plans by an objective (fewest parcels, the
+  default, or least chargeable weight at 250 kg/m³) and keeps the cheapest;
+  the bench shows each parcel's size and weight and the loose goods' weight;
+  "For the booking" lists the parcels in whole cm and kg with Copy. A box
+  says what it weighs empty (`POST /package-types/{id}/empty-weight`,
+  Workspace › Boxes › Empty). The packing plan opens in 3D, remembered per
+  browser (`app/common/remembered.ts`), with cartons' cut sides on them.
+  Copy works over the LAN's plain http too (`app/common/copy.ts`, which
+  Import tokens uses as well).
+- Light mode's highlighted row in a menu or a select is `--ui-accent-soft`,
+  now `#e0e7ff`, strong enough to see on white.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

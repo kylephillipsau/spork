@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { MOST_PIECES, arrange, contentsOf, pack, piecesOf, type Dims, type Kind, type OpenCarton, type Placement } from "./arrange.ts";
+import { MOST_PIECES, arrange, boxFreight, contentsOf, pack, piecesOf, type Dims, type Kind, type OpenCarton, type Placement } from "./arrange.ts";
+import { OBJECTIVES } from "./freight.ts";
 import type { BenchLine, PackUnit, Preset } from "@domain/types";
 
 /**
@@ -54,6 +55,7 @@ function box(name: string, [l, w, h]: Dims | [number, number, number], suggested
     size: { length_mm: l, width_mm: w, height_mm: h },
     suggested,
     max_payload_g,
+    tare_weight_g: null,
   };
 }
 
@@ -219,7 +221,7 @@ test("a thing too big for every box is said, and nothing else is lost", () => {
 });
 
 test("a preset with no size is never suggested", () => {
-  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null }]);
+  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null }]);
   assert.deepEqual(a.boxes, []);
   assert.deepEqual(a.oversize.map((o) => o.item_code), ["APR"]);
 });
@@ -263,7 +265,7 @@ test("as many pieces as it will arrange go in without running out of stack", () 
 
 /** The small box, open on the bench with these in it. */
 function opened(contents: { item_id: string; quantity: number }[]): OpenCarton {
-  return { id: "ca470000-0000-0000-0000-000000000009", sequence: "2", name: "small", size: SMALL.size!, max_payload_g: null, contents };
+  return { id: "ca470000-0000-0000-0000-000000000009", sequence: "2", name: "small", size: SMALL.size!, max_payload_g: null, tare_weight_g: null, contents };
 }
 
 /** Where everything is, and whether it is in already, in the order the layers go in. */
@@ -346,4 +348,35 @@ test("a thing kept upright is turned round, never laid on its side (D200)", () =
   const p = stood.boxes[0]!.layers[0]!.placements[0]!;
   assert.equal(p.axes[2], 2, "its own height stays its height");
   assert.equal(p.dims[2], 300);
+});
+
+test("which boxes is the objective's to say: one big box for fewest parcels, two small for least charge (D224)", () => {
+  // Two 1 kg cubes: one box takes both, or one each in a box only just bigger.
+  const cube = each([300, 300, 300], { gross_weight_g: 1000 });
+  const boxes = [box("single", [310, 310, 310]), box("double", [620, 620, 320])];
+  const fewest = arrange([line("CUBE", 2, [cube])], boxes);
+  assert.deepEqual(fewest.boxes.map((b) => b.preset.name), ["double"], "the default: fewest parcels");
+  const cheapest = arrange([line("CUBE", 2, [cube])], boxes, null, OBJECTIVES.chargeable);
+  assert.deepEqual(cheapest.boxes.map((b) => b.preset.name), ["single", "single"], "less air, less cubic weight");
+});
+
+test("a box weighs its goods and itself, when its empty weight is said (D224)", () => {
+  const apron = each([280, 220, 30], { gross_weight_g: 100 });
+  const light = arrange([line("APR", 3, [apron])], [{ ...SMALL, tare_weight_g: 350 }]);
+  assert.equal(boxFreight(light.boxes[0]!).weight_g, 650);
+  assert.equal(light.boxes[0]!.tare_g, 350);
+  const unsaid = arrange([line("APR", 3, [apron])], [SMALL]);
+  assert.equal(boxFreight(unsaid.boxes[0]!).weight_g, 300, "the goods, until the box is weighed");
+  assert.equal(unsaid.boxes[0]!.tare_g, null);
+});
+
+test("a thing not measured still weighs what its record says, to box it by hand (D224)", () => {
+  const a = arrange([line("GLV", 8, [each(null, { gross_weight_g: 520 })]), line("NET", 3, [each(null, { gross_weight_g: null })])], [SMALL]);
+  assert.deepEqual(
+    a.unmeasured.map((u) => [u.item_code, u.units, u.weight_g]),
+    [
+      ["GLV", 8, 4160],
+      ["NET", 3, null],
+    ],
+  );
 });

@@ -29,6 +29,8 @@ export interface WorkspaceBench {
   suggest: (boxId: string, suggested: boolean) => Promise<void>;
   /** Say the most a box's goods may weigh, in grams, or null for no limit (D199). */
   boxWeight: (boxId: string, grams: number | null) => Promise<void>;
+  /** Say what a box weighs empty, in grams, or null until one is weighed (D224). */
+  boxEmptyWeight: (boxId: string, grams: number | null) => Promise<void>;
 }
 
 export function useWorkspace(): WorkspaceBench {
@@ -92,5 +94,10 @@ export function useWorkspace(): WorkspaceBench {
     [change],
   );
 
-  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner, boxes, suggest, boxWeight };
+  const boxEmptyWeight = useCallback(
+    (boxId: string, grams: number | null) => change(() => api.boxEmptyWeight(boxId, grams), "Could not change what that box weighs empty."),
+    [change],
+  );
+
+  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner, boxes, suggest, boxWeight, boxEmptyWeight };
 }

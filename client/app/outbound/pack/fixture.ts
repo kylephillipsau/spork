@@ -271,10 +271,10 @@ export const PACK_FIXTURE: BenchScreen = {
     },
   ],
   presets: [
-    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 }, suggested: true, max_payload_g: null },
-    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true, max_payload_g: null },
-    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null },
-    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true, max_payload_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 }, suggested: true, max_payload_g: null, tare_weight_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true, max_payload_g: null, tare_weight_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null },
+    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true, max_payload_g: null, tare_weight_g: null },
   ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };
@@ -313,4 +313,27 @@ export const PACK_FILLING: BenchScreen = {
       ],
     },
   ],
+};
+
+/**
+ * An order that is mostly cartons as they came, with loose things nobody has
+ * measured yet (D224): the cartons shown as themselves, and what the loose
+ * things weigh, so they can be boxed by hand and the box weighed against it.
+ * One of them was never weighed either.
+ */
+export const PACK_LOOSE: BenchScreen = {
+  ...PACK_FIXTURE,
+  cartons: [],
+  lines: PACK_FIXTURE.lines.map((l) => {
+    const unmeasured = (grams: number | null) => ({
+      ...l,
+      remaining: l.committed,
+      kit: null,
+      packs: [{ ...l.packs[0]!, level: "each" as const, units: 1, size: null, ships_as_is: false, gross_weight_g: grams }],
+    });
+    if (l.item_code === "GLV-NIT-BLU-M") return unmeasured(520);
+    if (l.item_code === "HRN-DSP-WHT") return unmeasured(null);
+    if (l.item_code === "APR-PE-CLR-L") return unmeasured(180);
+    return { ...l, remaining: l.committed, kit: null, own_carton: null };
+  }),
 };

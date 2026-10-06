@@ -129,7 +129,8 @@
   --ui-accent: #4f46e5;
   --ui-accent-hover: #4338ca;
   --ui-accent-fg: #ffffff;
-  --ui-accent-soft: #eef0ff;
+  /* A selected row, the current item, a highlight: seen at a glance on white. */
+  --ui-accent-soft: #e0e7ff;
   --ui-accent-soft-fg: #3730a3;
   --ui-ring: rgba(79, 70, 229, 0.45);
 

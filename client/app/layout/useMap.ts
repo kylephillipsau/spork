@@ -7,6 +7,8 @@ import { href } from "@app/routing/location";
 import { api, reason } from "@domain/api";
 import type { BinView, LayoutPlace, LayoutView, MapBin, MapBins, Uuid, WalkRoute } from "@domain/types";
 
+import { keep, recall } from "@app/common/remembered";
+
 import { LAYERS, type Layer } from "./layers";
 import type { Read } from "./usePlace";
 
@@ -57,19 +59,11 @@ export function mapFrom(search: string): { bin: Uuid | null; layer: Layer | null
   return { bin: p.get("bin") || null, layer: LAYERS.some((l) => l.id === layer) ? (layer as Layer) : null };
 }
 
-function remembered(): Layer {
-  try {
-    const was = localStorage.getItem(REMEMBERED);
-    return LAYERS.some((l) => l.id === was) ? (was as Layer) : "stock";
-  } catch {
-    return "stock";
-  }
-}
 
 export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bin: null, layer: null }): MapDesk {
   const live = useLive();
   const [read, setRead] = useState<Read<MapSite>>({ kind: "loading" });
-  const [layer, setLayerState] = useState<Layer>(() => initial.layer ?? remembered());
+  const [layer, setLayerState] = useState<Layer>(() => initial.layer ?? recall(REMEMBERED, LAYERS.map((l) => l.id)) ?? "stock");
   const [chosenId, setChosenId] = useState<Uuid | null>(initial.bin);
   // A bin named in the address is flown to once the map has it.
   const [flight, setFlight] = useState(initial.bin ? 1 : 0);
@@ -160,11 +154,7 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
     layer,
     setLayer: (next) => {
       setLayerState(next);
-      try {
-        localStorage.setItem(REMEMBERED, next);
-      } catch {
-        /* remembered for this visit only */
-      }
+      keep(REMEMBERED, next);
     },
     chosen,
     place,

@@ -294,6 +294,41 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(pack(&cased, "carton")["ships_as_is"], true, "the default for a carton: {cased}");
     assert_eq!(pack(&cased, "carton")["units"], 4);
 
+    // ── a carton photographed and cut is drawn as itself ────────────────
+    // Now, as the case pack just said is in force from today.
+    let now = chrono::Utc::now().to_rfc3339();
+    let (status, look) = call(
+        &app,
+        test::TestRequest::post().uri("/observations").insert_header(auth.clone()).set_json(json!({
+            "item_id": item, "packaging_level": "carton", "measurements": [], "photographs": true,
+            "method": "instrument", "client_event_id": Uuid::now_v7(), "occurred_at": now,
+        })),
+    )
+    .await;
+    assert_eq!(status, 200, "{look}");
+    let (status, photo) = call(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observations/{}/images/front", look["observation_event_id"].as_str().unwrap()))
+            .insert_header(auth.clone())
+            .insert_header(("content-type", "image/png"))
+            .set_payload(common::png(1200, 900)),
+    )
+    .await;
+    assert_eq!(status, 200, "{photo}");
+    let (status, cut) = call(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observation-images/{}/cuts", photo["image_id"].as_str().unwrap()))
+            .insert_header(auth.clone())
+            .set_json(json!({ "digest": photo["digest"], "corners": [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9],
+                              "client_event_id": Uuid::now_v7(), "occurred_at": now })),
+    )
+    .await;
+    assert_eq!(status, 200, "{cut}");
+    let (_, pictured) = call(&app, bench()).await;
+    assert_eq!(pack(&pictured, "carton")["faces"]["front"], photo["digest"], "its cut front: {pictured}");
+
     // ── what a caller can get wrong ─────────────────────────────────────
     let refused = |body: Value| test::TestRequest::post().uri("/packages").insert_header(auth.clone()).set_json(body);
     let (status, each_cased) = call(
@@ -381,4 +416,24 @@ async fn a_box_can_be_left_out_of_the_suggestion() {
     assert_eq!(status, 204);
     let (_, unlimited) = call(&app, types()).await;
     assert!(large(&unlimited)["max_payload_g"].is_null(), "and none again");
+
+    // ── what a box weighs empty (D224) ───────────────────────────────────
+    let empty = |id: &str, grams: Value| {
+        test::TestRequest::post()
+            .uri(&format!("/package-types/{id}/empty-weight"))
+            .insert_header(auth.clone())
+            .set_json(json!({ "tare_weight_g": grams }))
+    };
+    let (status, body) = call(&app, empty(LARGE_BOX, json!(620))).await;
+    assert_eq!(status, 204, "{body}");
+    let (_, weighed) = call(&app, types()).await;
+    assert_eq!(large(&weighed)["tare_weight_g"], 620);
+    let (status, _) = call(&app, empty(LARGE_BOX, json!(-5))).await;
+    assert_eq!(status, 400, "an empty box weighs something");
+    let (status, _) = call(&app, empty(PALLET, json!(25000))).await;
+    assert_eq!(status, 404, "the platform's pallet is not the workspace's to weigh");
+    let (status, _) = call(&app, empty(LARGE_BOX, Value::Null)).await;
+    assert_eq!(status, 204);
+    let (_, unweighed) = call(&app, types()).await;
+    assert!(large(&unweighed)["tare_weight_g"].is_null(), "and unweighed again");
 }

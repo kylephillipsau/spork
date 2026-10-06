@@ -179,23 +179,61 @@ pub async fn box_weight(
     path: web::Path<Uuid>,
     body: web::Json<BoxWeightRequest>,
 ) -> Result<HttpResponse, ApiError> {
-    let who = caller(&state, &req).await?;
-    let id = path.into_inner();
-    let grams = body.max_payload_g;
+    let refused = "a box's limit is more than nothing; leave it empty for none";
+    set_box_grams(&state, &req, path.into_inner(), BoxGrams::MostGoods, body.max_payload_g, refused).await
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BoxEmptyWeightRequest {
+    /// What the box weighs empty, in grams; null when nobody has weighed one.
+    pub tare_weight_g: Option<i64>,
+}
+
+/// Say what a box weighs empty (D224), so a box of goods weighs its goods and
+/// itself by the record. The workspace's own boxes only, as with [`suggest_box`].
+#[post("/package-types/{id}/empty-weight")]
+pub async fn box_empty_weight(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<BoxEmptyWeightRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let refused = "an empty box weighs more than nothing; leave it empty until one is weighed";
+    set_box_grams(&state, &req, path.into_inner(), BoxGrams::Empty, body.tare_weight_g, refused).await
+}
+
+/// A weight a workspace says of one of its boxes.
+enum BoxGrams {
+    /// The most its goods may weigh (D199).
+    MostGoods,
+    /// What it weighs empty (D224).
+    Empty,
+}
+
+/// Say one of a box's weights in grams, or clear it. Only the workspace's own
+/// boxes: one the platform ships is not the workspace's to change, and is
+/// refused as not found.
+async fn set_box_grams(
+    state: &web::Data<AppState>,
+    req: &HttpRequest,
+    id: Uuid,
+    which: BoxGrams,
+    grams: Option<i64>,
+    refused: &str,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(state, req).await?;
     if grams.is_some_and(|g| g <= 0) {
-        return Err(ApiError::Rejected("a box's limit is more than nothing; leave it empty for none".into()));
+        return Err(ApiError::Rejected(refused.into()));
     }
+    let sql = match which {
+        BoxGrams::MostGoods => "UPDATE package_type SET max_payload_g = $2 WHERE id = $1 AND tenant_id IS NOT NULL",
+        BoxGrams::Empty => "UPDATE package_type SET tare_weight_g = $2 WHERE id = $1 AND tenant_id IS NOT NULL",
+    };
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     scope
         .run(move |tx| {
             Box::pin(async move {
-                let changed = tx
-                    .execute(
-                        "UPDATE package_type SET max_payload_g = $2 WHERE id = $1 AND tenant_id IS NOT NULL",
-                        &[&id, &grams],
-                    )
-                    .await?;
-                if changed == 0 {
+                if tx.execute(sql, &[&id, &grams]).await? == 0 {
                     return Err(ApiError::NotFound);
                 }
                 Ok(())

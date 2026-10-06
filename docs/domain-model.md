@@ -15387,3 +15387,61 @@ more lines for one item." And: "They ship as a loose head and bottle."
 **Not decided.** A kit that ships assembled, which would pack the kit at its
 own size and not its parts: a property of the kit, when one does. What the
 customer's packing list says of a kit: it lists the parts in each carton.
+
+### D224: What an order leaves as is freight, and which boxes is best is a setting
+
+*Adopted 2026-10-06, with no migration. Amends D195, D198, D202.*
+
+**The aim.** Every product is to be measured declaratively and arranged into
+the best configuration for it. That is built a kind of product at a time, as
+the user meets them. What this sets down is the foundation the arrangement
+and its measure of "best" rest on, so that fewest parcels now and cheapest
+freight later are settings of one search.
+
+**Decision.**
+
+- **Freight is one description of the parcels** (`freight.ts`): how many
+  alike, each one's outside size, and what one weighs, on the scale once it
+  has been and by the record until then, goods and box. The suggestion scores
+  plans by it, the bench totals it, and the booking is made from it.
+- **An objective is a cost over the parcels, lower being better.** Fewest
+  parcels (then least air sent) is the default. Least chargeable weight, a
+  parcel's weight or its cubic weight at 250 kg per m³, whichever is more, is
+  the second. A carrier's own factor or rates are a third when they are known.
+  Which one a workspace uses is configuration to come; the arrangement takes
+  it as an argument.
+- **The suggestion tries more than one way and keeps the best.** Today's way
+  (the smallest box that takes it all, else the one that takes the most, and
+  again) and, for orders of up to 300 pieces, boxes of one kind only, one of
+  each kind. The plan kept is the one that leaves least unboxed, then costs
+  least. With the default objective, the old way's plan stands unless boxes
+  of one kind take the order in fewer parcels, or as many with less air.
+- **A box says what it weighs empty** (`package_type.tare_weight_g`, until
+  now set by nothing): Workspace › Boxes › Empty
+  (`POST /package-types/{id}/empty-weight`). A box of goods weighs its goods
+  and itself by the record. Until a box is weighed empty, its weight says
+  "box not weighed".
+- **The bench shows it.** Each parcel says its size and what one weighs, and
+  what the weight leaves out. What isn't in the suggestion, things not yet
+  measured or too big, says what each line weighs and the total to box by
+  hand. "For the booking" lists the parcels in whole centimetres, rounded up
+  as carriers measure, and kilograms, with Copy: a line per kind of parcel,
+  its columns tab-separated, so it pastes into a booking.
+- **The packing plan opens in 3D**, remembered per browser, and a carton is
+  drawn with its cut sides: the bench read only an each's and an inner's
+  before, and most cut photographs are of cartons. A carton that is one of a
+  product as it is borrows that product's.
+
+**Why.** The user, 2026-10-06: "the whole point of this is that all items can
+be declaratively measured and then arranged into an optimal configuration
+... at the very least ... display the boxes in the 3D view and then list the
+total weight of loose items so that we can arrange each type into boxes and
+calculate the weights." And: "We will be able to determine the optimal based
+on cheapest freight in the future ... it needs to be a relative and flexible
+system." The carrier is booked in NetSuite and MachShip, by hand, so the
+bench is a helper: what it can hand over is the parcels' sizes and weights.
+
+**Not decided.** Where the objective is set (workspace or site) and a
+carrier's own factor and rates. The shape of things with no fixed shape
+(D138): a space they take, so they can be arranged rather than put in round
+the rest.

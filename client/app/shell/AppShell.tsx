@@ -3,6 +3,7 @@ import { Menu as MenuIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { Breadcrumbs, IconButton, Link, Tooltip, cx, materials, type Crumb } from "@ui/index";
 import { usePath } from "@app/routing/Router";
+import { keep, recall } from "@app/common/remembered";
 import { useWork } from "./useWork";
 
 
@@ -19,11 +20,7 @@ import s from "./app-shell.module.css";
 const COLLAPSED_KEY = "spork.sidebar.collapsed";
 
 function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return recall(COLLAPSED_KEY, ["1", "0"]) === "1";
 }
 
 /**
@@ -76,11 +73,7 @@ export function AppShell({
 
   function toggleCollapsed() {
     setCollapsed((c) => {
-      try {
-        localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
-      } catch {
-        // not remembered, still toggled
-      }
+      keep(COLLAPSED_KEY, c ? "0" : "1");
       return !c;
     });
   }
