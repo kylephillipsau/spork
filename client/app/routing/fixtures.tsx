@@ -106,7 +106,7 @@ import { BACKUP_READY, fixtureBackup } from "@app/admin/backup-fixture";
 import { PeoplePage } from "@app/admin/PeoplePage";
 import { PEOPLE_READY, fixturePeople } from "@app/admin/people-fixture";
 import { ItemPage } from "@app/items/ItemPage";
-import { MoveDialog } from "@app/items/ItemProperties";
+import { MatchDialog, MoveDialog } from "@app/items/ItemProperties";
 import {
   BRUSH,
   ITEM,
@@ -662,6 +662,16 @@ export const FIXTURES: readonly Screen[] = [
       <>
         <ItemPage desk={desk} />
         <MoveDialog item={MEASURED_AS_KIT} subject={MEASURED_AS_KIT.subjects[0]!} desk={desk} onClose={() => {}} />
+      </>
+    );
+  }),
+  // D228: its family, and matching it from the green one.
+  app("f-item-matching", "/fixtures/item/matching", "Item — matching from its family", "floor", { screen: "item" }, () => {
+    const desk = fixtureProperties(ITEM);
+    return (
+      <>
+        <ItemPage desk={desk} />
+        <MatchDialog item={ITEM} from={ITEM.family[0]!} desk={desk} onClose={() => {}} />
       </>
     );
   }),

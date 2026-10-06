@@ -1391,14 +1391,34 @@ export interface ItemStyleRef {
 }
 
 /** What a carton holds, as the case pack in force says. Either count may be unknown. */
-/** What moving one card's records to another made (D219). */
+/** What moving one card's records to another made (D219), or matching them from another of the family (D228). */
 export interface Refiled {
-  /** Figures copied to the right card, and retracted on the wrong one. */
+  /** Figures copied to the other card (and, moved, retracted where they were). */
   figures: number;
-  /** Photos filed again on the right card. */
+  /** Photos filed again on the other card. */
   photos: number;
   /** The act was recorded before: nothing was done again. */
   replay: boolean;
+}
+
+/** What is on one of an item's own cards (D228): enough to say what copying it would bring. */
+export interface RecordedCard {
+  level: "each" | "inner" | "carton";
+  weighed: boolean;
+  measured: boolean;
+  /** Faces with a photo: its sides, top and bottom, its label. */
+  faces: number;
+}
+
+/** Another item of its family (D228), and what is on its own cards: the one to match an item from. */
+export interface FamilyMember {
+  item_id: Uuid;
+  code: string;
+  description: string;
+  active: boolean;
+  picture: Picture | null;
+  /** Its own cards with anything on them, the each first. */
+  cards: RecordedCard[];
 }
 
 /** Which level of an item is one in NetSuite: what it is sold as (D218). */
@@ -1472,6 +1492,8 @@ export interface ItemView {
   description: string;
   active: boolean;
   style: ItemStyleRef | null;
+  /** The other items of its family, by code (D228). */
+  family: FamilyMember[];
   /** The front, own before its style's, saying whose (D141). */
   picture: Picture | null;
   measurements: ItemMeasurements[];

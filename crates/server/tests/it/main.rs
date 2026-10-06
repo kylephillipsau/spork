@@ -20,6 +20,7 @@ mod change_password;
 mod consignments;
 mod evidence_and_pictures;
 mod export_http;
+mod family_match_http;
 mod fulfilment_intake;
 mod handover_http;
 mod happy_path;

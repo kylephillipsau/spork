@@ -291,6 +291,16 @@ async fn a_box_measured_on_the_carton_card_is_moved_to_the_box() {
         .unwrap_or_else(|| panic!("its each card: {there}"))
         .clone();
     assert_eq!(each["gross_weight_g"], 230, "the figures are the other item's now: {each}");
+    let unstated: i64 = db
+        .query_one(
+            "SELECT count(*) FROM observation_event e JOIN observable s ON s.id = e.observable_id
+              WHERE s.item_id = $1 AND s.packaging_level = 'each' AND e.presentation_id IS NULL",
+            &[&part],
+        )
+        .await
+        .expect("its events")
+        .get(0);
+    assert_eq!(unstated, 0, "a box's size on a single thing is as supplied (J72)");
     assert!(card(&page().await, "inner")["gross_weight_g"].is_null(), "and gone from the box");
     let (status, said) = elsewhere(part, Uuid::new_v4()).await;
     assert_eq!(status, 400, "nothing left to move: {said}");

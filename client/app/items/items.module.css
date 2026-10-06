@@ -154,6 +154,12 @@
 .itemCode:hover {
   text-decoration: underline;
 }
+/* On a phone it is a thing to tap, as tall as the smallest button. */
+[data-density="touch"] .itemCode {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ui-control-sm);
+}
 
 /* An item on a row of work: its picture, then its code and what it is. */
 .itemLine {
@@ -162,8 +168,11 @@
   gap: var(--ui-space-3);
   min-width: 0;
 }
+/* Its own text, whatever row it sits in: a list's title is set for a code. */
 .itemText {
   min-width: 0;
+  font-family: var(--ui-font);
+  font-weight: 400;
 }
 .itemDone {
   color: var(--ui-text-faint);

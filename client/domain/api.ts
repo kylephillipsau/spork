@@ -867,6 +867,15 @@ export const api = {
       occurred_at: act.at,
     }),
 
+  /** Copy what another item of the family has on some of its cards to the same cards of this one (D228). */
+  matchFamily: (itemId: Uuid, from: Uuid, levels: ("each" | "inner" | "carton")[], act: Act) =>
+    send<Refiled>("POST", `/items/${encodeURIComponent(itemId)}/match`, {
+      from_item: from,
+      levels,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
   /** Say which level of an item is one in NetSuite: what it is sold as (D218). */
   sayUnit: (itemId: Uuid, level: "each" | "inner" | "carton", act: Act) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/unit`, {

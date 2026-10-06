@@ -286,7 +286,7 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-Two hundred and twenty-seven recorded decisions, a hundred and thirty-four rules the design must always
+Two hundred and twenty-eight recorded decisions, a hundred and thirty-four rules the design must always
 satisfy, and a database that a hundred and twenty-six migrations build and reverse cleanly, both
 from empty and with data in them.
 
@@ -344,7 +344,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D227
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D228
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being

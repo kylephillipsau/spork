@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { anAct, partOf, type Act } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
-import type { BinFlagged, BoundBarcode, CaptureSubject, ItemView, PackagingType, Uuid } from "@domain/types";
+import type { BinFlagged, BoundBarcode, CaptureSubject, FamilyMember, ItemView, PackagingType, Uuid } from "@domain/types";
 
 import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
@@ -165,6 +165,11 @@ export interface PropertiesDesk {
    * (D219), or another item's (D222). True when moved.
    */
   refile: (subject: CaptureSubject, to: { item: Uuid; level: "each" | "inner" | "carton" }, name: string) => Promise<boolean>;
+  /**
+   * Copy what another of its family has on some of its cards to the same
+   * cards of this item (D228). True when matched.
+   */
+  matchFamily: (from: FamilyMember, levels: ("each" | "inner" | "carton")[]) => Promise<boolean>;
   /** Another item, by its code: where a card's records may belong (D222). Null, said in `problem`, when none. */
   findItem: (code: string) => Promise<ItemView | null>;
 
@@ -649,6 +654,30 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
             : `Moved ${moved.figures} ${moved.figures === 1 ? "figure" : "figures"} and ${moved.photos} ${moved.photos === 1 ? "photo" : "photos"} to ${name}. The figures show there in a moment.`,
         });
         await reload();
+      });
+      return done;
+    },
+
+    matchFamily: async (from, levels) => {
+      if (read.kind !== "ready") return false;
+      const item = read.item.item_id;
+      let done = false;
+      await press(`match:${item}:${from.item_id}:${levels.join(",")}`, async (act) => {
+        const copied = await api.matchFamily(item, from.item_id, levels, act);
+        done = true;
+        if (!live.current) return;
+        setOpen(null);
+        const many = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`;
+        setSaid({
+          tone: "success",
+          text: copied.replay
+            ? `Already matched from ${from.code}.`
+            : copied.figures + copied.photos === 0
+              ? `Nothing new on ${from.code} to match.`
+              : `Copied ${many(copied.figures, "figure")} and ${many(copied.photos, "photo")} from ${from.code}. The figures show in a moment; photograph again any side that differs.`,
+        });
+        await reload();
+        settle();
       });
       return done;
     },

@@ -9486,6 +9486,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cartons::say_carton)
         .service(crate::cartons::say_unit)
         .service(crate::refile::refile)
+        .service(crate::refile::match_family)
         .service(crate::cartons::add_lot)
         .service(crate::cartons::set_default_lot)
         .service(crate::cartons::set_family_picture)

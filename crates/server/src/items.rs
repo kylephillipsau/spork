@@ -35,6 +35,7 @@ use uuid::Uuid;
 use crate::capture::{self, CaptureSubject};
 use crate::error::ApiError;
 use crate::pictures::{self, Picture};
+use crate::refile::{self, RecordedCard};
 use crate::routes::{caller, measurements_of, ItemMeasurements};
 use crate::tenancy::TenantScope;
 use crate::AppState;
@@ -48,6 +49,19 @@ pub struct ItemStyleRef {
     pub variants: i64,
     /// The variant whose picture stands for the family (D188).
     pub picture_item_id: Option<Uuid>,
+}
+
+/// Another item of its family (D228), and what is on its own cards: the one
+/// to match this one from.
+#[derive(Serialize, Debug)]
+pub struct FamilyMember {
+    pub item_id: Uuid,
+    pub code: String,
+    pub description: String,
+    pub active: bool,
+    pub picture: Option<Picture>,
+    /// Its own cards with anything on them, the each first.
+    pub cards: Vec<RecordedCard>,
 }
 
 /// What a carton of it holds, as the case pack in force says.
@@ -127,6 +141,8 @@ pub struct ItemView {
     pub description: String,
     pub active: bool,
     pub style: Option<ItemStyleRef>,
+    /// The other items of its family, by code (D228).
+    pub family: Vec<FamilyMember>,
     /// The front, own before its style's, and saying whose (D141).
     pub picture: Option<Picture>,
     pub measurements: Vec<ItemMeasurements>,
@@ -229,6 +245,33 @@ pub async fn item_page(
                 });
 
                 let picture = pictures::of(tx, &[id]).await?.remove(&id);
+
+                let others = tx
+                    .query(
+                        "SELECT v.id, v.code, v.description, v.active
+                           FROM item i JOIN item v ON v.style_id = i.style_id AND v.id <> i.id
+                          WHERE i.id = $1
+                          ORDER BY v.code",
+                        &[&id],
+                    )
+                    .await?;
+                let ids: Vec<Uuid> = others.iter().map(|v| v.get(0)).collect();
+                let mut seen = pictures::of(tx, &ids).await?;
+                let mut cards = refile::recorded(tx, &ids).await?;
+                let family = others
+                    .iter()
+                    .map(|v| {
+                        let member: Uuid = v.get(0);
+                        FamilyMember {
+                            item_id: member,
+                            code: v.get(1),
+                            description: v.get(2),
+                            active: v.get(3),
+                            picture: seen.remove(&member),
+                            cards: cards.remove(&member).unwrap_or_default(),
+                        }
+                    })
+                    .collect();
 
                 let measurements = measurements_of(tx, id).await?;
 
@@ -404,6 +447,7 @@ pub async fn item_page(
                     description: r.get(1),
                     active: r.get(2),
                     style,
+                    family,
                     picture,
                     measurements,
                     packing,

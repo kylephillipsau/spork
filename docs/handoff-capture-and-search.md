@@ -253,6 +253,14 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   `/search?q=` (`app/scan/SearchPage.tsx`), every match grouped as the header
   groups them (`app/scan/found.tsx`); one match still opens it. Search fields
   neither capitalise nor autocorrect on a phone.
+- D228. An item's page lists its family with what is on each one's cards, and
+  Match… copies the cards ticked from one of them (`POST /items/{id}/match`,
+  `Family` and `MatchDialog` in `ItemProperties.tsx`). It shares the copying
+  with Move… (`refile::file_again`), copying rather than moving: nothing
+  retracted, nothing marked moved, the copies keeping when they were taken.
+  A pack's or carton's size moved or copied onto an each is said to be as
+  supplied; the move to another item's each (D222) had left it unsaid, which
+  J72 reports.
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.

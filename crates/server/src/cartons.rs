@@ -74,7 +74,7 @@ enum Change {
 /// The case pack in force on the day, by the rule the observation writer
 /// names a carton by. `$2::timestamptz::date`, never `$2::date`: see
 /// `observable_for`.
-async fn in_force(
+pub(crate) async fn in_force(
     tx: &tokio_postgres::Transaction<'_>,
     item_id: Uuid,
     at: DateTime<Utc>,

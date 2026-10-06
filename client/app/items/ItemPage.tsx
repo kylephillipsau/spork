@@ -21,7 +21,7 @@ import {
 import type { BinFlagged, ItemFlag, ItemHeld, ItemReported, ItemView } from "@domain/types";
 import { Faint, ago, dateTime } from "@app/common/cells";
 
-import { ItemProperties, ItemSummary } from "./ItemProperties";
+import { Family, ItemDrawer, ItemProperties, ItemSummary } from "./ItemProperties";
 import type { BinFlag, PropertiesDesk } from "./useItemProperties";
 import s from "./items.module.css";
 
@@ -43,6 +43,8 @@ import s from "./items.module.css";
  */
 export function ItemPage({ desk, asking }: { desk: PropertiesDesk; asking?: Asking }) {
   const read = desk.read;
+  // Another of its family, open beside the page (D228).
+  const [looking, setLooking] = useState<string | null>(null);
 
   if (read.kind !== "ready") {
     return (
@@ -86,10 +88,13 @@ export function ItemPage({ desk, asking }: { desk: PropertiesDesk; asking?: Aski
           <ItemProperties item={item} desk={desk} />
         </Section>
 
+        <Family item={item} desk={desk} onOpen={setLooking} />
+
         <Section title="Where it is">
           <Where item={item} desk={desk} opened={asking ?? null} />
         </Section>
       </Stack>
+      <ItemDrawer itemId={looking} onClose={() => setLooking(null)} />
     </Page>
   );
 }

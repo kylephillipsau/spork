@@ -1,4 +1,4 @@
-import type { CaptureSubject, ItemListRow, ItemRow, ItemView, PackagingType } from "@domain/types";
+import type { CaptureSubject, FamilyMember, ItemListRow, ItemRow, ItemView, PackagingType } from "@domain/types";
 
 import { NO_FIGURES } from "./subjects";
 import type { PropertiesDesk } from "./useItemProperties";
@@ -115,12 +115,47 @@ const PHOTO = "a3f1e0c2b4d6a8f0e2c4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8"
 const CUT = "c7d1e0c2b4d6a8f0e2c4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6c7";
 const image = (n: number) => `01990000-0000-7000-8000-0000000e${String(n).padStart(4, "0")}`;
 
+/**
+ * The blue brush's family (D228): the green measured and photographed, the
+ * yellow weighed, the red with nothing yet.
+ */
+const BRUSH_FAMILY_MEMBERS: FamilyMember[] = [
+  {
+    item_id: "01990000-0000-7000-8000-0000000b5121",
+    code: "SKU-5120G",
+    description: "Floor brush, 450 mm, green",
+    active: true,
+    picture: { digest: PHOTO, source: "own" },
+    cards: [
+      { level: "each", weighed: true, measured: true, faces: 1 },
+      { level: "carton", weighed: true, measured: true, faces: 7 },
+    ],
+  },
+  {
+    item_id: "01990000-0000-7000-8000-0000000b5122",
+    code: "SKU-5120R",
+    description: "Floor brush, 450 mm, red",
+    active: true,
+    picture: null,
+    cards: [],
+  },
+  {
+    item_id: "01990000-0000-7000-8000-0000000b5123",
+    code: "SKU-5120Y",
+    description: "Floor brush, 450 mm, yellow",
+    active: false,
+    picture: null,
+    cards: [{ level: "carton", weighed: true, measured: false, faces: 0 }],
+  },
+];
+
 export const ITEM: ItemView = {
   item_id: BRUSH,
   code: "SKU-5120B",
   description: "Floor brush, 450 mm, blue",
   active: true,
   style: { code: "SKU-5120", description: "Floor brush, 450 mm", variants: 4, picture_item_id: null },
+  family: BRUSH_FAMILY_MEMBERS,
   picture: { digest: PHOTO, source: "own" },
   measurements: [],
   packing: { units_per_inner: 1, inners_per_carton: 8, effective_from: "2026-09-30" },
@@ -212,6 +247,7 @@ export const ITEM_UNKNOWN: ItemView = {
   description: "Tape gun, 50 mm",
   active: true,
   style: null,
+  family: [],
   picture: null,
   measurements: [],
   packing: null,
@@ -269,6 +305,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     flagBin: async () => null,
     sayUnit: async () => false,
     refile: async () => false,
+    matchFamily: async () => false,
     findItem: async () => null,
     taken: [],
     sending: {},

@@ -15501,3 +15501,36 @@ typed `sku` became `Sku`, and a code became a word.
 **Why.** The user, 2026-10-06: "if you search for a product family, entering
 the search should not take you to the first item from the family, but instead
 take you to a results page so that you can view the matching search results."
+
+### D228: An item is matched from another of its family
+
+*Adopted 2026-10-06, with no migration. Extends D108, D219.*
+
+**Decision.** An item's page lists the other items of its family, each with
+what is on its own cards: "Each weighed, measured, 1 photo · Carton of 8
+weighed, measured, 7 photos" (`ItemView.family`). **Match…** beside one
+copies what it has on the cards ticked, its each, pack or carton, to the same
+cards of this item (`POST /items/{id}/match`). The one matched from keeps its own. Then the side
+that differs, a label of another colour, is photographed again, and being
+newer it is the one shown.
+
+**A copy, filed as a move is (D219).** Each event with anything live on the
+card is mirrored on this item's card, `derived_from_event_id` naming it, with
+its figures, and its photos with their cuts. Nothing is retracted and nothing
+is marked moved. The copies keep when they were taken, so this item's own
+newer figures and photos stay in front of them; a card of its own with records
+is left unticked, and ticked, the newer of each stays. Matching again copies
+only what has been recorded on the other since. Move and match share one
+implementation (`refile::file_again`). Either way, a pack's or a carton's size
+filed on a single thing is said to be as supplied: a size on an each names the
+arrangement it was measured in (D138, J72), and the move to another item's
+each (D222) had left it unsaid.
+
+**Only within a family, and only the same carton.** An item outside the family
+is refused. A pack or carton is only a definite thing under a case pack (D23):
+an item with none is given the other's counts; one whose case pack says a
+different count is refused, since a carton of 24 is not a carton of 12.
+
+**Why.** The user, 2026-10-06: "Most of the items in the same family have
+identical faces except one, where a label might be a different colour or
+something."

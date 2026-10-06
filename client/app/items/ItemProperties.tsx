@@ -6,12 +6,16 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Dialog,
   Drawer,
   EmptyState,
   Fact,
   Facts,
   Link,
+  List,
+  ListItem,
+  Section,
   Select,
   Skeleton,
   Spacer,
@@ -22,7 +26,7 @@ import {
   cx,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import type { CaptureSubject, ItemView, PackagingType, Picture, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, FamilyMember, ItemView, PackagingType, Picture, RecordedCard, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
@@ -234,6 +238,7 @@ export function ItemDrawer({
         <Stack gap={5}>
           <ItemSummary item={item} desk={d} />
           <ItemProperties item={item} desk={d} />
+          <Family item={item} desk={d} />
         </Stack>
       )}
     </Drawer>
@@ -388,6 +393,132 @@ export function MoveDialog({
         {to && taken.has(to) && (
           <p className={s.note}>{name} has figures or photos of its own. Move those away first, or record over them.</p>
         )}
+      </Stack>
+    </Dialog>
+  );
+}
+
+/**
+ * The other items of its family (D228), each with what is on its cards, and
+ * Match… to copy those to this item's. The colours of one brush come in the
+ * same carton, the same size and weight, with the same sides but a label.
+ * `onOpen` opens one beside the page; without it, its code is only said.
+ */
+export function Family({ item, desk, onOpen }: { item: ItemView; desk: PropertiesDesk; onOpen?: ((id: string) => void) | undefined }) {
+  const [matching, setMatching] = useState<FamilyMember | null>(null);
+  if (item.family.length === 0) return null;
+  return (
+    <Section title="Its family" count={item.family.length}>
+      <Card padded={false}>
+        <List label="Its family">
+          {item.family.map((m) => (
+            <ListItem
+              key={m.item_id}
+              title={
+                <ItemLine
+                  code={m.code}
+                  description={m.description}
+                  picture={m.picture}
+                  onOpen={onOpen && (() => onOpen(m.item_id))}
+                  note={m.cards.length > 0 ? m.cards.map((c) => `${levelName(c.level, item)} ${onCard(c)}`).join(" · ") : "Nothing measured or photographed"}
+                />
+              }
+              badges={!m.active && <Badge tone="warning">Inactive</Badge>}
+              action={
+                m.cards.length > 0 ? (
+                  <Button size="sm" disabled={desk.busy} onClick={() => setMatching(m)}>
+                    Match…
+                  </Button>
+                ) : undefined
+              }
+            />
+          ))}
+        </List>
+      </Card>
+      {matching && <MatchDialog item={item} from={matching} desk={desk} onClose={() => setMatching(null)} />}
+    </Section>
+  );
+}
+
+/** What is on a card: "weighed, measured, 7 photos". */
+function onCard(c: RecordedCard): string {
+  const photos = c.faces > 0 && `${c.faces} ${c.faces === 1 ? "photo" : "photos"}`;
+  return [c.weighed && "weighed", c.measured && "measured", photos].filter(Boolean).join(", ");
+}
+
+/**
+ * Copy what another of the family has on its cards to the same cards of this
+ * item (D228), with when and how each was taken; the other keeps its own. A
+ * card of this item's with records of its own is left unticked: ticked, the
+ * newer of each stays. A side that differs is then photographed again.
+ */
+export function MatchDialog({
+  item,
+  from,
+  desk,
+  onClose,
+}: {
+  item: ItemView;
+  from: FamilyMember;
+  desk: PropertiesDesk;
+  onClose: () => void;
+}) {
+  const own = new Set(item.subjects.filter((x) => ownLevel(item, x) && recorded(x)).map((x) => x.packaging_level));
+  const [levels, setLevels] = useState<Set<Level>>(() => new Set(from.cards.map((c) => c.level).filter((l) => !own.has(l))));
+  const picked = from.cards.map((c) => c.level).filter((l) => levels.has(l));
+  const tick = (level: Level, on: boolean) =>
+    setLevels((was) => {
+      const next = new Set(was);
+      if (on) next.add(level);
+      else next.delete(level);
+      return next;
+    });
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !desk.busy && onClose()}
+      width={460}
+      title={`Match from ${from.code}`}
+      description={`What ${from.code} has on these cards is copied to the same cards of ${item.code}, with when and how it was taken. ${from.code} keeps its own.`}
+      footer={
+        <>
+          <Button onClick={onClose} disabled={desk.busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={desk.busy}
+            disabled={picked.length === 0}
+            onClick={() => void desk.matchFamily(from, picked).then((ok) => ok && onClose())}
+          >
+            Match
+          </Button>
+        </>
+      }
+    >
+      <Stack gap={3}>
+        {desk.problem && (
+          <Alert tone="danger" onDismiss={desk.dismiss}>
+            {desk.problem}
+          </Alert>
+        )}
+        <ItemLine code={from.code} description={from.description} picture={from.picture} />
+        {from.cards.map((c) => (
+          <Checkbox
+            key={c.level}
+            label={
+              <>
+                {levelName(c.level, item)} <Faint>· {onCard(c)}</Faint>
+              </>
+            }
+            checked={levels.has(c.level)}
+            onCheckedChange={(on) => tick(c.level, on)}
+          />
+        ))}
+        {picked.some((l) => own.has(l)) && (
+          <p className={s.note}>{item.code} has figures or photos of its own there: the newer of each stays.</p>
+        )}
+        <p className={s.note}>Then photograph again any side that differs, such as a label of another colour.</p>
       </Stack>
     </Dialog>
   );

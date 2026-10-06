@@ -248,6 +248,8 @@ const PAIRS = [
   ["ItemPacking", ["ItemPacking"]],
   ["ItemUnit", ["ItemUnit"]],
   ["Refiled", ["Refiled"]],
+  ["RecordedCard", ["RecordedCard"]],
+  ["FamilyMember", ["FamilyMember"]],
   ["ItemHeld", ["ItemHeld"]],
   ["ItemReported", ["ItemReported"]],
   ["ItemFlag", ["ItemFlag"]],
