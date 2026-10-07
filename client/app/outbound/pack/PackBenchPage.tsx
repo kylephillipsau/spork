@@ -117,6 +117,7 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
         <ItemLine
           code={l.item_code}
           description={l.description ?? undefined}
+          art={l.art_no}
           picture={l.picture}
           onOpen={() => setLooking(l.item_id)}
           note={l.kit ? `Part of ${l.kit.item_code} × ${l.kit.ordered}` : undefined}

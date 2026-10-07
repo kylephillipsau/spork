@@ -147,10 +147,26 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
 export function ItemSummary({ item, desk }: { item: ItemView; desk?: PropertiesDesk | undefined }) {
   const pictures = item.style?.picture_item_id === item.item_id;
   const [changing, setChanging] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   return (
     <div className={s.summary}>
-      <Photo key={item.item_id} item={item} />
+      <div className={s.figure}>
+        <Photo key={item.item_id} item={item} />
+        {desk && choices(item).length > 0 && (
+          <div>
+            <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => setChoosing(true)}>
+              Main picture…
+            </Button>
+          </div>
+        )}
+        {desk && choosing && <MainPictureDialog item={item} desk={desk} onClose={() => setChoosing(false)} />}
+      </div>
       <Facts columns={1}>
+        {item.netsuite?.art_no && (
+          <Fact label="Art No.">
+            <span className={s.code}>{item.netsuite.art_no}</span>
+          </Fact>
+        )}
         <Fact label="Sold as" always>
           {soldAs(item)}
           {desk && (
@@ -246,6 +262,7 @@ export function ItemDrawer({
           <ItemSummary item={item} desk={d} />
           <ItemProperties item={item} desk={d} />
           <Family item={item} desk={d} />
+          <NetSuiteSays item={item} desk={d} />
         </Stack>
       )}
     </Drawer>
@@ -638,6 +655,160 @@ function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: Propertie
   );
 }
 
+/** A picture an item could be shown by, and what it is. */
+interface Choice {
+  digest: string;
+  label: string;
+}
+
+/**
+ * The pictures an item could be shown by (D237): its own photographs, each
+ * side as cut, its box drawing, and NetSuite's picture unless somebody said
+ * it isn't this product.
+ */
+function choices(item: ItemView): Choice[] {
+  const own = item.photos.flatMap((p) => {
+    const subject = item.subjects.find((x) => subjectKey(x) === subjectKey(p));
+    if (!subject || p.item_id !== item.item_id || p.same_as) return [];
+    return [{ digest: shown(p), label: `${nameOf(subject, item)}, ${faceName(p.face as Face, subject).toLowerCase()}` }];
+  });
+  const drawn = item.box_picture ? [{ digest: item.box_picture.digest, label: "Box drawing" }] : [];
+  const netsuite = item.netsuite?.picture && !item.netsuite.picture_not_it ? [{ digest: item.netsuite.picture, label: "NetSuite’s picture" }] : [];
+  return [...own, ...drawn, ...netsuite];
+}
+
+/**
+ * Choose the picture an item is shown by everywhere (D237): any photograph of
+ * it, its box drawing, or NetSuite's picture; or none, to be shown as Spork
+ * chooses, its own photograph before NetSuite's.
+ */
+function MainPictureDialog({ item, desk, onClose }: { item: ItemView; desk: PropertiesDesk; onClose: () => void }) {
+  const [picked, setPicked] = useState<string | null>(item.main_picture);
+  const options = choices(item);
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !desk.busy && onClose()}
+      width={560}
+      title="Main picture"
+      description="What it is shown by wherever it is listed: on the bench, the shelves and when picking."
+      footer={
+        <>
+          <Button onClick={onClose} disabled={desk.busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={desk.busy}
+            disabled={picked === item.main_picture}
+            onClick={() => void desk.sayPicture("main", picked).then((ok) => ok && onClose())}
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      <Stack gap={3}>
+        {desk.problem && (
+          <Alert tone="danger" onDismiss={desk.dismiss}>
+            {desk.problem}
+          </Alert>
+        )}
+        <div className={s.pictures}>
+          <button type="button" className={s.pictureChoice} aria-pressed={picked === null} onClick={() => setPicked(null)}>
+            <span>As Spork chooses: its own photo, else NetSuite’s</span>
+          </button>
+          {options.map((o) => (
+            <button
+              key={o.digest}
+              type="button"
+              className={s.pictureChoice}
+              aria-pressed={picked === o.digest}
+              onClick={() => setPicked(o.digest)}
+            >
+              <img src={imageUrl(o.digest)} alt="" loading="lazy" />
+              <span>{sentence(o.label)}</span>
+            </button>
+          ))}
+        </div>
+      </Stack>
+    </Dialog>
+  );
+}
+
+/** Grams as kilograms, three places. */
+function kgOf(g: number): string {
+  return `${(g / 1000).toFixed(3)} kg`;
+}
+
+/**
+ * What NetSuite says of an item (D237), beside what Spork recorded and never
+ * in its place: its article number, UPC, weight, size and picture, as its
+ * last report gave them, and where each disagrees with what was measured and
+ * scanned here. A difference is put right in NetSuite, not here.
+ */
+export function NetSuiteSays({ item, desk }: { item: ItemView; desk: PropertiesDesk }) {
+  const ns = item.netsuite;
+  if (!ns) return null;
+  const differs = (yes: boolean, what: string) => yes && <Badge tone="warning">{what}</Badge>;
+  const size =
+    ns.length_mm !== null && ns.width_mm !== null && ns.height_mm !== null
+      ? `${centimetres(ns.length_mm)} × ${centimetres(ns.width_mm)} × ${centimetres(ns.height_mm)} cm`
+      : null;
+  return (
+    <Section title="What NetSuite says">
+      <Card>
+        <div className={s.summary}>
+          {ns.picture && (
+            <figure className={s.figure}>
+              <img className={s.netsuitePicture} src={imageUrl(ns.picture)} alt={`${item.code}, as NetSuite pictures it`} />
+              {ns.picture_not_it ? (
+                <figcaption className={s.caption}>Said not to be this product, so shown to nobody</figcaption>
+              ) : (
+                item.main_picture !== ns.picture && (
+                  <div>
+                    <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.sayPicture("main", ns.picture)}>
+                      Use as main picture
+                    </Button>
+                  </div>
+                )
+              )}
+              <div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={desk.busy}
+                  onClick={() => void desk.sayPicture(ns.picture_not_it ? "is_it" : "not_it", ns.picture)}
+                >
+                  {ns.picture_not_it ? "It is this product" : "Not this product"}
+                </Button>
+              </div>
+            </figure>
+          )}
+          <Facts columns={1}>
+            <Fact label="Art No." always>
+              {ns.art_no ? <span className={s.code}>{ns.art_no}</span> : <Faint>Not set</Faint>}
+            </Fact>
+            <Fact label="UPC" always>
+              {ns.upc ? <span className={s.code}>{ns.upc}</span> : <Faint>Not set</Faint>}{" "}
+              {differs(ns.upc_differs, "Not a barcode scanned here")}
+            </Fact>
+            <Fact label="Weight" always>
+              {ns.weight_g !== null ? kgOf(ns.weight_g) : <Faint>Not set</Faint>} {differs(ns.weight_differs, "Differs from what was weighed")}
+            </Fact>
+            <Fact label="Size (L × W × H)" always>
+              {size ?? <Faint>Not set</Faint>} {differs(ns.size_differs, "Differs from what was measured")}
+            </Fact>
+          </Facts>
+        </div>
+        <p className={s.note}>
+          As NetSuite said it {dateTime(ns.as_at)}, for what it counts one of. Where it differs, put it right in NetSuite.
+        </p>
+      </Card>
+    </Section>
+  );
+}
+
 /**
  * An item code that opens the item's properties. A button, not a link: it
  * opens beside the work rather than leaving it.
@@ -662,6 +833,7 @@ export function ItemLine({
   picture,
   onOpen,
   note,
+  art,
   done = false,
 }: {
   code: string;
@@ -671,6 +843,8 @@ export function ItemLine({
   onOpen?: (() => void) | undefined;
   /** A word about it on this row, under what it is: which kit it is part of (D223). */
   note?: string | undefined;
+  /** Its article number, as NetSuite says it (D237): printed where the code isn't. */
+  art?: string | null | undefined;
   /** Dealt with, so drawn quieter. */
   done?: boolean | undefined;
 }) {
@@ -682,6 +856,7 @@ export function ItemLine({
         {/* An item made from a code alone has the code as its description;
             saying it twice is noise. */}
         {description && description !== code && <span className={s.itemDesc}>{description}</span>}
+        {art && <span className={s.art}>Art {art}</span>}
         {note && <span className={s.itemNote}>{note}</span>}
       </span>
     </span>
@@ -1660,7 +1835,9 @@ function Photo({ item }: { item: ItemView }) {
       <img className={s.photo} src={imageUrl(picture.digest)} alt={`${item.code}, front`} onError={() => setMissing(true)} />
       {picture.source !== "own" && (
         <figcaption className={s.caption}>
-          {picture.source === "variant"
+          {picture.source === "netsuite"
+            ? "NetSuite’s picture"
+            : picture.source === "variant"
             ? "Photo of a variant"
             : item.style
               ? `Photo of the ${item.style.code} family`

@@ -191,6 +191,11 @@ export interface PropertiesDesk {
   /** Say which level is one in NetSuite (D218). True when said. */
   sayUnit: (level: "each" | "inner" | "carton", quantity?: number) => Promise<boolean>;
   /**
+   * Say which picture is its main one, or none to choose as before; or that
+   * NetSuite's picture isn't this product, or is (D237). True when said.
+   */
+  sayPicture: (said: "main" | "not_it" | "is_it", digest: string | null) => Promise<boolean>;
+  /**
    * Move what is recorded on one of the item's cards to another of its cards
    * (D219), or another item's (D222). Moving to a carton nobody has said
    * the count of, `carton` says it (D232). True when moved.
@@ -726,6 +731,19 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         if (!live.current) return;
         await reload();
       }),
+
+    sayPicture: async (said, digest) => {
+      if (read.kind !== "ready") return false;
+      const item = read.item.item_id;
+      let done = false;
+      await press(`picture:${item}:${said}:${digest ?? ""}`, async (act) => {
+        await api.sayPicture(item, said, digest, act);
+        done = true;
+        if (!live.current) return;
+        await reload();
+      });
+      return done;
+    },
 
     sayUnit: async (level, quantity = 1) => {
       if (read.kind !== "ready") return false;

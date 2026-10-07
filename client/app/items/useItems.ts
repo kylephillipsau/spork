@@ -26,7 +26,7 @@ import { codesFrom } from "./lists";
  */
 
 export type Stock = "" | "here";
-export type Needs = "" | "weighing" | "measuring" | "photo" | "packing";
+export type Needs = "" | "weighing" | "measuring" | "photo" | "packing" | "netsuite";
 /** What has been done, to look over: the other way round from `Needs`. */
 export type Has = "" | "measured" | "photographed" | "both";
 export type Order = "" | "demand" | "packing" | "walk" | "list";
@@ -80,7 +80,7 @@ export interface ItemsDesk {
   making: { busy: boolean; problem: string | null; dismiss: () => void };
 }
 
-const NEEDS: readonly Needs[] = ["weighing", "measuring", "photo", "packing"];
+const NEEDS: readonly Needs[] = ["weighing", "measuring", "photo", "packing", "netsuite"];
 const HAS: readonly Has[] = ["measured", "photographed", "both"];
 const ORDERS: readonly Order[] = ["demand", "packing", "walk", "list"];
 

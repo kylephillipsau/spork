@@ -27,12 +27,13 @@
 //! Nothing here writes: weighing, measuring and photographing are
 //! `POST /weighings`, `POST /observations` and its images, as they were.
 
-use actix_web::{get, web, HttpRequest, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::capture::{self, CaptureSubject};
+use crate::client_events::{self, NewClientEvent};
 use crate::error::ApiError;
 use crate::pictures::{self, Picture};
 use crate::refile::{self, RecordedCard};
@@ -169,6 +170,33 @@ pub struct ItemView {
     /// only: a photograph is what one look at one box saw, and does not
     /// inherit (D132, D141).
     pub photos: Vec<SubjectPhoto>,
+    /// What NetSuite says of it, beside Spork's own record and never in its
+    /// place (D237); absent where NetSuite has said nothing.
+    pub netsuite: Option<ItemNetSuite>,
+    /// The picture somebody chose as its main one, by its content address (D237).
+    pub main_picture: Option<String>,
+}
+
+/// What NetSuite says of an item, and where that disagrees with what Spork
+/// measured and scanned (D237). NetSuite's word, as its last report gave it.
+#[derive(Serialize, Debug)]
+pub struct ItemNetSuite {
+    /// Its article number: NetSuite's Alternative Code, which order lines carry
+    /// as Art No. and the capture sheet as Supplier Part No. (D217).
+    pub art_no: Option<String>,
+    pub upc: Option<String>,
+    pub weight_g: Option<i32>,
+    pub length_mm: Option<i32>,
+    pub width_mm: Option<i32>,
+    pub height_mm: Option<i32>,
+    /// NetSuite's picture of it, once carried here.
+    pub picture: Option<String>,
+    /// Somebody said NetSuite's picture is not this product.
+    pub picture_not_it: bool,
+    pub weight_differs: bool,
+    pub size_differs: bool,
+    pub upc_differs: bool,
+    pub as_at: DateTime<Utc>,
 }
 
 /// One face of one subject, as last photographed.
@@ -439,6 +467,49 @@ pub async fn item_page(
                     })
                     .collect();
 
+                let netsuite = tx
+                    .query_opt(
+                        "SELECT r.supplier_part, r.upc, r.weight_g, r.length_mm, r.width_mm, r.height_mm,
+                                p.digest,
+                                coalesce((SELECT s.said = 'not_it' FROM item_picture_said s
+                                           WHERE s.item_id = r.item_id AND s.digest = p.digest
+                                             AND s.said IN ('not_it', 'is_it')
+                                           ORDER BY s.recorded_at DESC, s.id DESC LIMIT 1), false),
+                                coalesce(d.weight_differs, false), coalesce(d.size_differs, false),
+                                coalesce(d.upc_differs, false), r.as_at
+                           FROM reported_item r
+                           LEFT JOIN reported_item_picture p
+                             ON p.item_id = r.item_id AND p.source = r.source AND p.file = r.picture_file
+                           LEFT JOIN item_netsuite_differs d ON d.item_id = r.item_id
+                          WHERE r.item_id = $1
+                          ORDER BY r.as_at DESC
+                          LIMIT 1",
+                        &[&id],
+                    )
+                    .await?
+                    .map(|n| ItemNetSuite {
+                        art_no: n.get(0),
+                        upc: n.get(1),
+                        weight_g: n.get(2),
+                        length_mm: n.get(3),
+                        width_mm: n.get(4),
+                        height_mm: n.get(5),
+                        picture: n.get(6),
+                        picture_not_it: n.get(7),
+                        weight_differs: n.get(8),
+                        size_differs: n.get(9),
+                        upc_differs: n.get(10),
+                        as_at: n.get(11),
+                    });
+                let main_picture: Option<String> = tx
+                    .query_opt(
+                        "SELECT digest FROM item_picture_said WHERE item_id = $1 AND said = 'main'
+                          ORDER BY recorded_at DESC, id DESC LIMIT 1",
+                        &[&id],
+                    )
+                    .await?
+                    .and_then(|r| r.get(0));
+
                 Ok(ItemView {
                     item_id: id,
                     code: r.get(0),
@@ -456,11 +527,113 @@ pub async fn item_page(
                     subjects,
                     box_picture,
                     photos,
+                    netsuite,
+                    main_picture,
                 })
             })
         })
         .await?;
     Ok(HttpResponse::Ok().json(view))
+}
+
+/// These items' article numbers, as NetSuite says them (D237): one read
+/// however many a screen lists, as their pictures are (`pictures::of`). An
+/// item NetSuite gives none is not in the map.
+pub async fn art_numbers(
+    tx: &tokio_postgres::Transaction<'_>,
+    items: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, String>, ApiError> {
+    Ok(tx
+        .query(
+            "SELECT DISTINCT ON (item_id) item_id, supplier_part FROM reported_item
+              WHERE item_id = ANY($1) AND supplier_part IS NOT NULL
+              ORDER BY item_id, as_at DESC",
+            &[&items],
+        )
+        .await?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect())
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SayPictureRequest {
+    /// `main`, `not_it` or `is_it`.
+    pub said: String,
+    /// The picture, by its content address; for `main`, none goes back to
+    /// choosing as before.
+    pub digest: Option<String>,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Say which picture is an item's main one, a photograph of it or NetSuite's,
+/// or that NetSuite's picture is not this product, or is after all (D237).
+/// Spork's word, so a new load of NetSuite's feed changes none of it.
+#[post("/items/{id}/pictures")]
+pub async fn say_picture(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<SayPictureRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let item = path.into_inner();
+    let body = body.into_inner();
+    if !matches!(body.said.as_str(), "main" | "not_it" | "is_it") {
+        return Err(ApiError::Rejected("a picture is said to be the main one, not it, or it".into()));
+    }
+    if body.said != "main" && body.digest.is_none() {
+        return Err(ApiError::Rejected("say which picture".into()));
+    }
+    let ev = NewClientEvent {
+        tenant_id: who.tenant_id,
+        client_event_id: body.client_event_id,
+        site_id: who.site_id,
+        recorded_by_id: who.person_id,
+        submitted_at: body.occurred_at,
+    };
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item]).await?.ok_or(ApiError::NotFound)?;
+                // Only a picture of this item: a photograph of it, cut or not,
+                // its box drawing, or NetSuite's; for `not_it`, NetSuite's.
+                if let Some(digest) = &body.digest {
+                    let netsuite = "SELECT 1 FROM reported_item_picture WHERE item_id = $1 AND digest = $2";
+                    let any = "SELECT 1 FROM observation_image oi
+                                 JOIN observation_event e ON e.id = oi.observation_event_id
+                                 JOIN observable o ON o.id = e.observable_id
+                                 LEFT JOIN LATERAL cut_of(oi.id) cut ON true
+                                WHERE o.item_id = $1 AND (oi.digest = $2 OR cut.digest = $2)
+                               UNION ALL
+                               SELECT 1 FROM box_picture WHERE item_id = $1 AND digest = $2
+                               UNION ALL
+                               SELECT 1 FROM reported_item_picture WHERE item_id = $1 AND digest = $2";
+                    let sql = if body.said == "main" { any } else { netsuite };
+                    if tx.query_opt(&format!("{sql} LIMIT 1"), &[&item, digest]).await?.is_none() {
+                        return Err(ApiError::Rejected(if body.said == "main" {
+                            "that isn't a picture of this item".into()
+                        } else {
+                            "that isn't NetSuite's picture of this item".into()
+                        }));
+                    }
+                }
+                if client_events::claim_act(tx, &ev).await?.is_replay() {
+                    return Ok(());
+                }
+                tx.execute(
+                    "INSERT INTO item_picture_said (tenant_id, item_id, digest, said, client_event_id, recorded_by_id)
+                     VALUES ($1, $2, $3, $4, $5, $6)",
+                    &[&ev.tenant_id, &item, &body.digest, &body.said, &ev.client_event_id, &ev.recorded_by_id],
+                )
+                .await?;
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 // ---------------------------------------------------------------------------
@@ -637,6 +810,9 @@ pub struct ItemRow {
     pub held: i64,
     /// Its place on the list asked for, from 1; absent when no list was.
     pub list_position: Option<i32>,
+    /// Its article number, as NetSuite says it (D237): what is printed on a
+    /// box that doesn't show the code.
+    pub art_no: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -692,6 +868,8 @@ pub(crate) struct ListAsk {
     measuring: bool,
     photo: bool,
     packing: bool,
+    /// Where NetSuite's weight, size or UPC disagree with Spork's (D237).
+    netsuite: bool,
     has_measured: bool,
     has_photo: bool,
     list: Option<Uuid>,
@@ -717,17 +895,18 @@ impl ListAsk {
             .flatten()
             .collect();
         let here = query.stock.as_deref() == Some("here");
+        let netsuite = query.needs.as_deref() == Some("netsuite");
         let (weighing, measuring, photo, packing) = match query.needs.as_deref() {
             Some("weighing") => (true, false, false, false),
             Some("measuring") => (false, true, false, false),
             Some("photo") => (false, false, true, false),
             Some("packing") => (false, false, false, true),
+            Some("netsuite") | None => (false, false, false, false),
             Some(other) => {
                 return Err(ApiError::Rejected(format!(
-                    "needs is weighing, measuring, photo or packing, not {other}"
+                    "needs is weighing, measuring, photo, packing or netsuite, not {other}"
                 )))
             }
-            None => (false, false, false, false),
         };
         let (has_measured, has_photo) = match query.has.as_deref() {
             Some("measured") => (true, false),
@@ -775,6 +954,7 @@ impl ListAsk {
             measuring,
             photo,
             packing,
+            netsuite,
             has_measured,
             has_photo,
             list,
@@ -801,6 +981,7 @@ pub(crate) async fn list_rows(
         measuring,
         photo,
         packing,
+        netsuite,
         has_measured,
         has_photo,
         list,
@@ -809,6 +990,14 @@ pub(crate) async fn list_rows(
         offset,
     } = ask;
     let order = *order;
+    // Where NetSuite's word and Spork's disagree (D237): read only when asked,
+    // being the one comparison over every item NetSuite has spoken of.
+    let differs = if *netsuite {
+        "AND EXISTS (SELECT 1 FROM item_netsuite_differs d
+                      WHERE d.item_id = c.id AND (d.weight_differs OR d.size_differs OR d.upc_differs))"
+    } else {
+        ""
+    };
     let pile = pile();
     let (sort_join, sort_by) = match order {
         Order::Code => ("", "n.code"),
@@ -845,7 +1034,10 @@ pub(crate) async fn list_rows(
                LEFT JOIN unit u ON u.item_id = i.id
               WHERE ($1::text IS NULL OR i.code ILIKE $1 OR i.description ILIKE $1
                      OR EXISTS (SELECT 1 FROM item_barcode b
-                                 WHERE b.item_id = i.id AND b.barcode = ANY($2::text[])))
+                                 WHERE b.item_id = i.id AND b.barcode = ANY($2::text[]))
+                     -- Its article number, printed where its code isn't (D237).
+                     OR EXISTS (SELECT 1 FROM reported_item r
+                                 WHERE r.item_id = i.id AND r.supplier_part ILIKE $1))
                 AND (NOT $3::bool
                      OR EXISTS (SELECT 1 FROM reported_stock rs
                                  WHERE rs.item_id = i.id AND rs.on_hand > 0
@@ -871,6 +1063,7 @@ pub(crate) async fn list_rows(
                          AND NOT {unit_sized}
                          AND NOT (SELECT s.as_it_is
                                     FROM ships_as_is(c.id, NULL, NULL, NULL, c.unit::packaging_level) s)))
+                {differs}
          ),
          page AS (
              SELECT n.*, row_number() OVER (ORDER BY {sort_by}) AS ordinal
@@ -884,7 +1077,9 @@ pub(crate) async fn list_rows(
                 (SELECT count(*) FROM needed), dem.lines, pile.code,
                 (SELECT e.position FROM item_list_entry e
                   WHERE e.item_list_id = $11 AND e.item_id = n.id),
-                pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0)
+                pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0),
+                (SELECT r.supplier_part FROM reported_item r WHERE r.item_id = n.id
+                  ORDER BY r.as_at DESC LIMIT 1)
            FROM page n
            LEFT JOIN to_pack tpk ON tpk.item_id = n.id
            LEFT JOIN item_style st ON st.id = n.style_id
@@ -964,6 +1159,7 @@ pub(crate) async fn list_rows(
             bin_within_reach: r.get(16),
             to_pack: r.get(17),
             to_pack_lines: r.get(18),
+            art_no: r.get(19),
         })
         .collect();
     Ok((items, total, more))

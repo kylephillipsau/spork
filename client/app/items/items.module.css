@@ -599,3 +599,50 @@
 .holdsBy {
   flex: 1 1 100%;
 }
+
+/* An item's article number, as NetSuite says it (D237): what is printed on a box
+   that doesn't show the code. */
+.art {
+  display: block;
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-xs);
+}
+
+/* The pictures an item could be shown by (D237). */
+.pictures {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--ui-space-2);
+}
+.pictureChoice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-1);
+  border: 2px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: var(--ui-text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+.pictureChoice[aria-pressed="true"] {
+  border-color: var(--ui-accent);
+}
+.pictureChoice img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: var(--ui-surface-sunken);
+}
+.netsuitePicture {
+  width: 160px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-sunken);
+}

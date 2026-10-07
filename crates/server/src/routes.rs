@@ -798,6 +798,8 @@ pub async fn read_image(
                          SELECT mime FROM observation_image_cut WHERE digest = $1
                          UNION ALL
                          SELECT mime FROM box_picture WHERE digest = $1
+                         UNION ALL
+                         SELECT mime FROM reported_item_picture WHERE digest = $1
                          LIMIT 1",
                         &[&wanted],
                     )
@@ -6194,7 +6196,7 @@ async fn issue_session(
 /// remember about it.
 ///
 /// It also means a leaked session cannot load a warehouse.
-async fn machine(
+pub(crate) async fn machine(
     state: &web::Data<AppState>,
     req: &HttpRequest,
 ) -> Result<auth::Machine, ApiError> {
@@ -9579,6 +9581,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::lists::lists)
         .service(crate::lists::change_list)
         .service(crate::correcting::correct)
+        .service(crate::reported_pictures::wanted)
+        .service(crate::reported_pictures::load)
+        .service(crate::items::say_picture)
         .service(crate::places::set_reach)
         .service(crate::places::site_layout)
         .service(crate::places::draft_layout)

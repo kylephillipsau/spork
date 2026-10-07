@@ -247,6 +247,7 @@ const PAIRS = [
   ["ItemStyleRef", ["ItemStyleRef"]],
   ["ItemPacking", ["ItemPacking"]],
   ["ItemUnit", ["ItemUnit"]],
+  ["ItemNetSuite", ["ItemNetSuite"]],
   ["Refiled", ["Refiled"]],
   ["RecordedCard", ["RecordedCard"]],
   ["FamilyMember", ["FamilyMember"]],

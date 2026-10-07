@@ -226,7 +226,7 @@ function Contents({ bin }: { bin: BinView }) {
       <ul className={s.items}>
         {items.map((i) => (
           <li key={i.item_id}>
-            <ItemLine code={i.item_code} description={i.description} picture={i.picture} onOpen={() => setLooking(i.item_id)} />
+            <ItemLine code={i.item_code} description={i.description} art={i.art_no} picture={i.picture} onOpen={() => setLooking(i.item_id)} />
             <span className={s.counts}>
               <span className={s.qty}>{i.on_hand === null ? "—" : Number(i.on_hand).toLocaleString()}</span>
               {i.held > 0 && <span className={s.held}>Spork {i.held.toLocaleString()}</span>}

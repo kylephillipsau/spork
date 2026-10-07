@@ -27,6 +27,8 @@ export interface BenchLine {
   item_id: Uuid;
   item_code: string;
   description: string | null;
+  /** Its article number, as NetSuite says it (D237). */
+  art_no: string | null;
   /** Still to do at the bench: committed less what is picked here or boxed. */
   remaining: number;
   /** What the line commits, all of it: what the whole order counts against (D202). */
@@ -591,8 +593,9 @@ export interface WeighingRecorded {
 export interface Picture {
   /** SHA-256. `GET /images/{digest}` serves the bytes inside the tenant scope. */
   digest: string;
-  /** `own` or `style`. An inherited picture drawn unlabelled claims to be a
-   *  photograph of this code when it is a photograph of another one. */
+  /** `own`, `style` or `variant`, or `netsuite`: NetSuite's picture of it
+   *  (D237). An inherited picture drawn unlabelled claims to be a photograph
+   *  of this code when it is a photograph of another one. */
   source: string;
 }
 
@@ -1523,6 +1526,29 @@ export interface ItemView {
   box_picture: BoxPicture | null;
   /** The newest photograph of each face of each subject; its own only (D132). */
   photos: SubjectPhoto[];
+  /** What NetSuite says of it, beside Spork's own record (D237); null where it has said nothing. */
+  netsuite: ItemNetSuite | null;
+  /** The picture somebody chose as its main one, by its content address (D237). */
+  main_picture: string | null;
+}
+
+/** What NetSuite says of an item, and where that disagrees with Spork (D237). */
+export interface ItemNetSuite {
+  /** Its article number: NetSuite's Alternative Code, Art No. on order lines. */
+  art_no: string | null;
+  upc: string | null;
+  weight_g: number | null;
+  length_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  /** NetSuite's picture of it, once carried here. */
+  picture: string | null;
+  /** Somebody said NetSuite's picture isn't this product. */
+  picture_not_it: boolean;
+  weight_differs: boolean;
+  size_differs: boolean;
+  upc_differs: boolean;
+  as_at: string;
 }
 
 /** An item drawn as its box from its front, right and top cuts (D186). */
@@ -1645,6 +1671,8 @@ export interface ItemRow {
   held: number;
   /** Its place on the list asked for, from 1; null when no list was (D179). */
   list_position: number | null;
+  /** Its article number, as NetSuite says it (D237). */
+  art_no: string | null;
 }
 
 /** `POST /items/{id}/lots`: a run of the item that looks different (D182). */
@@ -1753,6 +1781,8 @@ export interface BinItem {
   item_code: string;
   description: string;
   picture: Picture | null;
+  /** Its article number, as NetSuite says it (D237). */
+  art_no: string | null;
   /** NetSuite's newest count of it here, as text; null when only Spork's ledger has it here. */
   on_hand: string | null;
   /** What Spork's own ledger holds of it here. */

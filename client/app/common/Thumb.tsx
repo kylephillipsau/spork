@@ -27,7 +27,7 @@ export function Thumb({ picture, alt }: { picture: Picture | null; alt: string }
   return (
     <span className={s.thumb}>
       <img src={imageUrl(picture.digest)} alt={alt} loading="lazy" onError={() => setMissing(true)} />
-      {picture.source !== "own" && <span className={s.from}>{picture.source}</span>}
+      {picture.source !== "own" && <span className={s.from}>{picture.source === "netsuite" ? "NetSuite" : picture.source}</span>}
     </span>
   );
 }

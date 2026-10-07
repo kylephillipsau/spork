@@ -163,6 +163,7 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
                 { value: "needs:measuring", label: "Needs measuring" },
                 { value: "needs:photo", label: "Needs a photo" },
                 { value: "needs:packing", label: "Needs a size for packing" },
+                { value: "needs:netsuite", label: "Differs from NetSuite" },
               ]}
             />
           </div>
@@ -422,6 +423,7 @@ const COLUMNS: Column<ItemRow>[] = [
       <span className={s.named}>
         <span className={s.code}>{i.code}</span>
         {i.description !== i.code && <span className={s.described}>{i.description}</span>}
+        {i.art_no && <span className={s.art}>Art {i.art_no}</span>}
         {i.to_pack > 0 && <Faint>{toPack(i)}</Faint>}
       </span>
     ),

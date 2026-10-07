@@ -122,7 +122,10 @@ const ROUTES = [
   }
 }
 
-const VISITS = ROUTES.flatMap((route) =>
+// RENDER_ONLY=item/netsuite,items/list renders just the fixtures whose path
+// holds one of those; unset, every one.
+const ONLY = (process.env.RENDER_ONLY ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const VISITS = ROUTES.filter((route) => ONLY.length === 0 || ONLY.some((o) => route.path.includes(o))).flatMap((route) =>
   ["light", "dark"]
     .map((scheme) => ({ route, scheme, viewport: route.floor ? HANDHELD : BENCH, as: scheme }))
     .concat(route.floor ? [] : [{ route, scheme: "light", viewport: POCKET, as: "pocket" }])

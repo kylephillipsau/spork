@@ -127,6 +127,7 @@ import {
   CARTON_MEASURING,
   PAIR_CARTON,
   CORRECTING,
+  ITEM_NETSUITE,
   fixturePhotoQueue,
   TURNED,
   CROPPING,
@@ -718,6 +719,9 @@ export const FIXTURES: readonly Screen[] = [
   )),
   app("f-item-correcting", "/fixtures/item/correcting", "Item — putting figures right", "floor", { screen: "item" }, () => (
     <ItemPage desk={CORRECTING} />
+  )),
+  app("f-item-netsuite", "/fixtures/item/netsuite", "Item — what NetSuite says", "floor", { screen: "item" }, () => (
+    <ItemPage desk={fixtureProperties(ITEM_NETSUITE)} />
   )),
   // The warehouse: none yet, its draft previewed (and adjusted: a lone code's
   // "rack" left out, three racks with two sides), a rack chosen with its

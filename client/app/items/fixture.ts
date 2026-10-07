@@ -151,6 +151,8 @@ const BRUSH_FAMILY_MEMBERS: FamilyMember[] = [
 ];
 
 export const ITEM: ItemView = {
+  netsuite: null,
+  main_picture: null,
   item_id: BRUSH,
   code: "SKU-5120B",
   description: "Floor brush, 450 mm, blue",
@@ -243,6 +245,8 @@ export const ITEM: ItemView = {
 };
 
 export const ITEM_UNKNOWN: ItemView = {
+  netsuite: null,
+  main_picture: null,
   item_id: TAPE_GUN,
   code: "SKU-8837",
   description: "Tape gun, 50 mm",
@@ -303,6 +307,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     shipAsIs: later,
     keepUpright: later,
     flagBin: async () => null,
+    sayPicture: async () => false,
     sayUnit: async () => false,
     refile: async () => false,
     matchFamily: async () => false,
@@ -622,6 +627,29 @@ export const CORRECTING = fixtureProperties(SOLD_BY_BOX, {
   holds: { by: "packs", count: "10", per: "200", in: 1 },
 });
 
+/**
+ * What NetSuite says of the brush beside what Spork recorded (D237): its
+ * article number, a UPC no barcode scanned here matches, a weight far from
+ * the one weighed, and its picture.
+ */
+export const ITEM_NETSUITE: ItemView = {
+  ...ITEM,
+  netsuite: {
+    art_no: "ART-51200",
+    upc: "9300000000017",
+    weight_g: 900,
+    length_mm: 450,
+    width_mm: 80,
+    height_mm: 60,
+    picture: ITEM.picture?.digest ?? null,
+    picture_not_it: false,
+    weight_differs: true,
+    size_differs: false,
+    upc_differs: true,
+    as_at: "2026-10-08T02:00:00Z",
+  },
+};
+
 /** A carton of six pairs being weighed, counted as twelve boots. */
 export const PAIR_CARTON = fixtureProperties(SOLD_BY_PAIR, {
   open: { key: `${BOOTS}:carton`, action: "weigh" },
@@ -731,6 +759,7 @@ export const RECROPPING = fixtureProperties(ITEM, {
 let row = 0;
 const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): ItemRow => ({
   item_id: `01990000-0000-7000-8000-00000000c${String(++row).padStart(3, "0")}`,
+  art_no: null,
   active: true,
   style_code: null,
   picture: null,

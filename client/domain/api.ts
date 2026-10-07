@@ -782,7 +782,7 @@ export const api = {
   items: (query: {
     q?: string;
     stock?: "here";
-    needs?: "weighing" | "measuring" | "photo" | "packing";
+    needs?: "weighing" | "measuring" | "photo" | "packing" | "netsuite";
     /** What has been done: measured, photographed, or both. */
     has?: "measured" | "photographed" | "both";
     /** Only the items on this list (D179). */
@@ -845,6 +845,18 @@ export const api = {
   /** Say this item's picture stands for its family, or that none does (D188). */
   setFamilyPicture: (itemId: Uuid, pictures: boolean) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/family-picture`, { pictures }),
+
+  /**
+   * Say which picture is an item's main one, a photograph or NetSuite's, or
+   * none to choose as before; or that NetSuite's isn't this product (D237).
+   */
+  sayPicture: (itemId: Uuid, said: "main" | "not_it" | "is_it", digest: string | null, act: Act) =>
+    send<void>("POST", `/items/${encodeURIComponent(itemId)}/pictures`, {
+      said,
+      digest,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
 
   /** Say which variant stands for the item's carton, or none (D184). */
   setDefaultLot: (itemId: Uuid, lot: Uuid | null) =>

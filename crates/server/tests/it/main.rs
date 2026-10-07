@@ -49,6 +49,7 @@ mod receipt_entered;
 mod receipt_header;
 mod receipt_http;
 mod receiving_list_http;
+mod netsuite_item_http;
 mod refile_http;
 mod reported_stock_import;
 mod round_http;

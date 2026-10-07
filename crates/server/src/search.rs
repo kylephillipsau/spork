@@ -130,7 +130,10 @@ async fn entries(state: &web::Data<AppState>, tenant: Uuid) -> Result<Vec<Entry>
                 for r in tx
                     .query(
                         "SELECT i.id, i.code, i.description, s.code,
-                                (SELECT array_agg(b.barcode) FROM item_barcode b WHERE b.item_id = i.id)
+                                (SELECT array_agg(b.barcode) FROM item_barcode b WHERE b.item_id = i.id),
+                                -- Its article number, printed where its code isn't (D237).
+                                (SELECT r.supplier_part FROM reported_item r WHERE r.item_id = i.id
+                                  ORDER BY r.as_at DESC LIMIT 1)
                            FROM item i LEFT JOIN item_style s ON s.id = i.style_id
                           WHERE i.active",
                         &[],
@@ -143,6 +146,7 @@ async fn entries(state: &web::Data<AppState>, tenant: Uuid) -> Result<Vec<Entry>
                     let mut codes = vec![code.clone()];
                     codes.extend(r.get::<_, Option<Vec<String>>>(4).unwrap_or_default());
                     codes.extend(style.clone());
+                    codes.extend(r.get::<_, Option<String>>(5));
                     out.push(Entry {
                         kind: "item",
                         id: r.get(0),

@@ -44,7 +44,8 @@ pub struct Picture {
     /// The content address. `GET /images/{digest}` serves the bytes, inside the
     /// tenant scope, so knowing one is not enough to read it.
     pub digest: String,
-    /// `own` or `style`. D108's vocabulary, doing a second job.
+    /// `own`, `style` or `variant`, D108's vocabulary doing a second job; or
+    /// `netsuite`, NetSuite's picture of it (D237).
     pub source: String,
 }
 
@@ -105,9 +106,37 @@ boxed AS (
       JOIN packaging_type t ON t.code = pk.packaging_type AND NOT t.six_sided
             WHERE x.digest = b.made_from[1])
 ),
+-- What somebody said of its pictures (D237): the main one, newest saying
+-- first; and NetSuite's that are not this product.
+picture_chosen AS (
+    SELECT DISTINCT ON (s.item_id) s.item_id, s.digest
+      FROM item_picture_said s
+     WHERE s.said = 'main'
+     ORDER BY s.item_id, s.recorded_at DESC, s.id DESC
+),
+picture_netsuite AS (
+    SELECT rp.item_id, rp.digest
+      FROM reported_item_picture rp
+      JOIN reported_item r ON r.item_id = rp.item_id AND r.source = rp.source AND r.picture_file = rp.file
+     WHERE NOT EXISTS (
+           SELECT 1 FROM (SELECT DISTINCT ON (s.item_id, s.digest) s.said
+                            FROM item_picture_said s
+                           WHERE s.item_id = rp.item_id AND s.digest = rp.digest AND s.said IN ('not_it', 'is_it')
+                           ORDER BY s.item_id, s.digest, s.recorded_at DESC, s.id DESC) x
+            WHERE x.said = 'not_it')
+),
 picture AS (
     SELECT DISTINCT ON (p.item_id) p.item_id, p.digest, p.source
       FROM (
+            -- The picture chosen as its main one, a photograph or NetSuite's (D237).
+            SELECT c.item_id, c.digest,
+                   CASE WHEN EXISTS (SELECT 1 FROM reported_item_picture rp
+                                      WHERE rp.item_id = c.item_id AND rp.digest = c.digest)
+                        THEN 'netsuite' ELSE 'own' END AS source,
+                   -1 AS rank, NULL::timestamptz AS at
+              FROM picture_chosen c
+             WHERE c.digest IS NOT NULL
+             UNION ALL
             -- Its box, drawn from three cut faces (D186), before any photograph.
             SELECT b.item_id, b.digest, 'own' AS source, 0 AS rank, b.recorded_at AS at
               FROM boxed b
@@ -127,6 +156,10 @@ picture AS (
               FROM item i
               JOIN item_style st ON st.id = i.style_id
              WHERE st.picture_item_id IS NOT NULL AND st.picture_item_id <> i.id
+            UNION ALL
+            -- NetSuite's, until anything of Spork's pictures it (D237).
+            SELECT n.item_id, n.digest, 'netsuite', 4, NULL
+              FROM picture_netsuite n
            ) p
      WHERE p.digest IS NOT NULL
      ORDER BY p.item_id, p.rank, p.at DESC NULLS LAST

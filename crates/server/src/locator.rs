@@ -80,7 +80,7 @@ pub struct Subject {
     pub id: Uuid,
     pub code: String,
     pub description: Option<String>,
-    /// Which surface answered: `item_barcode`, `item_code`, `package_barcode`,
+    /// Which surface answered: `item_barcode`, `item_code`, `item_art_no` (D237), `package_barcode`,
     /// `package_sscc` or `location_code`. Two arms agreeing on one subject is
     /// one hit, and this says which of them spoke.
     pub via: String,
@@ -201,6 +201,30 @@ pub async fn resolve(
                             via: "item_code".into(),
                             capture: vec![],
                         });
+                    }
+                    // **And its article number** (D237), as exactly: NetSuite's
+                    // Alternative Code, printed on boxes that don't show the
+                    // code. Two items under one article number are both said.
+                    let by_art = tx
+                        .query(
+                            "SELECT DISTINCT i.id, i.code, i.description
+                               FROM reported_item r JOIN item i ON i.id = r.item_id
+                              WHERE upper(r.supplier_part) = upper($1)",
+                            &[&scan.raw],
+                        )
+                        .await?;
+                    for r in &by_art {
+                        let id: Uuid = r.get(0);
+                        if found.iter().all(|f| f.id != id) {
+                            found.push(Subject {
+                                kind: "item".into(),
+                                id,
+                                code: r.get(1),
+                                description: r.get(2),
+                                via: "item_art_no".into(),
+                                capture: vec![],
+                            });
+                        }
                     }
                 }
 
