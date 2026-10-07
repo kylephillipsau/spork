@@ -55,6 +55,7 @@ import type {
   SiteRow,
   WorkWaiting,
   PickListScreen,
+  ToPick,
   PutawayScreen,
   ReceivingScreen,
   RecordReceiptResponse,
@@ -1165,6 +1166,8 @@ export const api = {
    * this model: they scan what they are putting the goods on (D166).
    */
   picking: (site: Uuid) => send<PickListScreen>("GET", `/sites/${site}/picking`),
+  /** A batch of orders to pick, looked up and shared out (D231, D230). */
+  toPick: (site: Uuid, ask: ToPickAsk) => send<ToPick>("GET", `/sites/${site}/to-pick?${toPickQuery(ask)}`),
 
   /**
    * What is expected here and has not all arrived.
@@ -1448,3 +1451,19 @@ export const api = {
       occurred_at: act.at,
     }),
 };
+
+/** A batch of orders to look up, and how to share it out (D231, D230). */
+export interface ToPickAsk {
+  orders: readonly string[];
+  pickers: number;
+  perTrip: number | null;
+  gather: boolean;
+}
+
+/** The query the lookup and the printed tickets both take; `walk` adds walk sheets. */
+export function toPickQuery(ask: ToPickAsk, walk = false): string {
+  const q = new URLSearchParams({ orders: ask.orders.join(","), pickers: String(ask.pickers), gather: String(ask.gather) });
+  if (ask.perTrip) q.set("per_trip", String(ask.perTrip));
+  if (walk) q.set("walk", "true");
+  return q.toString();
+}

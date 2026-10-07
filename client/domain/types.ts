@@ -1952,3 +1952,91 @@ export interface LayoutEdited {
 export interface ScaleSet {
   cell_mm: number;
 }
+
+/** Where an asked order stands (D231). */
+export type AskedState = "waiting" | "part_picked" | "picked" | "packed" | "shipped" | "closed" | "elsewhere" | "unknown";
+
+/** `GET /sites/{id}/to-pick`: a batch of orders to pick (D231), and who walks which (D230). */
+export interface ToPick {
+  /** When NetSuite last said what it has open here; null when it hasn't. */
+  orders_as_at: string | null;
+  /** How old the bins' counts are (D212). */
+  balance_as_at: string | null;
+  orders: AskedOrder[];
+  /** Null when nothing is waiting, or the batch is too big to share out. */
+  plan: PickPlan | null;
+}
+
+export interface AskedOrder {
+  /** As pasted, or its number when nothing was. */
+  asked: string;
+  number: string | null;
+  state: AskedState;
+  ordered_on: string | null;
+  customer: string | null;
+  ship_to: string | null;
+  picking_instructions: string | null;
+  customer_notes: string | null;
+  ship_via: string | null;
+  po_ref: string | null;
+  status: string | null;
+  lines: ToPickLine[];
+}
+
+export interface ToPickLine {
+  line_key: string;
+  line_no: number | null;
+  item_id: Uuid | null;
+  code: string;
+  description: string | null;
+  art_no: string | null;
+  picture: Picture | null;
+  ordered: number;
+  committed: number | null;
+  to_pick: number;
+  /** A kit's own line, picked as its parts (D223). */
+  kit: boolean;
+  part_of: string | null;
+  /** Where to take it from, in the order to go. */
+  takes: Take[];
+  /** What no bin covers. */
+  short: number;
+}
+
+export interface Take {
+  location_id: Uuid;
+  bin: string;
+  quantity: number;
+  on_hand: number;
+  within_reach: boolean;
+}
+
+export interface PickPlan {
+  from: "pack" | "free" | "none";
+  cell_mm: number | null;
+  /** Each picker's trips. */
+  pickers: PlannedTrip[][];
+}
+
+export interface PlannedTrip {
+  orders: string[];
+  walked: number;
+  minutes: number | null;
+  stops: PlannedStop[];
+}
+
+export interface PlannedStop {
+  bin: string | null;
+  within_reach: boolean | null;
+  code: string;
+  description: string | null;
+  takes: StopTake[];
+  off_route: boolean;
+}
+
+export interface StopTake {
+  order: string;
+  quantity: number;
+  /** For an order on another trip: taken here, sorted at the bench. */
+  gathered: boolean;
+}

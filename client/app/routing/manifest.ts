@@ -89,6 +89,7 @@ export const SCREENS: readonly ScreenSpec[] = [
   // thing on the row — and a chrome locator beside it is two places to aim a
   // reader, fighting over the caret.
   spec("picking", "/picking", "Picking", "floor", { claimsScan: true }),
+  spec("to-pick", "/to-pick", "To pick", "desk"),
   // The other half of the same argument: one scan field, asking whichever
   // question is open — what did you pick up, then which bin is this.
   // The step before it, and the same shape again: scan the bay, then scan each

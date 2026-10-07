@@ -23,6 +23,8 @@ import { DespatchPage } from "@app/outbound/despatch/DespatchPage";
 import { useDespatch } from "@app/outbound/despatch/useDespatch";
 import { PickingPage, PickingDock } from "@app/outbound/picking/PickingPage";
 import { usePicking } from "@app/outbound/picking/usePicking";
+import { ToPickPage } from "@app/outbound/picking/ToPickPage";
+import { useToPick } from "@app/outbound/picking/useToPick";
 import { PutawayPage, PutawayDockPage } from "@app/inbound/putaway/PutawayPage";
 import { usePutaway } from "@app/inbound/putaway/usePutaway";
 import { ReceivingPage, ReceivingDockPage } from "@app/inbound/receiving/ReceivingPage";
@@ -178,6 +180,10 @@ function LivePutaway() {
       </Dock>
     </>
   );
+}
+
+function LiveToPick() {
+  return <ToPickPage desk={useToPick()} />;
 }
 
 function LivePicking() {
@@ -352,6 +358,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   weigh: () => <Moved to="/items?stock=here&needs=weighing&order=demand" />,
   capture: () => <Moved to="/items?stock=here&needs=measuring&order=walk" />,
   picking: () => <LivePicking />,
+  "to-pick": () => <LiveToPick />,
   receiving: () => <LiveReceiving />,
   putaway: () => <LivePutaway />,
   orders: () => <LiveOrders />,

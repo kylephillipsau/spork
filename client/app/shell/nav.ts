@@ -13,6 +13,7 @@ import {
   DatabaseBackup,
   Users,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   Crop,
   KeyRound,
@@ -58,6 +59,7 @@ export const NAV: readonly NavGroup[] = [
     label: "Outbound",
     items: [
       { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
+      { id: "to-pick", label: "To pick", path: "/to-pick", icon: ClipboardCheck },
       { id: "picking", label: "Picking", path: "/picking", icon: ScanLine, badge: "pick" },
       { id: "pack", label: "Packing", path: "/pack", icon: Package, badge: "pack" },
       { id: "despatch", label: "Despatch", path: "/despatch", icon: Truck, badge: "despatch" },

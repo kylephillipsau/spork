@@ -39,6 +39,9 @@ use crate::AppState;
 
 /// The most orders one batch is asked about.
 const MOST_ASKED: usize = 200;
+/// The most waiting orders shared out at once. Nobody shares out a whole
+/// warehouse's open orders, and planning them would take too long to wait for.
+pub const MOST_PLANNED: usize = 40;
 /// A walking pace and the time a stop takes, for the minutes a trip is said
 /// to take once the site is measured, and to weigh stops against walking
 /// when trips are shared out. Estimates, said as "about".
@@ -514,6 +517,9 @@ async fn plan(
 ) -> Result<Option<PickPlan>, ApiError> {
     let waiting: Vec<&AskedOrder> =
         orders.iter().filter(|o| (o.state == "waiting" || o.state == "part_picked") && o.number.is_some()).collect();
+    if waiting.len() > MOST_PLANNED {
+        return Ok(None);
+    }
     // Every take, and what no bin covers, as a pick.
     let mut picks: Vec<(usize, Planned)> = vec![];
     for (i, o) in waiting.iter().enumerate() {
