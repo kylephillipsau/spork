@@ -70,7 +70,8 @@ export interface PackUnit {
   /** `own`, `style` or `mixed` (D108). */
   source: string;
   style_code: string | null;
-  /** Its sides cut from photographs (D176), by face, to draw it with. */
+  /** Its sides cut from photographs (D176), by face, to draw it with; a side
+   *  said to look like another wears that one's cut (D183). */
   faces: Partial<Record<"front" | "back" | "left" | "right" | "top" | "bottom", string>>;
 }
 

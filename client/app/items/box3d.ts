@@ -118,13 +118,7 @@ export class BoxScene {
       this.loader.load(this.imageUrl(digest), (image) => {
         // Painted again since (other photos, or the theme): this one is stale.
         if (painting !== this.painting) return;
-        const texture = new Texture(shrink(image, TEXTURE_PX));
-        texture.colorSpace = SRGBColorSpace;
-        const fit = cover(faceAspect(face, this.size), image.width / image.height);
-        texture.repeat.set(...fit.repeat);
-        texture.offset.set(...fit.offset);
-        texture.needsUpdate = true;
-        this.dress(material, texture);
+        this.dress(material, faceTexture(image, face, this.size, TEXTURE_PX));
       });
     });
   }
@@ -151,6 +145,21 @@ export class BoxScene {
     texture.colorSpace = SRGBColorSpace;
     return texture;
   }
+}
+
+/**
+ * A photograph as one face of a box this size, its longest side `px` at most,
+ * covering the face without stretching. The one way a photo goes on a box, so
+ * a thing looks the same on its page and in the packing plan.
+ */
+export function faceTexture(image: HTMLImageElement, face: BoxFace, size: [number, number, number], px: number): Texture {
+  const texture = new Texture(shrink(image, px));
+  texture.colorSpace = SRGBColorSpace;
+  const fit = cover(faceAspect(face, size), image.width / image.height);
+  texture.repeat.set(...fit.repeat);
+  texture.offset.set(...fit.offset);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /** The image itself when it is small enough, or a copy whose longest side is `px`. */

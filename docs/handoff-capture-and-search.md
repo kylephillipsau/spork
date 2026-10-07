@@ -9,11 +9,15 @@ still covers the toolchain, tests, layout and packing.
 - Spork `main` is pushed, through D229.
 - `warehouse-scripts` is pushed. Spork Bridge 0.8.0 is published: it sends
   each line's item type and a kit part's kit line (D223).
-- The database is at migration 126 after the next `local.ps1 start`. Nothing
-  since D223 adds one.
+- The database is at migration 127 after the next `local.ps1 start`: D183's
+  amendment adds `cut_of`. Rebuild the server and client before starting.
 - 2026-10-06, on a fresh database: every migration up and down; the server's
   unit tests (283) and integration tests (154) all pass; the client's tests,
   laws, contract and render (133 fixtures) pass.
+- From 2026-10-07, `unit_http::an_item_leads_with_what_netsuite_counts_one_of`
+  fails at HEAD as well: its case pack starts `current_date - 1` and its
+  weighing is dated 2026-10-05, so the weighing now falls before the case
+  pack. The test's dates need tying together. Every other test passes.
 - The invariants: S7 and S10 fail, as they have since migrations 118 and 119
   (a trigger that is not a projection's, a jsonb column). After the
   integration suite has written to the database, J1 also finds two GLOVE-M
@@ -275,6 +279,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - Items can be narrowed to what has been done as well as what needs doing:
   Measured, Photographed, or both (`GET /items?has=`), the other way round
   from `needs`, family figures and pictures counting as they do there.
+- D183, amended (migration 127). A side said to look like another ("Same as
+  front") now shows on the packing plan's 3D boxes as it does on the item
+  page. The cut a photograph shows is one SQL function, `cut_of(image)`,
+  joined by the item page, the bench's sides and the list picture; the bench
+  and the picture had looked only for a cut of the row itself. In 3D, both
+  scenes put a photo on a face with `faceTexture` (`app/items/box3d.ts`).
 
 ## Known limits
 

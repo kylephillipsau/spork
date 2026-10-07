@@ -84,13 +84,7 @@ front AS (
            ) c
       JOIN observation_event e ON e.observable_id = c.observable_id
       JOIN observation_image oi ON oi.observation_event_id = e.id
-      LEFT JOIN LATERAL (
-           SELECT x.digest
-             FROM observation_image_cut x
-            WHERE x.observation_image_id = oi.id
-            ORDER BY x.recorded_at DESC, x.id DESC
-            LIMIT 1
-      ) cut ON true
+      LEFT JOIN LATERAL cut_of(oi.id) cut ON true
      WHERE oi.face = 'front'
        AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
      ORDER BY c.item_id, c.rank, oi.captured_at DESC, oi.id DESC

@@ -406,13 +406,7 @@ pub async fn item_page(
                            JOIN observation_event e ON e.observable_id = o.id
                            JOIN observation_image oi ON oi.observation_event_id = e.id
                            LEFT JOIN observation_image src ON src.id = oi.same_as_id
-                           LEFT JOIN LATERAL (
-                                SELECT c.digest, c.corners
-                                  FROM observation_image_cut c
-                                 WHERE c.observation_image_id = coalesce(oi.same_as_id, oi.id)
-                                 ORDER BY c.recorded_at DESC, c.id DESC
-                                 LIMIT 1
-                           ) cut ON true
+                           LEFT JOIN LATERAL cut_of(oi.id) cut ON true
                           WHERE (o.item_id = $1
                              OR o.item_style_id = (SELECT style_id FROM item WHERE id = $1)
                              OR o.item_part_id IN (SELECT id FROM item_part WHERE item_id = $1)

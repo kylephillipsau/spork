@@ -139,7 +139,8 @@ pub struct PackUnit {
     /// `own`, `style` or `mixed` (D108): a family's figure says it is one.
     pub source: String,
     pub style_code: Option<String>,
-    /// Its sides cut from photographs (D176), by face, to draw it with.
+    /// Its sides cut from photographs (D176), by face, to draw it with; a side
+    /// said to look like another wears that one's cut (D183).
     pub faces: BTreeMap<String, String>,
 }
 
@@ -613,8 +614,9 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
     let pictured = pictures::of(tx, &ids).await?;
     // The newest cut of each side of its own each, inner or carton (D176), not
     // one moved to another subject: a carton that ships as it is is drawn as
-    // itself. Only cut faces: an uncut photo is the bench behind the box as
-    // much as the box.
+    // itself. A side said to look like another wears that one's cut (D183),
+    // as on the item page. Only cut faces: an uncut photo is the bench behind
+    // the box as much as the box.
     let mut faces: HashMap<(Uuid, String), BTreeMap<String, String>> = HashMap::new();
     for r in tx
         .query(
@@ -623,11 +625,7 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
                FROM observable o
                JOIN observation_event e ON e.observable_id = o.id
                JOIN observation_image oi ON oi.observation_event_id = e.id
-               JOIN LATERAL (
-                    SELECT c.digest FROM observation_image_cut c
-                     WHERE c.observation_image_id = oi.id
-                     ORDER BY c.recorded_at DESC, c.id DESC
-                     LIMIT 1) x ON true
+               JOIN LATERAL cut_of(oi.id) x ON true
               WHERE o.item_id = ANY($1)
                 AND o.packaging_level IN ('each', 'inner', 'carton')
                 AND oi.face IN ('front', 'back', 'left', 'right', 'top', 'bottom')

@@ -11,13 +11,14 @@ import {
   MeshBasicMaterial,
   PerspectiveCamera,
   SRGBColorSpace,
-  Texture,
+  type Texture,
   Vector3,
   type Color,
 } from "three";
 
 import { Stage } from "@app/common/stage3d";
-import { MATERIAL_ORDER, cover, faceAspect, type BoxFace } from "@app/items/box";
+import { MATERIAL_ORDER, type BoxFace } from "@app/items/box";
+import { faceTexture } from "@app/items/box3d";
 
 import type { Dims, Kind, Layer, Placement } from "./arrange";
 import { tone } from "./tones";
@@ -29,7 +30,7 @@ import { tone } from "./tones";
  * up to a layer, so the view follows the steps.
  *
  * Built on the shared [`Stage`]; the faces go on as the item page's box puts
- * them on ([`cover`], [`faceAspect`]), so a thing looks the same in both.
+ * them on ([`faceTexture`]), so a thing looks the same in both.
  *
  * **The whole order, side by side** (D202): every parcel on one bench, each
  * box with what goes in it, each thing that ships as it is as itself, and each
@@ -225,12 +226,7 @@ export class PackScene {
       if (digest) {
         this.loader.load(this.imageUrl(digest), (image) => {
           if (painting !== this.painting) return;
-          const texture = new Texture(shrink(image, TEXTURE_PX));
-          texture.colorSpace = SRGBColorSpace;
-          const fit = cover(faceAspect(face, kind.size), image.width / image.height);
-          texture.repeat.set(...fit.repeat);
-          texture.offset.set(...fit.offset);
-          texture.needsUpdate = true;
+          const texture = faceTexture(image, face, kind.size, TEXTURE_PX);
           this.textures.push(texture);
           material.map = texture;
           material.needsUpdate = true;
@@ -286,15 +282,4 @@ function rotation(p: Placement): Matrix4 {
   const m = new Matrix4().makeBasis(x, y, z);
   if (m.determinant() < 0) m.makeBasis(x, y, z.negate());
   return m;
-}
-
-/** The image itself when it is small enough, or a copy whose longest side is `px`. */
-function shrink(image: HTMLImageElement, px: number): HTMLImageElement | HTMLCanvasElement {
-  const scale = px / Math.max(image.width, image.height);
-  if (scale >= 1) return image;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(image.width * scale);
-  canvas.height = Math.round(image.height * scale);
-  canvas.getContext("2d")!.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas;
 }

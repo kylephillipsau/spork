@@ -328,6 +328,20 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(status, 200, "{cut}");
     let (_, pictured) = call(&app, bench()).await;
     assert_eq!(pack(&pictured, "carton")["faces"]["front"], photo["digest"], "its cut front: {pictured}");
+    assert_eq!(pack(&pictured, "carton")["faces"]["back"], Value::Null, "and nothing behind it yet: {pictured}");
+
+    // ── a back printed like the front wears the front's cut (D183) ──────
+    let (status, said) = call(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!("/observation-images/{}/same-as", photo["image_id"].as_str().unwrap()))
+            .insert_header(auth.clone())
+            .set_json(json!({ "face": "back" })),
+    )
+    .await;
+    assert_eq!(status, 200, "{said}");
+    let (_, behind) = call(&app, bench()).await;
+    assert_eq!(pack(&behind, "carton")["faces"]["back"], photo["digest"], "drawn as the item page draws it: {behind}");
 
     // ── what a caller can get wrong ─────────────────────────────────────
     let refused = |body: Value| test::TestRequest::post().uri("/packages").insert_header(auth.clone()).set_json(body);

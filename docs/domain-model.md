@@ -14064,6 +14064,15 @@ looks like (`observation_image.same_as_id`, `POST
 newest cut, so it is never cut on its own and never waits in the crop queue.
 Said of a side that was itself said, it points at the photograph taken.
 
+*Amended 2026-10-07, with migration 127:* **one rule says which cut a
+photograph shows**, `cut_of(image)`, and every read joins it: the item page,
+the pack bench's sides (D195) and the list picture (D141). Each had written
+the lookup for itself, and only the item page followed the pointer, so the
+packing plan drew a carton printed alike front and back with a plain back,
+left and bottom. On the local data that was 104 of 444 sides. The 3D packing
+plan and the item page also put a photo on a face with one function,
+`faceTexture` in `box3d.ts`.
+
 **Why.** Four photographs instead of six, on a phone over a warehouse's WiFi,
 and two fewer faces to check at the computer, with the 3D box still dressed
 on every side.
