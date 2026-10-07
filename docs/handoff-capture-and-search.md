@@ -305,7 +305,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   picking and most orders a trip, with "walk to a shelf once" as a setting,
   over `walk_route::distances`.
 - Outbound › **To pick** (`ToPickPage.tsx`, `useToPick.ts`): paste, states,
-  share out, Print.
+  share out, Print, and **Walk** on each trip (`WalkView.tsx`). Walk shows the
+  stop on screen and highlights its bin on the 3D map (`Map3D`), with the
+  trip's A* route on the floor. The trip is kept in `localStorage` while it's
+  walked.
 - `GET /print/pick-tickets/{site}` (`web/tickets.rs`): one order to an A4
   landscape page with a Code 128 barcode, and a walk sheet per trip with
   `walk=true`. The approved proof is the artifact

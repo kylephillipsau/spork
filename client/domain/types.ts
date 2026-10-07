@@ -2023,9 +2023,12 @@ export interface PlannedTrip {
   walked: number;
   minutes: number | null;
   stops: PlannedStop[];
+  /** Where it goes on the floor, from the bench and back, in the site's cells. */
+  path: [number, number][];
 }
 
 export interface PlannedStop {
+  location_id: Uuid | null;
   bin: string | null;
   within_reach: boolean | null;
   code: string;

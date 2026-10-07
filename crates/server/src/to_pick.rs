@@ -165,11 +165,16 @@ pub struct PlannedTrip {
     pub walked: f64,
     pub minutes: Option<f64>,
     pub stops: Vec<PlannedStop>,
+    /// Where it goes on the floor, from the bench and back, in the site's
+    /// cells: the walk's route, as the map draws it. Empty off the layout.
+    pub path: Vec<[f64; 2]>,
 }
 
 /// One shelf and one product, and how many for each order.
 #[derive(Serialize, Debug)]
 pub struct PlannedStop {
+    /// The bin, for the map to show.
+    pub location_id: Option<Uuid>,
     pub bin: Option<String>,
     pub within_reach: Option<bool>,
     pub code: String,
@@ -568,8 +573,8 @@ async fn plan(
     };
     let bins: Vec<Option<Whereabouts>> = locations.iter().map(|l| whereabouts.get(l).copied().flatten()).collect();
     let walk = walk_route::distances(tx, site, &bins).await?;
-    let (cost, node_of, from, cell_mm) = match walk {
-        Some(d) => (d.cost, d.node_of, d.from, d.cell_mm),
+    let (cost, node_of, from, cell_mm) = match &walk {
+        Some(d) => (d.cost.clone(), d.node_of.clone(), d.from.clone(), d.cell_mm),
         None => (vec![vec![0.0]], vec![None; locations.len()], "none".to_string(), None),
     };
     // A stop's time as a walk, in cells: a cell taken as a metre until the
@@ -605,6 +610,7 @@ async fn plan(
                 None => out.push((
                     w,
                     PlannedStop {
+                        location_id: p.location,
                         bin: p.bin.map(String::from),
                         within_reach: p.reach,
                         code: p.code.to_string(),
@@ -624,14 +630,16 @@ async fn plan(
             trips
                 .iter()
                 .map(|t| {
-                    let mut walk: Vec<PlannedStop> = t.stops.iter().flat_map(|(_, at)| stops(at, &t.orders, false)).collect();
-                    walk.extend(stops(&t.off_route, &t.orders, true));
-                    let minutes = cell_mm.map(|_| (t.walked * metres_per_cell / WALK_M_PER_S + STOP_S * walk.len() as f64) / 60.0);
+                    let mut route: Vec<PlannedStop> = t.stops.iter().flat_map(|(_, at)| stops(at, &t.orders, false)).collect();
+                    route.extend(stops(&t.off_route, &t.orders, true));
+                    let minutes = cell_mm.map(|_| (t.walked * metres_per_cell / WALK_M_PER_S + STOP_S * route.len() as f64) / 60.0);
+                    let nodes: Vec<usize> = t.stops.iter().map(|s| s.0).collect();
                     PlannedTrip {
                         orders: t.orders.iter().map(|&o| waiting[o].number.clone().unwrap_or_default()).collect(),
                         walked: t.walked,
                         minutes,
-                        stops: walk,
+                        stops: route,
+                        path: walk.as_ref().map(|d| d.line(&nodes)).unwrap_or_default(),
                     }
                 })
                 .collect()

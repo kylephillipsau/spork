@@ -15588,6 +15588,15 @@ to their orders at the bench: the trip that loses least by keeping it, which
 is the one passing it anyway. A shelf off the layout costs nothing anyone can
 measure, so the first trip wanting it keeps it, which is still one walk.
 
+**Walked with the map.** Each trip carries its route, the A* path from the
+bench through its stops and back (`Distances::line`, the walk's own
+`routing::line_through`), and To pick walks it: the stop on screen, its bin
+highlighted on the 3D bin map with the route drawn on the floor (D208,
+D211), Got it to move on. The trip is kept by the browser from the moment
+it starts, so it doesn't change under the picker as NetSuite hears of their
+picks, and a phone that reloads the tab keeps its place. Nothing is recorded
+in Spork (D212).
+
 **Pure and shared.** The planner is `pick_groups.rs`, distances in and plan out.
 The distances are the walk's own (`walk_route::distances`): the same floor,
 the same spot to stand at for a bin, the same bench. The order of a trip's

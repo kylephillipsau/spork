@@ -26,6 +26,12 @@ export interface MapSite {
   bins: MapBins;
 }
 
+/** The site's layout and every placed bin: what the 3D map draws. */
+export async function readMapSite(): Promise<MapSite> {
+  const [layout, bins] = await Promise.all([api.layout(), api.mapBins()]);
+  return { layout, bins };
+}
+
 export interface MapDesk {
   read: Read<MapSite>;
   layer: Layer;
@@ -96,8 +102,8 @@ export function useMap(initial: { bin: Uuid | null; layer: Layer | null } = { bi
 
   const load = useCallback(async () => {
     try {
-      const [layout, bins] = await Promise.all([api.layout(), api.mapBins()]);
-      if (live.current) setRead({ kind: "ready", value: { layout, bins } });
+      const value = await readMapSite();
+      if (live.current) setRead({ kind: "ready", value });
     } catch (error) {
       if (live.current) setRead({ kind: "failed", message: reason(error, "Could not load the map.") });
     }

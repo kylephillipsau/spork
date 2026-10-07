@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ClipboardList, MessageSquareText, Printer } from "lucide-react";
+import { ClipboardList, Footprints, MessageSquareText, Printer } from "lucide-react";
 
 import {
   Alert,
@@ -24,6 +24,7 @@ import { href } from "@app/routing/location";
 import type { AskedOrder, AskedState, PickPlan } from "@domain/types";
 
 import { PER_TRIP, PICKERS, type ToPickDesk } from "./useToPick";
+import { WalkView } from "./WalkView";
 import s from "./to-pick.module.css";
 
 /** The most waiting orders the server shares out at once (`to_pick::MOST_PLANNED`). */
@@ -121,6 +122,7 @@ export function ToPickPage({ desk }: { desk: ToPickDesk }) {
   ];
 
   const waitingCount = counts.waiting;
+  if (desk.walking) return <WalkView desk={desk} walk={desk.walking} />;
   return (
     <Page>
       <PageHeader
@@ -203,16 +205,24 @@ export function ToPickPage({ desk }: { desk: ToPickDesk }) {
                 trips.length === 0 ? null : (
                   <li key={g}>
                     <strong>{batch.plan!.pickers.length > 1 ? `Group ${String.fromCharCode(65 + g)}` : "One picker"}</strong>
-                    {trips.map((t, i) => (
-                      <span key={i} className={s.trip}>
-                        Trip {i + 1}: <span className={s.mono}>{t.orders.join(", ")}</span>
-                        <Faint>
-                          {" "}
-                          · {t.stops.length} {t.stops.length === 1 ? "stop" : "stops"}
-                          {t.minutes !== null && ` · about ${Math.max(1, Math.round(t.minutes))} min`}
-                        </Faint>
-                      </span>
-                    ))}
+                    {trips.map((t, i) => {
+                      const label = batch.plan!.pickers.length > 1 ? `Group ${String.fromCharCode(65 + g)} · trip ${i + 1}` : `Trip ${i + 1}`;
+                      return (
+                        <span key={i} className={s.trip}>
+                          Trip {i + 1}: <span className={s.mono}>{t.orders.join(", ")}</span>
+                          <Faint>
+                            {" "}
+                            · {t.stops.length} {t.stops.length === 1 ? "stop" : "stops"}
+                            {t.minutes !== null && ` · about ${Math.max(1, Math.round(t.minutes))} min`}
+                          </Faint>{" "}
+                          {t.stops.length > 0 && (
+                            <Button size="sm" icon={<Footprints size={14} />} onClick={() => desk.walkTrip(label, t)}>
+                              Walk
+                            </Button>
+                          )}
+                        </span>
+                      );
+                    })}
                   </li>
                 ),
               )}

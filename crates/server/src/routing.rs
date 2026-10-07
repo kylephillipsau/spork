@@ -530,6 +530,21 @@ pub struct Planned {
     pub path: Vec<Pt>,
 }
 
+/// The walk through these nodes in turn, leg by leg, as a line on the site.
+/// A leg with no way through is left out.
+pub fn line_through(floor: &Floor, nodes: &[usize]) -> Vec<Pt> {
+    let mut path: Vec<usize> = vec![];
+    for w in nodes.windows(2) {
+        if let Some((_, leg)) = floor.path(w[0], w[1]) {
+            if !path.is_empty() {
+                path.pop();
+            }
+            path.extend(leg);
+        }
+    }
+    floor.line(&path)
+}
+
 /// Plan a walk over `stops`, nodes on the floor in the order somebody typed.
 ///
 /// **From the same place, both ways.** With a `base` (the packing bench), the
@@ -561,21 +576,12 @@ pub fn plan(floor: &Floor, base: Option<usize>, stops: &[usize]) -> Planned {
     if closed {
         legs.push(start);
     }
-    let mut path: Vec<usize> = vec![];
-    for w in legs.windows(2) {
-        if let Some((_, leg)) = floor.path(w[0], w[1]) {
-            if !path.is_empty() {
-                path.pop();
-            }
-            path.extend(leg);
-        }
-    }
     Planned {
         order: route.into_iter().skip(1).map(|i| reached[i - 1]).collect(),
         unreachable,
         walked,
         typed,
-        path: floor.line(&path),
+        path: line_through(floor, &legs),
     }
 }
 

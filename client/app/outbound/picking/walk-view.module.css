@@ -1,0 +1,169 @@
+/* The stop and the stop list beside the map at a desk or tablet; on a phone,
+   the stop first, then the map, then the list. */
+.walk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26rem;
+  grid-template-areas:
+    "stage now"
+    "stage stops";
+  grid-template-rows: auto 1fr;
+  gap: var(--ui-space-4);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .walk {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "now"
+      "stage"
+      "stops";
+  }
+}
+
+.now {
+  grid-area: now;
+  display: grid;
+  gap: var(--ui-space-3);
+  min-width: 0;
+}
+
+.stage {
+  grid-area: stage;
+  position: relative;
+  height: clamp(22rem, 72vh, 60rem);
+  min-width: 0;
+  border-radius: var(--ui-radius-lg);
+  overflow: hidden;
+  background: var(--ui-surface-sunken);
+}
+@media (max-width: 900px) {
+  .stage {
+    height: 50vh;
+  }
+}
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.stop {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+.where {
+  display: grid;
+  gap: var(--ui-space-1);
+}
+.bin {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-text-3xl);
+  font-weight: 700;
+  line-height: 1;
+}
+.item {
+  display: flex;
+  gap: var(--ui-space-3);
+  align-items: center;
+  min-width: 0;
+}
+.code {
+  font-family: var(--ui-font-mono);
+  font-weight: 700;
+  font-size: var(--ui-text-lg);
+}
+
+.takes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ui-space-1);
+}
+.takes li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--ui-space-3);
+  align-items: baseline;
+  padding: var(--ui-space-2) 0;
+  border-top: 1px solid var(--ui-border);
+}
+.order {
+  font-family: var(--ui-font-mono);
+  font-weight: 600;
+}
+.customer {
+  color: var(--ui-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qty {
+  font-size: var(--ui-text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.gathered {
+  color: var(--ui-text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+
+.stops {
+  grid-area: stops;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ui-space-1);
+  min-width: 0;
+}
+.row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 2rem 7rem minmax(0, 1fr) auto;
+  gap: var(--ui-space-3);
+  align-items: center;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row[aria-current="step"] {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+.row:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+.n {
+  display: inline-flex;
+  justify-content: center;
+  color: var(--ui-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.rowBin {
+  font-family: var(--ui-font-mono);
+  font-weight: 700;
+}
+.rowCode {
+  font-family: var(--ui-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowQty {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

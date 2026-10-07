@@ -1,6 +1,7 @@
 import type { AskedOrder, ToPick, ToPickLine } from "@domain/types";
+import { MAP_SITE, MAP_WALK } from "@app/layout/map-fixture";
 
-import type { ToPickDesk } from "./useToPick";
+import type { ToPickDesk, TripWalk } from "./useToPick";
 
 /** A batch of four pasted orders, invented: two waiting, one picked, one nobody knows. */
 
@@ -23,6 +24,7 @@ const line = (key: string, code: string, description: string, takes: [string, nu
 });
 
 const stop = (bin: string, code: string, order: string, quantity: number) => ({
+  location_id: null,
   bin,
   within_reach: true,
   code,
@@ -68,8 +70,8 @@ export const BATCH: ToPick = {
     from: "pack",
     cell_mm: 1000,
     pickers: [
-      [{ orders: ["S100231"], walked: 40, minutes: 3.4, stops: [stop("K-12-01", "GLV-NIT-M", "S100231", 10), stop("M-02-04", "BIN-LNR-80", "S100231", 1)] }],
-      [{ orders: ["S100245"], walked: 22, minutes: 2.1, stops: [stop("D-04-02", "WIP-ROLL-B", "S100245", 6)] }],
+      [{ orders: ["S100231"], walked: 40, minutes: 3.4, path: [], stops: [stop("K-12-01", "GLV-NIT-M", "S100231", 10), stop("M-02-04", "BIN-LNR-80", "S100231", 1)] }],
+      [{ orders: ["S100245"], walked: 22, minutes: 2.1, path: [], stops: [stop("D-04-02", "WIP-ROLL-B", "S100245", 6)] }],
     ],
   },
 };
@@ -90,5 +92,45 @@ export function fixtureToPick(batch: ToPick | null = BATCH, pasted = "S100231\tS
     gather: true,
     setGather: () => undefined,
     printed: () => null,
+    walking: null,
+    map: { kind: "loading" },
+    walkTrip: () => undefined,
+    goTo: () => undefined,
+    got: () => undefined,
+    notGot: () => undefined,
+    leaveWalk: () => undefined,
   };
+}
+
+/** Group A's trip, two stops in: three of the drafted site's bins on the map's sample route. */
+export function fixtureWalk(): ToPickDesk {
+  const [a, b, c] = MAP_SITE.bins.bins.filter((x) => x.reported_items > 0);
+  const at = (bin: typeof a, code: string, takes: [string, number, boolean][]) => ({
+    location_id: bin!.location_id,
+    bin: bin!.code,
+    within_reach: bin!.within_reach,
+    code,
+    description: null,
+    takes: takes.map(([order, quantity, gathered]) => ({ order, quantity, gathered })),
+    off_route: false,
+  });
+  const walking: TripWalk = {
+    label: "Group A · trip 1",
+    trip: {
+      orders: ["S100231", "S100245"],
+      walked: MAP_WALK.walked,
+      minutes: 6,
+      path: MAP_WALK.path,
+      stops: [
+        at(a, "WIP-ROLL-B", [["S100245", 6, false]]),
+        at(b, "GLV-NIT-M", [["S100231", 10, false], ["S100245", 4, false], ["S100260", 4, true]]),
+        at(c, "BIN-LNR-80", [["S100231", 1, false]]),
+      ],
+    },
+    pictures: {},
+    customers: { S100231: "Hillcrest Cafe", S100245: "Riverside Deli" },
+    at: 1,
+    done: [0],
+  };
+  return { ...fixtureToPick(), walking, map: { kind: "ready", site: MAP_SITE } };
 }

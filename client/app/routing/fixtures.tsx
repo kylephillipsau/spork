@@ -41,7 +41,7 @@ import { BOOKED, DESPATCH_FIXTURE } from "@app/outbound/despatch/fixture";
 
 import { PickingPage, PickingDock } from "@app/outbound/picking/PickingPage";
 import { ToPickPage } from "@app/outbound/picking/ToPickPage";
-import { fixtureToPick } from "@app/outbound/picking/to-pick-fixture";
+import { fixtureToPick, fixtureWalk } from "@app/outbound/picking/to-pick-fixture";
 import { AT_THE_STATION, ON_A_PALLET, PICKING_CLEAR, PICKING_FIXTURE, fixturePicking } from "@app/outbound/picking/fixture";
 import type { PickBench } from "@app/outbound/picking/usePicking";
 
@@ -416,6 +416,7 @@ export const FIXTURES: readonly Screen[] = [
   // The pick walk: what to pick, where it is, and what it looks like.
   app("f-picking", "/fixtures/picking", "Picking", "floor", { screen: "picking" }, () => picking(fixturePicking())),
   app("f-to-pick", "/fixtures/to-pick", "To pick", "desk", { screen: "to-pick" }, () => <ToPickPage desk={fixtureToPick()} />),
+  app("f-to-pick-walk", "/fixtures/to-pick/walk", "To pick — walking a trip", "desk", { screen: "to-pick" }, () => <ToPickPage desk={fixtureWalk()} />),
   app("f-picking-clear", "/fixtures/picking/clear", "Picking — clear", "floor", { screen: "picking" }, () =>
     picking(fixturePicking(PICKING_CLEAR)),
   ),

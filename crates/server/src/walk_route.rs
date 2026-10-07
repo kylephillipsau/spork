@@ -216,7 +216,6 @@ async fn bench(tx: &Transaction<'_>, site: Uuid, floor: &SiteFloor) -> Result<Op
 }
 
 /// The walk between bins, for planning several walks at once (D230).
-#[derive(Debug)]
 pub struct Distances {
     /// The walk between nodes, in the site's cells. Node 0 is the bench; with
     /// no bench on the layout it is nothing from anywhere, so a walk starts
@@ -228,6 +227,21 @@ pub struct Distances {
     /// `pack`, from the packing bench and back; `free`, from anywhere.
     pub from: String,
     pub cell_mm: Option<i32>,
+    /// The floor, and each node's spot on it (none for node 0 with no bench),
+    /// to draw a walk.
+    floor: Arc<SiteFloor>,
+    spots: Vec<Option<usize>>,
+}
+
+impl Distances {
+    /// A walk over these nodes in turn, from the bench and back when there is
+    /// one, as a line on the site in cells: what the map draws (D211).
+    pub fn line(&self, stops: &[usize]) -> Vec<[f64; 2]> {
+        let bench = self.spots[0];
+        let legs: Vec<usize> =
+            bench.into_iter().chain(stops.iter().filter_map(|&s| self.spots.get(s).copied().flatten())).chain(bench).collect();
+        routing::line_through(&self.floor.floor, &legs)
+    }
 }
 
 /// How far it is between these bins on foot, and from the bench. Nothing when
@@ -276,5 +290,6 @@ pub async fn distances(tx: &Transaction<'_>, site: Uuid, bins: &[Option<Whereabo
         }
     }
     let node_of = spot_of.into_iter().map(|s| s.and_then(|s| kept.iter().position(|&k| k == s)).map(|i| i + 1)).collect();
-    Ok(Some(Distances { cost, node_of, from: if base.is_some() { "pack" } else { "free" }.into(), cell_mm }))
+    let spots = std::iter::once(base).chain(nodes.iter().map(|&n| Some(n))).collect();
+    Ok(Some(Distances { cost, node_of, from: if base.is_some() { "pack" } else { "free" }.into(), cell_mm, floor, spots }))
 }
