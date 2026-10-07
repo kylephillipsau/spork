@@ -13934,6 +13934,9 @@ some codes have in them.
 **Next.** The completed sheet: each item on a list with its own figures and its
 carton's, to hand back.
 
+*Amended by D235:* a list is renamed, added to, taken from and put away, each
+change kept.
+
 ### D180: A rack says how many of its levels are within reach
 
 *Adopted 2026-10-02, with migration 103.*
@@ -15207,6 +15210,9 @@ item's unit, nothing to remove.
 respirator's box on its carton, can be moved to the right one, and the items
 list's "needs" and "has" filters count the unit.
 
+*Amended by D233:* NetSuite's Pair is two single ones, not the each; a pair
+packed as one is the pack.
+
 ### D219: What was recorded on the wrong card is moved to the right one
 
 *Adopted 2026-10-05. Amends D218. No migration.*
@@ -15246,6 +15252,9 @@ goes: figures, said-absent figures, photos and their cuts
 
 **Not yet.** Moving one event, or one photo, rather than the card's worth;
 moving to another item, or to a family.
+
+*Amended by D232:* the carton is offered whatever is on file, and said by the
+move where nobody had.
 
 ### D220: A rack is numbered from either end of its front
 
@@ -15651,3 +15660,178 @@ as itself when it doesn't.
 are still waiting and see where I'm supposed to pick them from. Also, the
 printed tickets that we have are atrocious, wasting so much space and barely
 legible."
+
+### D232: A carton measured as the product is moved onto its carton, said with it
+
+*Adopted 2026-10-08, with no migration. Amends D219.*
+
+**The finding.** A carton of sixteen rolls weighed and measured on the roll's
+card is the carton's record, filed against the roll. **Move…** (D219) offered
+the carton only when a case pack was on file, and 12 of the 22 items measured
+here had none, so the dialog went straight to another item. It never asked
+what the carton holds either, so the figures could not say the cartonisation.
+
+**Decision.** **Move…** offers the item's carton whatever is on file. Where
+nobody has said what the carton holds, the dialog asks it, the same fields as
+the carton's own (D178, D233), or leaves it blank to say later. One press,
+one act (`holds` and `per` on `POST /items/{id}/refile`):
+
+- **No carton on file:** the move says one first, **in force from the day the
+  first of what moves was measured**, since the carton was there to be
+  measured then. Then the records move, as D219 moves them.
+- **A carton whose count nobody said:** the count is filled in (D178).
+- **A carton whose count is on file and differs:** refused. A count said
+  wrongly is put right under Holds (D229), not by a move.
+- A single thing's arrangement (D138) says nothing of its carton, so an
+  each's presentation is left off what is filed on a pack or carton.
+
+**One writer of a case pack.** `cartons::say` is the rule every writer says a
+carton by: the carton's own card, matching a sibling (D228), which wrote its
+own row before, and the move.
+
+**Why.** The user, 2026-10-08: "if a product was measured as just a box of
+that carton, there is no way to correct the measurement to represent the
+cartonisation of the product."
+
+### D233: A pair is two single ones
+
+*Adopted 2026-10-08, with migration 129. Amends D218 and D185.*
+
+**The finding.** NetSuite sells 504 items here by the Pair: 338 boots and
+shoes, 127 gloves, insoles, knee pads, and a few that are one thing (safety
+glasses, earmuffs). D218 read every "Pair" as the each. A carton of 70 pairs
+of gloves, said as the gloves in it, 140, was 140 of what NetSuite counts, so
+the pack bench would pack twice what was ordered. The gumboots had been
+recorded the other way, a boot, a pair box and a carton of six boxes, and
+were sold as one boot.
+
+**Decision.** One of what NetSuite counts is **so many of a level**
+(`item_unit.quantity`): two of the each for a pair, one of anything else.
+Unsaid, NetSuite's Pack Unit decides by one rule, `unit_quantity_of`, beside
+`unit_level_of`: Pair, Pairs, PR and PRS are two. **Sold as** has **Pair**
+beside Single item, Pack or box and Carton; a pair that is one thing is said
+as a Single item over NetSuite's word.
+
+- **The single one is what the levels count.** A pack holds so many gloves,
+  a carton so many packs, as before; only what NetSuite counts is two of them.
+- **A pair packed as one is the pack.** Boots a pair to a box, and gloves a
+  pair at a time, have the pair as their pack: `item_unit_level` says the unit
+  is the pack where the pack in force holds two or nobody has said what it
+  holds. It leads the item page as **Pair**, the boot inside it is **Single
+  one**, and the carton is "Carton of 70 pairs".
+- **A pair that is no package** (ten bags of twelve pairs) is two of the each.
+  The single leads, the bag is "Pack of 24 (12 pairs)", and the pack bench
+  counts the bag as twelve and the carton as 120, in single ones divided by
+  two (`bench::per_level`). A single glove is half of one and never leaves on
+  its own. Its figures are no pair's, so the capture sheet's boxes are empty.
+- **`item_unit_level.singles`** says how many single ones the unit is, where
+  it is counted in them, for every reader: the page, the bench, the export.
+
+**What a carton holds is typed either way.** How many in it altogether, or
+**in packs**: so many packs, each holding so many. Each count in single ones
+or, for an item sold by the pair, in pairs: 140 single and 70 pairs are the
+same carton, and what it comes to is said under the field. However it is
+typed, the case pack keeps packs of single ones (`readHoldsTyped`).
+Altogether, a pair item's pairs are its packs. A pack's count can now be said
+on its own (`per` with no `holds`), the carton's count kept.
+
+**Recorded only.** The weight of one is never worked out from the pair's, nor
+the pair's from one: each card shows what was measured on it, as the bench
+guesses nothing.
+
+**Why.** The user, 2026-10-08: "for items which are usually sold in pairs, it
+should be easy to determine the recorded weight and dimensions of either one
+or two. Usually when I see a box which contains 70 pairs for example, I will
+record the total as a box that contains 140 each, as the cartonisation and
+item model should be able to represent a pair as two each." And of the
+carton's count: "we could either specify how many in the carton, or say how
+many boxes in the carton, then how many per box, then ... set either 140 each
+or 70 pairs".
+
+**Not yet.** A loose pair from an opened bag on the pack bench, which would
+pack two single ones as one.
+
+### D234: An item may come in a pack or inner box, offered as its carton is
+
+*Adopted 2026-10-08, with no migration. Extends D185 and D218.*
+
+**Decision.** Beside "Comes in a carton?", an item's page offers **"Comes in a
+pack or inner box?"**: its pack, with nothing known and asking for nothing
+until somebody asks to measure it (`capture::offered`, one builder for both).
+Weighing, measuring or photographing it asks **How many in a pack**, in
+single ones or pairs (D233), and says the case pack with it: packs of so
+many, the carton's count kept or unsaid. Its card then says what a pack holds,
+with **Change** to put it right (D229). A pair packed as one is never asked:
+it holds its two. A box sold as one may still be measured before its count,
+as D226 has it.
+
+A pack's count said on its own, where the carton is counted loose (140 rolls),
+is refused: a carton of 140 in packs of 12 is another carton, said with the
+carton's count.
+
+**Why.** The user, 2026-10-08: "it should also be possible to not just record
+that it comes in a carton, but that it comes in a pack or inner box".
+
+### D235: A list is renamed, changed and put away
+
+*Adopted 2026-10-08, with migration 130. Amends D179.*
+
+**The finding.** D179 kept a list as given and never edited it: "a corrected
+list is another list". In use, a sheet's name was typed wrong, a second page
+of codes arrived for the same sheet, a code was pasted that was never on it,
+and a finished or mistaken list stayed in everybody's picker for good. And
+the picker said how many items a list had, not how many were left.
+
+**Decision.** A list is worked as the layout is (D209): the list as it is
+now, its name and its items, changed in place, and each change kept beside it
+as it was and as it became (`item_list_change`), under the act that made it
+(`POST /item-lists/{id}/changes`: rename, add, take off, remove).
+
+- **Renamed** from its bar's menu.
+- **Added to:** more codes pasted, after those on it; a code on it already
+  stays where it is, and every code still has to be an item.
+- **Taken off:** a row's ×. Its number is kept, as a row struck through on
+  the paper keeps the others' numbers.
+- **Delete** puts it away (`item_list.removed_at`): gone from every picker,
+  its row, items and history kept. Nothing measured changes; a list only
+  narrows the item list.
+- **How much is left** is said beside each list, "9 of 21 left" or "done",
+  and lists with work left come first. Done is the unit weighed and measured,
+  the item list's own rule (`items::unit_measured`, one function for both).
+
+**Why.** The user, 2026-10-08: "In the items list, I'd like to be able to
+rename or delete saved lists." Asked what delete should do, they chose to
+hide a list and keep its row; asked what else, progress on lists and adding
+and removing items.
+
+### D236: A measurement is put right a figure at a time
+
+*Adopted 2026-10-08, with no migration.*
+
+**Decision.** **Correct…** on a card with figures of its own opens Measure
+filled with what is on file, and what its carton or pack holds. Change a
+length from 20 to 20.5 and the count to 200, and one press puts right those
+two and nothing else (`POST /items/{id}/corrections`, then D229's correction
+of the count).
+
+- **A correction, not a new measurement.** Each figure that differs is an
+  observation correcting the one on file (`corrects_observation_id`, which
+  the observation model always had: "was never true"), taken when the
+  original was, by its method and in its arrangement, said by this person
+  now. The original stops counting, retroactively; a newer measurement still
+  stands in front of its correction.
+- **What is shown is what is put right:** the card's own figure the
+  projection shows, followed to its newest correction where the projection
+  hasn't caught up. A figure nobody recorded is measured, not corrected, and
+  a family's figures shown on the card are not the card's to correct.
+- **One reading of a typed figure:** `routes::entered_quantity`, for a
+  measurement and its correction alike.
+
+**And moves now show.** Moving or matching a card's records (D219, D222,
+D228) wrote figures without marking the projection to rebuild, so they showed
+only once something else was recorded. `refile::file_again` marks it.
+
+**Why.** The user, 2026-10-08: "I also want to be able to update specific
+parts of a measurement. So if I wanted to just update the length, say make a
+minor correction from 20 to 20.5, and then also set the quantity to 200, I
+should be able to do that."

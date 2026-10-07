@@ -292,6 +292,37 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   and the picture had looked only for a cut of the row itself. In 3D, both
   scenes put a photo on a face with `faceTexture` (`app/items/box3d.ts`).
 
+**Items: cartons, pairs, packs, corrections and lists (2026-10-08)**
+- Not committed yet when written. Migrations 129 and 130 are applied to
+  `spork_fresh` only. The working `spork` database is still at 128: it moves
+  to 130 at the next `local.ps1 start`, after rebuilding.
+- D232. Move… on a card always offers the carton. With none said, it asks
+  what the carton holds, says it from the day the first moved figure was
+  taken, then moves (`holds`/`per` on `POST /items/{id}/refile`). Every
+  writer of a case pack goes through `cartons::say`.
+- D233, migration 129. A pair is two single ones: `item_unit.quantity`,
+  `unit_quantity_of` (Pair, PR … are 2), and `item_unit_level.singles`. A
+  pair packed as one (pack holds 2, or nothing said) is the pack and leads
+  as "Pair"; in bags of 12 pairs it stays two of the each, and the bench
+  counts in singles over two (`bench::Unit`). Sold as › Pair, or › Single
+  item for glasses and earmuffs. On the real data 503 pair items read as
+  Pair; the safety glasses and the earmuffs need Single item said.
+- What a carton holds is typed altogether or in packs, in single ones or
+  pairs (`HoldsTyped`, `readHoldsTyped`, `holdsTypedFrom` in `subjects.ts`;
+  `HoldsField`, `PackField`, `CountedIn` in `ItemProperties.tsx`).
+- D234. "Comes in a pack or inner box?" is offered beside the carton
+  (`capture::offered`). Measuring it asks how many in a pack; its card has
+  Holds › Change. A pack's count can be said alone (`per` with no `holds`).
+- D235, migration 130. Lists: rename, add codes, take a row off (its number
+  kept), Delete (put away, `removed_at`), "9 of 21 left" in the picker
+  (`POST /item-lists/{id}/changes`, `item_list_change`;
+  `ListBar`/`ListDialog`/`RemoveList` in `ItemsPage.tsx`). Done is
+  `items::unit_measured`.
+- D236. Correct… on a card puts figures right one at a time
+  (`POST /items/{id}/corrections`, `correcting.rs`) with the carton's or
+  pack's count in the same press. Moves and matches now mark the projection
+  to rebuild, which they hadn't.
+
 **Picking (2026-10-07)**
 - D231, migration 128. NetSuite's open orders are a report,
   `reported_order_line`: goods lines with something left to pick
