@@ -111,11 +111,12 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
         .iter()
         .filter_map(|s| s["packaging_level"].as_str())
         .collect();
-    // The item as it is sold leads, and the carton nobody has said is only
-    // offered behind it (D218).
-    assert_eq!(levels, ["each", "carton"], "the item itself first, then a carton offered: {before}");
+    // The item as it is sold leads, and a pack and carton nobody has said
+    // are only offered behind it (D218, D234).
+    assert_eq!(levels, ["each", "inner", "carton"], "the item itself first, then a pack and carton offered: {before}");
     assert_eq!(before["subjects"][0]["is_unit"], true, "the each is what NetSuite counts here: {before}");
-    let carton = &before["subjects"][1];
+    assert_eq!(before["subjects"][1]["offered"], true, "the pack is offered, not there: {before}");
+    let carton = &before["subjects"][2];
     assert_eq!(carton["item_id"], item.to_string());
     assert_eq!(carton["wants"], json!([]), "a carton nobody has said asks for nothing: {carton}");
     assert_eq!(carton["offered"], true, "and is offered, not there: {carton}");
@@ -232,12 +233,19 @@ async fn a_carton_is_said_at_the_item_and_then_measured() {
     )
     .await;
     assert_eq!(status, 200, "the bundle is weighed on its own: {bundle}");
-    let (status, _) = post(
+    // What a pack holds said alone (D233): as on file, nothing; another, refused.
+    let (status, same) = post(
         format!("/items/{gloves}/carton"),
         json!({ "per": 24, "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z" }),
     )
     .await;
-    assert_eq!(status, 400, "packs of 24, but how many packs?");
+    assert_eq!((status, &same["changed"]), (200, &json!(false)), "packs of 24 is what is on file: {same}");
+    let (status, _) = post(
+        format!("/items/{gloves}/carton"),
+        json!({ "per": 12, "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-02T00:00:00Z" }),
+    )
+    .await;
+    assert_eq!(status, 400, "packs of 12, but how many packs?");
 
     // ── a count said wrongly is put right (D229): ten bundles, not six. The
     //    same carton, so the bundle weighed under it is still its own
@@ -355,6 +363,68 @@ async fn a_list_is_kept_in_its_order_and_narrows_the_item_list() {
     assert_eq!(status, 400, "the order of a list needs a list");
     let (_, plain) = get("/items?q=GLOVE-M".into()).await;
     assert!(plain["items"][0]["list_position"].is_null(), "no list, no place on one: {plain}");
+}
+
+/// A list is renamed, added to, taken from and put away, each change kept (D235).
+#[actix_web::test]
+async fn a_list_is_renamed_changed_and_put_away() {
+    let _file = common::file_gate(module_path!());
+    let Some(u) = url() else {
+        eprintln!("no DATABASE_URL: skipping");
+        return;
+    };
+    let state = web::Data::new(AppState { pool: pool(&u) });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    let auth = ("authorization", common::bearer(&app).await);
+    let send = |req: test::TestRequest| {
+        let auth = auth.clone();
+        let app = &app;
+        async move {
+            let r = test::call_service(app, req.insert_header(auth).to_request()).await;
+            let status = r.status().as_u16();
+            (status, serde_json::from_slice::<Value>(&test::read_body(r).await).unwrap_or(Value::Null))
+        }
+    };
+    let at = "2026-10-08T00:00:00Z";
+    let name = format!("Sheet {}", nonce());
+    let (status, made) = send(test::TestRequest::post().uri("/item-lists").set_json(json!({
+        "name": name, "codes": ["STY-7720-08"], "client_event_id": Uuid::new_v4(), "occurred_at": at,
+    })))
+    .await;
+    assert_eq!(status, 200, "{made}");
+    let id = made["item_list_id"].as_str().unwrap().to_string();
+    let change = |change: Value| {
+        send(test::TestRequest::post().uri(&format!("/item-lists/{id}/changes")).set_json(json!({
+            "change": change, "client_event_id": Uuid::new_v4(), "occurred_at": at,
+        })))
+    };
+    let places = || async {
+        let (_, page) = send(test::TestRequest::get().uri(&format!("/items?list={id}&order=list"))).await;
+        page["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| (i["code"].as_str().unwrap().to_string(), i["list_position"].as_i64().unwrap(), i["item_id"].clone()))
+            .collect::<Vec<_>>()
+    };
+
+    let (status, added) = change(json!({ "add": { "codes": ["GLOVE-M", "STY-7720-08"] } })).await;
+    assert_eq!((status, &added["items"]), (200, &json!(2)), "one added, one on it already: {added}");
+    let rows = places().await;
+    let (status, _) = change(json!({ "take_off": { "item_ids": [rows[0].2] } })).await;
+    assert_eq!(status, 200);
+    let rows = places().await;
+    assert_eq!(rows.iter().map(|r| (r.0.as_str(), r.1)).collect::<Vec<_>>(), [("GLOVE-M", 2)], "its number kept, as on the paper");
+    let (status, renamed) = change(json!({ "rename": { "name": "  Put right  " } })).await;
+    assert_eq!((status, &renamed["name"]), (200, &json!("Put right")), "{renamed}");
+    assert!(renamed["done"].is_number(), "with how many are done: {renamed}");
+
+    let (status, gone) = change(json!("remove")).await;
+    assert_eq!((status, gone), (200, Value::Null));
+    let (_, lists) = send(test::TestRequest::get().uri("/item-lists")).await;
+    assert!(lists.as_array().unwrap().iter().all(|l| l["item_list_id"] != id.as_str()), "put away: {lists}");
+    let (status, _) = change(json!({ "rename": { "name": "Again" } })).await;
+    assert_eq!(status, 404, "a list put away is not changed");
 }
 
 /// A run of an item that looks different is a subject of its own (D182).

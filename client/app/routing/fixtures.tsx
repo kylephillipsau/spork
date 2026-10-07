@@ -125,6 +125,8 @@ import {
   ITEMS_PAGE,
   LISTS,
   CARTON_MEASURING,
+  PAIR_CARTON,
+  CORRECTING,
   fixturePhotoQueue,
   TURNED,
   CROPPING,
@@ -137,7 +139,7 @@ import {
   fixtureItems,
   fixtureProperties,
 } from "@app/items/fixture";
-import { ItemsPage, NewList } from "@app/items/ItemsPage";
+import { ItemsPage, ListDialog } from "@app/items/ItemsPage";
 import { PhotosPage } from "@app/items/PhotosPage";
 import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
@@ -603,7 +605,7 @@ export const FIXTURES: readonly Screen[] = [
     return (
       <>
         <ItemsPage desk={desk} />
-        <NewList desk={desk} onClose={() => {}} />
+        <ListDialog kind="new" desk={desk} onClose={() => {}} />
       </>
     );
   }),
@@ -710,6 +712,12 @@ export const FIXTURES: readonly Screen[] = [
   // D178: its own carton measured, and how many it holds said with it.
   app("f-item-carton", "/fixtures/item/carton", "Item — measuring its carton", "floor", { screen: "item" }, () => (
     <ItemPage desk={CARTON_MEASURING} />
+  )),
+  app("f-item-pair", "/fixtures/item/pair", "Item — a pair's carton", "floor", { screen: "item" }, () => (
+    <ItemPage desk={PAIR_CARTON} />
+  )),
+  app("f-item-correcting", "/fixtures/item/correcting", "Item — putting figures right", "floor", { screen: "item" }, () => (
+    <ItemPage desk={CORRECTING} />
   )),
   // The warehouse: none yet, its draft previewed (and adjusted: a lone code's
   // "rack" left out, three racks with two sides), a rack chosen with its

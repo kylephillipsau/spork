@@ -104,7 +104,8 @@ async fn a_scan_resolves_to_what_it_names_and_to_nothing_else() {
         // can post one. D139 — asserted here rather than left to the day a
         // scanned item first has parts.
         match s["packaging_level"].as_str() {
-            Some(level) => assert!(level == "each" || level == "carton", "got {level}"),
+            // A pack is offered as a carton is (D234).
+            Some(level) => assert!(matches!(level, "each" | "inner" | "carton"), "got {level}"),
             None => assert!(
                 s["item_part_id"].is_string(),
                 "no level and no part is no subject at all: {s}"

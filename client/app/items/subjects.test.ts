@@ -7,8 +7,9 @@ import {
   isOwnCarton,
   nameOf,
   photosOf,
-  readHolds,
-  readHoldsFor,
+  readHoldsTyped,
+  holdsOf,
+  holdsTypedFrom,
   levelName,
   unitWord,
   sayFirst,
@@ -146,16 +147,35 @@ test("a carton holds its packs times what is in each, or nobody has said", () =>
   assert.equal(holdsInWords({ units_per_inner: 100, inners_per_carton: 10 }, "box"), "10 boxes of 100 (1,000 × each)", "in what it is sold as (D218)");
 });
 
-test("a count typed is the whole carton's, a whole number from one, or nothing said (D185)", () => {
-  assert.deepEqual(readHolds(" 16 "), { holds: 16, per: null });
-  assert.deepEqual(readHolds(""), { holds: null, per: null });
-  assert.deepEqual(readHolds("144", "24"), { holds: 6, per: 24 }, "144 in all, in packs of 24: six packs");
-  assert.deepEqual(readHolds("1000", "50"), { holds: 20, per: 50 }, "a thousand in packs of 50 is 20 packs, not 50,000");
-  assert.ok("problem" in readHolds("1000", "30"), "a thousand is not a whole number of packs of 30");
-  assert.ok("problem" in readHolds("", "24"), "packs of 24, but how many altogether?");
-  assert.ok("problem" in readHolds("0"));
-  assert.ok("problem" in readHolds("1.5"));
-  assert.ok("problem" in readHolds("a dozen"));
+const by = (by: "all" | "packs", count: string, per = "", inPairs = false) => ({ by, count, per, in: inPairs ? 2 : 1 });
+
+test("a count typed is the whole carton's, or so many packs of so many, or nothing said (D185, D233)", () => {
+  const brush = { unit: { level: "each" as const, said: false, netsuite_unit: "Each", singles: 1 }, packing: null };
+  assert.deepEqual(readHoldsTyped(by("all", " 16 "), brush), { holds: 16, per: null });
+  assert.deepEqual(readHoldsTyped(by("all", ""), brush), { holds: null, per: null });
+  assert.deepEqual(readHoldsTyped(by("packs", "6", "24"), brush), { holds: 6, per: 24 }, "six packs of 24");
+  for (const wrong of ["0", "1.5", "a dozen"]) assert.ok("problem" in readHoldsTyped(by("all", wrong), brush), wrong);
+});
+
+test("a pair is two single ones, counted either way (D233)", () => {
+  const gloves = { unit: { level: "inner" as const, said: false, netsuite_unit: "Pair", singles: 2 }, packing: null };
+  assert.deepEqual(readHoldsTyped(by("all", "140"), gloves), { holds: 70, per: 2 }, "140 gloves is 70 pairs");
+  assert.deepEqual(readHoldsTyped(by("all", "70", "", true), gloves), { holds: 70, per: 2 }, "and so is 70 pairs");
+  assert.ok("problem" in readHoldsTyped(by("all", "141"), gloves), "no whole number of pairs");
+  assert.deepEqual(readHoldsTyped(by("packs", "10", "12", true), gloves), { holds: 10, per: 24 }, "ten bags of twelve pairs");
+  const packed = { ...gloves, packing: { units_per_inner: 2, inners_per_carton: 70, effective_from: "2026-10-01" } };
+  assert.equal(holdsOf(packed), "70 pairs (140 single)");
+  assert.deepEqual(holdsTypedFrom(packed), by("all", "70", "", true), "on file, in pairs");
+  assert.equal(levelName("inner", packed), "Pair");
+  assert.equal(levelName("each", packed), "Single one");
+  assert.equal(levelName("carton", packed), "Carton of 70 pairs");
+  const bagged = {
+    unit: { level: "each" as const, said: false, netsuite_unit: "Pair", singles: 2 },
+    packing: { units_per_inner: 24, inners_per_carton: 10, effective_from: "2026-10-01" },
+  };
+  assert.equal(holdsOf(bagged), "10 packs of 12 pairs (240 single)");
+  assert.deepEqual(holdsTypedFrom(bagged), by("packs", "10", "12", true));
+  assert.equal(levelName("inner", bagged), "Pack of 24 (12 pairs)");
 });
 
 test("the carton is said first when none is on file, or a different count is typed", () => {
@@ -171,30 +191,33 @@ test("the carton is said first when none is on file, or a different count is typ
 });
 
 test("an item's levels are named from what it is sold as (D218)", () => {
-  const plugs = { unit: { level: "inner" as const, said: false, netsuite_unit: "Box" }, packing: { units_per_inner: 100, inners_per_carton: 10, effective_from: "2026-10-01" } };
+  const plugs = { unit: { level: "inner" as const, said: false, netsuite_unit: "Box", singles: null }, packing: { units_per_inner: 100, inners_per_carton: 10, effective_from: "2026-10-01" } };
   assert.equal(levelName("inner", plugs), "Box of 100");
   assert.equal(levelName("carton", plugs), "Carton of 10 boxes");
   assert.equal(levelName("each", plugs), "Single item");
-  const gloves = { unit: { level: "carton" as const, said: false, netsuite_unit: "CTN" }, packing: { units_per_inner: 1, inners_per_carton: 1000, effective_from: "2026-10-01" } };
+  const gloves = { unit: { level: "carton" as const, said: false, netsuite_unit: "CTN", singles: null }, packing: { units_per_inner: 1, inners_per_carton: 1000, effective_from: "2026-10-01" } };
   assert.equal(unitWord(gloves), "Carton", "a CTN is a carton");
   assert.equal(levelName("carton", gloves), "Carton of 1,000");
   assert.equal(levelName("each", gloves), "Single item");
-  const brush = { unit: { level: "each" as const, said: false, netsuite_unit: "Each" }, packing: { units_per_inner: 1, inners_per_carton: 16, effective_from: "2026-10-01" } };
+  const brush = { unit: { level: "each" as const, said: false, netsuite_unit: "Each", singles: 1 }, packing: { units_per_inner: 1, inners_per_carton: 16, effective_from: "2026-10-01" } };
   assert.equal(levelName("each", brush), "Each");
   assert.equal(levelName("carton", brush), "Carton of 16");
-  const boots = { unit: { level: "each" as const, said: false, netsuite_unit: "Pair" }, packing: { units_per_inner: 24, inners_per_carton: 6, effective_from: "2026-10-01" } };
-  assert.equal(levelName("each", boots), "Pair");
-  assert.equal(levelName("inner", boots), "Pack of 24");
-  assert.equal(levelName("carton", boots), "Carton of 6 packs");
-  const book = { unit: { level: "each" as const, said: false, netsuite_unit: null }, packing: null };
+  const boots = { unit: { level: "each" as const, said: false, netsuite_unit: "Pair", singles: 2 }, packing: { units_per_inner: 24, inners_per_carton: 6, effective_from: "2026-10-01" } };
+  assert.equal(levelName("each", boots), "Single one", "a pair is two of it (D233)");
+  assert.equal(levelName("inner", boots), "Pack of 24 (12 pairs)");
+  assert.equal(levelName("carton", boots), "Carton of 6 packs (72 pairs)");
+  const book = { unit: { level: "each" as const, said: false, netsuite_unit: null, singles: 1 }, packing: null };
   assert.equal(levelName("each", book), "Each");
   assert.equal(levelName("carton", book), "Carton", "a carton nobody has counted");
 });
 
 test("a carton of an item sold by the box is counted in boxes (D218)", () => {
-  const box = { units_per_inner: 100 };
-  assert.deepEqual(readHoldsFor("inner", "10", "", box), { holds: 10, per: 100 }, "ten boxes, each as it was");
-  assert.deepEqual(readHoldsFor("inner", "10", "50", box), { holds: 10, per: 50 });
-  assert.ok("problem" in readHoldsFor("inner", "ten", "", box));
-  assert.deepEqual(readHoldsFor("each", "1000", "50", box), { holds: 20, per: 50 }, "anything else, as the whole carton");
+  const plugs = {
+    unit: { level: "inner" as const, said: false, netsuite_unit: "Box", singles: null },
+    packing: { units_per_inner: 100, inners_per_carton: null, effective_from: "2026-10-01" },
+  };
+  assert.deepEqual(readHoldsTyped(by("packs", "10"), plugs), { holds: 10, per: 100 }, "ten boxes, each as it was");
+  assert.deepEqual(readHoldsTyped(by("packs", "10", "50"), plugs), { holds: 10, per: 50 });
+  assert.ok("problem" in readHoldsTyped(by("packs", "ten"), plugs));
+  assert.deepEqual(readHoldsTyped(by("all", "1000"), plugs), { holds: 10, per: 100 }, "a thousand earplugs, in its boxes of 100");
 });

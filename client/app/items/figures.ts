@@ -35,6 +35,35 @@ export interface Figures {
  * refusal belongs here: an operator who weighed a box and could not reach a
  * tape has recorded a weight, and the request should say that rather than fail.
  */
+/**
+ * A card's figures as typed, to put right (D236): kilograms and centimetres,
+ * as the instruments read and as Measure asks for them; blank where nothing
+ * is recorded.
+ */
+export function figuresOf(s: {
+  gross_weight_g: number | null;
+  length_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  diameter_mm: number | null;
+  base_diameter_mm: number | null;
+  top_height_mm: number | null;
+}): Figures {
+  const kg = (g: number | null) => (g === null ? "" : String(g / 1000));
+  const cm = (mm: number | null) => (mm === null ? "" : String(mm / 10));
+  return {
+    weight: kg(s.gross_weight_g),
+    length: cm(s.length_mm),
+    width: cm(s.width_mm),
+    height: cm(s.height_mm),
+    top: cm(s.diameter_mm),
+    base: cm(s.base_diameter_mm),
+    topHeight: cm(s.top_height_mm),
+    presentation: "",
+    noDimensions: false,
+  };
+}
+
 export function measurementsOf(figures: Figures, round = false): {
   metric: string;
   entered_value?: string;

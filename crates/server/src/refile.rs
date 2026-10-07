@@ -36,6 +36,11 @@
 //!
 //! The other card is the item's at that level under the case pack in force
 //! now (D23): a box is only a definite thing to measure relative to one.
+//!
+//! **A carton measured as the product (D232)** is moved onto its carton with
+//! what the carton holds. With no carton on file, the move says one first,
+//! in force from the day what moves was measured, since it was there then;
+//! with one whose count nobody said, the count is filled in.
 
 use std::collections::HashMap;
 
@@ -59,6 +64,13 @@ pub struct RefileRequest {
     /// The item whose card it belongs on, when that is another item (D222).
     #[serde(default)]
     pub to_item: Option<Uuid>,
+    /// Moving to a carton or pack, what a carton holds, as
+    /// `POST /items/{id}/carton` takes it: so many of the item, or so many
+    /// packs of `per` (D232). Absent: not said here.
+    #[serde(default)]
+    pub holds: Option<i32>,
+    #[serde(default)]
+    pub per: Option<i32>,
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
 }
@@ -147,17 +159,28 @@ pub async fn recorded(
     Ok(out)
 }
 
-/// Whether a card has anything live on it: figures, or photos not moved away.
-async fn holds(tx: &tokio_postgres::Transaction<'_>, item: Uuid, level: &str) -> Result<bool, ApiError> {
+/// When the first of what is live on a card was taken: figures, or photos not
+/// moved away. None when it has nothing.
+async fn first_recorded(
+    tx: &tokio_postgres::Transaction<'_>,
+    item: Uuid,
+    level: &str,
+) -> Result<Option<DateTime<Utc>>, ApiError> {
     let sql = format!(
-        "SELECT EXISTS (SELECT 1 FROM observable s JOIN observation o ON o.observable_id = s.id
-                         WHERE {CARD} AND {LIVE})
-             OR EXISTS (SELECT 1 FROM observable s
-                          JOIN observation_event e ON e.observable_id = s.id
-                          JOIN observation_image i ON i.observation_event_id = e.id
-                         WHERE {CARD} AND {UNMOVED})"
+        "SELECT least(
+             (SELECT min(o.observed_at) FROM observable s JOIN observation o ON o.observable_id = s.id
+               WHERE {CARD} AND {LIVE}),
+             (SELECT min(e.observed_at) FROM observable s
+                JOIN observation_event e ON e.observable_id = s.id
+                JOIN observation_image i ON i.observation_event_id = e.id
+               WHERE {CARD} AND {UNMOVED}))"
     );
     Ok(tx.query_one(&sql, &[&item, &level]).await?.get(0))
+}
+
+/// Whether a card has anything live on it.
+async fn holds(tx: &tokio_postgres::Transaction<'_>, item: Uuid, level: &str) -> Result<bool, ApiError> {
+    Ok(first_recorded(tx, item, level).await?.is_some())
 }
 
 /// The item's card at a level under the case pack in force at `at`.
@@ -194,7 +217,8 @@ enum Filing {
 ///
 /// A size on a single thing names the arrangement it was measured in (D138,
 /// J72), and a pack's or a carton's never did: one filed on an each was the
-/// thing in its packaging, so it is said to be as supplied.
+/// thing in its packaging, so it is said to be as supplied. The other way, a
+/// single thing's arrangement says nothing of its carton, so it is left off.
 async fn file_again(
     tx: &tokio_postgres::Transaction<'_>,
     ev: &NewClientEvent,
@@ -230,8 +254,11 @@ async fn file_again(
                      (tenant_id, client_event_id, observable_id, observed_at, recorded_by_id,
                       method, ingestion_channel, derived_from_event_id, presentation_id)
                  SELECT $3, $4, $5, src.observed_at, $6, src.method, 'derived', src.id,
-                        coalesce(src.presentation_id,
-                                 (SELECT p.id FROM presentation p WHERE p.code = 'as_supplied' AND $8 = 'each'))
+                        CASE WHEN $8 = 'each'
+                             THEN coalesce(src.presentation_id,
+                                           (SELECT p.id FROM presentation p WHERE p.code = 'as_supplied'))
+                             WHEN $2 = 'each' THEN NULL
+                             ELSE src.presentation_id END
                    FROM src
                  RETURNING derived_from_event_id, id"
             ),
@@ -369,6 +396,8 @@ async fn file_again(
         }
         filed.insert(old, new);
     }
+    // The figures each card shows are rebuilt from here (D107).
+    tx.execute("SELECT projection_mark_dirty($1, 'observation')", &[&tenant]).await?;
     Ok((copied as i64, filed.len() as i64))
 }
 
@@ -397,6 +426,10 @@ pub async fn refile(
     if body.from == body.to && to_item == item {
         return Err(ApiError::Rejected("that is the card it is on".into()));
     }
+    let wanted = crate::cartons::counts(body.holds, body.per)?;
+    if body.to == "each" && wanted.1.is_some() {
+        return Err(ApiError::Rejected("what a carton holds is said moving to its carton or pack".into()));
+    }
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
         client_event_id: body.client_event_id,
@@ -415,13 +448,34 @@ pub async fn refile(
                 if client_events::claim_act(tx, &ev).await?.is_replay() {
                     return Ok(Refiled { figures: 0, photos: 0, replay: true });
                 }
-                if !holds(tx, item, &body.from).await? {
+                let Some(first) = first_recorded(tx, item, &body.from).await? else {
                     return Err(ApiError::Rejected("there is nothing recorded on that card to move".into()));
-                }
+                };
                 if holds(tx, to_item, &body.to).await? {
                     return Err(ApiError::Rejected(
                         "the card it would move to has figures or photos of its own: move those away first".into(),
                     ));
+                }
+                if body.to != "each" {
+                    let on_file = crate::cartons::in_force(tx, to_item, body.occurred_at)
+                        .await?
+                        .map(|c| (c.get::<_, Option<i32>>(1), c.get::<_, Option<i32>>(2)));
+                    // A count on file is put right under Holds (D229), not by a move.
+                    if let (Some(on), Some(_)) = (on_file, wanted.1) {
+                        if let Some(n) = on.1.filter(|_| on != wanted) {
+                            return Err(ApiError::Rejected(format!(
+                                "its carton is said to hold {} already: put that right under Holds first",
+                                i64::from(n) * i64::from(on.0.unwrap_or(1))
+                            )));
+                        }
+                    }
+                    if on_file.is_none() || wanted != (None, None) {
+                        let carton = NewClientEvent {
+                            client_event_id: Uuid::new_v5(&ev.client_event_id, b"carton"),
+                            ..ev.clone()
+                        };
+                        crate::cartons::say(tx, &carton, to_item, wanted, false, first).await?;
+                    }
                 }
                 let target = card_of(tx, ev.tenant_id, to_item, &body.to, body.occurred_at).await?;
                 let (figures, photos) = file_again(tx, &ev, item, &body.from, target, &body.to, Filing::Move).await?;
@@ -519,23 +573,7 @@ pub async fn match_family(
                                 client_event_id: Uuid::new_v5(&ev.client_event_id, b"carton"),
                                 ..ev.clone()
                             };
-                            client_events::claim_act(tx, &said).await?;
-                            tx.execute(
-                                "INSERT INTO item_packing_config
-                                     (tenant_id, item_id, units_per_inner, inners_per_carton,
-                                      effective_from, client_event_id, recorded_by_id)
-                                 VALUES ($1, $2, $3, $4, $5::timestamptz::date, $6, $7)",
-                                &[
-                                    &ev.tenant_id,
-                                    &item,
-                                    &t.0,
-                                    &t.1,
-                                    &body.occurred_at,
-                                    &said.client_event_id,
-                                    &ev.recorded_by_id,
-                                ],
-                            )
-                            .await?;
+                            crate::cartons::say(tx, &said, item, t, false, body.occurred_at).await?;
                         }
                         // Nothing in force for theirs: its cards hold nothing under one.
                         (None, _) => {}

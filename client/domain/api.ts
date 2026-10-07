@@ -18,6 +18,7 @@ import type {
   BinsList,
   CartonSaid,
   ItemListRow,
+  ListChange,
   SearchAnswer,
   BoxPictureSaid,
   LotAdded,
@@ -855,17 +856,40 @@ export const api = {
   /** GS1's packaging types, the common ones first (D191). */
   packagingTypes: () => send<PackagingType[]>("GET", "/packaging-types"),
 
-  /** Move what one card of an item holds to another of its cards (D219), or another item's (D222). */
+  /**
+   * Move what one card of an item holds to another of its cards (D219), or
+   * another item's (D222). Moving to a carton or pack, `carton` says what a
+   * carton holds where nothing has (D232), as `sayCarton` takes it.
+   */
   refile: (
     itemId: Uuid,
     from: "each" | "inner" | "carton",
     to: { item: Uuid; level: "each" | "inner" | "carton" },
     act: Act,
+    carton?: { holds: number | null; per: number | null },
   ) =>
     send<Refiled>("POST", `/items/${encodeURIComponent(itemId)}/refile`, {
       from,
       to: to.level,
       to_item: to.item,
+      ...(carton?.holds ? { holds: carton.holds, ...(carton.per ? { per: carton.per } : {}) } : {}),
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
+  /**
+   * Put right figures on one of an item's own cards (D236): each that differs
+   * from the one on file corrects it, as taken when and how it was.
+   */
+  correctFigures: (
+    itemId: Uuid,
+    level: string,
+    measurements: { metric: string; entered_value?: string; unit?: string }[],
+    act: Act,
+  ) =>
+    send<{ figures: number; replay: boolean }>("POST", `/items/${encodeURIComponent(itemId)}/corrections`, {
+      level,
+      measurements,
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),
@@ -879,10 +903,14 @@ export const api = {
       occurred_at: act.at,
     }),
 
-  /** Say which level of an item is one in NetSuite: what it is sold as (D218). */
-  sayUnit: (itemId: Uuid, level: "each" | "inner" | "carton", act: Act) =>
+  /**
+   * Say which level of an item is one in NetSuite: what it is sold as (D218);
+   * `quantity` two of the each for a pair (D233).
+   */
+  sayUnit: (itemId: Uuid, level: "each" | "inner" | "carton", act: Act, quantity = 1) =>
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/unit`, {
       level,
+      ...(quantity > 1 ? { quantity } : {}),
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),
@@ -988,8 +1016,16 @@ export const api = {
   search: (q: string, limit?: number) =>
     send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ""}`),
 
-  /** The lists of items worked at this site, newest first (D179). */
+  /** The lists of items worked at this site, those with work left first (D179, D235). */
   itemLists: () => send<ItemListRow[]>("GET", "/item-lists"),
+
+  /** Rename a list, add codes to it, take items off it, or put it away (D235). The list after; put away, null. */
+  changeItemList: (id: Uuid, change: ListChange, act: Act) =>
+    send<ItemListRow | null>("POST", `/item-lists/${encodeURIComponent(id)}/changes`, {
+      change,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
 
   /** Make a list from item codes, in the order on the paper. Every code has to be an item. */
   makeItemList: (input: { name: string; codes: string[]; act: Act }) =>

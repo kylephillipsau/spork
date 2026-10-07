@@ -786,65 +786,31 @@ async fn assemble(
             .iter()
             .find(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("each"))
         {
-            let carton = CaptureSubject {
-                item_id: Some(item_id),
-                item_style_id: None,
-                item_part_id: None,
-                part_label: None,
-                lot_id: None,
-                lot_code: None,
-                variant_lot_id: None,
-                variant_code: None,
-                code: each.code.clone(),
-                description: each.description.clone(),
-                packaging_level: Some("carton".into()),
-                parts: 0,
-                gross_weight_g: None,
-                length_mm: None,
-                width_mm: None,
-                height_mm: None,
-                diameter_mm: None,
-                base_diameter_mm: None,
-                top_height_mm: None,
-                weight_absent: false,
-                dimensions_absent: false,
-                packed_in: None,
-                packed_in_source: None,
-                ships_as_is: false,
-                ships_as_is_source: "default".into(),
-                upright: false,
-                upright_source: "default".into(),
-                box_shaped: true,
-
-                round: false,
-                source: None,
-                style_code: None,
-                method: None,
-                observed_at: None,
-                faces: vec![],
-                wants: vec![],
-                demand: each.demand,
-                because: because(Class::Unrecorded, None).to_string(),
-                location_code: each.location_code.clone(),
-                soh: each.soh,
-                is_unit: false,
-                // Nobody has said it comes in one (D218): offered, not there.
-                offered: true,
-            };
-            found.insert(0, carton);
+            found.insert(0, offered(each, "carton"));
         }
     }
     // The inner pack sits between the carton and the each (D185); the
     // enumeration has it already when it is what NetSuite counts (D218).
     let has_inner = found.iter().any(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("inner"));
-    if known.packs.contains(&item_id) && !has_inner {
-        if let Some(inner) = inner_subject(tx, item_id).await? {
-            let at = found
-                .iter()
-                .position(|s| s.packaging_level.as_deref() == Some("each"))
-                .unwrap_or(found.len());
-            found.insert(at, inner);
-        }
+    let inner = match has_inner || !known.packs.contains(&item_id) {
+        true => None,
+        false => inner_subject(tx, item_id).await?,
+    };
+    // **Or offered, as its carton is** (D234): a pack or inner box nobody
+    // has said it comes in, shown when somebody asks to measure it.
+    let inner = match (has_inner, inner) {
+        (false, None) => found
+            .iter()
+            .find(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("each"))
+            .map(|each| offered(each, "inner")),
+        (_, inner) => inner,
+    };
+    if let Some(inner) = inner {
+        let at = found
+            .iter()
+            .position(|s| s.item_id == Some(item_id) && s.packaging_level.as_deref() == Some("each"))
+            .unwrap_or(found.len());
+        found.insert(at, inner);
     }
     if known.lots.contains(&item_id) {
         found.extend(lot_subjects(tx, item_id).await?);
@@ -1108,6 +1074,56 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         soh: 0,
         is_unit: false,
         offered: false,
+    }
+}
+
+/// A level of the item nobody has said it comes in (D218, D234): its carton,
+/// or a pack or inner box, offered with nothing known and asking for nothing
+/// until somebody asks to measure it. Most things come in neither, and a card
+/// nagging every one of them would be a list nobody finishes.
+fn offered(each: &CaptureSubject, level: &str) -> CaptureSubject {
+    CaptureSubject {
+        item_id: each.item_id,
+        item_style_id: None,
+        item_part_id: None,
+        part_label: None,
+        lot_id: None,
+        lot_code: None,
+        variant_lot_id: None,
+        variant_code: None,
+        code: each.code.clone(),
+        description: each.description.clone(),
+        packaging_level: Some(level.into()),
+        parts: 0,
+        gross_weight_g: None,
+        length_mm: None,
+        width_mm: None,
+        height_mm: None,
+        diameter_mm: None,
+        base_diameter_mm: None,
+        top_height_mm: None,
+        weight_absent: false,
+        dimensions_absent: false,
+        packed_in: None,
+        packed_in_source: None,
+        ships_as_is: false,
+        ships_as_is_source: "default".into(),
+        upright: false,
+        upright_source: "default".into(),
+        box_shaped: true,
+        round: false,
+        source: None,
+        style_code: None,
+        method: None,
+        observed_at: None,
+        faces: vec![],
+        wants: vec![],
+        demand: each.demand,
+        because: because(Class::Unrecorded, None).to_string(),
+        location_code: each.location_code.clone(),
+        soh: each.soh,
+        is_unit: false,
+        offered: true,
     }
 }
 

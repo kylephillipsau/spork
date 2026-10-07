@@ -108,6 +108,122 @@ fn said(r: &tokio_postgres::Row, changed: bool) -> CartonSaid {
     }
 }
 
+/// The case pack's two counts for what is said: packs of so many, and so many
+/// packs, or so many of the item (packs of one). `holds` absent: there is a
+/// carton, and how many it holds is not being said; with `per`, what a pack
+/// of it holds is, a pair's two (D233).
+pub(crate) fn counts(holds: Option<i32>, per: Option<i32>) -> Result<(Option<i32>, Option<i32>), ApiError> {
+    if let Some(n) = holds {
+        if !(1..=MOST).contains(&n) {
+            return Err(ApiError::Rejected(format!(
+                "a carton holds from 1 to {MOST} of an item, not {n}"
+            )));
+        }
+    }
+    if let Some(p) = per {
+        if !(1..=MOST).contains(&p) {
+            return Err(ApiError::Rejected(format!("a pack holds from 1 to {MOST} of an item, not {p}")));
+        }
+    }
+    Ok((per.or(holds.map(|_| 1)), holds))
+}
+
+/// Say what a carton of the item holds, as the act `ev`: `wanted` is the case
+/// pack's two counts, the second absent when no count is being said. Every
+/// writer of a case pack at the item says it here: the carton's own card,
+/// matching a sibling (D228), and moving a carton measured as the product onto
+/// its carton (D232).
+///
+/// A carton made where none was is in force from `from`: the day it is said,
+/// or, said by a move, the day what moves was measured, since the carton was
+/// there to be measured then. A different count is a new version from the day
+/// of the act (D23).
+pub(crate) async fn say(
+    tx: &tokio_postgres::Transaction<'_>,
+    ev: &NewClientEvent,
+    item_id: Uuid,
+    wanted: (Option<i32>, Option<i32>),
+    correction: bool,
+    from: DateTime<Utc>,
+) -> Result<CartonSaid, ApiError> {
+    let at = ev.submitted_at;
+    let now = in_force(tx, item_id, at).await?;
+    // What the act would do, decided before it is claimed: saying what is on
+    // file is no act at all, and a retried press of one that changed something
+    // finds it on file and answers the same. What a pack holds said alone
+    // keeps the carton's count on file (D233).
+    let mut wanted = wanted;
+    let change = match &now {
+        None => Change::Make,
+        Some(c) => {
+            let on_file: (Option<i32>, Option<i32>) = (c.get(1), c.get(2));
+            if wanted.1.is_none() && wanted.0.is_some() {
+                // A carton counted in packs of another size would hold
+                // another number of the item: say what it holds as well.
+                // Put right (D229), the carton still holds as many packs.
+                if !correction && on_file.1.is_some() && on_file.0.is_some_and(|p| Some(p) != wanted.0) {
+                    return Err(ApiError::Rejected(
+                        "a carton of it holds packs of another count: say how many it holds as well".into(),
+                    ));
+                }
+                wanted.1 = on_file.1;
+            }
+            match on_file {
+                was if was == wanted => Change::Nothing,
+                _ if wanted == (None, None) => Change::Nothing,
+                // A count never said, now said: the same carton, described.
+                (_, None) => Change::Amend(c.get(0)),
+                // What a pack holds, never said, now said of the same carton.
+                (None, n) if n == wanted.1 => Change::Amend(c.get(0)),
+                _ if correction => Change::Amend(c.get(0)),
+                _ => Change::Version,
+            }
+        }
+    };
+    if let (Change::Nothing, Some(c)) = (&change, &now) {
+        return Ok(said(c, false));
+    }
+    if client_events::claim_act(tx, ev).await?.is_replay() {
+        let row = in_force(tx, item_id, at).await?.ok_or_else(|| {
+            ApiError::Rejected("client_event exists but no carton is on file; incomplete act".into())
+        })?;
+        return Ok(said(&row, false));
+    }
+
+    const RETURNING: &str = "RETURNING id, units_per_inner, inners_per_carton, effective_from";
+    let row = match change {
+        // The count, never said or said wrongly, now is: the same carton.
+        Change::Amend(id) => {
+            tx.query_one(
+                &format!(
+                    "UPDATE item_packing_config
+                        SET units_per_inner = $2, inners_per_carton = $3,
+                            client_event_id = $4, recorded_by_id = $5
+                      WHERE id = $1 {RETURNING}"
+                ),
+                &[&id, &wanted.0, &wanted.1, &ev.client_event_id, &ev.recorded_by_id],
+            )
+            .await?
+        }
+        // No carton on file, in force from when it was there; or a different
+        // one, from the day it is said (D23).
+        Change::Make | Change::Version | Change::Nothing => {
+            let effective = if matches!(change, Change::Make) { from.min(at) } else { at };
+            tx.query_one(
+                &format!(
+                    "INSERT INTO item_packing_config
+                         (tenant_id, item_id, units_per_inner, inners_per_carton,
+                          effective_from, client_event_id, recorded_by_id)
+                     VALUES ($1, $2, $3, $4, $5::timestamptz::date, $6, $7) {RETURNING}"
+                ),
+                &[&ev.tenant_id, &item_id, &wanted.0, &wanted.1, &effective, &ev.client_event_id, &ev.recorded_by_id],
+            )
+            .await?
+        }
+    };
+    Ok(said(&row, true))
+}
+
 /// Say what a carton of this item holds.
 #[post("/items/{id}/carton")]
 pub async fn say_carton(
@@ -119,25 +235,7 @@ pub async fn say_carton(
     let who = caller(&state, &req).await?;
     let item_id = path.into_inner();
     let body = body.into_inner();
-    if let Some(n) = body.holds {
-        if !(1..=MOST).contains(&n) {
-            return Err(ApiError::Rejected(format!(
-                "a carton holds from 1 to {MOST} of an item, not {n}"
-            )));
-        }
-    }
-    if let Some(p) = body.per {
-        if !(1..=MOST).contains(&p) {
-            return Err(ApiError::Rejected(format!("a pack holds from 1 to {MOST} of an item, not {p}")));
-        }
-        if body.holds.is_none() {
-            return Err(ApiError::Rejected("say how many packs a carton holds as well as what is in each".into()));
-        }
-    }
-    // What the carton is, as the case pack's two counts: packs of so many, or
-    // so many of the item (a pack of one).
-    let wanted: (Option<i32>, Option<i32>) = (body.holds.map(|_| body.per.unwrap_or(1)), body.holds);
-
+    let wanted = counts(body.holds, body.per)?;
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
         client_event_id: body.client_event_id,
@@ -152,72 +250,7 @@ pub async fn say_carton(
                 tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item_id])
                     .await?
                     .ok_or(ApiError::NotFound)?;
-
-                let now = in_force(tx, item_id, body.occurred_at).await?;
-                // What the act would do, decided before it is claimed: saying
-                // what is on file is no act at all, and a retried press of one
-                // that changed something finds it on file and answers the same.
-                let change = match &now {
-                    None => Change::Make,
-                    Some(c) => {
-                        let on_file: (Option<i32>, Option<i32>) = (c.get(1), c.get(2));
-                        match (on_file, body.holds) {
-                            (_, None) => Change::Nothing,
-                            (was, Some(_)) if was == wanted => Change::Nothing,
-                            ((_, None), Some(_)) => Change::Amend(c.get(0)),
-                            (_, Some(_)) if body.correction => Change::Amend(c.get(0)),
-                            ((_, Some(_)), Some(_)) => Change::Version,
-                        }
-                    }
-                };
-                if let (Change::Nothing, Some(c)) = (&change, &now) {
-                    return Ok(said(c, false));
-                }
-                if client_events::claim_act(tx, &ev).await?.is_replay() {
-                    let row = in_force(tx, item_id, body.occurred_at).await?.ok_or_else(|| {
-                        ApiError::Rejected("client_event exists but no carton is on file; incomplete act".into())
-                    })?;
-                    return Ok(said(&row, false));
-                }
-
-                const RETURNING: &str = "RETURNING id, units_per_inner, inners_per_carton, effective_from";
-                let row = match change {
-                    // The count, never said or said wrongly, now is: the same carton.
-                    Change::Amend(id) => {
-                        tx.query_one(
-                            &format!(
-                                "UPDATE item_packing_config
-                                    SET units_per_inner = $2, inners_per_carton = $3,
-                                        client_event_id = $4, recorded_by_id = $5
-                                  WHERE id = $1 {RETURNING}"
-                            ),
-                            &[&id, &wanted.0, &wanted.1, &ev.client_event_id, &ev.recorded_by_id],
-                        )
-                        .await?
-                    }
-                    // No carton on file, or a different one from today (D23).
-                    Change::Make | Change::Version | Change::Nothing => {
-                        tx.query_one(
-                            &format!(
-                                "INSERT INTO item_packing_config
-                                     (tenant_id, item_id, units_per_inner, inners_per_carton,
-                                      effective_from, client_event_id, recorded_by_id)
-                                 VALUES ($1, $2, $3, $4, $5::timestamptz::date, $6, $7) {RETURNING}"
-                            ),
-                            &[
-                                &ev.tenant_id,
-                                &item_id,
-                                &wanted.0,
-                                &wanted.1,
-                                &body.occurred_at,
-                                &ev.client_event_id,
-                                &ev.recorded_by_id,
-                            ],
-                        )
-                        .await?
-                    }
-                };
-                Ok(said(&row, true))
+                say(tx, &ev, item_id, wanted, body.correction, body.occurred_at).await
             })
         })
         .await?;
@@ -380,6 +413,9 @@ mod tests {
 pub struct SayUnitRequest {
     /// `each`, `inner` or `carton`: which level of the item is one in NetSuite.
     pub level: String,
+    /// How many of it: two of the each for a pair (D233). Absent, one.
+    #[serde(default)]
+    pub quantity: Option<i32>,
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
 }
@@ -400,6 +436,10 @@ pub async fn say_unit(
     if !matches!(body.level.as_str(), "each" | "inner" | "carton") {
         return Err(ApiError::Rejected("an item is sold as its each, its pack or its carton".into()));
     }
+    let quantity = body.quantity.unwrap_or(1);
+    if quantity != 1 && !(body.level == "each" && (2..=1000).contains(&quantity)) {
+        return Err(ApiError::Rejected("several of an item are said of its each: two for a pair".into()));
+    }
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
         client_event_id: body.client_event_id,
@@ -416,9 +456,9 @@ pub async fn say_unit(
                     return Ok(());
                 }
                 tx.execute(
-                    "INSERT INTO item_unit (tenant_id, item_id, level, client_event_id, recorded_by_id)
-                     VALUES ($1, $2, $3::text::packaging_level, $4, $5)",
-                    &[&ev.tenant_id, &item_id, &body.level, &ev.client_event_id, &ev.recorded_by_id],
+                    "INSERT INTO item_unit (tenant_id, item_id, level, quantity, client_event_id, recorded_by_id)
+                     VALUES ($1, $2, $3::text::packaging_level, $4, $5, $6)",
+                    &[&ev.tenant_id, &item_id, &body.level, &quantity, &ev.client_event_id, &ev.recorded_by_id],
                 )
                 .await?;
                 Ok(())

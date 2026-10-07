@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { href } from "@app/routing/location";
 import { ApiError, api, reason } from "@domain/api";
-import type { ItemListRow, ItemRow } from "@domain/types";
+import type { ItemListRow, ItemRow, ListChange } from "@domain/types";
 
 import { codesFrom } from "./lists";
 
@@ -65,6 +65,16 @@ export interface ItemsDesk {
   pick: (listId: string) => void;
   /** Make a list from pasted codes and narrow to it. True when it was made. */
   makeList: (name: string, pasted: string) => Promise<boolean>;
+  /** The list narrowed to, as the picker has it; null for none. */
+  list: ItemListRow | null;
+  /**
+   * Rename the list narrowed to, add pasted codes to it, take an item off it,
+   * or put it away (D235). True when done.
+   */
+  renameList: (name: string) => Promise<boolean>;
+  addToList: (pasted: string) => Promise<boolean>;
+  takeOffList: (itemId: string) => Promise<boolean>;
+  removeList: () => Promise<boolean>;
   /** Where the list as asked downloads, every row of it (D216). */
   exportUrl: (format: "csv" | "xlsx" | "pdf") => string;
   making: { busy: boolean; problem: string | null; dismiss: () => void };
@@ -135,6 +145,8 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
   const [state, setState] = useState<ItemsState>({ kind: "loading" });
   // The newest question wins: an answer to one asked before it is dropped.
   const asking = useRef(0);
+  // Asked again, the question unchanged: a list's items changed under it (D235).
+  const [again, setAgain] = useState(0);
 
   useEffect(() => {
     window.history.replaceState(null, "", href(addressOf(asked, chosen)));
@@ -152,7 +164,7 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
       .catch((error) => {
         if (live.current && n === asking.current) setState({ kind: "failed", message: reason(error, "Could not load items.") });
       });
-  }, [asked, live]);
+  }, [asked, again, live]);
 
   const readLists = useCallback(async () => {
     try {
@@ -166,6 +178,19 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
   useEffect(() => {
     void readLists();
   }, [readLists]);
+
+  /** One change to the list narrowed to, as an act; the lists read again after it. */
+  const change = async (key: string, what: () => ListChange): Promise<boolean> => {
+    const list = asked.list;
+    if (!list) return false;
+    let done = false;
+    await making.press(`list:${list}:${key}`, async (act) => {
+      await api.changeItemList(list, what(), act);
+      done = true;
+    });
+    if (done && live.current) await readLists();
+    return done;
+  };
 
   const more = useCallback(async () => {
     if (state.kind !== "ready" || !state.next || state.more) return;
@@ -210,6 +235,33 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
       setTyped("");
       return true;
     },
+    list: (lists ?? []).find((l) => l.item_list_id === asked.list) ?? null,
+    renameList: (name) => change(`rename:${name.trim()}`, () => {
+      if (!name.trim()) throw new ApiError("Give the list a name.", 400);
+      return { rename: { name: name.trim() } };
+    }),
+    addToList: (pasted) =>
+      change(`add:${pasted}`, () => {
+        const codes = codesFrom(pasted);
+        if (codes.length === 0) throw new ApiError("Paste the item codes, one a line.", 400);
+        return { add: { codes } };
+      }).then((done) => {
+        if (done) setAgain((n) => n + 1);
+        return done;
+      }),
+    takeOffList: (itemId) =>
+      change(`take-off:${itemId}`, () => ({ take_off: { item_ids: [itemId] } })).then((done) => {
+        if (done) setAgain((n) => n + 1);
+        return done;
+      }),
+    removeList: () =>
+      change("remove", () => "remove").then((done) => {
+        if (done) {
+          setChosen(null);
+          setAsked((a) => ({ ...a, list: "", order: a.order === "list" ? "" : a.order }));
+        }
+        return done;
+      }),
     making: { busy: making.busy, problem: making.problem, dismiss: making.dismiss },
   };
 }

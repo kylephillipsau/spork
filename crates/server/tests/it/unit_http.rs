@@ -141,8 +141,8 @@ async fn an_item_leads_with_what_netsuite_counts_one_of() {
     assert_eq!(p["unit"]["netsuite_unit"], "CTN");
     assert_eq!(
         cards(&p),
-        vec![card("carton", true, false, 3), card("each", false, true, 0)],
-        "{p}"
+        vec![card("carton", true, false, 3), card("inner", false, true, 0), card("each", false, true, 0)],
+        "a pack is offered as the carton is (D234): {p}"
     );
 
     // ── earplugs, sold by the box: the box, its carton of ten, a pair offered
@@ -163,7 +163,7 @@ async fn an_item_leads_with_what_netsuite_counts_one_of() {
     assert_eq!(p["unit"]["level"], "each");
     assert_eq!(
         cards(&p),
-        vec![card("each", true, false, 3), card("carton", false, true, 0)],
+        vec![card("each", true, false, 3), card("inner", false, true, 0), card("carton", false, true, 0)],
         "{p}"
     );
 
@@ -276,4 +276,25 @@ async fn an_item_leads_with_what_netsuite_counts_one_of() {
     assert_eq!(level(&format!("GLV-{n}")), "carton");
     assert_eq!(level(&format!("PLG-{n}")), "inner");
     assert_eq!(level(&format!("CAT-{n}")), "carton");
+
+    // ── a pair is two single ones (D233) ───────────────────────────────────
+    let boots = made(format!("BTS-{n}"), "Gumboots", Some("Pair"), None).await;
+    let bagged = made(format!("WKG-{n}"), "Work gloves, bags of 12 pairs", Some("Pair"), Some((24, 10))).await;
+    let glasses = made(format!("GLS-{n}"), "Safety glasses", Some("Pair"), Some((1, 12))).await;
+    let unit = |p: &Value| (p["unit"]["level"].as_str().map(str::to_string), p["unit"]["singles"].as_i64());
+    let p = page(boots).await;
+    assert_eq!(unit(&p), (Some("inner".into()), Some(2)), "a pair packed as one is its pack: {p}");
+    assert_eq!(cards(&p)[0].0, "inner", "and leads: {p}");
+    assert_eq!(unit(&page(bagged).await), (Some("each".into()), Some(2)), "in bags of twelve, two of the each");
+    let (status, _) = call(test::TestRequest::post().uri(&format!("/items/{glasses}/unit")).set_json(json!({
+        "level": "each", "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-08T03:00:00Z",
+    })))
+    .await;
+    assert_eq!(status, 204);
+    assert_eq!(unit(&page(glasses).await), (Some("each".into()), Some(1)), "a pair of glasses is one thing, said so");
+    let (status, _) = call(test::TestRequest::post().uri(&format!("/items/{glasses}/unit")).set_json(json!({
+        "level": "carton", "quantity": 2, "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-08T03:00:00Z",
+    })))
+    .await;
+    assert_eq!(status, 400, "two of a carton is not a pair");
 }

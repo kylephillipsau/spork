@@ -22,6 +22,7 @@ pub mod cartons;
 pub mod client_events;
 pub mod correction;
 pub mod cuts;
+pub mod correcting;
 pub mod counting;
 pub mod credentials;
 pub mod despatch;

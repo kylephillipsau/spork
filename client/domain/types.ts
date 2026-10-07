@@ -1429,6 +1429,12 @@ export interface ItemUnit {
   said: boolean;
   /** NetSuite's Pack Unit, as it names it: "CTN", "Box", "Pair". */
   netsuite_unit: string | null;
+  /**
+   * How many single ones one is, where it is counted in them: two for a pair,
+   * packed as one (the level is its pack) or not (D233); one for the each;
+   * null for a pack or carton of its own.
+   */
+  singles: number | null;
 }
 
 export interface ItemPacking {
@@ -1694,9 +1700,18 @@ export interface ItemListRow {
   item_list_id: Uuid;
   name: string;
   items: number;
+  /** Items whose unit is weighed and measured: the sheet's boxes filled (D235). */
+  done: number;
   recorded_at: string;
   recorded_by_name: string | null;
 }
+
+/** What is done to a list (D235): renamed, added to, taken from, or put away. */
+export type ListChange =
+  | { rename: { name: string } }
+  | { add: { codes: string[] } }
+  | { take_off: { item_ids: Uuid[] } }
+  | "remove";
 
 /** `POST /items/{id}/carton`: the carton in force after saying what it holds (D178). */
 export interface CartonSaid {

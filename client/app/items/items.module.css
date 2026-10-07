@@ -69,6 +69,19 @@
   max-width: 100%;
 }
 
+/* The list narrowed to: its name, what is left of it, and its menu (D235). */
+.listBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2) var(--ui-space-3);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border);
+}
+.listName {
+  font-weight: 600;
+}
+
 .search {
   display: flex;
   align-items: center;
@@ -581,4 +594,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--ui-space-2);
+}
+/* What a carton holds, altogether or in packs (D233): its own row above the counts. */
+.holdsBy {
+  flex: 1 1 100%;
 }

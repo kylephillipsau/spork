@@ -306,4 +306,102 @@ async fn a_box_measured_on_the_carton_card_is_moved_to_the_box() {
     assert_eq!(status, 400, "nothing left to move: {said}");
     let (status, said) = elsewhere(Uuid::new_v4(), Uuid::new_v4()).await;
     assert_eq!(status, 400, "an item that isn't in the catalogue: {said}");
+
+    // ── a carton measured as the each (D232): moved onto it, with its count ─
+    let rolls: Uuid = db
+        .query_one(
+            "INSERT INTO item (tenant_id, code, description, base_unit_id, tracking)
+             SELECT current_tenant(), $1, 'Paper towel roll', u.id, 'none' FROM unit u WHERE u.code = 'ea'
+             RETURNING id",
+            &[&format!("PTR-{n}")],
+        )
+        .await
+        .expect("the rolls")
+        .get(0);
+    let (status, look) = post(
+        "/observations".into(),
+        json!({
+            "item_id": rolls, "packaging_level": "each",
+            "measurements": [
+                { "metric": "gross_weight", "entered_value": "4.2", "unit": "kg" },
+                { "metric": "length", "entered_value": "44", "unit": "cm" },
+                { "metric": "width",  "entered_value": "33", "unit": "cm" },
+                { "metric": "height", "entered_value": "40", "unit": "cm" },
+            ],
+            "presentation": "as_supplied",
+            "method": "instrument", "client_event_id": Uuid::new_v4(), "occurred_at": "2026-10-01T04:00:00Z",
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "{look}");
+    let to_carton = |from: &str, to: &str, holds: Value| {
+        post(
+            format!("/items/{rolls}/refile"),
+            json!({ "from": from, "to": to, "holds": holds, "client_event_id": Uuid::new_v4(), "occurred_at": now }),
+        )
+    };
+    let (status, moved) = to_carton("each", "carton", json!(16)).await;
+    assert_eq!(status, 200, "no carton on file, and the move says one: {moved}");
+    assert_eq!(moved["figures"].as_i64(), Some(4), "{moved}");
+    let said = db
+        .query_one(
+            "SELECT units_per_inner, inners_per_carton, effective_from::text FROM item_packing_config WHERE item_id = $1",
+            &[&rolls],
+        )
+        .await
+        .expect("one carton");
+    assert_eq!(
+        (said.get::<_, Option<i32>>(0), said.get::<_, Option<i32>>(1), said.get::<_, String>(2)),
+        (Some(1), Some(16), "2026-10-01".to_string()),
+        "sixteen to a carton, there since it was measured"
+    );
+    fold().await;
+    let (_, there) = call(test::TestRequest::get().uri(&format!("/items/{rolls}"))).await;
+    let weight = |level: &str| {
+        there["subjects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["item_id"] == rolls.to_string() && s["packaging_level"] == level && s["lot_id"].is_null())
+            .map(|s| s["gross_weight_g"].clone())
+    };
+    assert_eq!(weight("carton"), Some(json!(4200)), "the carton has its weight: {there}");
+    assert_eq!(weight("each"), Some(Value::Null), "and the roll has none, to be measured");
+    let (status, _) = to_carton("carton", "each", Value::Null).await;
+    assert_eq!(status, 200);
+    let (status, said) = to_carton("each", "carton", json!(12)).await;
+    assert_eq!(status, 400, "a count on file is put right under Holds, not by a move: {said}");
+
+    // ── a figure put right on its own (D236): 44 cm was 44.5 ──────────────
+    fold().await;
+    let correct = |length: &str| {
+        post(
+            format!("/items/{rolls}/corrections"),
+            json!({ "level": "each",
+                    "measurements": [{ "metric": "length", "entered_value": length, "unit": "cm" },
+                                     { "metric": "width", "entered_value": "33", "unit": "cm" }],
+                    "client_event_id": Uuid::new_v4(), "occurred_at": now }),
+        )
+    };
+    let (status, put) = correct("44.5").await;
+    assert_eq!((status, &put["figures"]), (200, &json!(1)), "the length, and not the width as it was: {put}");
+    let (status, again) = correct("45").await;
+    assert_eq!((status, &again["figures"]), (200, &json!(1)), "put right again before the fold: {again}");
+    fold().await;
+    let (_, there) = call(test::TestRequest::get().uri(&format!("/items/{rolls}"))).await;
+    let each = there["subjects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["item_id"] == rolls.to_string() && s["packaging_level"] == "each" && s["lot_id"].is_null())
+        .unwrap()
+        .clone();
+    assert_eq!((each["length_mm"].as_i64(), each["width_mm"].as_i64()), (Some(450), Some(330)), "{each}");
+    let (status, said) = post(
+        format!("/items/{rolls}/corrections"),
+        json!({ "level": "each", "measurements": [{ "metric": "diameter", "entered_value": "9", "unit": "cm" }],
+                "client_event_id": Uuid::new_v4(), "occurred_at": now }),
+    )
+    .await;
+    assert_eq!(status, 400, "nothing recorded to put right is measured instead: {said}");
 }

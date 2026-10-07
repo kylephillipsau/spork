@@ -101,6 +101,9 @@ pub struct ExportRow {
     pub selling_unit: Option<String>,
     /// Which level is one of that (D218): `each`, `inner` or `carton`.
     pub unit_level: String,
+    /// How many of the each one of that is, where it is counted in them: two
+    /// for a pair, packed as one or not (D233).
+    pub unit_singles: Option<i32>,
     pub supplier_part: Option<String>,
     /// The bin to go to for it here (D180), and what NetSuite has in it.
     pub bin: Option<String>,
@@ -251,11 +254,13 @@ fn sheet_of(rows: &[ExportRow], context: &Context) -> crate::sheet::Sheet {
 
 /// The level whose figures go in the boxes: the one NetSuite counts one of
 /// (D218), the carton for a CTN, the pack for a box of 100, the each for the
-/// rest, as said or as NetSuite's Pack Unit has it.
+/// rest, as said or as NetSuite's Pack Unit has it. A pair not packed as one
+/// is two of the each (D233), which no card holds, so its boxes are empty.
 fn selling_level(r: &ExportRow) -> Option<&ExportLevel> {
     match r.unit_level.as_str() {
         "carton" => r.carton.as_ref(),
         "inner" => r.inner.as_ref(),
+        _ if r.unit_singles.is_some_and(|n| n > 1) => None,
         _ => r.each.as_ref(),
     }
 }
@@ -337,12 +342,12 @@ async fn rows_of(
         .iter()
         .map(|r| (r.get(0), (r.get(1), r.get(2))))
         .collect();
-    // Which level of each is one in NetSuite (D218).
-    let units: HashMap<Uuid, String> = tx
-        .query("SELECT item_id, level::text FROM item_unit_level WHERE item_id = ANY($1)", &[&ids])
+    // Which level of each is one in NetSuite (D218), and how many single ones (D233).
+    let units: HashMap<Uuid, (String, Option<i32>)> = tx
+        .query("SELECT item_id, level::text, singles FROM item_unit_level WHERE item_id = ANY($1)", &[&ids])
         .await?
         .iter()
-        .map(|r| (r.get(0), r.get(1)))
+        .map(|r| (r.get(0), (r.get(1), r.get(2))))
         .collect();
 
     let by_item = |rows: Vec<tokio_postgres::Row>| -> HashMap<Uuid, String> {
@@ -556,7 +561,8 @@ async fn rows_of(
             ExportRow {
                 item_id: i.item_id,
                 selling_unit,
-                unit_level: units.get(&i.item_id).cloned().unwrap_or_else(|| "each".into()),
+                unit_level: units.get(&i.item_id).map_or_else(|| "each".into(), |u| u.0.clone()),
+                unit_singles: units.get(&i.item_id).map_or(Some(1), |u| u.1),
                 supplier_part,
                 each: at("each"),
                 inner: at("inner"),

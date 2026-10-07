@@ -7,20 +7,26 @@ import type { BinFlagged, BoundBarcode, CaptureSubject, FamilyMember, ItemView, 
 
 import type { Pixels, Point } from "./cut";
 import { handheld } from "./crop";
-import { measurementsOf, type Figures } from "./figures";
+import { figuresOf, measurementsOf, type Figures } from "./figures";
 import { isRound } from "./box";
 import {
   NO_FIGURES,
-  cartonHolds,
-  holdsInWords,
+  NO_HOLDS,
+  holdsOf,
+  packHolds,
+  holdsTypedFrom,
   isOwnCarton,
+  isOwnPack,
+  levelName,
   photosOf,
   presentationNeeded,
-  readHoldsFor,
+  readHoldsTyped,
+  readPackTyped,
   sayFirst,
+  singlesOf,
   subjectKey,
-  unitWord,
   type Face,
+  type HoldsTyped,
 } from "./subjects";
 
 /**
@@ -60,7 +66,7 @@ const drawing = () => import("./boxPicture");
 
 export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } | { kind: "failed"; message: string };
 
-export type Action = "weigh" | "measure" | "photos" | "barcodes" | "holds";
+export type Action = "weigh" | "measure" | "photos" | "barcodes" | "holds" | "correct";
 
 /** Which subject has which action open. */
 export interface Open {
@@ -109,22 +115,29 @@ export interface PropertiesDesk {
   setUnit: (next: string) => void;
   weigh: (subject: CaptureSubject) => Promise<void>;
 
-  /** How many of the item its carton holds altogether, as typed (D178); with `per`, in packs of that many (D185). */
-  holds: string;
-  typeHolds: (next: string) => void;
-  per: string;
-  typePer: (next: string) => void;
   /**
-   * Say again what its carton holds, the count on file having been said
-   * wrongly (D229): the same carton, described right.
+   * What its carton holds, as typed (D178, D185): altogether or in packs, in
+   * single ones or pairs (D233); and on its pack's card, what a pack holds.
    */
-  correctHolds: () => Promise<void>;
+  holds: HoldsTyped;
+  typeHolds: (next: Partial<HoldsTyped>) => void;
+  /**
+   * Say again what its carton or its pack holds, the count on file having
+   * been said wrongly (D229): the same carton, described right.
+   */
+  correctHolds: (subject: CaptureSubject) => Promise<void>;
 
   figures: Figures;
   type: (field: "weight" | "length" | "width" | "height" | "top" | "base" | "topHeight", next: string) => void;
   choosePresentation: (code: string) => void;
   toggleNoDimensions: () => void;
   measure: (subject: CaptureSubject) => Promise<void>;
+  /**
+   * Put right what is recorded on a card (D236): the figures typed that
+   * differ from those on file, and what its carton or pack holds, in one
+   * press. The rest stays as it was measured.
+   */
+  correct: (subject: CaptureSubject) => Promise<void>;
 
   /** Faces photographed in this look, sent or still on their way. */
   taken: Face[];
@@ -176,12 +189,18 @@ export interface PropertiesDesk {
    */
   flagBin: (said: BinFlag) => Promise<BinFlagged | null>;
   /** Say which level is one in NetSuite (D218). True when said. */
-  sayUnit: (level: "each" | "inner" | "carton") => Promise<boolean>;
+  sayUnit: (level: "each" | "inner" | "carton", quantity?: number) => Promise<boolean>;
   /**
    * Move what is recorded on one of the item's cards to another of its cards
-   * (D219), or another item's (D222). True when moved.
+   * (D219), or another item's (D222). Moving to a carton nobody has said
+   * the count of, `carton` says it (D232). True when moved.
    */
-  refile: (subject: CaptureSubject, to: { item: Uuid; level: "each" | "inner" | "carton" }, name: string) => Promise<boolean>;
+  refile: (
+    subject: CaptureSubject,
+    to: { item: Uuid; level: "each" | "inner" | "carton" },
+    name: string,
+    carton?: { holds: number | null; per: number | null },
+  ) => Promise<boolean>;
   /**
    * Copy what another of its family has on some of its cards to the same
    * cards of this item (D228). True when matched.
@@ -225,8 +244,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
   const [reading, setReading] = useState("");
   const [unit, setUnit] = useState("kg");
   const [figures, setFigures] = useState<Figures>(NO_FIGURES);
-  const [holds, setHolds] = useState("");
-  const [per, setPer] = useState("");
+  const [holds, setHolds] = useState<HoldsTyped>(NO_HOLDS);
   const [taken, setTaken] = useState<Face[]>([]);
   const [packagingTypes, setPackagingTypes] = useState<PackagingType[]>([]);
   // GS1's list, read once an item is open: the same for everyone, changed only by a release.
@@ -347,18 +365,16 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     setReading("");
     setBinding("");
     setCount("");
-    // The count on file, to keep or correct, as the whole carton's (D185);
-    // nothing, for a carton not said.
-    const packing = read.kind === "ready" && isOwnCarton(subject) ? read.item.packing : null;
-    const packs = (packing?.units_per_inner ?? 1) > 1;
-    // Sold by the pack, its carton is counted in packs (D218).
-    const byPack = read.kind === "ready" && read.item.unit.level === "inner";
-    const known = byPack ? (packing?.inners_per_carton ?? null) : cartonHolds(packing);
-    setHolds(known === null ? "" : String(known));
-    setPer(packs ? String(packing!.units_per_inner) : "");
+    // What its carton and its pack hold on file, to keep or correct, counted
+    // as it is sold (D185, D233); nothing, for neither said.
+    if (read.kind === "ready") {
+      setHolds(isOwnCarton(subject) || isOwnPack(subject) ? holdsTypedFrom(read.item) : { ...NO_HOLDS, in: singlesOf(read.item) });
+    }
     // Measuring starts from nothing typed; photographing after measuring keeps
     // the measuring look, and photographing on its own starts a new one.
     if (action === "measure") setFigures(NO_FIGURES);
+    // Put right from what is on file (D236).
+    if (action === "correct") setFigures(figuresOf(subject));
     if (action === "photos") {
       // At a desk the face-finder's model is fetched while the camera is in
       // use, so it is ready by the first photo's crop. Not on a phone, whose
@@ -380,20 +396,30 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
    * no carton on file, or a count typed that is not the one on file. A part
    * of the press it is in, so a retry is the same act.
    *
-   * The item's own pack needs a case pack as much as its carton does (D23):
-   * an item sold by the box has its box measured before anybody has said what
-   * a carton of it holds, so one is said with its counts unsaid.
+   * The item's own pack needs a case pack as much as its carton does (D23),
+   * and says what it holds (D234): an item sold by the box has its box
+   * measured before anybody has said what a carton of it holds, and a pair
+   * packed as one holds its two (D233).
    */
   const sayCartonFirst = async (subject: CaptureSubject, act: Act) => {
     if (!subject.item_id || read.kind !== "ready") return;
-    if (subject.packaging_level === "inner" && !subject.lot_id && !subject.item_style_id) {
-      if (!read.item.packing) await api.sayCarton(subject.item_id, { holds: null, act: partOf(act, "carton") });
+    const item = read.item;
+    if (isOwnPack(subject)) {
+      const per = readPackTyped(holds, item);
+      if (per !== null && typeof per === "object") throw new ApiError(per.problem, 400);
+      const on = item.packing?.units_per_inner ?? null;
+      // Offered, a pack that is no box sold as one is said with what it holds.
+      if (per === null && subject.offered && item.unit.level !== "inner") {
+        throw new ApiError("Say how many are in a pack.", 400);
+      }
+      if (item.packing && (per === null || per === on)) return;
+      await api.sayCarton(subject.item_id, { holds: null, per, act: partOf(act, "carton") });
       return;
     }
     if (!isOwnCarton(subject)) return;
-    const typed = readHoldsFor(read.item.unit.level, holds, per, read.item.packing);
+    const typed = readHoldsTyped(holds, item);
     if ("problem" in typed) throw new ApiError(typed.problem, 400);
-    if (!sayFirst(read.item.packing, typed.holds, typed.per)) return;
+    if (!sayFirst(item.packing, typed.holds, typed.per)) return;
     await api.sayCarton(subject.item_id, { holds: typed.holds, per: typed.per, act: partOf(act, "carton") });
   };
 
@@ -487,7 +513,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
      */
     weigh: (subject) => {
       const entered = reading.trim();
-      return press(`weigh:${subjectKey(subject)}:${entered}:${unit}:${holds.trim()}:${per.trim()}`, async (act) => {
+      return press(`weigh:${subjectKey(subject)}:${entered}:${unit}:${JSON.stringify(holds)}`, async (act) => {
         if (!entered) throw new ApiError("Read the scale first.", 400);
         if (!subject.packaging_level) throw new ApiError("A part is weighed with its size: use Measure.", 400);
         await sayCartonFirst(subject, act);
@@ -523,23 +549,32 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     },
 
     holds,
-    typeHolds: setHolds,
-    per,
-    typePer: setPer,
-    correctHolds: () =>
-      press(`holds:${holds.trim()}:${per.trim()}`, async (act) => {
+    typeHolds: (next) => setHolds((h) => ({ ...h, ...next })),
+    correctHolds: (subject) =>
+      press(`holds:${subjectKey(subject)}:${JSON.stringify(holds)}`, async (act) => {
         if (read.kind !== "ready") return;
         const item = read.item;
-        const typed = readHoldsFor(item.unit.level, holds, per, item.packing);
-        if ("problem" in typed) throw new ApiError(typed.problem, 400);
-        if (typed.holds === null) throw new ApiError("Say how many it holds.", 400);
-        const said = await api.sayCarton(item.item_id, { holds: typed.holds, per: typed.per, correction: true, act });
+        // A pack's count alone, its carton holding as many packs (D234); or the carton's.
+        const pack = isOwnPack(subject);
+        let counts: { holds: number | null; per: number | null };
+        if (pack) {
+          const per = readPackTyped(holds, item);
+          if (per !== null && typeof per === "object") throw new ApiError(per.problem, 400);
+          if (per === null) throw new ApiError("Say how many are in a pack.", 400);
+          counts = { holds: null, per };
+        } else {
+          const typed = readHoldsTyped(holds, item);
+          if ("problem" in typed) throw new ApiError(typed.problem, 400);
+          if (typed.holds === null) throw new ApiError("Say how many it holds.", 400);
+          counts = typed;
+        }
+        const said = await api.sayCarton(item.item_id, { ...counts, correction: true, act });
         if (!live.current) return;
         setOpen(null);
-        const pack = item.unit.level === "inner" ? unitWord(item) : "pack";
+        const now = { ...item, packing: said };
         setSaid({
           tone: "success",
-          text: said.changed ? `A carton holds ${holdsInWords(said, pack)} now.` : "That is what was on file.",
+          text: !said.changed ? "That is what was on file." : pack ? `A pack holds ${packHolds(now)} now.` : `A carton holds ${holdsOf(now)} now.`,
         });
         await reload();
       }),
@@ -561,7 +596,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
      */
     measure: (subject) => {
       const measurements = measurementsOf(figures, isRound(subject));
-      return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}:${holds.trim()}:${per.trim()}`, async (act) => {
+      return press(`measure:${subjectKey(subject)}:${JSON.stringify(measurements)}:${figures.presentation}:${JSON.stringify(holds)}`, async (act) => {
         if (measurements.length === 0) throw new ApiError("Nothing has been measured yet.", 400);
         // Said sooner than the server would say it (D138).
         const lengths = measurements.some((m) => !m.absent_reason && m.metric !== "gross_weight");
@@ -584,6 +619,40 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         setSaid({
           tone: "success",
           text: `${response.observation_ids.length} ${response.observation_ids.length === 1 ? "figure" : "figures"} recorded, shown here in a moment. Photograph it now, while it is in front of you.`,
+        });
+        await reload();
+        settle();
+      });
+    },
+
+    correct: (subject) => {
+      const measurements = measurementsOf(figures, isRound(subject));
+      return press(`correct:${subjectKey(subject)}:${JSON.stringify(measurements)}:${JSON.stringify(holds)}`, async (act) => {
+        if (read.kind !== "ready" || !subject.item_id || !subject.packaging_level) return;
+        const item = read.item;
+        // What its carton or pack holds, said wrongly (D229), put right with it.
+        let counts: { holds: number | null; per: number | null } | null = null;
+        if (isOwnCarton(subject)) {
+          const typed = readHoldsTyped(holds, item);
+          if ("problem" in typed) throw new ApiError(typed.problem, 400);
+          if (typed.holds !== null && sayFirst(item.packing, typed.holds, typed.per)) counts = typed;
+        } else if (isOwnPack(subject)) {
+          const per = readPackTyped(holds, item);
+          if (per !== null && typeof per === "object") throw new ApiError(per.problem, 400);
+          if (per !== null && per !== item.packing?.units_per_inner) counts = { holds: null, per };
+        }
+        const put = measurements.length
+          ? (await api.correctFigures(subject.item_id, subject.packaging_level, measurements, partOf(act, "figures"))).figures
+          : 0;
+        if (counts) await api.sayCarton(subject.item_id, { ...counts, correction: true, act: partOf(act, "carton") });
+        if (!live.current) return;
+        setOpen(null);
+        setSaid({
+          tone: "success",
+          text:
+            put === 0 && !counts
+              ? "Nothing differs from what is on file."
+              : `Put right: ${[put > 0 && `${put} ${put === 1 ? "figure" : "figures"}`, counts && "what it holds"].filter(Boolean).join(" and ")}. Shown here in a moment.`,
         });
         await reload();
         settle();
@@ -658,12 +727,12 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         await reload();
       }),
 
-    sayUnit: async (level) => {
+    sayUnit: async (level, quantity = 1) => {
       if (read.kind !== "ready") return false;
       const item = read.item.item_id;
       let done = false;
-      await press(`unit:${item}:${level}`, async (act) => {
-        await api.sayUnit(item, level, act);
+      await press(`unit:${item}:${level}:${quantity}`, async (act) => {
+        await api.sayUnit(item, level, act, quantity);
         done = true;
         if (!live.current) return;
         await reload();
@@ -671,13 +740,16 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       return done;
     },
 
-    refile: async (subject, to, name) => {
+    refile: async (subject, to, name, carton) => {
       const from = subject.packaging_level;
       if (read.kind !== "ready" || (from !== "each" && from !== "inner" && from !== "carton")) return false;
       const item = read.item.item_id;
+      // Taken off what it is sold as, that is what still needs measuring.
+      const left =
+        to.item === item && from === read.item.unit.level ? ` ${levelName(from, read.item)} has nothing recorded now.` : "";
       let done = false;
-      await press(`refile:${item}:${from}:${to.item}:${to.level}`, async (act) => {
-        const moved = await api.refile(item, from, to, act);
+      await press(`refile:${item}:${from}:${to.item}:${to.level}:${carton?.holds ?? ""}:${carton?.per ?? ""}`, async (act) => {
+        const moved = await api.refile(item, from, to, act, carton);
         done = true;
         if (!live.current) return;
         setOpen(null);
@@ -685,7 +757,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
           tone: "success",
           text: moved.replay
             ? `Already moved to ${name}.`
-            : `Moved ${moved.figures} ${moved.figures === 1 ? "figure" : "figures"} and ${moved.photos} ${moved.photos === 1 ? "photo" : "photos"} to ${name}. The figures show there in a moment.`,
+            : `Moved ${moved.figures} ${moved.figures === 1 ? "figure" : "figures"} and ${moved.photos} ${moved.photos === 1 ? "photo" : "photos"} to ${name}. The figures show there in a moment.${left}`,
         });
         await reload();
       });

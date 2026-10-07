@@ -92,6 +92,8 @@ export function nameOf(s: CaptureSubject, item?: Pick<ItemView, "item_id" | "uni
  * CTN being a carton; or, with none, its level's name.
  */
 export function unitWord(item: Pick<ItemView, "unit">): string {
+  // Two single ones is a pair, whatever NetSuite's word (D233).
+  if (singlesOf(item) === 2) return "Pair";
   const said = item.unit.netsuite_unit?.trim();
   if (said) {
     const u = said.toUpperCase();
@@ -103,17 +105,39 @@ export function unitWord(item: Pick<ItemView, "unit">): string {
 }
 
 /** A word for so many of a thing: "boxes", "packs", "each". */
-function plural(word: string, n: number): string {
+export function plural(word: string, n: number): string {
   const w = word.toLowerCase();
   if (n === 1 || w === "each") return w;
   return /(x|s|sh|ch)$/.test(w) ? `${w}es` : `${w}s`;
 }
 
 /**
+ * How many single ones one of what NetSuite counts is, where it is counted in
+ * them (D233): two for a pair, packed as one or not; one otherwise.
+ */
+export function singlesOf(item: Pick<ItemView, "unit">): number {
+  return Math.max(item.unit.singles ?? 1, 1);
+}
+
+/** "pairs", for an item sold by the pair; null for one counted in single ones. */
+function severalWord(item: Pick<ItemView, "unit">): string | null {
+  return singlesOf(item) > 1 ? plural(unitWord(item), 2) : null;
+}
+
+/** "12 pairs": so many single ones in what NetSuite counts, where that is several; null where it isn't whole. */
+function inUnits(item: Pick<ItemView, "unit">, singles: number): string | null {
+  const k = singlesOf(item);
+  if (k <= 1 || singles % k !== 0) return null;
+  return `${(singles / k).toLocaleString()} ${plural(unitWord(item), singles / k)}`;
+}
+
+/**
  * One of the item's own levels, named from what it is sold as (D218): the
  * unit by NetSuite's word and what it holds, "Box of 100"; a carton by how
  * many of that it holds, "Carton of 10 boxes"; a pack by its count; and the
- * single product inside a pack or carton it is sold as, "Single item".
+ * single product inside a pack or carton it is sold as, "Single item". A pair
+ * is two single ones (D233): its pack, when it is packed as one, is "Pair",
+ * and the glove or boot inside it "Single one".
  */
 export function levelName(level: "each" | "inner" | "carton", item: Pick<ItemView, "unit" | "packing">): string {
   const unit = item.unit.level;
@@ -121,6 +145,15 @@ export function levelName(level: "each" | "inner" | "carton", item: Pick<ItemVie
   const per = item.packing?.units_per_inner ?? null;
   const inners = item.packing?.inners_per_carton ?? null;
   const count = (n: number) => n.toLocaleString();
+  const several = singlesOf(item) > 1;
+  if (several) {
+    if (level === "each") return "Single one";
+    if (level === unit) return word;
+    if (level === "inner") {
+      const pairs = per ? inUnits(item, per) : null;
+      return per && per > 1 ? `Pack of ${count(per)}${pairs ? ` (${pairs})` : ""}` : "Pack";
+    }
+  }
   if (level === unit) {
     if (unit === "inner" && per && per > 1) return `${word} of ${count(per)}`;
     if (unit === "carton" && inners) {
@@ -132,7 +165,9 @@ export function levelName(level: "each" | "inner" | "carton", item: Pick<ItemVie
   if (level === "carton") {
     if (!inners) return "Carton";
     if (unit === "inner") return `Carton of ${count(inners)} ${plural(word, inners)}`;
-    return per && per > 1 ? `Carton of ${count(inners)} packs` : `Carton of ${count(inners)}`;
+    const pairs = several ? inUnits(item, inners * (per ?? 1)) : null;
+    const said = per && per > 1 ? `Carton of ${count(inners)} packs` : `Carton of ${count(inners)}`;
+    return pairs ? `${said} (${pairs})` : said;
   }
   if (level === "inner") return per && per > 1 ? `Pack of ${count(per)}` : "Pack";
   return "Single item";
@@ -187,6 +222,14 @@ export function isOwnCarton(s: Pick<CaptureSubject, "item_id" | "packaging_level
   return s.item_id !== null && s.packaging_level === "carton";
 }
 
+/**
+ * Whether this is the item's own pack: so many of it in a pack or inner box,
+ * said at the item (D185, D234). A family's or a variant's is not.
+ */
+export function isOwnPack(s: Pick<CaptureSubject, "item_id" | "packaging_level" | "lot_id" | "item_style_id">): boolean {
+  return s.item_id !== null && s.packaging_level === "inner" && !s.lot_id && !s.item_style_id;
+}
+
 type Counts = Pick<ItemPacking, "units_per_inner" | "inners_per_carton">;
 
 /** How many of the item a carton holds, by the case pack in force; null when nobody has said. */
@@ -203,50 +246,129 @@ export function holdsInWords(p: Counts | null, pack = "pack"): string {
   if (n === null) return "Not said yet";
   if (u === 1) return `${n.toLocaleString()} × each`;
   const packs = plural(pack, n);
-  if (u === null) return `${n} ${packs}, how many in each not said`;
-  return `${n} ${packs} of ${u} (${(n * u).toLocaleString()} × each)`;
+  if (u === null) return `${n.toLocaleString()} ${packs}, how many in each not said`;
+  return `${n.toLocaleString()} ${packs} of ${u.toLocaleString()} (${(n * u).toLocaleString()} × each)`;
 }
 
 /**
- * How many a carton holds, as typed: the whole carton's count of the item, a
- * whole number from 1, or nothing said; and, when it holds packs, how many are
- * in each, so the packs are the count over that (D185). 1,000 in packs of 50
- * is 20 packs: the count is what a person reads off the carton's label.
+ * What its carton holds, in words, counted as the item is sold (D218, D233):
+ * "16 × each", "10 boxes of 100 (1,000 × each)", "70 pairs (140 single)",
+ * "10 packs of 12 pairs (240 single)".
  */
-export function readHolds(typed: string, perTyped = ""): { holds: number | null; per: number | null } | { problem: string } {
-  const t = typed.trim();
-  const p = perTyped.trim();
-  const whole = (v: string) => /^\d+$/.test(v) && Number(v) >= 1;
-  if (t && !whole(t)) return { problem: "How many it holds is a whole number, 1 or more." };
-  if (p && !whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
-  if (p && !t) return { problem: "Say how many are in it altogether, as well as how many in each pack." };
-  if (!p) return { holds: t ? Number(t) : null, per: null };
-  const [total, per] = [Number(t), Number(p)];
-  if (total % per !== 0) {
-    return { problem: `${total.toLocaleString()} isn’t a whole number of packs of ${per.toLocaleString()}.` };
+export function holdsOf(item: Pick<ItemView, "unit" | "packing">): string {
+  const p = item.packing;
+  const several = severalWord(item);
+  if (!several || !p || p.inners_per_carton === null) {
+    return holdsInWords(p, item.unit.level === "inner" ? unitWord(item) : "pack");
   }
-  return { holds: total / per, per };
+  const n = p.inners_per_carton;
+  const u = p.units_per_inner;
+  // Packed as pairs, the carton is so many of them.
+  if (item.unit.level === "inner") return `${n.toLocaleString()} ${plural(unitWord(item), n)}${u ? ` (${(n * u).toLocaleString()} single)` : ""}`;
+  const all = n * (u ?? 1);
+  const pairs = inUnits(item, all);
+  if (u && u > 1) {
+    const each = inUnits(item, u);
+    return `${n.toLocaleString()} ${plural("pack", n)} of ${each ?? `${u} single`} (${all.toLocaleString()} single)`;
+  }
+  return pairs ? `${pairs} (${all.toLocaleString()} single)` : `${all.toLocaleString()} single`;
+}
+
+/** What a pack of it holds, in words: "12 × each", "12 pairs (24 single)"; null when nobody has said. */
+export function packHolds(item: Pick<ItemView, "unit" | "packing">): string | null {
+  const u = item.packing?.units_per_inner ?? null;
+  if (u === null || u <= 1) return null;
+  const pairs = inUnits(item, u);
+  return pairs ? `${pairs} (${u.toLocaleString()} single)` : `${u.toLocaleString()} × each`;
 }
 
 /**
- * A carton's count as typed for an item sold by the pack (D218): how many
- * packs are in the carton, and, when said, how many are in a pack. Left blank,
- * a pack holds what it held. Any other item's carton is typed as the whole
- * carton's count ([`readHolds`]).
+ * What a carton holds, as somebody types it (D185, D233): how many are in it
+ * altogether, or so many packs of so many; each count in single ones or, for
+ * an item sold by the pair, in pairs. A carton of 70 pairs is typed as 140
+ * single or 70 pairs; ten bags of twelve pairs, as 10 packs of 12 pairs.
  */
-export function readHoldsFor(
-  unit: "each" | "inner" | "carton",
-  typed: string,
-  perTyped: string,
-  packing: Pick<ItemPacking, "units_per_inner"> | null,
-): { holds: number | null; per: number | null } | { problem: string } {
-  if (unit !== "inner") return readHolds(typed, perTyped);
-  const t = typed.trim();
-  const p = perTyped.trim();
-  const whole = (v: string) => /^\d+$/.test(v) && Number(v) >= 1;
-  if (t && !whole(t)) return { problem: "How many packs it holds is a whole number, 1 or more." };
-  if (p && !whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
-  return { holds: t ? Number(t) : null, per: p ? Number(p) : (packing?.units_per_inner ?? null) };
+export interface HoldsTyped {
+  by: "all" | "packs";
+  /** How many in it altogether, or how many packs. */
+  count: string;
+  /** How many in a pack, by packs, and on a pack's own card. */
+  per: string;
+  /** What the counts are counted in, as so many single ones: 1, or 2 for pairs. */
+  in: number;
+}
+
+export const NO_HOLDS: HoldsTyped = { by: "all", count: "", per: "", in: 1 };
+
+/**
+ * The item's carton as it is on file, to keep or correct: by packs where it
+ * has packs of its own (a box sold as one, ten bags of twelve pairs), else
+ * altogether, counted in pairs where it is sold by the pair and that is whole.
+ */
+export function holdsTypedFrom(item: Pick<ItemView, "unit" | "packing">): HoldsTyped {
+  const k = singlesOf(item);
+  const per = item.packing?.units_per_inner ?? null;
+  const n = item.packing?.inners_per_carton ?? null;
+  const counted = (singles: number) => (k > 1 && singles % k === 0 ? { v: singles / k, in: k } : { v: singles, in: 1 });
+  const boxSold = item.unit.level === "inner" && k <= 1;
+  // A pack of its own: not loose, and not the pair itself.
+  if (boxSold || (per !== null && per > 1 && per !== k)) {
+    const each = per === null ? null : counted(per);
+    return { by: "packs", count: n === null ? "" : String(n), per: each ? String(each.v) : "", in: each?.in ?? k };
+  }
+  if (n === null) return { ...NO_HOLDS, in: k };
+  const all = counted(n * (per ?? 1));
+  return { by: "all", count: String(all.v), per: "", in: all.in };
+}
+
+type Read = { holds: number | null; per: number | null } | { problem: string };
+
+const whole = (v: string) => /^\d+$/.test(v) && Number(v) >= 1;
+
+/**
+ * The case pack's two counts from what was typed: how many packs a carton
+ * holds and how many single ones are in a pack, either null where nothing is
+ * said. Altogether, a pair item's pairs are its packs (D233), a box sold as
+ * one is counted in its boxes of what is on file, and anything else is loose.
+ */
+export function readHoldsTyped(typed: HoldsTyped, item: Pick<ItemView, "unit" | "packing">): Read {
+  const k = singlesOf(item);
+  const t = typed.count.trim();
+  const p = typed.per.trim();
+  const counted = typed.in > 1 ? plural(unitWord(item), 2) : "single ones";
+  if (t && !whole(t)) return { problem: "How many it holds is a whole number, 1 or more." };
+  if (typed.by === "packs") {
+    if (p && !whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
+    const per = p ? Number(p) * typed.in : null;
+    return { holds: t ? Number(t) : null, per: per ?? (item.unit.level === "inner" ? (item.packing?.units_per_inner ?? null) : null) };
+  }
+  if (!t) return { holds: null, per: null };
+  const all = Number(t) * typed.in;
+  if (k > 1) {
+    if (all % k !== 0) return { problem: `${all.toLocaleString()} single isn’t a whole number of ${plural(unitWord(item), 2)}.` };
+    return { holds: all / k, per: k };
+  }
+  if (item.unit.level === "inner") {
+    const per = item.packing?.units_per_inner ?? null;
+    if (per === null) return { problem: `Say how many ${counted} each ${unitWord(item).toLowerCase()} holds: count it in packs.` };
+    if (all % per !== 0) return { problem: `${all.toLocaleString()} isn’t a whole number of ${plural(unitWord(item), 2)} of ${per}.` };
+    return { holds: all / per, per };
+  }
+  return { holds: all, per: null };
+}
+
+/**
+ * What a pack of it holds, as typed on the pack's own card (D234): so many
+ * single ones, or pairs; a pair packed as one holds its two. Null where
+ * nothing is typed.
+ */
+export function readPackTyped(typed: HoldsTyped, item: Pick<ItemView, "unit" | "packing">): number | null | { problem: string } {
+  const k = singlesOf(item);
+  if (item.unit.level === "inner" && k > 1) return k;
+  const p = typed.per.trim();
+  if (!p) return null;
+  if (!whole(p)) return { problem: "How many are in a pack is a whole number, 1 or more." };
+  return Number(p) * typed.in;
 }
 
 /**

@@ -8192,6 +8192,25 @@ pub struct RecordObservationResponse {
     pub warnings: Vec<String>,
 }
 
+/// A value as typed, in the unit it was typed in, as the canonical figure it
+/// is stored as (Principle 5), with the unit's id and what it measures. Every
+/// writer of a typed figure reads it here: a measurement, and a measurement
+/// put right (D236).
+pub(crate) async fn entered_quantity(
+    tx: &tokio_postgres::Transaction<'_>,
+    entered_value: &str,
+    unit_code: &str,
+) -> Result<(i64, Uuid, Uuid), ApiError> {
+    let ur = tx
+        .query_opt("SELECT id, dimension_id, factor_num, factor_den FROM unit WHERE code = $1", &[&unit_code])
+        .await?
+        .ok_or_else(|| ApiError::Rejected(format!("no unit named {unit_code}")))?;
+    let factor = observing::Factor { num: ur.get::<_, i64>(2), den: ur.get::<_, i64>(3) };
+    let entered = observing::parse_entered(entered_value).map_err(|e| ApiError::Rejected(e.to_string()))?;
+    let canonical = observing::to_canonical(entered, factor).map_err(|e| ApiError::Rejected(e.to_string()))?;
+    Ok((canonical, ur.get(0), ur.get(1)))
+}
+
 /// Record what was measured, in the unit it was measured in.
 ///
 /// **The second of the two tables that carry everything, and the last to get a
@@ -8488,28 +8507,9 @@ pub async fn record_observation(
                         )));
                     };
 
-                    let unit_row = tx
-                        .query_opt(
-                            "SELECT id, dimension_id, factor_num, factor_den
-                               FROM unit WHERE code = $1",
-                            &[unit_code],
-                        )
-                        .await?;
-                    let Some(ur) = unit_row else {
-                        return Err(ApiError::Rejected(format!("no unit named {unit_code}")));
-                    };
-                    let unit_id: Uuid = ur.get(0);
-                    let unit_dimension: Uuid = ur.get(1);
-                    let factor = observing::Factor {
-                        num: ur.get::<_, i64>(2),
-                        den: ur.get::<_, i64>(3),
-                    };
-
+                    let (canonical, unit_id, unit_dimension) =
+                        entered_quantity(tx, entered_value, unit_code).await?;
                     observing::check_applicable(&metric, subject_kind, unit_dimension, unit_code)
-                        .map_err(|e| ApiError::Rejected(e.to_string()))?;
-                    let entered = observing::parse_entered(entered_value)
-                        .map_err(|e| ApiError::Rejected(e.to_string()))?;
-                    let canonical = observing::to_canonical(entered, factor)
                         .map_err(|e| ApiError::Rejected(e.to_string()))?;
 
                     let id: Uuid = tx
@@ -9577,6 +9577,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cuts::record_box_picture)
         .service(crate::lists::make_list)
         .service(crate::lists::lists)
+        .service(crate::lists::change_list)
+        .service(crate::correcting::correct)
         .service(crate::places::set_reach)
         .service(crate::places::site_layout)
         .service(crate::places::draft_layout)

@@ -1,6 +1,7 @@
 import type { CaptureSubject, FamilyMember, ItemListRow, ItemRow, ItemView, PackagingType } from "@domain/types";
 
-import { NO_FIGURES } from "./subjects";
+import { figuresOf } from "./figures";
+import { NO_FIGURES, NO_HOLDS } from "./subjects";
 import type { PropertiesDesk } from "./useItemProperties";
 import type { Asked, ItemsDesk, ItemsState } from "./useItems";
 import type { QueueDesk, Queued } from "./usePhotoQueue";
@@ -159,7 +160,7 @@ export const ITEM: ItemView = {
   picture: { digest: PHOTO, source: "own" },
   measurements: [],
   packing: { units_per_inner: 1, inners_per_carton: 8, effective_from: "2026-09-30" },
-  unit: { level: "each", said: false, netsuite_unit: "Each" },
+  unit: { level: "each", said: false, netsuite_unit: "Each", singles: 1 },
   held: [
     {
       site_code: "NTH",
@@ -251,7 +252,7 @@ export const ITEM_UNKNOWN: ItemView = {
   picture: null,
   measurements: [],
   packing: null,
-  unit: { level: "each", said: false, netsuite_unit: null },
+  unit: { level: "each", said: false, netsuite_unit: null, singles: 1 },
   held: [],
   reported: [],
   flags: [],
@@ -286,15 +287,14 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     typeReading: noop,
     setUnit: noop,
     weigh: later,
-    holds: "",
+    holds: NO_HOLDS,
     typeHolds: noop,
-    per: "",
-    typePer: noop,
     figures: NO_FIGURES,
     type: noop,
     choosePresentation: noop,
     toggleNoDimensions: noop,
     measure: later,
+    correct: later,
     addVariant: async () => false,
     chooseVariant: later,
     pictureFamily: later,
@@ -338,6 +338,7 @@ const CATALOGUE = "01990000-0000-7000-8000-0000000c0a70";
 const GLOVES = "01990000-0000-7000-8000-0000000c0a71";
 const PLUGS = "01990000-0000-7000-8000-0000000c0a72";
 const RESPIRATOR = "01990000-0000-7000-8000-0000000c0a73";
+const BOOTS = "01990000-0000-7000-8000-0000000c0a74";
 
 /**
  * Sold by the each, and nothing said of a carton (D218): one card, and a
@@ -348,7 +349,7 @@ export const SOLD_SINGLY: ItemView = {
   item_id: CATALOGUE,
   code: "Catalogue",
   description: "Foodcare Industry Catalogue",
-  unit: { level: "each", said: false, netsuite_unit: "Each" },
+  unit: { level: "each", said: false, netsuite_unit: "Each", singles: 1 },
   subjects: [
     subject({
       item_id: CATALOGUE,
@@ -376,7 +377,7 @@ export const SOLD_BY_CARTON: ItemView = {
   item_id: GLOVES,
   code: "DGN-4110-XL",
   description: "Disposable Nitrile Powder Free Gloves - ctn 1000 - Black - XL",
-  unit: { level: "carton", said: false, netsuite_unit: "CTN" },
+  unit: { level: "carton", said: false, netsuite_unit: "CTN", singles: null },
   packing: { units_per_inner: 1, inners_per_carton: 1000, effective_from: "2026-09-30" },
   subjects: [
     subject({
@@ -409,7 +410,7 @@ export const SOLD_BY_BOX: ItemView = {
   item_id: PLUGS,
   code: "DEJ-8040",
   description: "CS40 Soft Corded Metal Detectable Earplugs Non-Touch TPR Box 100",
-  unit: { level: "inner", said: false, netsuite_unit: "Box" },
+  unit: { level: "inner", said: false, netsuite_unit: "Box", singles: null },
   packing: { units_per_inner: 100, inners_per_carton: 10, effective_from: "2026-10-02" },
   subjects: [
     subject({
@@ -457,7 +458,7 @@ export const MEASURED_AS_KIT: ItemView = {
   item_id: "17e10000-0000-0000-0000-0000000000a7",
   code: "SPR-1000",
   description: "Trigger sprayer with 1L bottle (kit)",
-  unit: { level: "each", said: false, netsuite_unit: "Each" },
+  unit: { level: "each", said: false, netsuite_unit: "Each", singles: 1 },
   packing: null,
   subjects: [
     subject({
@@ -488,7 +489,7 @@ export const MISFILED: ItemView = {
   item_id: RESPIRATOR,
   code: "P2R-0010",
   description: "Portwest P2 Respirator With Valve 10/box",
-  unit: { level: "inner", said: true, netsuite_unit: "Box" },
+  unit: { level: "inner", said: true, netsuite_unit: "Box", singles: null },
   packing: { units_per_inner: 10, inners_per_carton: 10, effective_from: "2026-10-05" },
   subjects: [
     subject({
@@ -559,8 +560,7 @@ const SAID_WRONG: ItemView = {
 };
 export const CORRECTING_HOLDS = fixtureProperties(SAID_WRONG, {
   open: { key: `${PLUGS}:carton`, action: "holds" },
-  holds: "10",
-  per: "100",
+  holds: { by: "packs", count: "10", per: "100", in: 1 },
 });
 
 export const MEASURING = fixtureProperties(ITEM, {
@@ -575,9 +575,58 @@ export const MEASURING = fixtureProperties(ITEM, {
  */
 export const CARTON_MEASURING = fixtureProperties(ITEM_UNKNOWN, {
   open: { key: `${TAPE_GUN}:carton`, action: "measure" },
-  holds: "1000",
-  per: "50",
+  holds: { by: "packs", count: "20", per: "50", in: 1 },
   figures: { ...NO_FIGURES, weight: "6.4", length: "41", width: "31", height: "" },
+});
+
+/**
+ * Sold by the pair, a pair to a box (D233): the pair is the pack and leads,
+ * the boot inside it is a single one, and its carton is counted in pairs or
+ * in single ones, either way.
+ */
+export const SOLD_BY_PAIR: ItemView = {
+  ...ITEM_UNKNOWN,
+  item_id: BOOTS,
+  code: "ABC-6210-09",
+  description: "Gumboots, size 9",
+  unit: { level: "inner", said: false, netsuite_unit: "Pair", singles: 2 },
+  packing: { units_per_inner: 2, inners_per_carton: null, effective_from: "2026-10-08" },
+  subjects: [
+    subject({
+      item_id: BOOTS,
+      code: "ABC-6210-09",
+      packaging_level: "inner",
+      is_unit: true,
+      gross_weight_g: 2830,
+      length_mm: 445,
+      width_mm: 330,
+      height_mm: 140,
+      method: "instrument",
+      source: "own",
+      observed_at: "2026-10-08T01:00:00Z",
+      wants: ["photographs"],
+      because: "incomplete",
+    }),
+    subject({ item_id: BOOTS, code: "ABC-6210-09", packaging_level: "carton", wants: ["weight", "dimensions", "photographs"], because: "nothing" }),
+    subject({ item_id: BOOTS, code: "ABC-6210-09", packaging_level: "each", wants: [], offered: true }),
+  ],
+};
+
+/**
+ * The box put right a figure at a time (D236): its length typed as 20.5 cm
+ * where 20.5 was taken as 20, and what a box holds, 200, in the same press.
+ */
+export const CORRECTING = fixtureProperties(SOLD_BY_BOX, {
+  open: { key: `${PLUGS}:inner`, action: "correct" },
+  figures: { ...figuresOf(SOLD_BY_BOX.subjects[0]!), length: "20.5" },
+  holds: { by: "packs", count: "10", per: "200", in: 1 },
+});
+
+/** A carton of six pairs being weighed, counted as twelve boots. */
+export const PAIR_CARTON = fixtureProperties(SOLD_BY_PAIR, {
+  open: { key: `${BOOTS}:carton`, action: "weigh" },
+  reading: "17.8",
+  holds: { by: "all", count: "12", per: "", in: 1 },
 });
 
 /** The family's carton put on the scale, and the reading far from the list's figure. */
@@ -721,10 +770,10 @@ export const ITEMS: ItemRow[] = [
   ROW({ code: "SKU-8837", description: "Tape gun, 50 mm" }),
 ];
 
-/** Two sheets made into lists (D179). */
+/** Two sheets made into lists (D179): one with work left, one done (D235). */
 export const LISTS: ItemListRow[] = [
-  { item_list_id: "01990000-0000-7000-8000-0000000a0002", name: "Weights and sizes, 1 Oct", items: 30, recorded_at: "2026-10-02T00:10:00Z", recorded_by_name: "Sam Lee" },
-  { item_list_id: "01990000-0000-7000-8000-0000000a0001", name: "Weights and sizes, 24 Sep", items: 25, recorded_at: "2026-10-02T00:05:00Z", recorded_by_name: "Sam Lee" },
+  { item_list_id: "01990000-0000-7000-8000-0000000a0002", name: "Weights and sizes, 1 Oct", items: 30, done: 21, recorded_at: "2026-10-02T00:10:00Z", recorded_by_name: "Sam Lee" },
+  { item_list_id: "01990000-0000-7000-8000-0000000a0001", name: "Weights and sizes, 24 Sep", items: 25, done: 25, recorded_at: "2026-10-02T00:05:00Z", recorded_by_name: "Sam Lee" },
 ];
 
 export function fixtureItems(
@@ -747,6 +796,11 @@ export function fixtureItems(
     lists: LISTS,
     pick: noop,
     makeList: async () => false,
+    list: LISTS.find((l) => l.item_list_id === a.list) ?? null,
+    renameList: async () => false,
+    addToList: async () => false,
+    takeOffList: async () => false,
+    removeList: async () => false,
     exportUrl: (format) => `/api/items/export?format=${format}`,
     making: { busy: false, problem: null, dismiss: noop },
     ...over,

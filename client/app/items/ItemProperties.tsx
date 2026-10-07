@@ -37,15 +37,20 @@ import { FaceCrop } from "./FaceCrop";
 import {
   PRESENTATIONS,
   bindable,
-  holdsInWords,
   isOwnCarton,
   nameOf,
   photosOf,
   presentationNeeded,
   presentationOffered,
-  readHolds,
-  readHoldsFor,
+  NO_HOLDS,
+  holdsOf,
+  isOwnPack,
+  packHolds,
+  plural,
+  readHoldsTyped,
+  singlesOf,
   subjectKey,
+  type HoldsTyped,
   unitWord,
   levelName,
   weighable,
@@ -117,7 +122,9 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
             >
               {subject.packaging_level === "carton"
                 ? "Comes in a carton?"
-                : `Measure a single one${unitWord(item) === "Each" ? "" : ` from the ${unitWord(item).toLowerCase()}`}`}
+                : subject.packaging_level === "inner"
+                  ? "Comes in a pack or inner box?"
+                  : `Measure a single one${unitWord(item) === "Each" ? "" : ` from the ${unitWord(item).toLowerCase()}`}`}
             </Button>
           ))}
         </div>
@@ -258,9 +265,10 @@ type Level = "each" | "inner" | "carton";
 
 /**
  * The levels of an item a card's records could go to: those it has a card
- * for, shown or offered, other than the card itself. A pack or carton is only
- * a definite thing under a case pack (D23), so with none said there is only
- * the single product.
+ * for, shown or offered, other than the card itself. A pack is only a
+ * definite thing under a case pack (D23); a carton is said by the move when
+ * nothing has said one (D232), so a carton measured as the product goes on
+ * its carton whatever is on file.
  */
 function destinations(item: ItemView, s: CaptureSubject): Level[] {
   const there = new Set(item.subjects.filter((x) => ownLevel(item, x)).map((x) => x.packaging_level));
@@ -268,7 +276,7 @@ function destinations(item: ItemView, s: CaptureSubject): Level[] {
     (level) =>
       !(item.item_id === s.item_id && level === s.packaging_level) &&
       there.has(level) &&
-      (level === "each" || item.packing !== null),
+      (level !== "inner" || item.packing !== null),
   );
 }
 
@@ -283,6 +291,11 @@ function ownLevel(item: ItemView, s: CaptureSubject): boolean {
   );
 }
 
+/** Whether a card's figures can be put right a figure at a time (D236): its own, and recorded. */
+function correctable(item: ItemView, s: CaptureSubject): boolean {
+  return ownLevel(item, s) && s.source === "own" && (s.gross_weight_g !== null || s.length_mm !== null);
+}
+
 /** Something recorded against the card itself: a family's figures or a variant's shown on it are not its own. */
 function recorded(s: CaptureSubject): boolean {
   if (s.source === "style" || s.source === "variant") return false;
@@ -294,6 +307,10 @@ function recorded(s: CaptureSubject): boolean {
  * of ten weighed on the carton card, put on the box's; or a kit's part
  * measured on the kit's card, put on the part's own item (D222). Kept with
  * when and how they were taken; nothing is rewritten.
+ *
+ * **A carton measured as the product** (D232) moves onto its carton with
+ * what the carton holds, asked here when nobody has said: the carton of
+ * sixteen rolls weighed on the roll's card is the roll's carton, of sixteen.
  */
 export function MoveDialog({
   item,
@@ -322,6 +339,11 @@ export function MoveDialog({
   const to = choices.find((c) => c.value === picked)?.value ?? (open.find((c) => c.value === into?.unit.level) ?? open[0] ?? choices[0])?.value;
   const level = choices.find((c) => c.value === to)?.label ?? to;
   const name = elsewhere && into ? `${into.code} · ${level}` : level;
+  // What a carton holds, asked where nobody has said: the move says it (D232).
+  const unsaid = !!into && to !== undefined && to !== "each" && into.packing?.inners_per_carton == null;
+  const [holds, setHolds] = useState<HoldsTyped>(NO_HOLDS);
+  const counts = into ? readHoldsTyped(holds, into) : null;
+  const carton = unsaid && counts && !("problem" in counts) ? counts : undefined;
   const find = () => {
     if (code.trim()) void desk.findItem(code).then(setOther);
   };
@@ -340,8 +362,10 @@ export function MoveDialog({
           <Button
             variant="primary"
             loading={desk.busy}
-            disabled={!into || !to || taken.has(to)}
-            onClick={() => into && to && void desk.refile(subject, { item: into.item_id, level: to }, name ?? to).then((ok) => ok && onClose())}
+            disabled={!into || !to || taken.has(to) || (unsaid && !carton)}
+            onClick={() =>
+              into && to && void desk.refile(subject, { item: into.item_id, level: to }, name ?? to, carton).then((ok) => ok && onClose())
+            }
           >
             {into && to ? `Move to ${name}` : "Move"}
           </Button>
@@ -392,6 +416,21 @@ export function MoveDialog({
         {into && choices.length === 0 && <p className={s.note}>{into.code} has no card to move these to.</p>}
         {to && taken.has(to) && (
           <p className={s.note}>{name} has figures or photos of its own. Move those away first, or record over them.</p>
+        )}
+        {into && unsaid && !taken.has(to) && (
+          <>
+            <div className={s.fields}>
+              <HoldsField
+                item={into}
+                desk={{ holds, typeHolds: (next) => setHolds((h) => ({ ...h, ...next })) }}
+              />
+            </div>
+            <p className={s.note}>
+              {counts && "problem" in counts
+                ? counts.problem
+                : "Nobody has said what its carton holds. Say it here, or leave it blank to say later."}
+            </p>
+          </>
         )}
       </Stack>
     </Dialog>
@@ -529,7 +568,9 @@ export function MatchDialog({
  * 10 boxes". Whose word it is, when Spork said it rather than NetSuite.
  */
 function soldAs(item: ItemView): ReactNode {
-  const unit = levelName(item.unit.level, item);
+  // A pair not packed as one is two of the single one (D233).
+  const k = singlesOf(item);
+  const unit = item.unit.level === "each" && k > 1 ? `${unitWord(item)}, ${k} single` : levelName(item.unit.level, item);
   const carton =
     item.unit.level !== "carton" && item.packing?.inners_per_carton
       ? levelName("carton", item).replace(/^Carton of/, "in cartons of")
@@ -543,15 +584,22 @@ function soldAs(item: ItemView): ReactNode {
   );
 }
 
-const SOLD_AS: { level: "each" | "inner" | "carton"; label: string; hint: string }[] = [
-  { level: "each", label: "Single item", hint: "One is one thing: a catalogue, a pair of boots, a roll" },
-  { level: "inner", label: "Pack or box", hint: "One is a box or pack of several: a box of 100 earplugs" },
-  { level: "carton", label: "Carton", hint: "One is a whole carton: gloves by the carton of 1,000" },
+const SOLD_AS: { value: string; level: "each" | "inner" | "carton"; quantity: number; label: string; hint: string }[] = [
+  { value: "each", level: "each", quantity: 1, label: "Single item", hint: "One is one thing: a catalogue, a roll, a pair of safety glasses" },
+  { value: "pair", level: "each", quantity: 2, label: "Pair", hint: "One is two single ones: a pair of boots or gloves" },
+  { value: "inner", level: "inner", quantity: 1, label: "Pack or box", hint: "One is a box or pack of several: a box of 100 earplugs" },
+  { value: "carton", level: "carton", quantity: 1, label: "Carton", hint: "One is a whole carton: gloves by the carton of 1,000" },
 ];
+
+/** Which of `SOLD_AS` it is: a pair, packed as one or not, is a pair (D233). */
+function soldAsValue(item: ItemView): string {
+  return singlesOf(item) === 2 ? "pair" : item.unit.level;
+}
 
 /** Say which level is one in NetSuite (D218), over its Pack Unit. */
 function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: PropertiesDesk; onClose: () => void }) {
-  const [level, setLevel] = useState(item.unit.level);
+  const [value, setValue] = useState(soldAsValue(item));
+  const chosen = SOLD_AS.find((o) => o.value === value) ?? SOLD_AS[0]!;
   return (
     <Dialog
       open
@@ -571,8 +619,8 @@ function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: Propertie
           <Button
             variant="primary"
             loading={desk.busy}
-            disabled={level === item.unit.level}
-            onClick={() => void desk.sayUnit(level).then((ok) => ok && onClose())}
+            disabled={value === soldAsValue(item)}
+            onClick={() => void desk.sayUnit(chosen.level, chosen.quantity).then((ok) => ok && onClose())}
           >
             Save
           </Button>
@@ -581,11 +629,11 @@ function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: Propertie
     >
       <Tabs
         aria-label="What one of it is"
-        value={level}
-        onValueChange={(v) => setLevel(v as typeof level)}
-        items={SOLD_AS.map((o) => ({ value: o.level, label: o.label }))}
+        value={value}
+        onValueChange={setValue}
+        items={SOLD_AS.map((o) => ({ value: o.value, label: o.label }))}
       />
-      <p className={s.note}>{SOLD_AS.find((o) => o.level === level)?.hint}</p>
+      <p className={s.note}>{chosen.hint}</p>
     </Dialog>
   );
 }
@@ -665,8 +713,11 @@ function Subject({
   // A thing that is not a box is asked for every side only when somebody wants them.
   const [sides, setSides] = useState(false);
   const [moving, setMoving] = useState(false);
-  // An item's own carton is a box of so many of it (D178).
+  // An item's own carton is a box of so many of it (D178), and its pack too
+  // (D234), but a pair packed as one, which holds its two (D233).
   const carton = isOwnCarton(subject);
+  const pack = isOwnPack(subject) && !(item.unit.level === "inner" && singlesOf(item) > 1);
+  const packSaid = (item.packing?.units_per_inner ?? 0) > 1;
   const needs = [
     subject.wants.includes("weight") && "weight",
     subject.wants.includes("dimensions") && "size",
@@ -683,7 +734,9 @@ function Subject({
             ? "Only if one is ever measured on its own: it is sold and packed as the whole"
             : carton && !item.packing
               ? "Say how many it holds when you weigh or measure it"
-              : provenance(subject)
+              : pack && !packSaid && item.unit.level !== "inner"
+                ? "Say how many are in a pack when you weigh or measure it"
+                : provenance(subject)
       }
       actions={
         <>
@@ -707,13 +760,26 @@ function Subject({
           </Fact>
           {subject.packaging_level && <Ships subject={subject} desk={desk} />}
           {subject.packaging_level && <WayUp subject={subject} desk={desk} />}
+          {pack && (
+            <Fact label="Holds" always>
+              {packHolds(item) ?? <Faint>Not said yet</Faint>}
+              {packSaid && (
+                <div>
+                  <Button
+                    size="sm"
+                    aria-pressed={open === "holds"}
+                    disabled={desk.busy}
+                    onClick={() => (open === "holds" ? desk.close() : desk.show(subject, "holds"))}
+                  >
+                    Change
+                  </Button>
+                </div>
+              )}
+            </Fact>
+          )}
           {carton && (
             <Fact label="Holds" always>
-              {(() => {
-                // A box-sold item's carton holds boxes (D218).
-                const said = holdsInWords(item.packing, item.unit.level === "inner" ? unitWord(item) : "pack");
-                return item.packing?.inners_per_carton != null ? said : <Faint>{said}</Faint>;
-              })()}
+              {item.packing?.inners_per_carton != null ? holdsOf(item) : <Faint>{holdsOf(item)}</Faint>}
               {item.packing?.inners_per_carton != null && (
                 <div>
                   <Button
@@ -750,6 +816,17 @@ function Subject({
             {a.label}
           </Button>
         ))}
+        {correctable(item, subject) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-pressed={open === "correct"}
+            disabled={desk.busy}
+            onClick={() => (open === "correct" ? desk.close() : desk.show(subject, "correct"))}
+          >
+            Correct…
+          </Button>
+        )}
         {movable(item, subject) && (
           <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => setMoving(true)}>
             Move…
@@ -759,8 +836,15 @@ function Subject({
       {moving && <MoveDialog item={item} subject={subject} desk={desk} onClose={() => setMoving(false)} />}
       {open === "weigh" && <WeighForm item={item} subject={subject} desk={desk} />}
       {open === "measure" && <MeasureForm item={item} subject={subject} desk={desk} />}
+      {open === "correct" && <MeasureForm item={item} subject={subject} desk={desk} correcting />}
       {open === "photos" && (
         <div className={s.form}>
+          {/* A pack nobody has said is said with its first photo (D234). */}
+          {asksPack(item, subject) && (
+            <div className={s.fields}>
+              <PackField desk={desk} item={item} />
+            </div>
+          )}
           <PackedIn subject={subject} desk={desk} />
           <p className={s.note}>
             {isBox(subject)
@@ -785,32 +869,33 @@ function Subject({
         </div>
       )}
       {open === "barcodes" && <BarcodesForm subject={subject} desk={desk} />}
-      {open === "holds" && <HoldsForm item={item} desk={desk} />}
+      {open === "holds" && <HoldsForm item={item} subject={subject} desk={desk} />}
     </Card>
   );
 }
 
 /**
- * What its carton holds, said again because it was said wrongly (D229): a
- * thousand boxes typed for ten. The same carton, so what was weighed,
- * measured and photographed of it, and of what is in it, stays.
+ * What its carton or its pack holds, said again because it was said wrongly
+ * (D229, D234): a thousand boxes typed for ten. The same carton, so what was
+ * weighed, measured and photographed of it, and of what is in it, stays.
  */
-function HoldsForm({ item, desk }: { item: ItemView; desk: PropertiesDesk }) {
+function HoldsForm({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
+  const pack = isOwnPack(subject);
   return (
     <form
       className={s.form}
       onSubmit={(e) => {
         e.preventDefault();
-        void desk.correctHolds();
+        void desk.correctHolds(subject);
       }}
     >
-      <div className={s.fields}>
-        <HoldsField desk={desk} item={item} />
-      </div>
-      <p className={s.note}>Puts right what was said of this carton. What was weighed, measured and photographed stays.</p>
+      <div className={s.fields}>{pack ? <PackField desk={desk} item={item} /> : <HoldsField desk={desk} item={item} />}</div>
+      <p className={s.note}>
+        Puts right what was said of this {pack ? "pack" : "carton"}. What was weighed, measured and photographed stays.
+      </p>
       <div className={s.formActions}>
         <Button onClick={desk.close}>Cancel</Button>
-        <Button type="submit" variant="primary" loading={desk.busy} disabled={!desk.holds.trim()}>
+        <Button type="submit" variant="primary" loading={desk.busy} disabled={!(pack ? desk.holds.per : desk.holds.count).trim()}>
           Save
         </Button>
       </div>
@@ -851,6 +936,7 @@ function WeighForm({ item, subject, desk }: { item: ItemView; subject: CaptureSu
           />
         </div>
         {isOwnCarton(subject) && <HoldsField desk={desk} item={item} />}
+        {asksPack(item, subject) && <PackField desk={desk} item={item} />}
       </div>
       <div className={s.formActions}>
         <Button onClick={desk.close}>Cancel</Button>
@@ -862,11 +948,6 @@ function WeighForm({ item, subject, desk }: { item: ItemView; subject: CaptureSu
   );
 }
 
-/**
- * Weight and size as one act (D133), in kilograms and centimetres as the
- * instruments read. A thing with no box says so rather than leaving it blank
- * (D138).
- */
 /** What a round thing is measured by (D213): its widths, its whole height, and
  *  how far down from the rim it stays straight before it tapers. */
 const ROUND_FIELDS = [
@@ -876,15 +957,35 @@ const ROUND_FIELDS = [
   { field: "topHeight", label: "Top part’s height", hint: "Straight, under the rim" },
 ] as const;
 
-function MeasureForm({ item, subject, desk }: { item: ItemView; subject: CaptureSubject; desk: PropertiesDesk }) {
+/**
+ * Weight and size as one act (D133), in kilograms and centimetres as the
+ * instruments read. A thing with no box says so rather than leaving it blank
+ * (D138).
+ *
+ * `correcting`, the same fields filled with what is on file, to put right a
+ * figure at a time with what its carton or pack holds (D236). A correction
+ * keeps the arrangement it was measured in.
+ */
+function MeasureForm({
+  item,
+  subject,
+  desk,
+  correcting = false,
+}: {
+  item: ItemView;
+  subject: CaptureSubject;
+  desk: PropertiesDesk;
+  correcting?: boolean | undefined;
+}) {
   const f = desk.figures;
-  const offered = presentationOffered(subject);
+  const offered = presentationOffered(subject) && !correcting;
+  const pairPacked = item.unit.level === "inner" && singlesOf(item) > 1;
   return (
     <form
       className={s.form}
       onSubmit={(e) => {
         e.preventDefault();
-        void desk.measure(subject);
+        void (correcting ? desk.correct(subject) : desk.measure(subject));
       }}
     >
       <div className={s.fields}>
@@ -900,6 +1001,7 @@ function MeasureForm({ item, subject, desk }: { item: ItemView; subject: Capture
           />
         </div>
         {isOwnCarton(subject) && <HoldsField desk={desk} item={item} />}
+        {(correcting ? isOwnPack(subject) && !pairPacked : asksPack(item, subject)) && <PackField desk={desk} item={item} />}
       </div>
       {!f.noDimensions && isRound(subject) && (
         <div className={s.dimensions}>
@@ -939,7 +1041,11 @@ function MeasureForm({ item, subject, desk }: { item: ItemView; subject: Capture
           </Button>
         </div>
       )}
-      <PackedIn subject={subject} desk={desk} />
+      {correcting ? (
+        <p className={s.note}>Only what you change is put right, as of when it was measured. The rest stays as it was.</p>
+      ) : (
+        <PackedIn subject={subject} desk={desk} />
+      )}
       {offered && !f.noDimensions && (
         <div className={s.arrangement}>
           <span className={s.fieldLabel}>
@@ -956,7 +1062,7 @@ function MeasureForm({ item, subject, desk }: { item: ItemView; subject: Capture
       <div className={s.formActions}>
         <Button onClick={desk.close}>Cancel</Button>
         <Button type="submit" variant="primary" loading={desk.busy}>
-          Record
+          {correcting ? "Save corrections" : "Record"}
         </Button>
       </div>
     </form>
@@ -966,72 +1072,142 @@ function MeasureForm({ item, subject, desk }: { item: ItemView; subject: Capture
 /**
  * How many of the item one carton holds (D178): the carton and the item in it,
  * said together. Blank says nothing of the count.
+ *
+ * **Altogether, or in packs** (D185, D233): 140 in it, or 10 packs each
+ * holding 12; counted in single ones or, for an item sold by the pair, in
+ * pairs. However it is typed, the carton is kept as packs of single ones, and
+ * what that comes to is said under it.
  */
-function HoldsField({ desk, item }: { desk: PropertiesDesk; item: ItemView }) {
-  // Sold by the pack, its carton is so many packs, and a pack so many (D218).
-  if (item.unit.level === "inner") {
-    const word = unitWord(item).toLowerCase();
-    const many = /(x|s|sh|ch)$/.test(word) ? `${word}es` : `${word}s`;
-    const read = readHoldsFor("inner", desk.holds, desk.per, item.packing);
-    return (
-      <>
+function HoldsField({
+  desk,
+  item,
+}: {
+  desk: Pick<PropertiesDesk, "holds" | "typeHolds">;
+  item: Pick<ItemView, "unit" | "packing">;
+}) {
+  const h = desk.holds;
+  const k = singlesOf(item);
+  // Sold by the box, its carton is so many boxes (D218); anything else's, packs.
+  const word = item.unit.level === "inner" && k <= 1 ? unitWord(item).toLowerCase() : "pack";
+  const packs = plural(word, 2);
+  const read = readHoldsTyped(h, item);
+  const typed = h.count.trim() !== "" || h.per.trim() !== "";
+  const said =
+    "problem" in read || read.holds === null
+      ? null
+      : `That’s ${holdsOf({ unit: item.unit, packing: { units_per_inner: read.per ?? 1, inners_per_carton: read.holds, effective_from: "" } })}`;
+  const problem = typed && "problem" in read ? read.problem : undefined;
+  const each = k > 1 ? undefined : "× each";
+  return (
+    <>
+      <div className={s.holdsBy}>
+        <Tabs
+          aria-label="What it holds, counted"
+          value={h.by}
+          onValueChange={(v) => desk.typeHolds({ by: v === "packs" ? "packs" : "all" })}
+          items={[
+            { value: "all", label: "How many in it" },
+            { value: "packs", label: `In ${packs}` },
+          ]}
+        />
+      </div>
+      {h.by === "all" ? (
         <div className={s.holds}>
           <TextField
-            label={`How many ${many} in it`}
-            hint="The whole carton"
-            error={"problem" in read && desk.holds.trim() !== "" ? read.problem : undefined}
+            label="How many in it"
+            hint={said ?? "The whole carton"}
+            error={problem}
             inputMode="numeric"
             autoComplete="off"
-            trailing={many}
-            value={desk.holds}
-            onChange={(e) => desk.typeHolds(e.target.value)}
+            trailing={each}
+            value={h.count}
+            onChange={(e) => desk.typeHolds({ count: e.target.value })}
           />
         </div>
-        <div className={s.holds}>
-          <TextField
-            label={`Each ${word} holds`}
-            hint="Blank if not counted"
-            inputMode="numeric"
-            autoComplete="off"
-            trailing="× each"
-            value={desk.per}
-            onChange={(e) => desk.typePer(e.target.value)}
-          />
-        </div>
-      </>
-    );
-  }
-  // The whole carton's count, and the packs worked out from it (D185).
-  const read = readHolds(desk.holds, desk.per);
-  const packs = "problem" in read || read.per === null || read.holds === null ? null : read;
-  const wrong = "problem" in read && desk.per.trim() !== "" && desk.holds.trim() !== "" ? read.problem : undefined;
+      ) : (
+        <>
+          <div className={s.holds}>
+            <TextField
+              label={`How many ${packs} in it`}
+              inputMode="numeric"
+              autoComplete="off"
+              trailing={packs}
+              value={h.count}
+              onChange={(e) => desk.typeHolds({ count: e.target.value })}
+            />
+          </div>
+          <div className={s.holds}>
+            <TextField
+              label={`Each ${word} holds`}
+              hint={said ?? "Blank if not counted"}
+              error={problem}
+              inputMode="numeric"
+              autoComplete="off"
+              trailing={each}
+              value={h.per}
+              onChange={(e) => desk.typeHolds({ per: e.target.value })}
+            />
+          </div>
+        </>
+      )}
+      <CountedIn desk={desk} item={item} />
+    </>
+  );
+}
+
+/**
+ * What a pack or inner box of it holds (D234), on the pack's own card: so
+ * many single ones or pairs. A pair packed as one holds its two, and is
+ * never asked.
+ */
+function PackField({ desk, item }: { desk: Pick<PropertiesDesk, "holds" | "typeHolds">; item: Pick<ItemView, "unit" | "packing"> }) {
+  const p = desk.holds.per.trim();
+  const ok = /^\d+$/.test(p) && Number(p) >= 1;
   return (
     <>
       <div className={s.holds}>
         <TextField
-          label="How many in it"
-          hint="The whole carton"
+          label="How many in a pack"
+          hint={ok && desk.holds.in > 1 ? `That’s ${(Number(p) * desk.holds.in).toLocaleString()} single` : "The whole pack or inner box"}
+          error={p && !ok ? "A whole number, 1 or more." : undefined}
           inputMode="numeric"
           autoComplete="off"
-          trailing="× each"
-          value={desk.holds}
-          onChange={(e) => desk.typeHolds(e.target.value)}
+          trailing={singlesOf(item) > 1 ? undefined : "× each"}
+          value={desk.holds.per}
+          onChange={(e) => desk.typeHolds({ per: e.target.value })}
         />
       </div>
-      <div className={s.holds}>
-        <TextField
-          label="In packs of"
-          hint={packs ? `That’s ${packs.holds!.toLocaleString()} ${packs.holds === 1 ? "pack" : "packs"} of ${packs.per!.toLocaleString()}` : "Blank if loose"}
-          error={wrong}
-          inputMode="numeric"
-          autoComplete="off"
-          trailing="× each"
-          value={desk.per}
-          onChange={(e) => desk.typePer(e.target.value)}
-        />
-      </div>
+      <CountedIn desk={desk} item={item} />
     </>
   );
+}
+
+/** Whether counts are typed in single ones or pairs: asked only of an item sold by the pair (D233). */
+function CountedIn({ desk, item }: { desk: Pick<PropertiesDesk, "holds" | "typeHolds">; item: Pick<ItemView, "unit"> }) {
+  const k = singlesOf(item);
+  if (k <= 1) return null;
+  return (
+    <div className={s.unit}>
+      <Select
+        label="Counted in"
+        value={String(desk.holds.in)}
+        onValueChange={(v) => desk.typeHolds({ in: Number(v) })}
+        options={[
+          { value: String(k), label: plural(unitWord(item), 2) },
+          { value: "1", label: "single" },
+        ]}
+      />
+    </div>
+  );
+}
+
+/**
+ * Whether weighing or measuring its pack asks what a pack holds (D234):
+ * nobody has said, and it is no box sold as one, which may be measured
+ * first, nor a pair packed as one.
+ */
+function asksPack(item: ItemView, subject: CaptureSubject): boolean {
+  return isOwnPack(subject) && item.unit.level !== "inner" && (item.packing?.units_per_inner ?? 0) <= 1;
 }
 
 /** Whether this variant stands for the item's carton, and choosing it (D184). */

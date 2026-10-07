@@ -455,16 +455,20 @@ pub async fn bench_view(
                     let measured = crate::routes::measurements_of(tx, item_id).await?;
                     let case = case_pack(tx, item_id).await?;
                     // What NetSuite counts one of (D218): what was ordered is in it.
-                    let unit: String = tx
-                        .query_opt("SELECT level::text FROM item_unit_level WHERE item_id = $1", &[&item_id])
+                    let (unit, singles): (String, i64) = tx
+                        .query_opt(
+                            "SELECT level::text, coalesce(singles, 1)::bigint FROM item_unit_level WHERE item_id = $1",
+                            &[&item_id],
+                        )
                         .await?
-                        .map(|r| r.get(0))
-                        .unwrap_or_else(|| "each".into());
+                        .map(|r| (r.get(0), r.get(1)))
+                        .unwrap_or_else(|| ("each".into(), 1));
+                    let unit = Unit { level: &unit, singles };
                     out.push(BenchLine {
                         elsewhere,
-                        own_carton: own_carton(case.as_ref(), &measured, &unit),
+                        own_carton: own_carton(case.as_ref(), &measured, unit),
                         picture: None,
-                        packs: packs_of(case.as_ref(), &measured, &unit),
+                        packs: packs_of(case.as_ref(), &measured, unit),
                         line_id: l.get(0),
                         item_id,
                         item_code: l.get(1),
@@ -533,23 +537,37 @@ async fn case_pack(
         }))
 }
 
+/// What NetSuite counts one of (D218): a level, and, for the each, how many
+/// of it, two for a pair not packed as one (D233).
+#[derive(Clone, Copy)]
+struct Unit<'a> {
+    level: &'a str,
+    singles: i64,
+}
+
 /// How many of what NetSuite counts are in one of each level (D218), each,
 /// inner, carton: one of the unit is one; a carton is so many of it; a level
 /// below the unit has none, because it never leaves on its own. A count
 /// nobody has said is none, and a level with none is not offered.
-fn per_level(case: Option<&CasePack>, unit: &str) -> [(&'static str, Option<i64>); 3] {
+///
+/// Counted in single ones where the unit is (D233): a pair is two of the
+/// each, so a single glove is half of one and never leaves on its own, and a
+/// bag of 24 gloves is twelve pairs.
+fn per_level(case: Option<&CasePack>, unit: Unit) -> [(&'static str, Option<i64>); 3] {
     let per_inner = case.and_then(|c| c.per_inner).map(i64::from).filter(|n| *n > 0);
     let inners = case.and_then(|c| c.inners).map(i64::from).filter(|n| *n > 0);
-    match unit {
+    let q = unit.singles.max(1);
+    let units = |singles: i64| (singles % q == 0).then_some(singles / q);
+    match unit.level {
         // The carton is the unit: one of it is one, whatever it holds.
         "carton" => [("each", None), ("inner", None), ("carton", Some(1))],
         // The pack is the unit: a carton is so many packs, however many each
         // pack holds, said or not.
         "inner" => [("each", None), ("inner", Some(1)), ("carton", inners)],
         _ => [
-            ("each", Some(1)),
-            ("inner", per_inner.filter(|n| *n > 1)),
-            ("carton", per_inner.zip(inners).map(|(p, i)| p * i)),
+            ("each", units(1)),
+            ("inner", per_inner.filter(|n| *n > 1).and_then(units)),
+            ("carton", per_inner.zip(inners).and_then(|(p, i)| units(p * i))),
         ],
     }
 }
@@ -562,7 +580,7 @@ fn per_level(case: Option<&CasePack>, unit: &str) -> [(&'static str, Option<i64>
 fn own_carton(
     case: Option<&CasePack>,
     measured: &[crate::routes::ItemMeasurements],
-    unit: &str,
+    unit: Unit,
 ) -> Option<OwnCarton> {
     let c = case?;
     let units = per_level(case, unit)[2].1?;
@@ -584,7 +602,7 @@ fn own_carton(
 /// guessed: the arrangement lists a level with no size as not measured. Its
 /// sides, whether it has no size, and whether it ships as it is are filled in
 /// by [`looks`], for every line at once.
-fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements], unit: &str) -> Vec<PackUnit> {
+fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements], unit: Unit) -> Vec<PackUnit> {
     per_level(case, unit)
         .into_iter()
         .filter_map(|(level, units)| {
@@ -978,8 +996,12 @@ mod tests {
     }
 
     /// What one of each level is, in what NetSuite counts (D218).
-    fn units(c: Option<CasePack>, unit: &str) -> Vec<(String, i64)> {
-        packs_of(c.as_ref(), &[], unit).into_iter().map(|p| (p.level, p.units)).collect()
+    fn units(c: Option<CasePack>, level: &str) -> Vec<(String, i64)> {
+        pairs(c, level, 1)
+    }
+
+    fn pairs(c: Option<CasePack>, level: &str, singles: i64) -> Vec<(String, i64)> {
+        packs_of(c.as_ref(), &[], Unit { level, singles }).into_iter().map(|p| (p.level, p.units)).collect()
     }
 
     fn of(levels: &[(&str, i64)]) -> Vec<(String, i64)> {
@@ -1013,8 +1035,18 @@ mod tests {
     }
 
     #[test]
+    fn a_pair_not_packed_as_one_is_two_singles() {
+        // Gloves a carton of 140, said as gloves: 70 pairs, and no glove alone.
+        assert_eq!(pairs(Some(case(Some(1), Some(140))), "each", 2), of(&[("carton", 70)]));
+        // Ten bags of twelve pairs.
+        assert_eq!(pairs(Some(case(Some(24), Some(10))), "each", 2), of(&[("inner", 12), ("carton", 120)]));
+        // A carton of an odd count is no whole number of pairs.
+        assert_eq!(pairs(Some(case(Some(1), Some(141))), "each", 2), of(&[]));
+    }
+
+    #[test]
     fn a_carton_of_its_own_counts_what_netsuite_counts() {
-        let carton = |c: CasePack, unit| own_carton(Some(&c), &[], unit).map(|o| o.units);
+        let carton = |c: CasePack, level| own_carton(Some(&c), &[], Unit { level, singles: 1 }).map(|o| o.units);
         assert_eq!(carton(case(Some(1), Some(1000)), "carton"), Some(1));
         assert_eq!(carton(case(Some(100), Some(10)), "inner"), Some(10));
         assert_eq!(carton(case(Some(1), Some(6)), "each"), Some(6));

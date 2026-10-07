@@ -117,6 +117,10 @@ pub struct ItemUnit {
     pub said: bool,
     /// NetSuite's Pack Unit, as it names it: "CTN", "Box", "Pair".
     pub netsuite_unit: Option<String>,
+    /// How many single ones one is, where it is counted in them: two for a
+    /// pair, packed as one or not (D233); one for the each; absent for a
+    /// pack or carton of its own.
+    pub singles: Option<i32>,
 }
 
 /// Something said on the floor against NetSuite's bins, still open (D215).
@@ -353,12 +357,12 @@ pub async fn item_page(
 
                 let unit = tx
                     .query_opt(
-                        "SELECT level::text, said, netsuite_unit FROM item_unit_level WHERE item_id = $1",
+                        "SELECT level::text, said, netsuite_unit, singles FROM item_unit_level WHERE item_id = $1",
                         &[&id],
                     )
                     .await?
-                    .map(|u| ItemUnit { level: u.get(0), said: u.get(1), netsuite_unit: u.get(2) })
-                    .unwrap_or(ItemUnit { level: "each".into(), said: false, netsuite_unit: None });
+                    .map(|u| ItemUnit { level: u.get(0), said: u.get(1), netsuite_unit: u.get(2), singles: u.get(3) })
+                    .unwrap_or(ItemUnit { level: "each".into(), said: false, netsuite_unit: None, singles: Some(1) });
 
                 let flags = tx
                     .query(
@@ -471,6 +475,26 @@ pub async fn item_page(
 /// on a scale. Somebody asking "what have we not measured yet" is asking about
 /// the second kind, so an item with only listed figures still needs measuring.
 const MEASURED_METHODS: &str = "('instrument', 'scan', 'keyed', 'derived', 'photographed')";
+
+/// Whether an item's unit has a figure of these metrics measured, its own or
+/// its family's, or said to have none: asked as yes or no of `c`, an item with
+/// its `id`, `style_id` and `unit` level. **Measured means the unit is**
+/// (D219): an item sold by the carton needs its carton weighed, not a single
+/// glove, and is measured when its carton is. The item list's needs and has,
+/// the row's own words and a list's progress (D235) all ask this.
+pub(crate) fn unit_measured(metrics: &str) -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM observable o
+                   JOIN observation_current oc ON oc.observable_id = o.id
+                   JOIN metric m ON m.id = oc.metric_id
+                  WHERE (o.item_id = c.id
+                         OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
+                    AND m.code IN ({metrics})
+                    AND o.packaging_level::text = c.unit
+                    AND (oc.absent_reason IS NOT NULL
+                         OR oc.method::text IN {MEASURED_METHODS}))"
+    )
+}
 
 #[derive(serde::Deserialize, Debug)]
 pub struct ItemsQuery {
@@ -793,25 +817,8 @@ pub(crate) async fn list_rows(
         Order::Walk => (pile.as_str(), "pile.pick_sequence NULLS LAST, pile.code NULLS LAST, n.code"),
         Order::Listed => (LISTED, "le.position, n.code"),
     };
-    // Asked as yes or no: whether a measured figure exists.
-    // **Measured means the unit is** (D219): an item sold by the carton
-    // needs its carton weighed, not a single glove, and is measured when its
-    // carton is. Needs, has, and the row's own words all say the same.
-    let measured = |metrics: &str| {
-        format!(
-            "EXISTS (SELECT 1 FROM observable o
-                       JOIN observation_current oc ON oc.observable_id = o.id
-                       JOIN metric m ON m.id = oc.metric_id
-                      WHERE (o.item_id = c.id
-                             OR (c.style_id IS NOT NULL AND o.item_style_id = c.style_id))
-                        AND m.code IN ({metrics})
-                        AND o.packaging_level::text = c.unit
-                        AND (oc.absent_reason IS NOT NULL
-                             OR oc.method::text IN {MEASURED_METHODS}))"
-        )
-    };
-    let weighed = measured("'gross_weight'");
-    let sized = measured("'length', 'width', 'height'");
+    let weighed = unit_measured("'gross_weight'");
+    let sized = unit_measured("'length', 'width', 'height'");
     // Its unit has all three lengths recorded, its own or its family's, or
     // is said to have none (D138): the pack bench can place what was
     // ordered, or knows to put it in loose (D197, D218).
