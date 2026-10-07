@@ -15835,3 +15835,58 @@ only once something else was recorded. `refile::file_again` marks it.
 parts of a measurement. So if I wanted to just update the length, say make a
 minor correction from 20 to 20.5, and then also set the quantity to 200, I
 should be able to do that."
+
+### D237: What NetSuite says of an item is kept beside what Spork recorded
+
+*Adopted 2026-10-08, with migration 131. Extends D212, D215 and D217.*
+
+**The principle, said once.** NetSuite and Spork each keep their own word
+about an item, and **neither writes the other**. NetSuite's is a report,
+replaced whole by each load of its feed and never edited here (`reported_*`).
+Spork's is what was observed and said here. A screen showing both says
+whose each is; where they disagree, that is something to put right in
+NetSuite, read from both and never stored as either. So Spork can find what
+NetSuite has wrong, and would stand as it is beside another system.
+
+**Decision.**
+
+- **Its article number** is NetSuite's Alternative Code, which the item
+  details have carried since D217 as Supplier Part No., and order lines as
+  Art No. It is shown under the code wherever an item is (the bench, a bin's
+  card, the item list and page), and typing or scanning it finds the item
+  (`items::art_numbers`, the item list's search, the header search, the
+  locator's `item_art_no`), because some boxes show it and not the code.
+- **NetSuite's weight, size and UPC** come with the item details (optional
+  columns: Weight and Weight Unit, Length, Width, Height and Dimension Unit,
+  UPC), held in grams and millimetres. `item_netsuite_differs` reads them
+  against the unit's figures measured here (D219) and the barcodes scanned:
+  weight more than 10 g and 5 % apart, a side more than 5 mm and 5 % apart
+  (sorted, so a box turned round is the same box), a UPC no scanned GTIN
+  matches. Items › **Differs from NetSuite** lists them; the item page says
+  which.
+- **NetSuite's picture** is named by the item details (Picture: its file),
+  and carried a few at a time: `GET /import/item-pictures/wanted` lists the
+  pictures named and not held, items in stock first, and
+  `POST /import/item-pictures` takes one file's bytes, only the file the
+  details name (`reported_item_picture`), into the same store as photographs
+  by its content address and nothing else. It is shown until anything of
+  Spork's pictures the item, labelled NetSuite's.
+- **Which picture an item is shown by is Spork's word** (`item_picture_said`):
+  Main picture… chooses any photograph of it, its box drawing or NetSuite's
+  picture, or none to choose as before; and NetSuite's picture can be said
+  not to be this product, which shows it to nobody. A new load of NetSuite's
+  feed changes none of it.
+
+**Why.** The user, 2026-10-08: "some of the SKU codes are not printed on
+boxes, but the article number usually is and this greatly helps picking
+accuracy. I want to make sure that we have a clean separation of the
+information gathered and presented through spork from netsuite ... By
+decoupling it, we can also use spork to find discrepencies in the netsuite
+data, and be independent in the event where we wanted to utilise another
+system." And of pictures: "Spork's photo first by default, but it should be
+possible to set a specific image as the main item photo, either from spork or
+netsuite."
+
+**Not yet.** Which NetSuite fields hold the picture, the weight unit and any
+size, until the probe says (the Spork Bridge sends them). Whether order lines'
+Art No. is always the item's Alternative Code.

@@ -323,6 +323,15 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   pack's count in the same press. Moves and matches now mark the projection
   to rebuild, which they hadn't.
 
+- D237, migration 131. NetSuite's word on an item, beside Spork's: Art No.
+  (`reported_item.supplier_part`) shown and searchable and scannable; the
+  item details' optional Picture, Weight/Weight Unit, Length/Width/Height/
+  Dimension Unit and UPC columns; `GET /import/item-pictures/wanted` and
+  `POST /import/item-pictures` for the bridge; `item_netsuite_differs` and
+  Items › Differs from NetSuite; Main picture… and "Not this product"
+  (`item_picture_said`, `POST /items/{id}/pictures`); `NetSuiteSays` on the
+  item page and drawer. The bridge side waits on the probe's field ids.
+
 **Picking (2026-10-07)**
 - D231, migration 128. NetSuite's open orders are a report,
   `reported_order_line`: goods lines with something left to pick
