@@ -57,6 +57,7 @@ mod setup_first_administrator;
 mod ships_as_is_http;
 mod sign_on;
 mod tenancy;
+mod to_pick_http;
 mod unit_http;
 mod walk_route_http;
 mod weighing_http;

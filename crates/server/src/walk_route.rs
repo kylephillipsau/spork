@@ -166,23 +166,7 @@ pub async fn route(
         return Ok(None);
     }
 
-    // The packing bench, when the site's packing location is on the layout.
-    let base = tx
-        .query_opt(
-            "SELECT l.place_id, l.slot_bay, l.slot_level, l.slot_row, l.slot_position, coalesce(l.slot_side, 1)::int
-               FROM site s JOIN location l ON l.id = s.pack_location_id
-              WHERE s.id = $1 AND l.place_id IS NOT NULL AND l.slot_bay IS NOT NULL",
-            &[&site],
-        )
-        .await?
-        .and_then(|r| {
-            let at = Whereabouts {
-                place_id: r.get(0),
-                cell: GridCell { bay: r.get(1), level: r.get(2), row: r.get(3), position: r.get(4), side: r.get(5) },
-            };
-            stand(&floor, &at)
-        });
-
+    let base = bench(tx, site, &floor).await?;
     let planned = routing::plan(&floor.floor, base, &stops);
     let mut placed = vec![false; lines.len()];
     let mut order = Vec::with_capacity(lines.len());
@@ -209,4 +193,88 @@ pub async fn route(
             path: planned.path,
         },
     )))
+}
+
+/// Where a picker stands at the packing bench, when the site's packing
+/// location is on the layout: where every walk starts and ends.
+async fn bench(tx: &Transaction<'_>, site: Uuid, floor: &SiteFloor) -> Result<Option<usize>, ApiError> {
+    Ok(tx
+        .query_opt(
+            "SELECT l.place_id, l.slot_bay, l.slot_level, l.slot_row, l.slot_position, coalesce(l.slot_side, 1)::int
+               FROM site s JOIN location l ON l.id = s.pack_location_id
+              WHERE s.id = $1 AND l.place_id IS NOT NULL AND l.slot_bay IS NOT NULL",
+            &[&site],
+        )
+        .await?
+        .and_then(|r| {
+            let at = Whereabouts {
+                place_id: r.get(0),
+                cell: GridCell { bay: r.get(1), level: r.get(2), row: r.get(3), position: r.get(4), side: r.get(5) },
+            };
+            stand(floor, &at)
+        }))
+}
+
+/// The walk between bins, for planning several walks at once (D230).
+#[derive(Debug)]
+pub struct Distances {
+    /// The walk between nodes, in the site's cells. Node 0 is the bench; with
+    /// no bench on the layout it is nothing from anywhere, so a walk starts
+    /// and ends where it likes. Each spot a picker stands at is a node after.
+    pub cost: Vec<Vec<f64>>,
+    /// Each bin's node, by its index in the bins asked about: none when it
+    /// isn't on the layout or can't be walked to.
+    pub node_of: Vec<Option<usize>>,
+    /// `pack`, from the packing bench and back; `free`, from anywhere.
+    pub from: String,
+    pub cell_mm: Option<i32>,
+}
+
+/// How far it is between these bins on foot, and from the bench. Nothing when
+/// none of them is on the layout. The walk's own floor and standing spots
+/// ([`route`]), so a plan and the walk agree on every distance.
+pub async fn distances(tx: &Transaction<'_>, site: Uuid, bins: &[Option<Whereabouts>]) -> Result<Option<Distances>, ApiError> {
+    if bins.iter().all(Option::is_none) {
+        return Ok(None);
+    }
+    let Some((floor, cell_mm)) = floor_for(tx, site).await? else {
+        return Ok(None);
+    };
+    let mut spots: Vec<usize> = vec![];
+    let spot_of: Vec<Option<usize>> = bins
+        .iter()
+        .map(|b| {
+            let node = stand(&floor, b.as_ref()?)?;
+            Some(spots.iter().position(|&s| s == node).unwrap_or_else(|| {
+                spots.push(node);
+                spots.len() - 1
+            }))
+        })
+        .collect();
+    if spots.is_empty() {
+        return Ok(None);
+    }
+    let base = bench(tx, site, &floor).await?;
+    // What a spot must be reachable from: the bench, or the first spot.
+    let from = base.unwrap_or(spots[0]);
+    let reach = floor.floor.distances(from, &spots);
+    let kept: Vec<usize> = (0..spots.len()).filter(|&k| reach[k].is_finite()).collect();
+    let nodes: Vec<usize> = kept.iter().map(|&k| spots[k]).collect();
+    let n = nodes.len() + 1;
+    let mut cost = vec![vec![0.0; n]; n];
+    for (a, &na) in nodes.iter().enumerate() {
+        let row = floor.floor.distances(na, &nodes);
+        for (b, d) in row.into_iter().enumerate() {
+            cost[a + 1][b + 1] = d;
+        }
+    }
+    if let Some(b) = base {
+        let out = floor.floor.distances(b, &nodes);
+        for (k, d) in out.into_iter().enumerate() {
+            cost[0][k + 1] = d;
+            cost[k + 1][0] = d;
+        }
+    }
+    let node_of = spot_of.into_iter().map(|s| s.and_then(|s| kept.iter().position(|&k| k == s)).map(|i| i + 1)).collect();
+    Ok(Some(Distances { cost, node_of, from: if base.is_some() { "pack" } else { "free" }.into(), cell_mm }))
 }

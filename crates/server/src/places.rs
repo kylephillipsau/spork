@@ -53,7 +53,7 @@ pub fn within_reach(loc: &str) -> String {
 
 /// The location kinds that are racking or shelving: solid, where a picker
 /// reaches in from an aisle. Staging and docks are floor.
-const SOLID_KINDS: &[&str] = &["pick_face", "bulk", "overflow"];
+pub const SOLID_KINDS: &[&str] = &["pick_face", "bulk", "overflow"];
 
 /// A place as its row says.
 #[derive(Clone, Debug)]

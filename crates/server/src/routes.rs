@@ -6965,6 +6965,73 @@ pub async fn import_item_details(
     Ok(HttpResponse::Ok().json(ItemDetailsImportReport { survey, loaded, arrival: arrival.map(FileArrival::from) }))
 }
 
+#[derive(Serialize, Debug)]
+pub struct OpenOrdersImportReport {
+    pub survey: crate::importing::open_orders::OpenOrdersSurvey,
+    pub loaded: crate::importing::open_orders::OpenOrdersLoaded,
+    pub arrival: Option<FileArrival>,
+    /// Set when the line count disagreed with `expect`: nothing was loaded.
+    pub refused: Option<String>,
+}
+
+/// Load what NetSuite has still to pick (D231), into `reported_order_line`:
+/// its open sales orders' lines, the whole of them each time, like the
+/// balance. Never orders or work; see [`crate::importing::open_orders`].
+///
+/// **Empty is an answer when it was said to be.** Nothing left to pick is
+/// the best news a load can bring, so a file of no lines loads, clearing the
+/// last, when `expect` says 0. Without it an empty file is refused, as it is
+/// everywhere else: a search that failed reads as nothing to do.
+#[post("/import/open-orders")]
+pub async fn import_open_orders(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ImportQuery>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+    let Some(as_at) = query.as_at else {
+        return Err(ApiError::Rejected("as_at is required".into()));
+    };
+    let Some(source) = query.source.clone().filter(|s| !s.trim().is_empty()) else {
+        return Err(ApiError::Rejected("source is required".into()));
+    };
+    let rows = crate::importing::open_orders::read(body.as_ref()).map_err(ApiError::Rejected)?;
+    if rows.is_empty() && query.expect != Some(0) {
+        return Err(ApiError::Rejected(
+            "no lines naming an order, a line and an item: say expect=0 when nothing is left to pick".into(),
+        ));
+    }
+    let survey = crate::importing::open_orders::survey(&rows);
+    let refused = crate::importing::stock::shortfall(rows.len(), query.expect);
+
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let tenant = scope.tenant();
+    let apply = query.apply;
+    let actor = crate::importing::received::Actor::Token(machine.token_id);
+    let filename = query.filename.clone();
+    let short = refused.clone();
+    let (loaded, arrival) = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
+                // A short report reads as orders picked that were not: kept, not loaded.
+                if short.is_some() {
+                    read_partially(tx, arrival).await?;
+                    return Ok((crate::importing::open_orders::OpenOrdersLoaded::default(), arrival));
+                }
+                let loaded = crate::importing::open_orders::load(tx, tenant, &rows, as_at, &source, apply)
+                    .await
+                    .map_err(ApiError::Rejected)?;
+                read_through(tx, arrival).await?;
+                Ok((loaded, arrival))
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(OpenOrdersImportReport { survey, loaded, arrival: arrival.map(FileArrival::from), refused }))
+}
+
 /// Load the bin list, from the CSV the system of record exports.
 ///
 /// **The body is the file, unaltered.** Re-shaping it into JSON first would put
@@ -9561,6 +9628,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(import_items)
         .service(import_stock)
         .service(import_item_details)
+        .service(import_open_orders)
+        .service(crate::to_pick::to_pick)
         .service(import_fulfilment)
         .service(void_package)
         .service(bind_barcode)

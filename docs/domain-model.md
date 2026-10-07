@@ -15566,3 +15566,79 @@ or measuring one with its count, and is a new version from that day.
 
 **Why.** The user, 2026-10-06: "I should also be able to easily adjust how
 many boxes are in a box".
+
+### D230: A batch of orders is shared out in trips, nearest together
+
+*Adopted 2026-10-07, with no migration. Builds on D211; narrows
+docs/picking-plan.md's Proposal E.*
+
+**Decision.** For picking without the handheld (on paper, "NOG"), a batch of
+waiting orders is shared out by two settings: **how many people are picking**
+and, when said, **the most orders one trip takes**. A trip is one walk from
+the packing bench and back. Trips are made by savings: every order starts as
+its own trip, and the two trips that walk least together are merged, again and
+again, while they fit under the limit. With no limit, the batch is shared
+evenly between the pickers. Trips then go to pickers longest first, each to
+whoever has least so far, a stop counted as about twenty seconds of walking.
+Within a trip, an item two of its orders want is one stop, split by order.
+
+**Gathering is a setting.** With it on, a shelf wanted by orders on different
+trips is walked to by one of them, for all of them, and the goods are sorted
+to their orders at the bench: the trip that loses least by keeping it, which
+is the one passing it anyway. A shelf off the layout costs nothing anyone can
+measure, so the first trip wanting it keeps it, which is still one walk.
+
+**Pure and shared.** The planner is `pick_groups.rs`, distances in and plan out.
+The distances are the walk's own (`walk_route::distances`): the same floor,
+the same spot to stand at for a bin, the same bench. The order of a trip's
+stops is `routing::order`.
+
+**Why.** The user, 2026-10-07: "I want to be able to optimise this and work
+out which of these orders contain the same items, and be able to delegate the
+picking orders into groups so that closer routes can be optimised and
+strategised." And of gathering: "someone from the group can grab those items
+from multiple orders to come to the packing station and then be arranged for
+the multiple orders. This would save two people from walking to the same bin."
+
+### D231: What NetSuite has still to pick is a report, looked up by the batch
+
+*Adopted 2026-10-07, with migration 128. Builds on D212 and D180.*
+
+**The finding.** NetSuite prints a picking ticket for each sales order, and an
+order reached Spork only once it was picked (D172), so a batch of tickets sent
+out to pick was a batch Spork knew nothing of. NetSuite's ticket had stopped
+showing the order's notes, and printed bins and quantities in small type on a
+mostly empty page.
+
+**Decision.** The Bridge (0.9.0) sends, every five minutes, the goods lines of
+open sales orders at the warehouse with something left to pick:
+`reported_order_line`, a report like the balance (migration 86) and what an
+item is sold in (D217), replaced whole by each load and held with its age
+(`POST /import/open-orders`). It is never orders or work: a line here commits
+nothing and is on no walk, so nothing is picked in Spork that NetSuite never
+hears of. The picks are still recorded in NetSuite.
+
+- **Left to pick** is NetSuite's own count: what it has set aside for the
+  line, less what is picked and not yet shipped. An order's status says little:
+  a freight line counts as shipped as soon as the order is made.
+- **What the ticket says of the order** is its ship-to as printed, its
+  **Picking Instructions** (the order's memo, as written) and its **Internal
+  Customer Notes**, and each line's Art No. The external notes are for the
+  customer, so they are not sent.
+- **An empty report is an answer** when it was said to be empty (`expect=0`),
+  and clears the last load.
+
+`GET /sites/{id}/to-pick` looks up a batch as pasted from the sheet the tickets
+went out on (a row of order numbers, matched by their digits), or everything
+open with nothing pasted. Each order says where it stands (waiting, part
+picked, picked, packed, shipped, or unknown here), and each line where it is
+taken from: **the item list's rule** (D180, `items::piles`, now one function
+for both), racking only, as much as the first bin holds and then the next.
+The batch draws each bin down as it goes, so two orders are never both sent
+for its last five. A kit is picked as its parts when the order has them, and
+as itself when it doesn't.
+
+**Why.** The user, 2026-10-07: "I want to be able to go through the ones that
+are still waiting and see where I'm supposed to pick them from. Also, the
+printed tickets that we have are atrocious, wasting so much space and barely
+legible."

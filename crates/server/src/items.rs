@@ -507,36 +507,44 @@ const DEMAND: &str = "LEFT JOIN LATERAL (
                           SELECT count(*)::bigint AS lines FROM order_line ol WHERE ol.item_id = n.id
                       ) dem ON true";
 
-/// The bin to go to for it at the caller's site (`$4`): the biggest pile **in
-/// reach of the floor** (D180), and only when no bin in reach holds any, the
-/// biggest pile anywhere. Somebody sent to weigh one or pick one wants the
-/// shelf they can get to without a forklift. This system's own ledger before
-/// NetSuite's report, as everywhere. A join on `n`, answering `pile.code`,
-/// `pile.pick_sequence` and `pile.reach`.
-fn pile() -> String {
+/// Every bin holding an item at a site, **in the order to go to them**
+/// (D180): in reach of the floor first, then this system's own ledger before
+/// NetSuite's report, as everywhere, then the biggest pile, then by code.
+/// Somebody sent to weigh one or pick one wants the shelf they can get to
+/// without a forklift, and a picker short at the first goes to the next.
+/// `item` and `site` are SQL for the item's id and the site's (a null site
+/// is every site). Answers `location_id`, `code`, `pick_sequence`, `reach`,
+/// `qty` and `nth`, its place in that order from 1, ordered by it; the item
+/// list takes the first, the pick list each in turn (D231).
+pub fn piles(item: &str, site: &str) -> String {
     format!(
-        "LEFT JOIN LATERAL (
-             SELECT l.code, l.pick_sequence, {reach} AS reach
-               FROM (SELECT coalesce(s.holder_location_id, s.resolved_location_id)
-                              AS location_id,
-                            sum(s.quantity)::numeric AS qty, 0 AS rank
-                       FROM stock s
-                      WHERE s.item_id = n.id AND s.quantity > 0
-                        AND ($4::uuid IS NULL OR s.site_id = $4)
-                      GROUP BY 1
-                     UNION ALL
-                     SELECT rs.location_id, sum(rs.on_hand), 1
-                       FROM reported_stock rs
-                      WHERE rs.item_id = n.id AND rs.on_hand > 0
-                        AND rs.location_id IS NOT NULL
-                        AND ($4::uuid IS NULL OR rs.site_id = $4)
-                      GROUP BY 1) piles
-               JOIN location l ON l.id = piles.location_id
-              ORDER BY {reach} DESC, piles.rank, piles.qty DESC, l.code
-              LIMIT 1
-         ) pile ON true",
+        "SELECT l.id AS location_id, l.code, l.pick_sequence, {reach} AS reach, piles.qty,
+                row_number() OVER (ORDER BY {reach} DESC, piles.rank, piles.qty DESC, l.code) AS nth
+           FROM (SELECT coalesce(s.holder_location_id, s.resolved_location_id)
+                          AS location_id,
+                        sum(s.quantity)::numeric AS qty, 0 AS rank
+                   FROM stock s
+                  WHERE s.item_id = {item} AND s.quantity > 0
+                    AND ({site}::uuid IS NULL OR s.site_id = {site})
+                  GROUP BY 1
+                 UNION ALL
+                 SELECT rs.location_id, sum(rs.on_hand), 1
+                   FROM reported_stock rs
+                  WHERE rs.item_id = {item} AND rs.on_hand > 0
+                    AND rs.location_id IS NOT NULL
+                    AND ({site}::uuid IS NULL OR rs.site_id = {site})
+                  GROUP BY 1) piles
+           JOIN location l ON l.id = piles.location_id
+          ORDER BY nth",
         reach = crate::places::within_reach("l")
     )
+}
+
+/// The bin to go to for it at the caller's site (`$4`): the first of its
+/// [`piles`]. A join on `n`, answering `pile.code`, `pile.pick_sequence` and
+/// `pile.reach`.
+fn pile() -> String {
+    format!("LEFT JOIN LATERAL ({} LIMIT 1) pile ON true", piles("n.id", "$4"))
 }
 
 /// Where an item is on the list asked for (`$11`): its place on the paper. A
