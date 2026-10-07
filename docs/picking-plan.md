@@ -1,6 +1,10 @@
 # Picking in Spork: routes, runs and the map
 
-**Status: proposed, not adopted.** Written 2026-10-04. The proposals below have
+**Status: proposed; parts adopted.** Written 2026-10-04. Adopted since:
+D211 (the walk in route order), D212 (NetSuite keeps the shelves), D230
+(a batch shared out in trips and walked on the 3D map, for picking on paper)
+and D231 (what NetSuite has still to pick, looked up by the batch and printed).
+Picking itself stays on NetSuite's handheld until the write-back. The proposals below have
 working names, A to I, and the questions it raises are numbered 1 to 5 here
 only. Each takes its D-number, and each question its Q-number, in the commit
 that adopts it, as the registers require. Until then

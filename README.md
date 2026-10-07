@@ -92,7 +92,10 @@ finds with an import token minted under Import tokens:
 - which of those NetSuite has since packed, shipped or deleted, so Spork
   closes them (D187);
 - the inventory balance, every five minutes (D212);
-- each item's Pack Unit and supplier part number (D217).
+- each item's Pack Unit and supplier part number (D217);
+- what NetSuite has still to pick: the goods lines of open sales orders with
+  something left to pick, with each order's ship-to and picking instructions,
+  every five minutes (D231). Kept as a report, never as work.
 
 It shows nothing unless it can't sync.
 
@@ -107,6 +110,21 @@ merged into it. [docs/local.md](docs/local.md) has the commands.
 Carriers and labels are booked in NetSuite and MachShip. The pack bench plans
 the boxes and lists each parcel's size and weight, ready to copy into the
 booking (D224).
+
+## Picking from the tickets
+
+Picks are still recorded in NetSuite on the handheld, because Spork doesn't
+write to NetSuite yet (D212). Spork guides them. Under Outbound, To pick:
+- paste the row of order numbers from the sheet the picking tickets went out
+  on, and see which are still waiting, picked, packed or shipped, and where
+  each line is picked from (D231);
+- share the batch between the people picking, by how many there are and the
+  most orders a trip, with a shelf several groups want walked to once (D230);
+- print the tickets, one order to an A4 landscape page with its barcode,
+  picking instructions and bins in walking order, with a walk sheet on top of
+  each trip if wanted;
+- walk a trip: each stop in turn, its bin highlighted on the 3D bin map with
+  the A* route drawn on the floor, ticked off as it's picked.
 
 ## Backups
 

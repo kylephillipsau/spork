@@ -1,4 +1,4 @@
-# Handoff: capture, crops, search and backups
+# Handoff: capture, crops, search, backups and picking
 
 Written 2026-10-02, brought up to date 2026-10-07. Read this first. The
 earlier handoff, [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md),
@@ -6,15 +6,17 @@ still covers the toolchain, tests, layout and packing.
 
 ## State
 
-- Spork `main` is pushed through D229. Committed since and **not pushed**:
-  D183's amendment, the dated unit test, and picking (D230, D231).
-- `warehouse-scripts`: Bridge 0.8.0 is published. **Bridge 0.9.0 is
-  committed (c82f348) and not pushed**. A push deploys it to everyone, so
-  put Spork live first. Otherwise the new feed reports "this Spork is older
-  than D231" (picks still sync).
-- The database is at migration 128 after the next `local.ps1 start`: 127 adds
-  `cut_of`, 128 `reported_order_line`. Rebuild the release server and the
-  client first (`local.ps1 start` migrates but never rebuilds).
+- Spork `main` is pushed through D231: D183's amendment, picking (D230,
+  D231), its printed tickets and the walk on the 3D map.
+- `warehouse-scripts` is pushed. **Spork Bridge 0.9.1** is published. It sends
+  NetSuite's open orders every five minutes (D231), without customer notes:
+  the order's `custbody_internalcustomernotes` is NOT_EXPOSED to SuiteQL (see
+  Known limits). On 2026-10-07 the first load brought 105 orders and 785
+  lines; every item was known, and 752 lines had a bin with stock.
+- The database is at migration 128: 127 adds `cut_of`, 128
+  `reported_order_line`. After pulling, rebuild the release server, restart,
+  then build the client (`local.ps1 start` migrates but never rebuilds, and a
+  client build goes live at once).
 - 2026-10-07: the full server suite passes on a fresh database except
   `picking_http::a_trolley_pick…`. It passes alone on a fresh database, but
   fails after other tests have used the walk's fixture line. Order-dependent,
@@ -346,6 +348,15 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   none of its parts on the order is printed as itself.
 - Where Spork's ledger and NetSuite's report both hold an item in one bin,
   the bin is listed twice. That doesn't happen at Melbourne (D212).
+- Tickets print no customer notes yet. The order's Internal Customer Notes is
+  shown from the customer and not stored on the order, so SuiteQL refuses it
+  (NOT_EXPOSED). The customer's own field is needed (Show Internal IDs on a
+  customer record), then the Bridge reads it through `JOIN customer`.
+- Picks are recorded in NetSuite: the walk keeps its place only in the
+  browser that walks it. Recording picks in Spork waits on the NetSuite
+  write-back (D212).
+- A batch of more than 40 waiting orders is listed but not shared out
+  (`to_pick::MOST_PLANNED`).
 
 ## Next
 
@@ -363,5 +374,10 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 6. Cut a non-box item's photo out onto white at the computer.
 7. Freight by price: carriers' rates as a third objective beside fewest
    parcels and least chargeable weight (D224), chosen in configuration.
-8. Put picking live: rebuild, restart, push Bridge 0.9.0, then try a real
-   batch from the sheet, with the gun and without it.
+8. Picking on the floor, from 2026-10-08:
+   - paste a real batch;
+   - print tickets on the real printer;
+   - scan a ticket's barcode with the gun;
+   - walk a trip on the device carried.
+   Then: customer notes from the customer's field, the first kit on a sales
+   order, and measuring the floor (5) so routes and minutes are real.
