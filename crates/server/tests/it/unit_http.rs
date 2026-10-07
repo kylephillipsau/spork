@@ -61,7 +61,7 @@ async fn an_item_leads_with_what_netsuite_counts_one_of() {
             if let Some((per, inners)) = case {
                 db.execute(
                     "INSERT INTO item_packing_config (tenant_id, item_id, units_per_inner, inners_per_carton, effective_from)
-                     VALUES (current_tenant(), $1, $2, $3, current_date - 1)",
+                     VALUES (current_tenant(), $1, $2, $3, DATE '2026-10-01')",
                     &[&id, &per, &inners],
                 )
                 .await

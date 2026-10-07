@@ -14,10 +14,6 @@ still covers the toolchain, tests, layout and packing.
 - 2026-10-06, on a fresh database: every migration up and down; the server's
   unit tests (283) and integration tests (154) all pass; the client's tests,
   laws, contract and render (133 fixtures) pass.
-- From 2026-10-07, `unit_http::an_item_leads_with_what_netsuite_counts_one_of`
-  fails at HEAD as well: its case pack starts `current_date - 1` and its
-  weighing is dated 2026-10-05, so the weighing now falls before the case
-  pack. The test's dates need tying together. Every other test passes.
 - The invariants: S7 and S10 fail, as they have since migrations 118 and 119
   (a trigger that is not a projection's, a jsonb column). After the
   integration suite has written to the database, J1 also finds two GLOVE-M
