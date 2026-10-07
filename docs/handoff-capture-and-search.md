@@ -1,16 +1,24 @@
 # Handoff: capture, crops, search and backups
 
-Written 2026-10-02, brought up to date 2026-10-06. Read this first. The
+Written 2026-10-02, brought up to date 2026-10-07. Read this first. The
 earlier handoff, [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md),
 still covers the toolchain, tests, layout and packing.
 
 ## State
 
-- Spork `main` is pushed, through D229.
-- `warehouse-scripts` is pushed. Spork Bridge 0.8.0 is published: it sends
-  each line's item type and a kit part's kit line (D223).
-- The database is at migration 127 after the next `local.ps1 start`: D183's
-  amendment adds `cut_of`. Rebuild the server and client before starting.
+- Spork `main` is pushed through D229. Committed since and **not pushed**:
+  D183's amendment, the dated unit test, and picking (D230, D231).
+- `warehouse-scripts`: Bridge 0.8.0 is published. **Bridge 0.9.0 is
+  committed (c82f348) and not pushed**. A push deploys it to everyone, so
+  put Spork live first. Otherwise the new feed reports "this Spork is older
+  than D231" (picks still sync).
+- The database is at migration 128 after the next `local.ps1 start`: 127 adds
+  `cut_of`, 128 `reported_order_line`. Rebuild the release server and the
+  client first (`local.ps1 start` migrates but never rebuilds).
+- 2026-10-07: the full server suite passes on a fresh database except
+  `picking_http::a_trolley_pick…`. It passes alone on a fresh database, but
+  fails after other tests have used the walk's fixture line. Order-dependent,
+  not yet looked into.
 - 2026-10-06, on a fresh database: every migration up and down; the server's
   unit tests (283) and integration tests (154) all pass; the client's tests,
   laws, contract and render (133 fixtures) pass.
@@ -282,6 +290,27 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   and the picture had looked only for a cut of the row itself. In 3D, both
   scenes put a photo on a face with `faceTexture` (`app/items/box3d.ts`).
 
+**Picking (2026-10-07)**
+- D231, migration 128. NetSuite's open orders are a report,
+  `reported_order_line`: goods lines with something left to pick
+  (committed − picked + shipped), each with its order's ship-to, Picking
+  Instructions (`memo`), Internal Customer Notes
+  (`custbody_internalcustomernotes`) and Art No. (`custcol_artno`). Bridge
+  0.9.0 sends them every five minutes, and "sync open orders now" sends them
+  at once. Never work: picks are still recorded in NetSuite (D212).
+- `GET /sites/{id}/to-pick` (`to_pick.rs`) looks up a pasted batch by the
+  orders' digits. It gives each order's state, and each line's bins by the
+  item list's rule (`items::piles`, racking only), the batch drawing bins down.
+- D230. `pick_groups.rs` shares a batch of up to 40 waiting orders by people
+  picking and most orders a trip, with "walk to a shelf once" as a setting,
+  over `walk_route::distances`.
+- Outbound › **To pick** (`ToPickPage.tsx`, `useToPick.ts`): paste, states,
+  share out, Print.
+- `GET /print/pick-tickets/{site}` (`web/tickets.rs`): one order to an A4
+  landscape page with a Code 128 barcode, and a walk sheet per trip with
+  `walk=true`. The approved proof is the artifact
+  https://claude.ai/artifact/HgDWBqk783d9zDrudcuPhw.
+
 ## Known limits
 
 - Firefox finds faces about 13 times slower than Chrome or Edge: 78 s against
@@ -306,6 +335,14 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 - The search page (D227) shows no pictures; `Found` carries none.
 - Freight is scored by parcel count or chargeable weight (D224). No carrier's
   rates are known yet, so neither is a price.
+- Routes and trips are as good as the layout. The draft's racks still number
+  from the left until Edit layout › Numbered from › The right end is saved
+  (D220), and the floor isn't measured (D210), so a trip's minutes are
+  estimates.
+- A sales order's kit lines haven't been seen with real data. A kit with
+  none of its parts on the order is printed as itself.
+- Where Spork's ledger and NetSuite's report both hold an item in one bin,
+  the bin is listed twice. That doesn't happen at Melbourne (D212).
 
 ## Next
 
@@ -323,3 +360,5 @@ Each item is one decision in [domain-model.md](./domain-model.md).
 6. Cut a non-box item's photo out onto white at the computer.
 7. Freight by price: carriers' rates as a third objective beside fewest
    parcels and least chargeable weight (D224), chosen in configuration.
+8. Put picking live: rebuild, restart, push Bridge 0.9.0, then try a real
+   batch from the sheet, with the gun and without it.
