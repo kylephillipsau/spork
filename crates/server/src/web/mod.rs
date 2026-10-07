@@ -25,6 +25,7 @@
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 
 mod style;
+mod tickets;
 use maud::{html, Markup, DOCTYPE};
 use uuid::Uuid;
 
@@ -352,5 +353,5 @@ async fn carton_view(
 
 /// The pages, registered beside the API rather than instead of it.
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(stylesheet).service(packing_list_page);
+    cfg.service(stylesheet).service(packing_list_page).service(tickets::pick_tickets);
 }
