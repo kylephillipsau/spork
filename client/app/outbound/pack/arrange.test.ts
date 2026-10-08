@@ -36,7 +36,7 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
     item_id: `17e10000-0000-0000-0000-${String(lines).padStart(12, "0")}`,
     item_code: code,
     description: null,
-    art_no: null,
+    tags: { art_no: null, shown: [], warnings: [] },
     remaining,
     committed: remaining,
     cells: [],

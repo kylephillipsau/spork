@@ -9,12 +9,14 @@
 //! Read by header name, and every column but the item's is optional, so a
 //! file with only units is a file with only units.
 //!
-//! **And what NetSuite says the item looks like, weighs and measures** (D237):
-//! the file of its picture, its weight and size in whatever units it holds
-//! them, and its UPC. Each is NetSuite's word beside Spork's own, never in its
-//! place: the comparison is `item_netsuite_differs`.
+//! **And every field as NetSuite said it** (D238): each column but the item's,
+//! under the column's name, its text as it came, into `reported_item_field`.
+//! A value NetSuite changes or stops saying is closed and the new one opened,
+//! so what NetSuite said, and when, is kept. What a field means (a weight, a
+//! barcode, a colour shown beside the code) is read at the other end, through
+//! `reported_item_said`, and none of it is Spork's record of the product.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -27,50 +29,11 @@ const SUPPLIER_PART: &[&str] = &[
     "Supplier Part No.",
     "Supplier Part",
     "Alternative Code",
+    "Article No.",
     "Vendor Code",
     "Vendor Name",
     "Vendor Part",
 ];
-
-const PICTURE: &[&str] = &["Picture", "Image", "Picture File", "Image File"];
-const WEIGHT: &[&str] = &["Weight"];
-const WEIGHT_UNIT: &[&str] = &["Weight Unit", "Weight Units"];
-const LENGTH: &[&str] = &["Length"];
-const WIDTH: &[&str] = &["Width"];
-const HEIGHT: &[&str] = &["Height"];
-const SIZE_UNIT: &[&str] = &["Dimension Unit", "Size Unit", "Dimensions Unit"];
-const UPC: &[&str] = &["UPC", "UPC Code", "Barcode"];
-
-/// Grams in one of a weight unit, as NetSuite names it.
-fn grams(unit: &str) -> Option<f64> {
-    match unit.trim().to_ascii_lowercase().as_str() {
-        "g" | "gram" | "grams" => Some(1.0),
-        "kg" | "kgs" | "kilogram" | "kilograms" => Some(1000.0),
-        "lb" | "lbs" | "pound" | "pounds" => Some(453.592_37),
-        "oz" | "ounce" | "ounces" => Some(28.349_523_125),
-        _ => None,
-    }
-}
-
-/// Millimetres in one of a length unit, as NetSuite names it.
-fn millimetres(unit: &str) -> Option<f64> {
-    match unit.trim().to_ascii_lowercase().as_str() {
-        "mm" | "millimetre" | "millimetres" | "millimeter" | "millimeters" => Some(1.0),
-        "cm" | "centimetre" | "centimetres" | "centimeter" | "centimeters" => Some(10.0),
-        "m" | "metre" | "metres" | "meter" | "meters" => Some(1000.0),
-        "in" | "inch" | "inches" => Some(25.4),
-        "ft" | "foot" | "feet" => Some(304.8),
-        _ => None,
-    }
-}
-
-/// A figure in its unit as a whole number of the base one: none where either
-/// is blank, unreadable, or not more than nothing.
-fn figure(value: Option<&str>, unit: Option<f64>) -> Option<i32> {
-    let v: f64 = value?.trim().replace(',', "").parse().ok()?;
-    let n = (v * unit?).round();
-    (n >= 1.0 && n <= f64::from(i32::MAX)).then_some(n as i32)
-}
 
 fn pick(header: &[String], names: &[&str]) -> Option<usize> {
     names
@@ -84,17 +47,9 @@ pub struct Row {
     pub item_code: String,
     pub selling_unit: Option<String>,
     pub supplier_part: Option<String>,
-    /// NetSuite's reference to its picture's file (D237).
-    pub picture_file: Option<String>,
-    /// NetSuite's weight and size, in grams and millimetres. Absent where it
-    /// is blank, or its unit is one this doesn't know, which `survey` counts.
-    pub weight_g: Option<i32>,
-    pub length_mm: Option<i32>,
-    pub width_mm: Option<i32>,
-    pub height_mm: Option<i32>,
-    pub upc: Option<String>,
-    /// A weight or size given in a unit this doesn't know.
-    pub unreadable: bool,
+    /// Every column but the item's, by its name, as it came; blank ones left
+    /// out, being not said (D238).
+    pub fields: Vec<(String, String)>,
 }
 
 /// Read the export from anything, so a path and a request body are the same.
@@ -113,23 +68,11 @@ pub fn read<R: std::io::Read>(source: R) -> Result<Vec<Row>, String> {
             header.join(", ")
         )
     })?;
+    if header.len() < 2 {
+        return Err(format!("nothing but the item: the file has {}", header.join(", ")));
+    }
     let i_unit = pick(&header, UNIT);
     let i_part = pick(&header, SUPPLIER_PART);
-    let i_picture = pick(&header, PICTURE);
-    let i_weight = pick(&header, WEIGHT);
-    let i_weight_unit = pick(&header, WEIGHT_UNIT);
-    let (i_length, i_width, i_height) = (pick(&header, LENGTH), pick(&header, WIDTH), pick(&header, HEIGHT));
-    let i_size_unit = pick(&header, SIZE_UNIT);
-    let i_upc = pick(&header, UPC);
-    if [i_unit, i_part, i_picture, i_weight, i_length, i_upc].iter().all(Option::is_none) {
-        return Err(format!(
-            "no unit, supplier part, picture, weight, size or UPC column: looked for {}, {} and the rest, \
-             and the file has {}",
-            UNIT.join(", "),
-            SUPPLIER_PART.join(", "),
-            header.join(", ")
-        ));
-    }
     let mut rows = vec![];
     for rec in rdr.records() {
         let r = rec.map_err(|e| e.to_string())?;
@@ -142,23 +85,17 @@ pub fn read<R: std::io::Read>(source: R) -> Result<Vec<Row>, String> {
         let Some(item_code) = at(i_item) else {
             continue;
         };
-        let text = |i: Option<usize>| i.and_then(at);
-        let weighed = text(i_weight);
-        let in_g = text(i_weight_unit).and_then(|u| grams(&u));
-        let sides = [text(i_length), text(i_width), text(i_height)];
-        let in_mm = text(i_size_unit).and_then(|u| millimetres(&u));
-        let said = |v: &Option<String>, unit: Option<f64>| figure(v.as_deref(), unit);
+        let fields = header
+            .iter()
+            .enumerate()
+            .filter(|(i, name)| *i != i_item && !name.is_empty())
+            .filter_map(|(i, name)| at(i).map(|v| (name.clone(), v)))
+            .collect();
         rows.push(Row {
             item_code,
-            selling_unit: text(i_unit),
-            supplier_part: text(i_part),
-            picture_file: text(i_picture),
-            weight_g: said(&weighed, in_g),
-            length_mm: said(&sides[0], in_mm),
-            width_mm: said(&sides[1], in_mm),
-            height_mm: said(&sides[2], in_mm),
-            upc: text(i_upc),
-            unreadable: (weighed.is_some() && in_g.is_none()) || (sides.iter().any(Option::is_some) && in_mm.is_none()),
+            selling_unit: i_unit.and_then(at),
+            supplier_part: i_part.and_then(at),
+            fields,
         });
     }
     Ok(rows)
@@ -170,25 +107,22 @@ pub struct DetailsSurvey {
     pub rows: usize,
     pub with_unit: usize,
     pub with_supplier_part: usize,
-    pub with_picture: usize,
-    pub with_weight: usize,
-    pub with_size: usize,
-    pub with_upc: usize,
-    /// Rows whose weight or size came in a unit this doesn't know, so wasn't read.
-    pub unreadable: usize,
+    /// How many rows say each field, by its name (D238).
+    pub fields: BTreeMap<String, usize>,
 }
 
 pub fn survey(rows: &[Row]) -> DetailsSurvey {
-    let count = |f: fn(&Row) -> bool| rows.iter().filter(|r| f(r)).count();
+    let mut fields = BTreeMap::new();
+    for r in rows {
+        for (name, _) in &r.fields {
+            *fields.entry(name.clone()).or_insert(0) += 1;
+        }
+    }
     DetailsSurvey {
         rows: rows.len(),
-        with_unit: count(|r| r.selling_unit.is_some()),
-        with_supplier_part: count(|r| r.supplier_part.is_some()),
-        with_picture: count(|r| r.picture_file.is_some()),
-        with_weight: count(|r| r.weight_g.is_some()),
-        with_size: count(|r| r.length_mm.is_some() && r.width_mm.is_some() && r.height_mm.is_some()),
-        with_upc: count(|r| r.upc.is_some()),
-        unreadable: count(|r| r.unreadable),
+        with_unit: rows.iter().filter(|r| r.selling_unit.is_some()).count(),
+        with_supplier_part: rows.iter().filter(|r| r.supplier_part.is_some()).count(),
+        fields,
     }
 }
 
@@ -201,6 +135,10 @@ pub struct DetailsLoaded {
     pub rows_replaced: usize,
     /// Codes the item master does not have.
     pub items_unknown: usize,
+    /// Fields NetSuite says now that it didn't, or said otherwise (D238).
+    pub fields_opened: usize,
+    /// Fields it said before and now says otherwise, or nothing of.
+    pub fields_closed: usize,
 }
 
 /// Write the feed's whole word, replacing what it said before. Rolled back
@@ -232,44 +170,77 @@ pub async fn load(
         .iter()
         .map(|c| said[c].supplier_part.as_deref())
         .collect();
-    let col = |f: fn(&Row) -> Option<&str>| codes.iter().map(|c| f(said[c])).collect::<Vec<_>>();
-    let num = |f: fn(&Row) -> Option<i32>| codes.iter().map(|c| f(said[c])).collect::<Vec<_>>();
-    let (pictures, upcs) = (col(|r| r.picture_file.as_deref()), col(|r| r.upc.as_deref()));
-    let (weights, lengths, widths, heights) =
-        (num(|r| r.weight_g), num(|r| r.length_mm), num(|r| r.width_mm), num(|r| r.height_mm));
     let r = tx
         .query_one(
-            "WITH f AS (SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $7::text[], $8::int[],
-                                             $9::int[], $10::int[], $11::int[], $12::text[])
-                                   AS f(code, unit, part, picture, weight, length, width, height, upc)),
-                  m AS (SELECT i.id, f.* FROM f JOIN item i ON i.code = f.code),
+            "WITH f AS (SELECT * FROM unnest($1::text[], $2::text[], $3::text[]) AS f(code, unit, part)),
+                  m AS (SELECT i.id, f.unit, f.part FROM f JOIN item i ON i.code = f.code),
                   gone AS (DELETE FROM reported_item r
                             WHERE r.source = $5 AND NOT EXISTS (SELECT 1 FROM m WHERE m.id = r.item_id)
                             RETURNING 1),
-                  up AS (INSERT INTO reported_item
-                             (tenant_id, item_id, selling_unit, supplier_part, picture_file, weight_g,
-                              length_mm, width_mm, height_mm, upc, as_at, source)
-                         SELECT $4, id, unit, part, picture, weight, length, width, height, upc, $6, $5 FROM m
+                  up AS (INSERT INTO reported_item (tenant_id, item_id, selling_unit, supplier_part, as_at, source)
+                         SELECT $4, id, unit, part, $6, $5 FROM m
                          ON CONFLICT (tenant_id, item_id, source) DO UPDATE
                             SET selling_unit = excluded.selling_unit, supplier_part = excluded.supplier_part,
-                                picture_file = excluded.picture_file, weight_g = excluded.weight_g,
-                                length_mm = excluded.length_mm, width_mm = excluded.width_mm,
-                                height_mm = excluded.height_mm, upc = excluded.upc,
                                 as_at = excluded.as_at, loaded_at = now()
                          RETURNING 1)
              SELECT (SELECT count(*) FROM f), (SELECT count(*) FROM m), (SELECT count(*) FROM up),
                     (SELECT count(*) FROM gone)",
-            &[&codes, &units, &parts, &tenant, &source, &as_at, &pictures, &weights, &lengths, &widths, &heights, &upcs],
+            &[&codes, &units, &parts, &tenant, &source, &as_at],
         )
         .await
         .map_err(fail)?;
     let (named, known, written, gone): (i64, i64, i64, i64) =
         (r.get(0), r.get(1), r.get(2), r.get(3));
+
+    // Every field as NetSuite said it (D238): what it says otherwise or no
+    // longer says is closed first, then what it says now and didn't is
+    // opened, so one value is open a field, an item, a feed.
+    let (mut f_codes, mut f_names, mut f_values): (Vec<&str>, Vec<&str>, Vec<&str>) = (vec![], vec![], vec![]);
+    for (code, row) in &said {
+        for (name, value) in &row.fields {
+            f_codes.push(code);
+            f_names.push(name);
+            f_values.push(value);
+        }
+    }
+    const NOW: &str = "WITH f AS (SELECT i.id AS item_id, f.field, f.value
+                         FROM unnest($1::text[], $2::text[], $3::text[]) AS f(code, field, value)
+                         JOIN item i ON i.code = f.code)";
+    let closed = tx
+        .execute(
+            &format!(
+                "{NOW}
+                 UPDATE reported_item_field r SET said_to = $5
+                  WHERE r.source = $4 AND r.said_to IS NULL
+                    AND NOT EXISTS (SELECT 1 FROM f
+                                     WHERE f.item_id = r.item_id AND f.field = r.field AND f.value = r.value)"
+            ),
+            &[&f_codes, &f_names, &f_values, &source, &as_at],
+        )
+        .await
+        .map_err(fail)?;
+    let opened = tx
+        .execute(
+            &format!(
+                "{NOW}
+                 INSERT INTO reported_item_field (tenant_id, item_id, source, field, value, said_from)
+                 SELECT $6, f.item_id, $4, f.field, f.value, $5 FROM f
+                  WHERE NOT EXISTS (SELECT 1 FROM reported_item_field r
+                                     WHERE r.item_id = f.item_id AND r.source = $4 AND r.field = f.field
+                                       AND r.said_to IS NULL)"
+            ),
+            &[&f_codes, &f_names, &f_values, &source, &as_at, &tenant],
+        )
+        .await
+        .map_err(fail)?;
+
     let out = DetailsLoaded {
         applied: apply,
         rows_written: written as usize,
         rows_replaced: gone as usize,
         items_unknown: (named - known) as usize,
+        fields_opened: opened as usize,
+        fields_closed: closed as usize,
     };
     let end = if apply {
         "RELEASE SAVEPOINT spork_item_details"
@@ -304,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn netsuites_own_names_are_read_and_a_file_with_neither_is_refused() {
+    fn netsuites_own_names_are_read_and_a_file_of_only_items_is_refused() {
         let rows =
             read("Name,Pack Unit,Alternative Code\nPBL-9558B,Roll,PBL-9558B\n".as_bytes()).unwrap();
         assert_eq!(rows[0].selling_unit.as_deref(), Some("Roll"));
@@ -312,23 +283,28 @@ mod tests {
         let rows = read("Name,Sale Unit,Vendor Name\nU.KTS,Roll,KTS\n".as_bytes()).unwrap();
         assert_eq!(rows[0].selling_unit.as_deref(), Some("Roll"));
         assert_eq!(rows[0].supplier_part.as_deref(), Some("KTS"));
-        assert!(read("Item,Description\nA,B\n".as_bytes()).is_err());
+        assert!(read("Item\nA\n".as_bytes()).is_err());
     }
 
     #[test]
-    fn netsuites_picture_weight_size_and_upc_are_read_in_its_units() {
-        let csv = "Item,Picture,Weight,Weight Unit,Length,Width,Height,Dimension Unit,UPC\n\
-                   ABC-1,4471,1.5,lb,12,8,4,in,9312345678903\n\
-                   ABC-2,,250,g,,,,,\n\
-                   ABC-3,,2,stone,30,20,10,cm,\n";
+    fn every_field_is_kept_as_netsuite_said_it() {
+        let csv = "Item,Colour,Item Weight,Weight Unit,Length (cm),Alert\n\
+                   ABC-1,Blue,1.5,lb,12, Charge bulky freight \n\
+                   ABC-2,,0.25,kg,,\n";
         let rows = read(csv.as_bytes()).unwrap();
-        assert_eq!(rows[0].picture_file.as_deref(), Some("4471"));
-        assert_eq!(rows[0].weight_g, Some(680), "a pound and a half, in grams");
-        assert_eq!((rows[0].length_mm, rows[0].width_mm, rows[0].height_mm), (Some(305), Some(203), Some(102)));
-        assert_eq!(rows[0].upc.as_deref(), Some("9312345678903"));
-        assert_eq!((rows[1].weight_g, rows[1].length_mm), (Some(250), None));
-        assert_eq!((rows[2].weight_g, rows[2].length_mm, rows[2].unreadable), (None, Some(300), true), "a unit not known is not read");
+        assert_eq!(
+            rows[0].fields,
+            [
+                ("Colour".into(), "Blue".into()),
+                ("Item Weight".into(), "1.5".into()),
+                ("Weight Unit".into(), "lb".into()),
+                ("Length (cm)".into(), "12".into()),
+                ("Alert".into(), "Charge bulky freight".into()),
+            ],
+            "its text as it came, trimmed, under its own name"
+        );
+        assert_eq!(rows[1].fields.len(), 2, "a blank is not said");
         let s = survey(&rows);
-        assert_eq!((s.with_picture, s.with_weight, s.with_size, s.with_upc, s.unreadable), (1, 2, 2, 1, 1));
+        assert_eq!((s.fields["Item Weight"], s.fields["Colour"]), (2, 1));
     }
 }

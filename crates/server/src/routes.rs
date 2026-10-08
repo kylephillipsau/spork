@@ -9581,6 +9581,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::lists::lists)
         .service(crate::lists::change_list)
         .service(crate::correcting::correct)
+        .service(crate::reported_fields::fields)
+        .service(crate::reported_fields::say_field)
         .service(crate::reported_pictures::wanted)
         .service(crate::reported_pictures::load)
         .service(crate::items::say_picture)

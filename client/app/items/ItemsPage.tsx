@@ -42,7 +42,7 @@ import type { ItemListRow, ItemRow } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime } from "@app/common/cells";
 
-import { ItemDrawer } from "./ItemProperties";
+import { ItemDrawer, ItemTagsLine } from "./ItemProperties";
 import type { PropertiesDesk } from "./useItemProperties";
 import type { Has, ItemsDesk, Needs, Order, Stock } from "./useItems";
 import s from "./items.module.css";
@@ -423,7 +423,7 @@ const COLUMNS: Column<ItemRow>[] = [
       <span className={s.named}>
         <span className={s.code}>{i.code}</span>
         {i.description !== i.code && <span className={s.described}>{i.description}</span>}
-        {i.art_no && <span className={s.art}>Art {i.art_no}</span>}
+        <ItemTagsLine tags={i.tags} />
         {i.to_pack > 0 && <Faint>{toPack(i)}</Faint>}
       </span>
     ),

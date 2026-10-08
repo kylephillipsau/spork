@@ -1,4 +1,4 @@
-import type { PackageTypeRow, Workspace } from "@domain/types";
+import type { PackageTypeRow, Workspace, ReportedField } from "@domain/types";
 import type { WorkspaceBench, WorkspaceState } from "./useWorkspace";
 
 /** The workspace as a deployment looks after a bin import. */
@@ -80,5 +80,20 @@ export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
     suggest: noop,
     boxWeight: noop,
     boxEmptyWeight: noop,
+    fields: state.kind === "ready" ? FIELDS : null,
+    sayField: noop,
   };
 }
+
+/** NetSuite's fields as the item details carried them (D238): read by their defaults, but one said here. */
+export const FIELDS: ReportedField[] = [
+  { source: "netsuite-item-details", field: "Alert", items: 412, example: "Charge bulky freight", role: "warning", unit: null, unit_field: null, level: null, said: false },
+  { source: "netsuite-item-details", field: "APN (Carton)", items: 41, example: "19300000000016", role: "barcode", unit: null, unit_field: null, level: "carton", said: false },
+  { source: "netsuite-item-details", field: "Colour", items: 520, example: "Blue", role: "shown", unit: null, unit_field: null, level: null, said: false },
+  { source: "netsuite-item-details", field: "Cubic", items: 2398, example: "0.004", role: "kept", unit: null, unit_field: null, level: null, said: false },
+  { source: "netsuite-item-details", field: "Each/Carton", items: 1201, example: "100", role: "per_carton", unit: null, unit_field: null, level: null, said: false },
+  { source: "netsuite-item-details", field: "Item Weight", items: 2290, example: "0.4", role: "weight", unit: null, unit_field: "Weight Unit", level: null, said: false },
+  { source: "netsuite-item-details", field: "Length (cm)", items: 1480, example: "37", role: "length", unit: "cm", unit_field: null, level: null, said: false },
+  { source: "netsuite-item-details", field: "Melbourne WH Bin", items: 240, example: "C-01-2", role: "note", unit: null, unit_field: null, level: null, said: true },
+  { source: "netsuite-item-details", field: "Weight Unit", items: 2290, example: "kg", role: "kept", unit: null, unit_field: null, level: null, said: false },
+];

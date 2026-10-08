@@ -226,8 +226,8 @@ pub struct BinItem {
     pub item_code: String,
     pub description: String,
     pub picture: Option<Picture>,
-    /// Its article number, as NetSuite says it (D237).
-    pub art_no: Option<String>,
+    /// What NetSuite says beside it (D237, D238).
+    pub tags: crate::items::ItemTags,
     /// NetSuite's newest count of it here, as text; none when only this
     /// system's own ledger has it here.
     pub on_hand: Option<String>,
@@ -268,7 +268,7 @@ async fn contents_of(tx: &Transaction<'_>, bin: Uuid) -> Result<(Vec<BinItem>, i
     let total = rows.first().map(|r| r.get(5)).unwrap_or(0);
     let ids: Vec<Uuid> = rows.iter().map(|r| r.get(0)).collect();
     let mut pictured = pictures::of(tx, &ids).await?;
-    let mut numbered = crate::items::art_numbers(tx, &ids).await?;
+    let mut tagged = crate::items::tags(tx, &ids).await?;
     let items = rows
         .iter()
         .map(|r| {
@@ -278,7 +278,7 @@ async fn contents_of(tx: &Transaction<'_>, bin: Uuid) -> Result<(Vec<BinItem>, i
                 item_code: r.get(1),
                 description: r.get(2),
                 picture: pictured.remove(&item_id),
-                art_no: numbered.remove(&item_id),
+                tags: tagged.remove(&item_id).unwrap_or_default(),
                 on_hand: r.get(3),
                 held: r.get(4),
             }

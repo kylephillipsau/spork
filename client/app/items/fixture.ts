@@ -635,18 +635,23 @@ export const CORRECTING = fixtureProperties(SOLD_BY_BOX, {
 export const ITEM_NETSUITE: ItemView = {
   ...ITEM,
   netsuite: {
-    art_no: "ART-51200",
-    upc: "9300000000017",
-    weight_g: 900,
-    length_mm: 450,
-    width_mm: 80,
-    height_mm: 60,
+    fields: [
+      { field: "Alert", value: "Long handle: ships in the shovel box", role: "warning", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "Colour", value: "Blue", role: "shown", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "Each/Carton", value: "8", role: "per_carton", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "Item Weight", value: "0.9", role: "weight", level: null, since: "2026-10-08T02:00:00Z" },
+      { field: "Length (cm)", value: "45", role: "length", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "Supplier Part No.", value: "ART-51200 / 5120-BL", role: "art_no", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "Transaction Image", value: "4349049", role: "picture", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "UPC", value: "9300000000017", role: "barcode", level: null, since: "2026-09-12T02:00:00Z" },
+      { field: "Weight Unit", value: "kg", role: "kept", level: null, since: "2026-09-12T02:00:00Z" },
+    ],
     picture: ITEM.picture?.digest ?? null,
     picture_not_it: false,
     weight_differs: true,
     size_differs: false,
-    upc_differs: true,
-    as_at: "2026-10-08T02:00:00Z",
+    barcode_differs: true,
+    pack_differs: false,
   },
 };
 
@@ -759,7 +764,7 @@ export const RECROPPING = fixtureProperties(ITEM, {
 let row = 0;
 const ROW = (over: Partial<ItemRow> & Pick<ItemRow, "code" | "description">): ItemRow => ({
   item_id: `01990000-0000-7000-8000-00000000c${String(++row).padStart(3, "0")}`,
-  art_no: null,
+  tags: { art_no: null, shown: [], warnings: [] },
   active: true,
   style_code: null,
   picture: null,

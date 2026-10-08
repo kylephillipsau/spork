@@ -61,6 +61,7 @@ pub mod pick_groups;
 pub mod pictures;
 pub mod receiving;
 pub mod refile;
+pub mod reported_fields;
 pub mod reported_pictures;
 pub mod revalidation;
 pub mod routes;

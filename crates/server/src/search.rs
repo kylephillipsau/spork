@@ -131,9 +131,11 @@ async fn entries(state: &web::Data<AppState>, tenant: Uuid) -> Result<Vec<Entry>
                     .query(
                         "SELECT i.id, i.code, i.description, s.code,
                                 (SELECT array_agg(b.barcode) FROM item_barcode b WHERE b.item_id = i.id),
-                                -- Its article number, printed where its code isn't (D237).
-                                (SELECT r.supplier_part FROM reported_item r WHERE r.item_id = i.id
-                                  ORDER BY r.as_at DESC LIMIT 1)
+                                -- Its article numbers, printed where its code isn't (D237),
+                                -- each of several said in one (D238).
+                                (SELECT array_agg(x) FROM reported_item_said r
+                                   CROSS JOIN LATERAL unnest(art_numbers_in(r.value)) x
+                                  WHERE r.item_id = i.id AND r.role = 'art_no')
                            FROM item i LEFT JOIN item_style s ON s.id = i.style_id
                           WHERE i.active",
                         &[],
@@ -146,7 +148,7 @@ async fn entries(state: &web::Data<AppState>, tenant: Uuid) -> Result<Vec<Entry>
                     let mut codes = vec![code.clone()];
                     codes.extend(r.get::<_, Option<Vec<String>>>(4).unwrap_or_default());
                     codes.extend(style.clone());
-                    codes.extend(r.get::<_, Option<String>>(5));
+                    codes.extend(r.get::<_, Option<Vec<String>>>(5).unwrap_or_default());
                     out.push(Entry {
                         kind: "item",
                         id: r.get(0),

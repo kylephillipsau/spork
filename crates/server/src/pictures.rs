@@ -117,7 +117,9 @@ picture_chosen AS (
 picture_netsuite AS (
     SELECT rp.item_id, rp.digest
       FROM reported_item_picture rp
-      JOIN reported_item r ON r.item_id = rp.item_id AND r.source = rp.source AND r.picture_file = rp.file
+      -- The file NetSuite still names as its picture (D238).
+      JOIN reported_item_said r
+        ON r.item_id = rp.item_id AND r.source = rp.source AND r.role = 'picture' AND r.value = rp.file
      WHERE NOT EXISTS (
            SELECT 1 FROM (SELECT DISTINCT ON (s.item_id, s.digest) s.said
                             FROM item_picture_said s

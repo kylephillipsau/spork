@@ -76,8 +76,9 @@ pub struct BenchLine {
     pub item_id: Uuid,
     pub item_code: String,
     pub description: Option<String>,
-    /// Its article number, as NetSuite says it (D237): printed where the code isn't.
-    pub art_no: Option<String>,
+    /// What NetSuite says beside it (D237, D238): its article number, printed
+    /// where the code isn't, the fields shown beside the code, its warnings.
+    pub tags: crate::items::ItemTags,
     /// Still to do at the bench: committed less the larger of what this system
     /// picked and what has gone into a carton (D172).
     pub remaining: i64,
@@ -475,7 +476,7 @@ pub async fn bench_view(
                         item_id,
                         item_code: l.get(1),
                         description: l.get(2),
-                        art_no: None,
+                        tags: Default::default(),
                         remaining: l.get(4),
                         committed: l.get(5),
                         kit: l.get::<_, Option<String>>(6).map(|item_code| KitOf {
@@ -633,7 +634,7 @@ fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements
 async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) -> Result<(), ApiError> {
     let ids: Vec<Uuid> = lines.iter().map(|l| l.item_id).collect();
     let pictured = pictures::of(tx, &ids).await?;
-    let mut numbered = crate::items::art_numbers(tx, &ids).await?;
+    let mut tagged = crate::items::tags(tx, &ids).await?;
     // The newest cut of each side of its own each, inner or carton (D176), not
     // one moved to another subject: a carton that ships as it is is drawn as
     // itself. A side said to look like another wears that one's cut (D183),
@@ -695,7 +696,7 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
         .collect();
     for line in lines.iter_mut() {
         line.picture = pictured.get(&line.item_id).cloned();
-        line.art_no = numbered.remove(&line.item_id);
+        line.tags = tagged.remove(&line.item_id).unwrap_or_default();
         for p in line.packs.iter_mut() {
             let key = (line.item_id, p.level.clone());
             if let Some((as_is, upright)) = handling.get(&key) {

@@ -177,26 +177,55 @@ pub struct ItemView {
     pub main_picture: Option<String>,
 }
 
-/// What NetSuite says of an item, and where that disagrees with what Spork
-/// measured and scanned (D237). NetSuite's word, as its last report gave it.
+/// What NetSuite says of an item, field by field as it said it, and where
+/// that disagrees with what Spork measured, scanned and said (D237, D238).
+/// An observation of NetSuite's record, not of the product.
 #[derive(Serialize, Debug)]
 pub struct ItemNetSuite {
-    /// Its article number: NetSuite's Alternative Code, which order lines carry
-    /// as Art No. and the capture sheet as Supplier Part No. (D217).
-    pub art_no: Option<String>,
-    pub upc: Option<String>,
-    pub weight_g: Option<i32>,
-    pub length_mm: Option<i32>,
-    pub width_mm: Option<i32>,
-    pub height_mm: Option<i32>,
-    /// NetSuite's picture of it, once carried here.
+    /// Every field it says now, by name, with what it is read as.
+    pub fields: Vec<NetSuiteField>,
+    /// Its picture, once carried here, by its content address.
     pub picture: Option<String>,
     /// Somebody said NetSuite's picture is not this product.
     pub picture_not_it: bool,
     pub weight_differs: bool,
     pub size_differs: bool,
-    pub upc_differs: bool,
-    pub as_at: DateTime<Utc>,
+    pub barcode_differs: bool,
+    pub pack_differs: bool,
+}
+
+/// One of NetSuite's fields for an item, as it said it (D238).
+#[derive(Serialize, Debug)]
+pub struct NetSuiteField {
+    /// As the feed names it: NetSuite's label.
+    pub field: String,
+    /// As NetSuite said it, unread.
+    pub value: String,
+    /// What Spork reads it as: `kept`, `shown`, `warning`, `note`, `art_no`,
+    /// `picture`, `weight`, `length`, `width`, `height`, `barcode`,
+    /// `per_carton`, `per_inner` or `inners_per_carton`.
+    pub role: String,
+    /// A barcode's level; none for the level NetSuite counts.
+    pub level: Option<String>,
+    /// Since when NetSuite has said this.
+    pub since: DateTime<Utc>,
+}
+
+/// What a screen says beside an item from NetSuite's word (D237, D238): its
+/// article number, the fields shown beside the code, and its warnings.
+#[derive(Serialize, Debug, Default, Clone)]
+pub struct ItemTags {
+    pub art_no: Option<String>,
+    /// Fields shown beside the code, as (name, value): Colour, Size.
+    pub shown: Vec<ShownField>,
+    /// Warnings, as NetSuite said them: an alert.
+    pub warnings: Vec<String>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct ShownField {
+    pub field: String,
+    pub value: String,
 }
 
 /// One face of one subject, as last photographed.
@@ -467,40 +496,55 @@ pub async fn item_page(
                     })
                     .collect();
 
-                let netsuite = tx
-                    .query_opt(
-                        "SELECT r.supplier_part, r.upc, r.weight_g, r.length_mm, r.width_mm, r.height_mm,
-                                p.digest,
-                                coalesce((SELECT s.said = 'not_it' FROM item_picture_said s
-                                           WHERE s.item_id = r.item_id AND s.digest = p.digest
-                                             AND s.said IN ('not_it', 'is_it')
-                                           ORDER BY s.recorded_at DESC, s.id DESC LIMIT 1), false),
-                                coalesce(d.weight_differs, false), coalesce(d.size_differs, false),
-                                coalesce(d.upc_differs, false), r.as_at
-                           FROM reported_item r
-                           LEFT JOIN reported_item_picture p
-                             ON p.item_id = r.item_id AND p.source = r.source AND p.file = r.picture_file
-                           LEFT JOIN item_netsuite_differs d ON d.item_id = r.item_id
-                          WHERE r.item_id = $1
-                          ORDER BY r.as_at DESC
-                          LIMIT 1",
+                let fields: Vec<NetSuiteField> = tx
+                    .query(
+                        "SELECT field, value, role, level::text, said_from FROM reported_item_said
+                          WHERE item_id = $1 ORDER BY field, source",
                         &[&id],
                     )
                     .await?
-                    .map(|n| ItemNetSuite {
-                        art_no: n.get(0),
-                        upc: n.get(1),
-                        weight_g: n.get(2),
-                        length_mm: n.get(3),
-                        width_mm: n.get(4),
-                        height_mm: n.get(5),
-                        picture: n.get(6),
-                        picture_not_it: n.get(7),
-                        weight_differs: n.get(8),
-                        size_differs: n.get(9),
-                        upc_differs: n.get(10),
-                        as_at: n.get(11),
-                    });
+                    .iter()
+                    .map(|f| NetSuiteField {
+                        field: f.get(0),
+                        value: f.get(1),
+                        role: f.get(2),
+                        level: f.get(3),
+                        since: f.get(4),
+                    })
+                    .collect();
+                let netsuite = if fields.is_empty() {
+                    None
+                } else {
+                    let n = tx
+                        .query_one(
+                            "SELECT p.digest,
+                                    coalesce((SELECT s.said = 'not_it' FROM item_picture_said s
+                                               WHERE s.item_id = $1 AND s.digest = p.digest
+                                                 AND s.said IN ('not_it', 'is_it')
+                                               ORDER BY s.recorded_at DESC, s.id DESC LIMIT 1), false),
+                                    coalesce(d.weight_differs, false), coalesce(d.size_differs, false),
+                                    coalesce(d.barcode_differs, false), coalesce(d.pack_differs, false)
+                               FROM (SELECT 1) one
+                               LEFT JOIN LATERAL (
+                                   SELECT p.digest FROM reported_item_said r
+                                     JOIN reported_item_picture p
+                                       ON p.item_id = r.item_id AND p.source = r.source AND p.file = r.value
+                                    WHERE r.item_id = $1 AND r.role = 'picture'
+                                    LIMIT 1) p ON true
+                               LEFT JOIN item_netsuite_differs d ON d.item_id = $1",
+                            &[&id],
+                        )
+                        .await?;
+                    Some(ItemNetSuite {
+                        fields,
+                        picture: n.get(0),
+                        picture_not_it: n.get(1),
+                        weight_differs: n.get(2),
+                        size_differs: n.get(3),
+                        barcode_differs: n.get(4),
+                        pack_differs: n.get(5),
+                    })
+                };
                 let main_picture: Option<String> = tx
                     .query_opt(
                         "SELECT digest FROM item_picture_said WHERE item_id = $1 AND said = 'main'
@@ -536,24 +580,34 @@ pub async fn item_page(
     Ok(HttpResponse::Ok().json(view))
 }
 
-/// These items' article numbers, as NetSuite says them (D237): one read
-/// however many a screen lists, as their pictures are (`pictures::of`). An
-/// item NetSuite gives none is not in the map.
-pub async fn art_numbers(
+/// What these items are said beside from NetSuite's word (D237, D238): its
+/// article number, the fields shown beside the code and its warnings, read
+/// through what each field means. One read however many a screen lists, as
+/// their pictures are (`pictures::of`); an item with none is not in the map.
+pub async fn tags(
     tx: &tokio_postgres::Transaction<'_>,
     items: &[Uuid],
-) -> Result<std::collections::HashMap<Uuid, String>, ApiError> {
-    Ok(tx
+) -> Result<std::collections::HashMap<Uuid, ItemTags>, ApiError> {
+    let mut out: std::collections::HashMap<Uuid, ItemTags> = std::collections::HashMap::new();
+    for r in tx
         .query(
-            "SELECT DISTINCT ON (item_id) item_id, supplier_part FROM reported_item
-              WHERE item_id = ANY($1) AND supplier_part IS NOT NULL
-              ORDER BY item_id, as_at DESC",
+            "SELECT item_id, role, field, value FROM reported_item_said
+              WHERE item_id = ANY($1) AND role IN ('art_no', 'shown', 'warning')
+              ORDER BY item_id, field, source",
             &[&items],
         )
         .await?
-        .iter()
-        .map(|r| (r.get(0), r.get(1)))
-        .collect())
+    {
+        let t = out.entry(r.get(0)).or_default();
+        let (role, field, value): (String, String, String) = (r.get(1), r.get(2), r.get(3));
+        match role.as_str() {
+            "art_no" if t.art_no.is_none() => t.art_no = Some(value),
+            "shown" => t.shown.push(ShownField { field, value }),
+            "warning" => t.warnings.push(value),
+            _ => {}
+        }
+    }
+    Ok(out)
 }
 
 #[derive(Deserialize, Debug)]
@@ -810,9 +864,9 @@ pub struct ItemRow {
     pub held: i64,
     /// Its place on the list asked for, from 1; absent when no list was.
     pub list_position: Option<i32>,
-    /// Its article number, as NetSuite says it (D237): what is printed on a
-    /// box that doesn't show the code.
-    pub art_no: Option<String>,
+    /// What NetSuite says beside it (D237, D238): its article number, the
+    /// fields shown beside the code, and its warnings.
+    pub tags: ItemTags,
 }
 
 #[derive(Serialize, Debug)]
@@ -994,7 +1048,8 @@ pub(crate) async fn list_rows(
     // being the one comparison over every item NetSuite has spoken of.
     let differs = if *netsuite {
         "AND EXISTS (SELECT 1 FROM item_netsuite_differs d
-                      WHERE d.item_id = c.id AND (d.weight_differs OR d.size_differs OR d.upc_differs))"
+                      WHERE d.item_id = c.id
+                        AND (d.weight_differs OR d.size_differs OR d.barcode_differs OR d.pack_differs))"
     } else {
         ""
     };
@@ -1036,8 +1091,8 @@ pub(crate) async fn list_rows(
                      OR EXISTS (SELECT 1 FROM item_barcode b
                                  WHERE b.item_id = i.id AND b.barcode = ANY($2::text[]))
                      -- Its article number, printed where its code isn't (D237).
-                     OR EXISTS (SELECT 1 FROM reported_item r
-                                 WHERE r.item_id = i.id AND r.supplier_part ILIKE $1))
+                     OR EXISTS (SELECT 1 FROM reported_item_said r
+                                 WHERE r.item_id = i.id AND r.role = 'art_no' AND r.value ILIKE $1))
                 AND (NOT $3::bool
                      OR EXISTS (SELECT 1 FROM reported_stock rs
                                  WHERE rs.item_id = i.id AND rs.on_hand > 0
@@ -1077,9 +1132,7 @@ pub(crate) async fn list_rows(
                 (SELECT count(*) FROM needed), dem.lines, pile.code,
                 (SELECT e.position FROM item_list_entry e
                   WHERE e.item_list_id = $11 AND e.item_id = n.id),
-                pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0),
-                (SELECT r.supplier_part FROM reported_item r WHERE r.item_id = n.id
-                  ORDER BY r.as_at DESC LIMIT 1)
+                pile.reach, coalesce(tpk.units, 0), coalesce(tpk.lines, 0)
            FROM page n
            LEFT JOIN to_pack tpk ON tpk.item_id = n.id
            LEFT JOIN item_style st ON st.id = n.style_id
@@ -1159,7 +1212,16 @@ pub(crate) async fn list_rows(
             bin_within_reach: r.get(16),
             to_pack: r.get(17),
             to_pack_lines: r.get(18),
-            art_no: r.get(19),
+            tags: ItemTags::default(),
+        })
+        .collect::<Vec<_>>();
+    let ids: Vec<Uuid> = items.iter().map(|i| i.item_id).collect();
+    let mut tagged = tags(tx, &ids).await?;
+    let items = items
+        .into_iter()
+        .map(|mut i| {
+            i.tags = tagged.remove(&i.item_id).unwrap_or_default();
+            i
         })
         .collect();
     Ok((items, total, more))

@@ -204,12 +204,14 @@ pub async fn resolve(
                     }
                     // **And its article number** (D237), as exactly: NetSuite's
                     // Alternative Code, printed on boxes that don't show the
-                    // code. Two items under one article number are both said.
+                    // code, any one of several said in one (D238). Two items
+                    // under one article number are both said.
                     let by_art = tx
                         .query(
                             "SELECT DISTINCT i.id, i.code, i.description
-                               FROM reported_item r JOIN item i ON i.id = r.item_id
-                              WHERE upper(r.supplier_part) = upper($1)",
+                               FROM reported_item_said r JOIN item i ON i.id = r.item_id
+                              WHERE r.role = 'art_no'
+                                AND upper($1) = ANY (SELECT upper(x) FROM unnest(art_numbers_in(r.value)) x)",
                             &[&scan.raw],
                         )
                         .await?;

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLive } from "@app/acting";
+import { anAct } from "@domain/acts";
 import { api, reason } from "@domain/api";
-import type { PackageTypeRow, Workspace } from "@domain/types";
+import type { PackageTypeRow, ReportedField, Workspace } from "@domain/types";
 
 /**
  * The organisation and its warehouses, and the two things a site says about
@@ -31,6 +32,10 @@ export interface WorkspaceBench {
   boxWeight: (boxId: string, grams: number | null) => Promise<void>;
   /** Say what a box weighs empty, in grams, or null until one is weighed (D224). */
   boxEmptyWeight: (boxId: string, grams: number | null) => Promise<void>;
+  /** NetSuite's fields, and what each is read as (D238); null until read. */
+  fields: ReportedField[] | null;
+  /** Say what one of them means. */
+  sayField: (field: ReportedField, meaning: { role: string; unit: string | null; unit_field: string | null; level: string | null }) => Promise<void>;
 }
 
 export function useWorkspace(): WorkspaceBench {
@@ -41,13 +46,15 @@ export function useWorkspace(): WorkspaceBench {
   const live = useLive();
 
   const [boxes, setBoxes] = useState<PackageTypeRow[] | null>(null);
+  const [fields, setFields] = useState<ReportedField[] | null>(null);
 
   const read = useCallback(async () => {
     try {
-      const [workspace, presets] = await Promise.all([api.workspace(), api.packageTypes()]);
+      const [workspace, presets, said] = await Promise.all([api.workspace(), api.packageTypes(), api.netsuiteFields()]);
       if (live.current) {
         setState({ kind: "ready", workspace });
         setBoxes(presets);
+        setFields(said);
       }
     } catch (error) {
       const message = reason(error, "The server could not be reached.");
@@ -99,5 +106,27 @@ export function useWorkspace(): WorkspaceBench {
     [change],
   );
 
-  return { state, busy, problem, dismiss: () => setProblem(null), setPackLocation, setOwner, boxes, suggest, boxWeight, boxEmptyWeight };
+  const sayField = useCallback(
+    (field: ReportedField, meaning: { role: string; unit: string | null; unit_field: string | null; level: string | null }) =>
+      change(
+        () => api.sayNetSuiteField({ source: field.source, field: field.field, ...meaning }, anAct()),
+        `Could not change what ${field.field} means.`,
+      ),
+    [change],
+  );
+
+  return {
+    state,
+    busy,
+    problem,
+    dismiss: () => setProblem(null),
+    setPackLocation,
+    setOwner,
+    boxes,
+    suggest,
+    boxWeight,
+    boxEmptyWeight,
+    fields,
+    sayField,
+  };
 }

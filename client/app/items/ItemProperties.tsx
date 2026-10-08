@@ -26,9 +26,9 @@ import {
   cx,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
-import type { CaptureSubject, FamilyMember, ItemView, PackagingType, Picture, RecordedCard, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, FamilyMember, ItemTags, ItemView, PackagingType, Picture, RecordedCard, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
-import { Faint, dateTime, sentence } from "@app/common/cells";
+import { Faint, dateTime, sentence, shortDate } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
 
 import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, isRound, measuredAspect, type BoxFace } from "./box";
@@ -162,9 +162,9 @@ export function ItemSummary({ item, desk }: { item: ItemView; desk?: PropertiesD
         {desk && choosing && <MainPictureDialog item={item} desk={desk} onClose={() => setChoosing(false)} />}
       </div>
       <Facts columns={1}>
-        {item.netsuite?.art_no && (
+        {artNo(item) && (
           <Fact label="Art No.">
-            <span className={s.code}>{item.netsuite.art_no}</span>
+            <span className={s.code}>{artNo(item)}</span>
           </Fact>
         )}
         <Fact label="Sold as" always>
@@ -655,6 +655,11 @@ function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: Propertie
   );
 }
 
+/** Its article number, as NetSuite says it: the field read as one (D238). */
+function artNo(item: ItemView): string | null {
+  return item.netsuite?.fields.find((f) => f.role === "art_no")?.value ?? null;
+}
+
 /** A picture an item could be shown by, and what it is. */
 interface Choice {
   digest: string;
@@ -736,25 +741,50 @@ function MainPictureDialog({ item, desk, onClose }: { item: ItemView; desk: Prop
   );
 }
 
-/** Grams as kilograms, three places. */
-function kgOf(g: number): string {
-  return `${(g / 1000).toFixed(3)} kg`;
+/** What each of NetSuite's fields is read as, in words (D238). */
+export const NETSUITE_ROLES: { role: string; label: string }[] = [
+  { role: "kept", label: "Kept" },
+  { role: "shown", label: "Shown beside the code" },
+  { role: "warning", label: "A warning" },
+  { role: "note", label: "A note" },
+  { role: "art_no", label: "Art No." },
+  { role: "picture", label: "Its picture" },
+  { role: "weight", label: "Weight" },
+  { role: "length", label: "Length" },
+  { role: "width", label: "Width" },
+  { role: "height", label: "Height" },
+  { role: "barcode", label: "A barcode" },
+  { role: "per_carton", label: "How many in a carton" },
+  { role: "per_inner", label: "How many in a pack" },
+  { role: "inners_per_carton", label: "Packs in a carton" },
+];
+
+/** The order its fields are listed in: what tells it apart, what is compared, then the rest. */
+const ROLE_ORDER = ["art_no", "shown", "warning", "weight", "length", "width", "height", "barcode", "per_carton", "per_inner", "inners_per_carton", "note", "kept"];
+
+/** Where a field read as this disagrees with Spork, said; none where it agrees or isn't compared. */
+function differs(ns: NonNullable<ItemView["netsuite"]>, role: string): string | null {
+  if (role === "weight" && ns.weight_differs) return "Differs from what was weighed";
+  if (["length", "width", "height"].includes(role) && ns.size_differs) return "Differs from what was measured";
+  if (role === "barcode" && ns.barcode_differs) return "Not a barcode scanned here";
+  if (["per_carton", "per_inner", "inners_per_carton"].includes(role) && ns.pack_differs) return "Not what its carton holds here";
+  return null;
 }
 
 /**
- * What NetSuite says of an item (D237), beside what Spork recorded and never
- * in its place: its article number, UPC, weight, size and picture, as its
- * last report gave them, and where each disagrees with what was measured and
- * scanned here. A difference is put right in NetSuite, not here.
+ * What NetSuite says of an item (D237, D238), beside what Spork recorded and
+ * never in its place: every field as NetSuite said it, with what it is read
+ * as and since when, and where it disagrees with what was measured, scanned
+ * and said here. A difference is put right in NetSuite, not here; what a
+ * field means is set under Workspace › NetSuite fields.
  */
 export function NetSuiteSays({ item, desk }: { item: ItemView; desk: PropertiesDesk }) {
   const ns = item.netsuite;
   if (!ns) return null;
-  const differs = (yes: boolean, what: string) => yes && <Badge tone="warning">{what}</Badge>;
-  const size =
-    ns.length_mm !== null && ns.width_mm !== null && ns.height_mm !== null
-      ? `${centimetres(ns.length_mm)} × ${centimetres(ns.width_mm)} × ${centimetres(ns.height_mm)} cm`
-      : null;
+  const fields = ns.fields
+    .filter((f) => f.role !== "picture")
+    .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.field.localeCompare(b.field));
+  const said = (role: string) => NETSUITE_ROLES.find((r) => r.role === role)?.label ?? role;
   return (
     <Section title="What NetSuite says">
       <Card>
@@ -786,26 +816,48 @@ export function NetSuiteSays({ item, desk }: { item: ItemView; desk: PropertiesD
             </figure>
           )}
           <Facts columns={1}>
-            <Fact label="Art No." always>
-              {ns.art_no ? <span className={s.code}>{ns.art_no}</span> : <Faint>Not set</Faint>}
-            </Fact>
-            <Fact label="UPC" always>
-              {ns.upc ? <span className={s.code}>{ns.upc}</span> : <Faint>Not set</Faint>}{" "}
-              {differs(ns.upc_differs, "Not a barcode scanned here")}
-            </Fact>
-            <Fact label="Weight" always>
-              {ns.weight_g !== null ? kgOf(ns.weight_g) : <Faint>Not set</Faint>} {differs(ns.weight_differs, "Differs from what was weighed")}
-            </Fact>
-            <Fact label="Size (L × W × H)" always>
-              {size ?? <Faint>Not set</Faint>} {differs(ns.size_differs, "Differs from what was measured")}
-            </Fact>
+            {fields.map((f) => {
+              const off = differs(ns, f.role);
+              return (
+                <Fact key={f.field} label={f.field}>
+                  <span className={f.role === "art_no" || f.role === "barcode" ? s.code : undefined}>{f.value}</span>{" "}
+                  {off && <Badge tone="warning">{off}</Badge>}
+                  <Faint>
+                    {" "}
+                    · {said(f.role)}
+                    {f.level ? `, the ${f.level === "inner" ? "pack" : f.level}’s` : ""} · since {shortDate(f.since)}
+                  </Faint>
+                </Fact>
+              );
+            })}
           </Facts>
         </div>
         <p className={s.note}>
-          As NetSuite said it {dateTime(ns.as_at)}, for what it counts one of. Where it differs, put it right in NetSuite.
+          As NetSuite says it, for what it counts one of: its record of the product, not the product. Where it differs, put
+          it right in NetSuite.
         </p>
       </Card>
     </Section>
+  );
+}
+
+/**
+ * What NetSuite says beside an item wherever it is listed (D237, D238): its
+ * article number and the fields shown beside the code on one line, and its
+ * warnings under it.
+ */
+export function ItemTagsLine({ tags }: { tags: ItemTags | null | undefined }) {
+  if (!tags) return null;
+  const line = [tags.art_no && `Art ${tags.art_no}`, ...tags.shown.map((f) => `${f.field} ${f.value}`)].filter(Boolean).join(" · ");
+  return (
+    <>
+      {line && <span className={s.art}>{line}</span>}
+      {tags.warnings.map((w) => (
+        <span key={w} className={s.warning}>
+          {w}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -833,7 +885,7 @@ export function ItemLine({
   picture,
   onOpen,
   note,
-  art,
+  tags,
   done = false,
 }: {
   code: string;
@@ -843,8 +895,8 @@ export function ItemLine({
   onOpen?: (() => void) | undefined;
   /** A word about it on this row, under what it is: which kit it is part of (D223). */
   note?: string | undefined;
-  /** Its article number, as NetSuite says it (D237): printed where the code isn't. */
-  art?: string | null | undefined;
+  /** What NetSuite says beside it (D237, D238): its Art No., a colour or size, a warning. */
+  tags?: ItemTags | null | undefined;
   /** Dealt with, so drawn quieter. */
   done?: boolean | undefined;
 }) {
@@ -856,7 +908,7 @@ export function ItemLine({
         {/* An item made from a code alone has the code as its description;
             saying it twice is noise. */}
         {description && description !== code && <span className={s.itemDesc}>{description}</span>}
-        {art && <span className={s.art}>Art {art}</span>}
+        <ItemTagsLine tags={tags} />
         {note && <span className={s.itemNote}>{note}</span>}
       </span>
     </span>

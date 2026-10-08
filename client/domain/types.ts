@@ -27,8 +27,8 @@ export interface BenchLine {
   item_id: Uuid;
   item_code: string;
   description: string | null;
-  /** Its article number, as NetSuite says it (D237). */
-  art_no: string | null;
+  /** What NetSuite says beside it (D237, D238). */
+  tags: ItemTags;
   /** Still to do at the bench: committed less what is picked here or boxed. */
   remaining: number;
   /** What the line commits, all of it: what the whole order counts against (D202). */
@@ -1532,23 +1532,63 @@ export interface ItemView {
   main_picture: string | null;
 }
 
-/** What NetSuite says of an item, and where that disagrees with Spork (D237). */
+/**
+ * What NetSuite says of an item, field by field as it said it, and where that
+ * disagrees with Spork (D237, D238): an observation of NetSuite's record, not
+ * of the product.
+ */
 export interface ItemNetSuite {
-  /** Its article number: NetSuite's Alternative Code, Art No. on order lines. */
-  art_no: string | null;
-  upc: string | null;
-  weight_g: number | null;
-  length_mm: number | null;
-  width_mm: number | null;
-  height_mm: number | null;
+  fields: NetSuiteField[];
   /** NetSuite's picture of it, once carried here. */
   picture: string | null;
   /** Somebody said NetSuite's picture isn't this product. */
   picture_not_it: boolean;
   weight_differs: boolean;
   size_differs: boolean;
-  upc_differs: boolean;
-  as_at: string;
+  barcode_differs: boolean;
+  pack_differs: boolean;
+}
+
+/** One of NetSuite's fields for an item, as it said it (D238). */
+export interface NetSuiteField {
+  /** NetSuite's label, as the feed names it. */
+  field: string;
+  /** As NetSuite said it. */
+  value: string;
+  /** What Spork reads it as: one of `NETSUITE_ROLES`. */
+  role: string;
+  /** A barcode's level; null for the level NetSuite counts. */
+  level: string | null;
+  since: string;
+}
+
+/** What a screen says beside an item from NetSuite's word (D237, D238). */
+export interface ItemTags {
+  art_no: string | null;
+  /** Fields shown beside the code: Colour, Size. */
+  shown: ShownField[];
+  /** Its warnings, as NetSuite said them. */
+  warnings: string[];
+}
+
+export interface ShownField {
+  field: string;
+  value: string;
+}
+
+/** One of NetSuite's fields, as the item details carry it, and what it is read as (D238). */
+export interface ReportedField {
+  source: string;
+  field: string;
+  /** Items NetSuite says it of now. */
+  items: number;
+  example: string;
+  role: string;
+  unit: string | null;
+  unit_field: string | null;
+  level: string | null;
+  /** Said in Spork, rather than read by its default. */
+  said: boolean;
 }
 
 /** An item drawn as its box from its front, right and top cuts (D186). */
@@ -1671,8 +1711,8 @@ export interface ItemRow {
   held: number;
   /** Its place on the list asked for, from 1; null when no list was (D179). */
   list_position: number | null;
-  /** Its article number, as NetSuite says it (D237). */
-  art_no: string | null;
+  /** What NetSuite says beside it (D237, D238). */
+  tags: ItemTags;
 }
 
 /** `POST /items/{id}/lots`: a run of the item that looks different (D182). */
@@ -1781,8 +1821,8 @@ export interface BinItem {
   item_code: string;
   description: string;
   picture: Picture | null;
-  /** Its article number, as NetSuite says it (D237). */
-  art_no: string | null;
+  /** What NetSuite says beside it (D237, D238). */
+  tags: ItemTags;
   /** NetSuite's newest count of it here, as text; null when only Spork's ledger has it here. */
   on_hand: string | null;
   /** What Spork's own ledger holds of it here. */

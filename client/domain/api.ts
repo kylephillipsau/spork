@@ -19,6 +19,7 @@ import type {
   CartonSaid,
   ItemListRow,
   ListChange,
+  ReportedField,
   SearchAnswer,
   BoxPictureSaid,
   LotAdded,
@@ -854,6 +855,20 @@ export const api = {
     send<void>("POST", `/items/${encodeURIComponent(itemId)}/pictures`, {
       said,
       digest,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
+  /** NetSuite's fields, as the item details carry them, and what each is read as (D238). */
+  netsuiteFields: () => send<ReportedField[]>("GET", "/netsuite-fields"),
+
+  /** Say what one of NetSuite's fields means (D238). */
+  sayNetSuiteField: (
+    input: { source: string; field: string; role: string; unit: string | null; unit_field: string | null; level: string | null },
+    act: Act,
+  ) =>
+    send<void>("POST", "/netsuite-fields", {
+      ...input,
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),

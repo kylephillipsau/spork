@@ -1,7 +1,8 @@
 //! NetSuite's picture of an item, carried to Spork (D237).
 //!
-//! The item details name each item's picture file in NetSuite
-//! (`reported_item.picture_file`). The bytes come after, a few at a time:
+//! The item details name each item's picture file in NetSuite: the value of
+//! the field read as its picture (D238, `reported_item_said`), NetSuite's
+//! Transaction Image. The bytes come after, a few at a time:
 //! Spork says which pictures named it doesn't hold yet, and the bridge brings
 //! each one. So the feed of details stays one small file, a picture travels
 //! once, and a new file named for an item is a new picture to bring.
@@ -56,23 +57,25 @@ pub async fn wanted(
             Box::pin(async move {
                 let rows = tx
                     .query(
-                        "SELECT i.code, r.picture_file
-                           FROM reported_item r
+                        "SELECT DISTINCT ON (i.code) i.code, r.value,
+                                NOT EXISTS (SELECT 1 FROM reported_stock s
+                                             WHERE s.item_id = r.item_id AND s.on_hand > 0) AS out_of_stock
+                           FROM reported_item_said r
                            JOIN item i ON i.id = r.item_id
-                          WHERE r.source = $1 AND r.picture_file IS NOT NULL
+                          WHERE r.source = $1 AND r.role = 'picture'
                             AND NOT EXISTS (SELECT 1 FROM reported_item_picture p
                                              WHERE p.item_id = r.item_id AND p.source = r.source
-                                               AND p.file = r.picture_file)
-                          ORDER BY NOT EXISTS (SELECT 1 FROM reported_stock s
-                                                WHERE s.item_id = r.item_id AND s.on_hand > 0),
-                                   i.code
-                          LIMIT $2",
-                        &[&source, &limit],
+                                               AND p.file = r.value)
+                          ORDER BY i.code, r.field",
+                        &[&source],
                     )
                     .await?;
+                let mut rows: Vec<_> = rows.iter().map(|r| (r.get::<_, bool>(2), r.get::<_, String>(0), r.get::<_, String>(1))).collect();
+                rows.sort();
+                rows.truncate(limit as usize);
                 Ok(rows
-                    .iter()
-                    .map(|r| WantedPicture { item: r.get(0), file: r.get(1) })
+                    .into_iter()
+                    .map(|(_, item, file)| WantedPicture { item, file })
                     .collect::<Vec<_>>())
             })
         })
@@ -116,8 +119,9 @@ pub async fn load(
             Box::pin(async move {
                 let named = tx
                     .query_opt(
-                        "SELECT r.item_id FROM reported_item r JOIN item i ON i.id = r.item_id
-                          WHERE i.code = $1 AND r.source = $2 AND r.picture_file = $3",
+                        "SELECT r.item_id FROM reported_item_said r JOIN item i ON i.id = r.item_id
+                          WHERE i.code = $1 AND r.source = $2 AND r.role = 'picture' AND r.value = $3
+                          LIMIT 1",
                         &[&query.item, &query.source, &query.file],
                     )
                     .await?;
