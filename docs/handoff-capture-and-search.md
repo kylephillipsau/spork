@@ -332,6 +332,15 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   (`item_picture_said`, `POST /items/{id}/pictures`); `NetSuiteSays` on the
   item page and drawer. The bridge side waits on the probe's field ids.
 
+- D238, migration 132. Every item-details field kept as NetSuite said it,
+  with history (`reported_item_field`); what each means is Workspace ›
+  NetSuite fields (`reported_field_said` over `reported_field_default`,
+  `reported_field_meaning`, `GET`/`POST /netsuite-fields`); read through
+  `reported_item_said`. `items::tags` (Art No., shown fields, warnings) on
+  the bench, bin cards and item list; `art_numbers_in` splits " / " and
+  " or ". `item_netsuite_differs` now covers barcodes by level and pack
+  counts. The Bridge sends fields under NetSuite's own labels.
+
 **Picking (2026-10-07)**
 - D231, migration 128. NetSuite's open orders are a report,
   `reported_order_line`: goods lines with something left to pick

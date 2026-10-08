@@ -15890,3 +15890,56 @@ netsuite."
 **Not yet.** Which NetSuite fields hold the picture, the weight unit and any
 size, until the probe says (the Spork Bridge sends them). Whether order lines'
 Art No. is always the item's Alternative Code.
+
+*Amended by D238:* NetSuite's fields are kept as it said them, and what each
+means is a setting; D237's columns for its weight, size and UPC are gone.
+
+### D238: What NetSuite says is kept as it said it, and what each field means is a setting
+
+*Adopted 2026-10-08, with migration 132. Amends D237.*
+
+**The finding.** D237 took NetSuite's weight, size and UPC into columns of
+their own, read into grams and millimetres as they arrived: what each field
+meant was decided at the door. The Bridge's probe then found more that helps
+on the floor than any fixed set of columns: Colour, Size and Style, where
+picks go wrong between variants; an Alert ("Charge bulky freight"); NetSuite's
+own pack counts; barcodes at the carton and the inner box; an article number
+that sometimes holds several codes.
+
+**Decision.** What NetSuite holds about an item is what somebody once typed
+into it: **an observation of its record, not of the product.**
+
+- **Every field the item details carry is kept as NetSuite said it**
+  (`reported_item_field`): its text under NetSuite's own label, with the load
+  that first said it. A value NetSuite changes or stops saying is closed and
+  the new one opened, so what it said and when is kept. Nothing of it is
+  Spork's record of the product, and nothing of Spork's is written from it.
+- **What a field means is a setting**, Workspace › NetSuite fields: kept;
+  shown beside the code; a warning; a note; its Art No.; its picture; a
+  weight, a length, width or height (its unit fixed, or another field's
+  value); a barcode at a level; how many in a carton or a pack, or packs in
+  a carton. Said here, newest first (`reported_field_said`), over defaults
+  for the labels this NetSuite uses (`reported_field_default`), by one rule,
+  `reported_field_meaning`. Changing it changes how what NetSuite said is
+  read, never what it said.
+- **Read through what each field means** (`reported_item_said`): the item
+  page lists every field with its meaning and since when; a field shown
+  beside the code and the warnings go wherever the item is listed, with its
+  Art No. (`items::tags`, one read); the picture is brought as D237 has it;
+  and `item_netsuite_differs` compares weights, sizes, barcodes at their
+  level and pack counts with what Spork measured, scanned and said. A pack
+  count agrees in single ones or in what NetSuite counts (a pair is two,
+  D233).
+- **An article number may hold several** (`art_numbers_in`): split at
+  " / " and " or ", never at a bare "/", which codes use. Search and the
+  locator find an item by any of them.
+
+**Why.** The user, 2026-10-08: "Details that are indeclarative should be
+configurable but still always recorded/measured as is, treat the data from
+netsuite as an observation of the data but not an actual record of the
+product, since what was measured is an abstraction recorded on netsuite, not
+of the actual product itself." Asked how descriptive fields are stored, they
+chose any extra column by its name; asked which, all four groups.
+
+**Not yet.** The history is kept and not yet shown beyond "since"; nothing
+yet says which NetSuite value an order line was picked against.
