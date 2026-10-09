@@ -15,11 +15,12 @@ test("a box is asked for its six sides, walked round from the front, then its la
   assert.equal(faceName("detail", { box_shaped: false }), "Close-up");
 });
 
-test("a round thing is asked for its side and its lid, then its label (D213)", () => {
+test("a round thing is asked for its side a quarter turn at a time, its lid and its base, then its label (D213, D240)", () => {
   const bucket = { box_shaped: false, round: true };
-  assert.deepEqual(facesToAsk(bucket), ["front", "top", "label", "detail"]);
-  assert.equal(faceName("front", bucket), "Side");
-  assert.equal(faceName("top", bucket), "Lid");
+  assert.deepEqual(facesToAsk(bucket), ["front", "right", "back", "left", "top", "bottom", "label", "detail"]);
+  assert.equal(faceName("front", bucket), "Front");
+  assert.equal(faceName("top", bucket), "Top", "its lid, or into it when it is open");
+  assert.equal(faceName("bottom", bucket), "Base");
   assert.equal(faceName("label", bucket), "Label");
   assert.equal(isRound({ box_shaped: true, round: true }), false, "a box is a box, whatever else is said of it");
   assert.equal(faceName("top", { box_shaped: true }), "Top");

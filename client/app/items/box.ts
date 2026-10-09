@@ -24,8 +24,12 @@ export function isBox(subject: Pick<CaptureSubject, "box_shaped">): boolean {
 /** A thing that is not a box: its photo, then its back, label and a close-up, any of them skipped. */
 export const THING_FACES: readonly Face[] = ["front", "back", "label", "detail"];
 
-/** A round thing, a bucket or a tin: its side, its lid, its label and a close-up (D213). */
-export const ROUND_FACES: readonly Face[] = ["front", "top", "label", "detail"];
+/**
+ * A round thing, a bucket or a tin: its side from the front and turned a
+ * quarter at a time, to be wrapped round it (D240); its lid and its base; its
+ * label and a close-up.
+ */
+export const ROUND_FACES: readonly Face[] = ["front", "right", "back", "left", "top", "bottom", "label", "detail"];
 
 /** What a subject is, for photographs and figures: the server says, from what it is packed in. */
 type Shaped = Pick<CaptureSubject, "box_shaped"> & { round?: boolean | undefined };
@@ -41,15 +45,17 @@ export function isRound(subject: Shaped): boolean {
  */
 export function facesToAsk(subject: Shaped, sides = false): readonly Face[] {
   if (isBox(subject)) return FACES;
+  if (isRound(subject)) return ROUND_FACES;
   if (sides) return [...FACES, "detail"];
-  return isRound(subject) ? ROUND_FACES : THING_FACES;
+  return THING_FACES;
 }
 
-/** A face's name on screen: a thing that is not a box has a photo, not a front; a round one a side and a lid. */
+/** A face's name on screen: a thing that is not a box has a photo, not a front; a round one a top and a base. */
 export function faceName(face: string, subject: Shaped): string {
-  if (isRound(subject) && face === "front") return "Side";
-  if (isRound(subject) && face === "top") return "Lid";
-  if (!isBox(subject) && face === "front") return "Photo";
+  // Its lid, or looking into it when it is open (D241).
+  if (isRound(subject) && face === "top") return "Top";
+  if (isRound(subject) && face === "bottom") return "Base";
+  if (!isBox(subject) && !isRound(subject) && face === "front") return "Photo";
   if (face === "detail") return "Close-up";
   return face.charAt(0).toUpperCase() + face.slice(1);
 }

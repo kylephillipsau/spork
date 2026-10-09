@@ -10,7 +10,9 @@
 //! item's carton's and an item's carton its family's carton's. Unsaid, a
 //! carton does and anything else does not (`ships_as_is`, migration 113).
 //! Whether it must stay the way up it stands is said the same way (D200,
-//! `keeps_upright`, migration 114); unsaid, any way up will do.
+//! `keeps_upright`, migration 114); unsaid, any way up will do. So is whether
+//! a thing wrapped, shrink-wrapped or banded is box-shaped (D239, `is_box`,
+//! migration 133); unsaid, it is not.
 
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
@@ -77,10 +79,64 @@ pub async fn say_upright(
     say(&state, &req, b.subject, Said::Upright(b.upright), b.client_event_id, b.occurred_at).await
 }
 
+#[derive(Deserialize, Debug)]
+pub struct SayShapeRequest {
+    #[serde(flatten)]
+    pub subject: SubjectArms,
+    /// Its sides are flat: photographed side by side, cut to its faces and
+    /// drawn, though what it is packed in has no shape of its own (D239).
+    pub box_shaped: bool,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Say whether a subject wrapped in something with no shape of its own is
+/// box-shaped (D239). Saying it again is the same act.
+#[post("/shape")]
+pub async fn say_shape(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<SayShapeRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let b = body.into_inner();
+    say(&state, &req, b.subject, Said::BoxShaped(b.box_shaped), b.client_event_id, b.occurred_at).await
+}
+
 /// A yes or no said of a subject, and the table its sayings are kept in.
 enum Said {
     ShipsAsIs(bool),
     Upright(bool),
+    BoxShaped(bool),
+}
+
+/// A subject named rightly: one arm of four, and a level with an item or a
+/// family and none with a variant or a part.
+pub(crate) fn check_arms(subject: &SubjectArms) -> Result<(), ApiError> {
+    let arms = [subject.item_id, subject.item_style_id, subject.lot_id, subject.item_part_id];
+    if arms.iter().filter(|a| a.is_some()).count() != 1 {
+        return Err(ApiError::Rejected("say it of one thing: an item, a family, a variant or a part".into()));
+    }
+    let levelled = subject.item_id.is_some() || subject.item_style_id.is_some();
+    match subject.packaging_level.as_deref() {
+        Some("each" | "inner" | "carton") if levelled => Ok(()),
+        None if !levelled => Ok(()),
+        _ if levelled => Err(ApiError::Rejected("an item or a family needs its level: each, inner or carton".into())),
+        _ => Err(ApiError::Rejected("a variant or a part has no level".into())),
+    }
+}
+
+/// Whether the subject's item, family, variant or part is there to say it of.
+pub(crate) async fn arms_exist(tx: &tokio_postgres::Transaction<'_>, subject: &SubjectArms) -> Result<bool, ApiError> {
+    Ok(tx
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM item WHERE id = $1)
+                 OR EXISTS (SELECT 1 FROM item_style WHERE id = $2)
+                 OR EXISTS (SELECT 1 FROM lot WHERE id = $3)
+                 OR EXISTS (SELECT 1 FROM item_part WHERE id = $4)",
+            &[&subject.item_id, &subject.item_style_id, &subject.lot_id, &subject.item_part_id],
+        )
+        .await?
+        .get::<_, bool>(0))
 }
 
 /// One saying of a subject: checked as `POST /packaging` checks one, and
@@ -94,17 +150,7 @@ async fn say(
     occurred_at: DateTime<Utc>,
 ) -> Result<HttpResponse, ApiError> {
     let who = caller(state, req).await?;
-    let arms = [subject.item_id, subject.item_style_id, subject.lot_id, subject.item_part_id];
-    if arms.iter().filter(|a| a.is_some()).count() != 1 {
-        return Err(ApiError::Rejected("say it of one thing: an item, a family, a variant or a part".into()));
-    }
-    let levelled = subject.item_id.is_some() || subject.item_style_id.is_some();
-    match subject.packaging_level.as_deref() {
-        Some("each" | "inner" | "carton") if levelled => {}
-        None if !levelled => {}
-        _ if levelled => return Err(ApiError::Rejected("an item or a family needs its level: each, inner or carton".into())),
-        _ => return Err(ApiError::Rejected("a variant or a part has no level".into())),
-    }
+    check_arms(&subject)?;
     let ev = NewClientEvent {
         tenant_id: who.tenant_id,
         client_event_id,
@@ -115,22 +161,13 @@ async fn say(
     let (table, column, value) = match said {
         Said::ShipsAsIs(v) => ("subject_shipping", "as_it_is", v),
         Said::Upright(v) => ("subject_upright", "upright", v),
+        Said::BoxShaped(v) => ("subject_shape", "box_shaped", v),
     };
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     scope
         .run(move |tx| {
             Box::pin(async move {
-                let there = tx
-                    .query_one(
-                        "SELECT EXISTS (SELECT 1 FROM item WHERE id = $1)
-                             OR EXISTS (SELECT 1 FROM item_style WHERE id = $2)
-                             OR EXISTS (SELECT 1 FROM lot WHERE id = $3)
-                             OR EXISTS (SELECT 1 FROM item_part WHERE id = $4)",
-                        &[&subject.item_id, &subject.item_style_id, &subject.lot_id, &subject.item_part_id],
-                    )
-                    .await?
-                    .get::<_, bool>(0);
-                if !there {
+                if !arms_exist(tx, &subject).await? {
                     return Err(ApiError::NotFound);
                 }
                 if client_events::claim_act(tx, &ev).await?.is_replay() {

@@ -232,8 +232,8 @@ function tally(o: OrderView): string {
 }
 
 /** A closed thing to draw: one placement filling its own size. */
-function closed(size: Dims, code: string, index: number, faces: Kind["faces"]): ParcelShape {
-  const kind: Kind = { line: "", item_id: "", item_code: code, level: "carton", units: 1, size, weight_g: null, faces, upright: false, index };
+function closed(size: Dims, code: string, index: number, faces: Kind["faces"], round: Kind["round"]): ParcelShape {
+  const kind: Kind = { line: "", item_id: "", item_code: code, level: "carton", units: 1, size, weight_g: null, faces, round, upright: false, index };
   return { size, outline: false, layers: [{ z: 0, height: size[2], placements: [{ kind, x: 0, y: 0, z: 0, dims: size, axes: [0, 1, 2] }] }] };
 }
 
@@ -247,8 +247,8 @@ function orderShapes(o: OrderView): ParcelShape[] {
   o.parcels.forEach((p, i) => {
     if (!p.size) return;
     if (p.layers) out.push({ size: p.size, layers: p.layers, outline: true });
-    else if (p.asIs) for (let n = 0; n < p.count; n++) out.push(closed(p.size, p.asIs.item_code, p.index ?? i, p.faces));
-    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, p.faces));
+    else if (p.asIs) for (let n = 0; n < p.count; n++) out.push(closed(p.size, p.asIs.item_code, p.index ?? i, p.faces, p.round));
+    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, p.faces, p.round));
   });
   return out;
 }

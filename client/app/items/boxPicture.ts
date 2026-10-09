@@ -1,9 +1,12 @@
 import { anAct } from "@domain/acts";
 import { api } from "@domain/api";
-import type { CaptureSubject, ItemView, SubjectPhoto } from "@domain/types";
+import type { CaptureSubject, ItemView, SubjectPhoto, Wrap } from "@domain/types";
 import { encodeWebp } from "@domain/webp";
 
 import { handheld, loadPhoto } from "./crop";
+import { isRound } from "./box";
+import { roundSize, type RoundSize } from "./round";
+import { drawRound } from "./round3d";
 import { photosOf, shown } from "./subjects";
 
 /**
@@ -25,26 +28,37 @@ const MARGIN = 24;
 /** The three faces a drawing is made of, in the order it names them. */
 const DRAWN = ["front", "right", "top"] as const;
 
-/** What to draw an item from: the subject whose front, right and top are all cut, carton first. */
-export function boxFaces(item: Pick<ItemView, "photos" | "subjects">): { subject: CaptureSubject; faces: SubjectPhoto[] } | null {
+/**
+ * What an item is drawn from: a box's front, right and top, all cut; or a
+ * round thing's wrapping (D240). The first of its subjects with either,
+ * carton first.
+ */
+export type Drawable =
+  | { kind: "box"; subject: CaptureSubject; faces: SubjectPhoto[] }
+  | { kind: "round"; subject: CaptureSubject; size: RoundSize; wrap: Wrap };
+
+export function boxFaces(item: Pick<ItemView, "photos" | "subjects">): Drawable | null {
   for (const subject of item.subjects) {
+    const size = isRound(subject) ? roundSize(subject) : null;
+    if (size && subject.wrap) return { kind: "round", subject, size, wrap: subject.wrap };
     // Only a box is drawn: a thing in shrink-wrap is pictured by its photo (D191).
     if (!subject.box_shaped) continue;
     const photos = photosOf(item, subject);
     const faces = DRAWN.map((f) => photos.get(f));
-    if (faces.every((p): p is SubjectPhoto => p !== undefined && p.cut !== null)) return { subject, faces };
+    if (faces.every((p): p is SubjectPhoto => p !== undefined && p.cut !== null)) return { kind: "box", subject, faces };
   }
   return null;
 }
 
-/** The cuts a drawing would be made from now, by content address. */
-export const madeFrom = (faces: SubjectPhoto[]) => faces.map(shown);
+/** The three pictures a drawing would be made from now, by content address: a box's cuts, or a wrapping's side, lid and base. */
+export const madeFrom = (d: Drawable): string[] =>
+  d.kind === "box" ? d.faces.map(shown) : [d.wrap.side, d.wrap.lid ?? d.wrap.inside ?? d.wrap.side, d.wrap.base ?? d.wrap.side];
 
-/** Whether the item wants drawing: three cut faces, and no drawing of those cuts. */
-export function wantsDrawing(item: ItemView): { subject: CaptureSubject; faces: SubjectPhoto[] } | null {
+/** Whether the item wants drawing: something to draw it from, and no drawing of that. */
+export function wantsDrawing(item: ItemView): Drawable | null {
   const found = boxFaces(item);
   if (!found) return null;
-  const now = madeFrom(found.faces);
+  const now = madeFrom(found);
   const drawn = item.box_picture?.made_from;
   return drawn && drawn.length === 3 && drawn.every((d, i) => d === now[i]) ? null : found;
 }
@@ -118,15 +132,30 @@ export async function drawBox(subject: CaptureSubject, faces: SubjectPhoto[]): P
   }
 }
 
+/** A round thing drawn as its tub, its wrapping round it (D240), as WebP. */
+export async function drawTub(size: RoundSize, wrap: Wrap): Promise<Blob> {
+  const [side, lid, base, inside, floor] = await Promise.all(
+    [wrap.side, wrap.lid, wrap.base, wrap.inside, wrap.floor].map((d) => (d ? loadPhoto(d) : Promise.resolve(null))),
+  );
+  const images = { side: side!, ...(lid ? { lid } : {}), ...(base ? { base } : {}), ...(inside ? { inside } : {}), ...(floor ? { floor } : {}) };
+  const canvas = drawRound(size, images, SIDE);
+  try {
+    return await encodeWebp(canvas);
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
+}
+
 /**
- * Draw and keep the item's box when it wants one (D186). At a computer only.
- * True when a drawing was kept.
+ * Draw and keep the item's picture for lists when it wants one (D186, D240).
+ * At a computer only. True when a drawing was kept.
  */
 export async function ensureBoxPicture(item: ItemView): Promise<boolean> {
   if (handheld()) return false;
   const wanted = wantsDrawing(item);
   if (!wanted) return false;
-  const kept = await api.storeImage(await drawBox(wanted.subject, wanted.faces));
-  await api.recordBoxPicture(item.item_id, { digest: kept.digest, made_from: madeFrom(wanted.faces), act: anAct() });
+  const drawn = wanted.kind === "box" ? await drawBox(wanted.subject, wanted.faces) : await drawTub(wanted.size, wanted.wrap);
+  const kept = await api.storeImage(drawn);
+  await api.recordBoxPicture(item.item_id, { digest: kept.digest, made_from: madeFrom(wanted), act: anAct() });
   return true;
 }

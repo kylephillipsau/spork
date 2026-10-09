@@ -1,6 +1,6 @@
 import { Check, Crop, ImageOff } from "lucide-react";
 
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 
 import { Alert, Button, Card, Dialog, EmptyState, Link, Page, PageHeader, Skeleton, Stack, Tabs, TextField, Toolbar, Spacer, cx } from "@ui/index";
 import { imageUrl } from "@domain/api";
@@ -9,7 +9,11 @@ import { Faint } from "@app/common/cells";
 import { FaceCrop } from "./FaceCrop";
 import type { Face } from "./subjects";
 import type { QueueDesk, Queued } from "./usePhotoQueue";
+import type { WrapDesk, Wrapping } from "./useWrapQueue";
 import s from "./items.module.css";
+
+// three.js is its own chunk, fetched the first time a tub is shown.
+const RoundView = lazy(() => import("./RoundView"));
 
 /**
  * The photographs nobody has cut to their faces yet, at a computer (D181).
@@ -19,10 +23,14 @@ import s from "./items.module.css";
  * checks them against the face as measured (D214). What is right is confirmed
  * with one press; what is not opens in the crop screen. Nothing is kept until
  * the person confirms.
+ *
+ * Round things are wrapped in their photographs here too (D240), each shown as
+ * it would look before it is saved.
  */
-export function PhotosPage({ desk }: { desk: QueueDesk }) {
+export function PhotosPage({ desk, wraps }: { desk: QueueDesk; wraps?: WrapDesk | undefined }) {
   const read = desk.read;
   const open = desk.queued.filter((q) => q.state !== "saved");
+  const toWrap = wraps?.wraps.filter((w) => w.state !== "saved") ?? [];
   const looked = open.filter((q) => q.state !== "waiting" && q.state !== "finding").length;
   const still = open.length - looked;
   const [moving, setMoving] = useState<Queued | null>(null);
@@ -42,12 +50,13 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
             <Skeleton width="70%" />
           </Stack>
         </Card>
-      ) : open.length === 0 ? (
+      ) : open.length === 0 && toWrap.length === 0 ? (
         <Card>
           <EmptyState icon={<Crop />} title="Nothing to crop" description="Every photo has been cut to its face." />
         </Card>
       ) : (
         <Stack gap={4}>
+          {wraps && toWrap.length > 0 && <WrapList desk={wraps} wraps={toWrap} />}
           {desk.phone && (
             <Alert tone="info">Open this at a computer to have the faces found. Here, each photo opens to have its corners dragged.</Alert>
           )}
@@ -56,6 +65,7 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
               {desk.crop.problem}
             </Alert>
           )}
+          {open.length > 0 && (
           <Card padded={false}>
             <Toolbar>
               <Faint>
@@ -74,6 +84,7 @@ export function PhotosPage({ desk }: { desk: QueueDesk }) {
               ))}
             </ul>
           </Card>
+          )}
         </Stack>
       )}
       {moving && <MoveDialog desk={desk} q={moving} onClose={() => setMoving(null)} />}
@@ -226,6 +237,97 @@ function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () =
             </Button>
           </>
         )}
+      </div>
+    </li>
+  );
+}
+
+/** Under this, how well the shape fitted a photograph is worth a look before saving. */
+const FITS = 0.9;
+
+/**
+ * The round things to wrap in their photographs (D240): each made in turn and
+ * shown as it would look, its unwrapped side under it, to save or to leave.
+ */
+function WrapList({ desk, wraps }: { desk: WrapDesk; wraps: Wrapping[] }) {
+  return (
+    <Card padded={false}>
+      <Toolbar>
+        <Faint>
+          {desk.phone
+            ? "Open this at a computer to wrap these round things in their photos."
+            : `${wraps.length} round ${wraps.length === 1 ? "thing" : "things"} to wrap in their photos`}
+        </Faint>
+      </Toolbar>
+      <ul className={s.queue} aria-label="Round things to wrap">
+        {wraps.map((w) => (
+          <WrapRow key={w.key} w={w} desk={desk} />
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function WrapRow({ w, desk }: { w: Wrapping; desk: WrapDesk }) {
+  const e = w.entry;
+  const level = e.packaging_level === "inner" ? "inner pack" : e.packaging_level;
+  const unsure = w.made?.fits.filter((f) => f.fit < FITS) ?? [];
+  const shown = w.state === "made" || w.state === "saving";
+  return (
+    <li className={s.queued}>
+      <div className={s.queuePhoto}>
+        {shown && w.made && w.preview ? (
+          <Suspense fallback={<div className={s.box} />}>
+            <RoundView size={w.made.size} wrap={w.preview} label={e.code} urlOf={(u) => u} />
+          </Suspense>
+        ) : (
+          <div className={s.photo} role="img" aria-label="Not made yet">
+            <Crop aria-hidden />
+          </div>
+        )}
+      </div>
+      <div className={s.queueText}>
+        <span className={s.code}>{level ? `${e.code} · ${level}` : e.code}</span>
+        <span>{e.description}</span>
+        {w.state === "waiting" && <Faint>{desk.phone ? "Wrapped at a computer" : "Waiting"}</Faint>}
+        {w.state === "making" && <Faint>{w.step}</Faint>}
+        {w.state === "failed" && <span className={s.cropLieOut}>{w.step}</span>}
+        {w.state === "saving" && <Faint>Saving…</Faint>}
+        {w.state === "made" &&
+          (unsure.length > 0 ? (
+            <span className={s.cropLieOut}>
+              The shape fits the {unsure.map((f) => f.face).join(" and ")} {unsure.length === 1 ? "photo" : "photos"} loosely: check the label lines up
+            </span>
+          ) : (
+            <Faint>Fitted to every photo: check the label reads right round it</Faint>
+          ))}
+        {w.state === "made" && w.step && <span className={s.cropLieOut}>{w.step}</span>}
+        {shown && w.preview && <img className={s.wrapSide} src={w.preview.side} alt={`${e.code}, its side unwrapped`} />}
+        {/* A bucket with no lid is open: its top photo looks into it (D241). */}
+        {(w.state === "made" || w.state === "failed") && (
+          <Tabs
+            aria-label="Its top"
+            value={w.open ? "open" : "lid"}
+            onValueChange={(v) => desk.setOpen(w.key, v === "open")}
+            items={[
+              { value: "lid", label: "Has a lid" },
+              { value: "open", label: "Open at the top" },
+            ]}
+          />
+        )}
+      </div>
+      <div className={s.queueActions}>
+        {shown && (
+          <Button size="sm" icon={<Check />} loading={w.state === "saving"} onClick={() => void desk.save(w.key)}>
+            Save
+          </Button>
+        )}
+        {(w.state === "made" || w.state === "failed") && (
+          <Button size="sm" onClick={() => desk.again(w.key)}>
+            Make again
+          </Button>
+        )}
+        <Link href={`/items/${e.open_item}`}>Open the item</Link>
       </div>
     </li>
   );

@@ -89,6 +89,11 @@ export const PACK_FIXTURE: BenchScreen = {
           source: "own",
           style_code: null,
           faces: {},
+          round: false,
+          diameter_mm: null,
+          base_diameter_mm: null,
+          top_height_mm: null,
+          wrap: null,
         },
       ],
       cells: [
@@ -130,6 +135,11 @@ export const PACK_FIXTURE: BenchScreen = {
           source: "style",
           style_code: "SLV-PE",
           faces: {},
+          round: false,
+          diameter_mm: null,
+          base_diameter_mm: null,
+          top_height_mm: null,
+          wrap: null,
         },
       ],
       // **Thirty picked, ten already shipped in their own carton.** Ten to a

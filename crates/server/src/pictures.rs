@@ -90,9 +90,9 @@ front AS (
        AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)
      ORDER BY c.item_id, c.rank, oi.captured_at DESC, oi.id DESC
 ),
--- Drawings of a box (D186). A thing packed in something without six sides is
--- pictured by its front photo (D191); a drawing of one, made before it said
--- so, is passed over.
+-- Drawings of a box (D186). A thing that is not a box is pictured by its
+-- front photo (D191, D239); a drawing of one, made before it said so, is
+-- passed over.
 boxed AS (
     SELECT b.*
       FROM box_picture b
@@ -102,8 +102,7 @@ boxed AS (
       JOIN observation_image oi ON oi.id = x.observation_image_id
       JOIN observation_event e ON e.id = oi.observation_event_id
       JOIN observable o ON o.id = e.observable_id
-      JOIN LATERAL packed_in(o.item_id, o.item_style_id, o.lot_id, o.item_part_id, o.packaging_level) pk ON true
-      JOIN packaging_type t ON t.code = pk.packaging_type AND NOT t.six_sided
+       AND NOT is_box(o.item_id, o.item_style_id, o.lot_id, o.item_part_id, o.packaging_level)
             WHERE x.digest = b.made_from[1])
 ),
 -- What somebody said of its pictures (D237): the main one, newest saying

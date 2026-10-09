@@ -68,6 +68,7 @@ import type {
   RecordImageResponse,
   StoredImage,
   UncutPhoto,
+  Unwrapped,
   Resolution,
   SetupDone,
   SetupRequest,
@@ -1011,6 +1012,26 @@ export const api = {
       occurred_at: act.at,
     }),
 
+  /**
+   * Say whether a subject packed in something with no shape of its own (a
+   * wrapper, shrink-wrap, a band) is box-shaped: cut to its faces and drawn (D239).
+   */
+  sayShape: (
+    subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
+    boxShaped: boolean,
+    act: Act,
+  ) =>
+    send<void>("POST", "/shape", {
+      item_id: subject.item_id,
+      item_style_id: subject.item_style_id,
+      lot_id: subject.lot_id,
+      item_part_id: subject.item_part_id,
+      packaging_level: subject.item_id || subject.item_style_id ? subject.packaging_level : null,
+      box_shaped: boxShaped,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
   /** The workspace's people, current first (D205). An administrator's. */
   people: () => send<WorkspacePerson[]>("GET", "/workspace/people"),
 
@@ -1489,6 +1510,24 @@ export const api = {
 
   /** The photographs waiting to be cut to their faces, oldest first: a computer's queue (D181). */
   uncutPhotos: () => send<UncutPhoto[]>("GET", "/photos/uncut"),
+  /** Round things whose side waits to be wrapped in its photographs (D240). */
+  unwrapped: () => send<Unwrapped[]>("GET", "/photos/unwrapped"),
+  /** Keep a round thing's wrapping (D240): its side unwrapped, its lid and base, and the photographs they came from. */
+  recordWrap: (
+    subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
+    wrap: { side: string; lid: string | null; base: string | null; inside: string | null; floor: string | null; made_from: Uuid[] },
+    act: Act,
+  ) =>
+    send<void>("POST", "/round-wraps", {
+      item_id: subject.item_id,
+      item_style_id: subject.item_style_id,
+      lot_id: subject.lot_id,
+      item_part_id: subject.item_part_id,
+      packaging_level: subject.item_id || subject.item_style_id ? subject.packaging_level : null,
+      ...wrap,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
 
   /**
    * Cut a photograph to its face (D176): the corners somebody marked, and the

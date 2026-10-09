@@ -207,6 +207,23 @@ export function faceFrom(logits: Float32Array, scores: Float32Array, w: number, 
   return pick ? (fromTopLeft(pick.quad).map(([x, y]) => [x / w, y / h]) as Quad) : null;
 }
 
+/**
+ * Every outline the model offers at a point that could be a whole thing
+ * (D240): neither a speck nor the whole photograph, and one it is sure of.
+ * Which is the thing is for its measured shape to say ([`fitPose`]), since
+ * the model's outlines of a bucket include the bucket on its scale and the
+ * bucket without its lid. Yes or no per pixel at the photograph's scaled size.
+ */
+export function wholesFrom(logits: Float32Array, scores: Float32Array, w: number, h: number, at: Point): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  for (let m = 0; m < scores.length; m++) {
+    const found = pieceAt(outline(logits, m, w, h), w, h, at);
+    const share = found.area / (w * h);
+    if (share >= 0.02 && share <= 0.9 && scores[m]! >= 0.5) out.push(found.piece);
+  }
+  return out;
+}
+
 export function choose(candidates: Candidate[]): Candidate | null {
   const faces = candidates.filter((c) => c.fit >= FACE_FIT);
   if (faces.length) return faces.reduce((a, b) => (b.share > a.share ? b : a));

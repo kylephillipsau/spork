@@ -11,7 +11,7 @@ import type { Answer, Ask } from "./faceWorker";
 
 let worker: Worker | undefined;
 let asked = 0;
-const waiting = new Map<number, { resolve: (corners: number[] | null) => void; reject: (error: Error) => void }>();
+const waiting = new Map<number, { resolve: (answer: Answer) => void; reject: (error: Error) => void }>();
 
 function hire(): Worker {
   if (worker) return worker;
@@ -21,7 +21,7 @@ function hire(): Worker {
     const job = waiting.get(answer.id);
     waiting.delete(answer.id);
     if ("error" in answer) job?.reject(new Error(answer.error));
-    else job?.resolve(answer.corners);
+    else job?.resolve(answer);
   });
   // A worker that cannot start answers nothing: everything waiting is told,
   // and the next question starts another.
@@ -37,7 +37,7 @@ function hire(): Worker {
 
 type Question = Ask extends infer A ? (A extends Ask ? Omit<A, "id"> : never) : never;
 
-function ask(question: Question, transfer: Transferable[] = []): Promise<number[] | null> {
+function ask(question: Question, transfer: Transferable[] = []): Promise<Answer> {
   const id = ++asked;
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
@@ -46,7 +46,7 @@ function ask(question: Question, transfer: Transferable[] = []): Promise<number[
 }
 
 /** Fetch and compile the model, once, so it is ready by the first crop. */
-export const warm = () => ask({ kind: "warm" });
+export const warm = () => ask({ kind: "warm" }).then(() => undefined);
 
 /**
  * The face at a point of a photograph, as eight corner fractions from its
@@ -55,4 +55,12 @@ export const warm = () => ask({ kind: "warm" });
  * it, the middle when not given.
  */
 export const findFace = (key: string, pixels: Pixels, at: Point = [0.5, 0.5]) =>
-  ask({ kind: "find", key, pixels, at }, [pixels.data.buffer]);
+  ask({ kind: "find", key, pixels, at }, [pixels.data.buffer]).then((a) => ("corners" in a ? a.corners : null));
+
+/**
+ * The outlines a whole thing could be (D240), asked at each of some points
+ * of a photograph, or of the one thing at all of a few: yes or no per pixel
+ * of `pixels`, which is the photograph at the model's size and is handed over.
+ */
+export const findWholes = (key: string, pixels: Pixels, at: Point[][]) =>
+  ask({ kind: "wholes", key, pixels, at }, [pixels.data.buffer]).then((a) => ("outlines" in a ? a.outlines : []));

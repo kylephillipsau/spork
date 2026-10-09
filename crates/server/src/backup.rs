@@ -197,7 +197,8 @@ pub async fn export(
         .query(
             "SELECT digest FROM observation_image WHERE tenant_id = $1
              UNION SELECT digest FROM observation_image_cut WHERE tenant_id = $1
-             UNION SELECT digest FROM box_picture WHERE tenant_id = $1",
+             UNION SELECT digest FROM box_picture WHERE tenant_id = $1
+             UNION SELECT digest FROM round_wrap_picture WHERE tenant_id = $1",
             &[&tenant],
         )
         .await?;
@@ -610,7 +611,8 @@ pub async fn backup_summary(req: HttpRequest, state: web::Data<AppState>) -> Res
                         "WITH photos AS (
                              SELECT digest, byte_count FROM observation_image
                              UNION SELECT digest, byte_count FROM observation_image_cut
-                             UNION SELECT digest, byte_count FROM box_picture)
+                             UNION SELECT digest, byte_count FROM box_picture
+                             UNION SELECT digest, byte_count FROM round_wrap_picture)
                          SELECT (SELECT count(*) FROM item WHERE tenant_id = current_tenant()),
                                 (SELECT count(DISTINCT digest) FROM photos),
                                 (SELECT coalesce(sum(byte_count), 0)::bigint FROM (SELECT DISTINCT digest, byte_count FROM photos) d),

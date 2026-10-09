@@ -54,6 +54,7 @@ const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "
   weight_absent: false,
   dimensions_absent: false,
   packed_in: null,
+  packed_in_name: null,
   packed_in_source: null,
   ships_as_is: false,
   ships_as_is_source: "default",
@@ -61,6 +62,7 @@ const subject = (over: Partial<CaptureSubject> & Pick<CaptureSubject, "code" | "
   upright_source: "default",
   box_shaped: true,
   round: false,
+  wrap: null,
   is_unit: false,
   offered: false,
   source: null,
@@ -162,7 +164,7 @@ export const ITEM: ItemView = {
   picture: { digest: PHOTO, source: "own" },
   measurements: [],
   packing: { units_per_inner: 1, inners_per_carton: 8, effective_from: "2026-09-30" },
-  unit: { level: "each", said: false, netsuite_unit: "Each", singles: 1 },
+  unit: { level: "each", said: false, netsuite_unit: "Each", netsuite_level: "each", singles: 1 },
   held: [
     {
       site_code: "NTH",
@@ -256,7 +258,7 @@ export const ITEM_UNKNOWN: ItemView = {
   picture: null,
   measurements: [],
   packing: null,
-  unit: { level: "each", said: false, netsuite_unit: null, singles: 1 },
+  unit: { level: "each", said: false, netsuite_unit: null, netsuite_level: null, singles: 1 },
   held: [],
   reported: [],
   flags: [],
@@ -306,6 +308,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     packIn: later,
     shipAsIs: later,
     keepUpright: later,
+    sayShape: later,
     flagBin: async () => null,
     sayPicture: async () => false,
     sayUnit: async () => false,
@@ -354,7 +357,7 @@ export const SOLD_SINGLY: ItemView = {
   item_id: CATALOGUE,
   code: "Catalogue",
   description: "Foodcare Industry Catalogue",
-  unit: { level: "each", said: false, netsuite_unit: "Each", singles: 1 },
+  unit: { level: "each", said: false, netsuite_unit: "Each", netsuite_level: "each", singles: 1 },
   subjects: [
     subject({
       item_id: CATALOGUE,
@@ -382,7 +385,7 @@ export const SOLD_BY_CARTON: ItemView = {
   item_id: GLOVES,
   code: "DGN-4110-XL",
   description: "Disposable Nitrile Powder Free Gloves - ctn 1000 - Black - XL",
-  unit: { level: "carton", said: false, netsuite_unit: "CTN", singles: null },
+  unit: { level: "carton", said: false, netsuite_unit: "CTN", netsuite_level: "carton", singles: null },
   packing: { units_per_inner: 1, inners_per_carton: 1000, effective_from: "2026-09-30" },
   subjects: [
     subject({
@@ -415,7 +418,7 @@ export const SOLD_BY_BOX: ItemView = {
   item_id: PLUGS,
   code: "DEJ-8040",
   description: "CS40 Soft Corded Metal Detectable Earplugs Non-Touch TPR Box 100",
-  unit: { level: "inner", said: false, netsuite_unit: "Box", singles: null },
+  unit: { level: "inner", said: false, netsuite_unit: "Box", netsuite_level: "inner", singles: null },
   packing: { units_per_inner: 100, inners_per_carton: 10, effective_from: "2026-10-02" },
   subjects: [
     subject({
@@ -463,7 +466,7 @@ export const MEASURED_AS_KIT: ItemView = {
   item_id: "17e10000-0000-0000-0000-0000000000a7",
   code: "SPR-1000",
   description: "Trigger sprayer with 1L bottle (kit)",
-  unit: { level: "each", said: false, netsuite_unit: "Each", singles: 1 },
+  unit: { level: "each", said: false, netsuite_unit: "Each", netsuite_level: "each", singles: 1 },
   packing: null,
   subjects: [
     subject({
@@ -494,7 +497,7 @@ export const MISFILED: ItemView = {
   item_id: RESPIRATOR,
   code: "P2R-0010",
   description: "Portwest P2 Respirator With Valve 10/box",
-  unit: { level: "inner", said: true, netsuite_unit: "Box", singles: null },
+  unit: { level: "inner", said: true, netsuite_unit: "Box", netsuite_level: "inner", singles: null },
   packing: { units_per_inner: 10, inners_per_carton: 10, effective_from: "2026-10-05" },
   subjects: [
     subject({
@@ -594,7 +597,7 @@ export const SOLD_BY_PAIR: ItemView = {
   item_id: BOOTS,
   code: "ABC-6210-09",
   description: "Gumboots, size 9",
-  unit: { level: "inner", said: false, netsuite_unit: "Pair", singles: 2 },
+  unit: { level: "inner", said: false, netsuite_unit: "Pair", netsuite_level: "each", singles: 2 },
   packing: { units_per_inner: 2, inners_per_carton: null, effective_from: "2026-10-08" },
   subjects: [
     subject({

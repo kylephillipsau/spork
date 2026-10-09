@@ -68,6 +68,12 @@ export type ItemRead = { kind: "loading" } | { kind: "ready"; item: ItemView } |
 
 export type Action = "weigh" | "measure" | "photos" | "barcodes" | "holds" | "correct";
 
+/** What one of it is in NetSuite (D218): a level, and two of the each for a pair (D233). */
+export interface SoldAs {
+  level: "each" | "inner" | "carton";
+  quantity: number;
+}
+
 /** Which subject has which action open. */
 export interface Open {
   key: string;
@@ -134,10 +140,11 @@ export interface PropertiesDesk {
   measure: (subject: CaptureSubject) => Promise<void>;
   /**
    * Put right what is recorded on a card (D236): the figures typed that
-   * differ from those on file, and what its carton or pack holds, in one
-   * press. The rest stays as it was measured.
+   * differ from those on file, what its carton or pack holds, and what it is
+   * sold as when `unit` says it anew (D239), in one press. The rest stays as
+   * it was measured.
    */
-  correct: (subject: CaptureSubject) => Promise<void>;
+  correct: (subject: CaptureSubject, unit?: SoldAs) => Promise<void>;
 
   /** Faces photographed in this look, sent or still on their way. */
   taken: Face[];
@@ -182,6 +189,8 @@ export interface PropertiesDesk {
   shipAsIs: (subject: CaptureSubject, asItIs: boolean) => Promise<void>;
   /** Say whether it must stay the way up it stands (D200). */
   keepUpright: (subject: CaptureSubject, upright: boolean) => Promise<void>;
+  /** Say whether a thing wrapped in something with no shape of its own is box-shaped (D239). */
+  sayShape: (subject: CaptureSubject, boxShaped: boolean) => Promise<void>;
   /**
    * Say it isn't in a bin NetSuite lists, or is in one it doesn't (D215): a
    * finding for someone to put right in NetSuite. What it made, or null when
@@ -320,7 +329,7 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     void drawing().then(async (d) => {
       const wanted = d.wantsDrawing(item);
       if (!wanted) return;
-      const key = `${item.item_id}:${d.madeFrom(wanted.faces).join(",")}`;
+      const key = `${item.item_id}:${d.madeFrom(wanted).join(",")}`;
       if (drew.current === key) return;
       drew.current = key;
       try {
@@ -630,9 +639,9 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
       });
     },
 
-    correct: (subject) => {
+    correct: (subject, unit) => {
       const measurements = measurementsOf(figures, isRound(subject));
-      return press(`correct:${subjectKey(subject)}:${JSON.stringify(measurements)}:${JSON.stringify(holds)}`, async (act) => {
+      return press(`correct:${subjectKey(subject)}:${JSON.stringify(measurements)}:${JSON.stringify(holds)}:${JSON.stringify(unit ?? null)}`, async (act) => {
         if (read.kind !== "ready" || !subject.item_id || !subject.packaging_level) return;
         const item = read.item;
         // What its carton or pack holds, said wrongly (D229), put right with it.
@@ -650,14 +659,14 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
           ? (await api.correctFigures(subject.item_id, subject.packaging_level, measurements, partOf(act, "figures"))).figures
           : 0;
         if (counts) await api.sayCarton(subject.item_id, { ...counts, correction: true, act: partOf(act, "carton") });
+        // What one of it is, said anew (D239): what NetSuite counts, put right with it.
+        if (unit) await api.sayUnit(item.item_id, unit.level, partOf(act, "unit"), unit.quantity);
         if (!live.current) return;
         setOpen(null);
+        const done = [put > 0 && `${put} ${put === 1 ? "figure" : "figures"}`, counts && "what it holds", unit && "what it is sold as"].filter(Boolean);
         setSaid({
           tone: "success",
-          text:
-            put === 0 && !counts
-              ? "Nothing differs from what is on file."
-              : `Put right: ${[put > 0 && `${put} ${put === 1 ? "figure" : "figures"}`, counts && "what it holds"].filter(Boolean).join(" and ")}. Shown here in a moment.`,
+          text: done.length === 0 ? "Nothing differs from what is on file." : `Put right: ${done.join(", ")}. Shown here in a moment.`,
         });
         await reload();
         settle();
@@ -728,6 +737,13 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     keepUpright: (subject, upright) =>
       press(`upright:${subjectKey(subject)}:${upright}`, async (act) => {
         await api.sayUpright(subject, upright, act);
+        if (!live.current) return;
+        await reload();
+      }),
+
+    sayShape: (subject, boxShaped) =>
+      press(`shape:${subjectKey(subject)}:${boxShaped}`, async (act) => {
+        await api.sayShape(subject, boxShaped, act);
         if (!live.current) return;
         await reload();
       }),

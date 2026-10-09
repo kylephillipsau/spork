@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  type BufferGeometry,
   CanvasTexture,
   EdgesGeometry,
   Group,
@@ -19,6 +20,7 @@ import {
 import { Stage } from "@app/common/stage3d";
 import { MATERIAL_ORDER, type BoxFace } from "@app/items/box";
 import { faceTexture } from "@app/items/box3d";
+import { isOpen, roundGeometry, roundMaterials } from "@app/items/round3d";
 
 import type { Dims, Kind, Layer, Placement } from "./arrange";
 import { tone } from "./tones";
@@ -55,7 +57,7 @@ const TEXTURE_PX = 256;
 const AXIS = [new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0)] as const;
 
 interface Dressed {
-  geometry: BoxGeometry;
+  geometry: BufferGeometry;
   edges: EdgesGeometry;
   materials: MeshBasicMaterial[];
 }
@@ -212,10 +214,23 @@ export class PackScene {
     this.stage.invalidate();
   }
 
-  /** A kind's shape and its six faces, made once however many of it there are. */
+  /** A kind's shape and its six faces, or the tub it is (D240), made once however many of it there are. */
   private dress(kind: Kind, scale: number, painting: number): Dressed {
     const made = this.dressed.get(kind);
     if (made) return made;
+    if (kind.round) {
+      // Its line's colour until its wrapping has loaded, as a box's plain faces are.
+      const tint = this.stage.token("--ui-surface").clone().lerp(this.stage.token(`--ui-${tone(kind.index)}`), 0.3);
+      const geometry = roundGeometry(kind.round.size, scale, true, isOpen(kind.round.wrap));
+      const materials = roundMaterials(kind.round.wrap, this.imageUrl, tint, (texture) => {
+        if (painting !== this.painting) return texture.dispose();
+        this.textures.push(texture);
+        this.stage.invalidate();
+      });
+      const dressed = { geometry, edges: new EdgesGeometry(geometry, 30), materials };
+      this.dressed.set(kind, dressed);
+      return dressed;
+    }
     const [l, w, h] = kind.size;
     // Its own length across, its height up and its width deep, as the item page draws it.
     const geometry = new BoxGeometry(l * scale, h * scale, w * scale);

@@ -118,6 +118,10 @@ pub struct ItemUnit {
     pub said: bool,
     /// NetSuite's Pack Unit, as it names it: "CTN", "Box", "Pair".
     pub netsuite_unit: Option<String>,
+    /// The level NetSuite's Pack Unit means, by `unit_level_of`: a "Roll"
+    /// is a single one, a "Box" a pack. Its word names that level, whatever
+    /// Spork says the item is sold as (D239). Absent where it says nothing.
+    pub netsuite_level: Option<String>,
     /// How many single ones one is, where it is counted in them: two for a
     /// pair, packed as one or not (D233); one for the each; absent for a
     /// pack or carton of its own.
@@ -414,12 +418,26 @@ pub async fn item_page(
 
                 let unit = tx
                     .query_opt(
-                        "SELECT level::text, said, netsuite_unit, singles FROM item_unit_level WHERE item_id = $1",
+                        "SELECT level::text, said, netsuite_unit, singles,
+                                CASE WHEN btrim(netsuite_unit) <> '' THEN unit_level_of(netsuite_unit)::text END
+                           FROM item_unit_level WHERE item_id = $1",
                         &[&id],
                     )
                     .await?
-                    .map(|u| ItemUnit { level: u.get(0), said: u.get(1), netsuite_unit: u.get(2), singles: u.get(3) })
-                    .unwrap_or(ItemUnit { level: "each".into(), said: false, netsuite_unit: None, singles: Some(1) });
+                    .map(|u| ItemUnit {
+                        level: u.get(0),
+                        said: u.get(1),
+                        netsuite_unit: u.get(2),
+                        singles: u.get(3),
+                        netsuite_level: u.get(4),
+                    })
+                    .unwrap_or(ItemUnit {
+                        level: "each".into(),
+                        said: false,
+                        netsuite_unit: None,
+                        singles: Some(1),
+                        netsuite_level: None,
+                    });
 
                 let flags = tx
                     .query(

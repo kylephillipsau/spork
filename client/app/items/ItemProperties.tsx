@@ -32,11 +32,13 @@ import { Faint, dateTime, sentence, shortDate } from "@app/common/cells";
 import { centimetres, kg } from "@app/common/format";
 
 import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, isRound, measuredAspect, type BoxFace } from "./box";
+import { roundSize } from "./round";
 import { handheld } from "./crop";
 import { FaceCrop } from "./FaceCrop";
 import {
   PRESENTATIONS,
   bindable,
+  cartonHolds,
   isOwnCarton,
   nameOf,
   photosOf,
@@ -48,6 +50,7 @@ import {
   packHolds,
   plural,
   readHoldsTyped,
+  singleOffer,
   singlesOf,
   subjectKey,
   type HoldsTyped,
@@ -60,7 +63,8 @@ import {
 
 // three.js is its own chunk, fetched the first time a box is shown.
 const BoxView = lazy(() => import("./BoxView"));
-import { useItemProperties, type Action, type PropertiesDesk } from "./useItemProperties";
+const RoundView = lazy(() => import("./RoundView"));
+import { useItemProperties, type Action, type PropertiesDesk, type SoldAs } from "./useItemProperties";
 import s from "./items.module.css";
 
 /**
@@ -124,7 +128,7 @@ export function ItemProperties({ item, desk }: { item: ItemView; desk: Propertie
                 ? "Comes in a carton?"
                 : subject.packaging_level === "inner"
                   ? "Comes in a pack or inner box?"
-                  : `Measure a single one${unitWord(item) === "Each" ? "" : ` from the ${unitWord(item).toLowerCase()}`}`}
+                  : singleOffer(item)}
             </Button>
           ))}
         </div>
@@ -590,7 +594,7 @@ function soldAs(item: ItemView): ReactNode {
   const unit = item.unit.level === "each" && k > 1 ? `${unitWord(item)}, ${k} single` : levelName(item.unit.level, item);
   const carton =
     item.unit.level !== "carton" && item.packing?.inners_per_carton
-      ? levelName("carton", item).replace(/^Carton of/, "in cartons of")
+      ? levelName("carton", item).replace(/^(\S+) of/, (_, word: string) => `in ${plural(word, 2)} of`)
       : null;
   return (
     <>
@@ -601,7 +605,7 @@ function soldAs(item: ItemView): ReactNode {
   );
 }
 
-const SOLD_AS: { value: string; level: "each" | "inner" | "carton"; quantity: number; label: string; hint: string }[] = [
+const SOLD_AS: (SoldAs & { value: string; label: string; hint: string })[] = [
   { value: "each", level: "each", quantity: 1, label: "Single item", hint: "One is one thing: a catalogue, a roll, a pair of safety glasses" },
   { value: "pair", level: "each", quantity: 2, label: "Pair", hint: "One is two single ones: a pair of boots or gloves" },
   { value: "inner", level: "inner", quantity: 1, label: "Pack or box", hint: "One is a box or pack of several: a box of 100 earplugs" },
@@ -613,10 +617,39 @@ function soldAsValue(item: ItemView): string {
   return singlesOf(item) === 2 ? "pair" : item.unit.level;
 }
 
+/** One of `SOLD_AS` by its value, as the unit write takes it. */
+function soldAsOf(value: string): SoldAs {
+  const o = SOLD_AS.find((x) => x.value === value) ?? SOLD_AS[0]!;
+  return { level: o.level, quantity: o.quantity };
+}
+
+/**
+ * What one of it is, chosen (D218): in Sold as's own dialog, and in Correct…
+ * beside the figures (D239). A carton that holds just one is the thing in
+ * its box, sold as the carton.
+ */
+function SoldAsChoice({ item, value, onChange }: { item: ItemView; value: string; onChange: (value: string) => void }) {
+  const chosen = SOLD_AS.find((o) => o.value === value) ?? SOLD_AS[0]!;
+  const ofOne = chosen.value === "carton" && cartonHolds(item.packing) === 1;
+  return (
+    <>
+      <Tabs
+        aria-label="What one of it is"
+        value={value}
+        onValueChange={onChange}
+        items={SOLD_AS.map((o) => ({ value: o.value, label: o.label }))}
+      />
+      <p className={s.note}>
+        {ofOne ? "One is its carton, which holds just one: weighed, measured and packed as the carton" : chosen.hint}
+      </p>
+    </>
+  );
+}
+
 /** Say which level is one in NetSuite (D218), over its Pack Unit. */
 function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: PropertiesDesk; onClose: () => void }) {
   const [value, setValue] = useState(soldAsValue(item));
-  const chosen = SOLD_AS.find((o) => o.value === value) ?? SOLD_AS[0]!;
+  const chosen = soldAsOf(value);
   return (
     <Dialog
       open
@@ -644,13 +677,7 @@ function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: Propertie
         </>
       }
     >
-      <Tabs
-        aria-label="What one of it is"
-        value={value}
-        onValueChange={setValue}
-        items={SOLD_AS.map((o) => ({ value: o.value, label: o.label }))}
-      />
-      <p className={s.note}>{chosen.hint}</p>
+      <SoldAsChoice item={item} value={value} onChange={setValue} />
     </Dialog>
   );
 }
@@ -1029,6 +1056,15 @@ function Subject({
             It comes as {subject.parts} parts, each listed below. Measure each part; this has no box of its own.
           </p>
         )}
+        {/* Sold one at a time in a carton of its own: the carton is what is measured (D239). */}
+        {subject.is_unit && subject.packaging_level === "each" && cartonHolds(item.packing) === 1 && (
+          <div className={s.ships}>
+            <Faint>Its carton holds just one.</Faint>
+            <Button size="sm" disabled={desk.busy} onClick={() => void desk.sayUnit("carton")}>
+              Sold in its carton
+            </Button>
+          </div>
+        )}
       </div>
       <Toolbar>
         {ACTIONS.filter((a) => a.when(subject)).map((a) => (
@@ -1077,9 +1113,10 @@ function Subject({
             {isBox(subject)
               ? "Take each side in turn, then its label. Each photo sends while you take the next."
               : isRound(subject)
-                ? "Take its side square on, then its lid from above, then its label or a close-up if they help. Each sends while you take the next."
+                ? "Take its front square on, then turn it a quarter at a time for its right, back and left; then its lid from above and its base. Each sends while you take the next."
                 : "Take its photo, then its back, label or a close-up if they help. Each sends while you take the next."}
             {handheld() && isBox(subject) && " They are cut to their faces at a computer, under Photos to crop."}
+            {isRound(subject) && " They are wrapped round it at a computer, under Photos to crop."}
           </p>
           <NextSide subject={subject} desk={desk} order={facesToAsk(subject, sides)} />
           {!isBox(subject) && !isRound(subject) && !sides && (
@@ -1207,12 +1244,16 @@ function MeasureForm({
   const f = desk.figures;
   const offered = presentationOffered(subject) && !correcting;
   const pairPacked = item.unit.level === "inner" && singlesOf(item) > 1;
+  // What one of it is, put right with the figures (D239).
+  const [soldAs, setSoldAs] = useState(soldAsValue(item));
   return (
     <form
       className={s.form}
       onSubmit={(e) => {
         e.preventDefault();
-        void (correcting ? desk.correct(subject) : desk.measure(subject));
+        void (correcting
+          ? desk.correct(subject, soldAs === soldAsValue(item) ? undefined : soldAsOf(soldAs))
+          : desk.measure(subject));
       }}
     >
       <div className={s.fields}>
@@ -1268,10 +1309,18 @@ function MeasureForm({
           </Button>
         </div>
       )}
-      {correcting ? (
-        <p className={s.note}>Only what you change is put right, as of when it was measured. The rest stays as it was.</p>
-      ) : (
-        <PackedIn subject={subject} desk={desk} />
+      {correcting && (
+        <div className={s.arrangement}>
+          <span className={s.fieldLabel}>Sold as: what one of {item.code} is in NetSuite</span>
+          <SoldAsChoice item={item} value={soldAs} onChange={setSoldAs} />
+        </div>
+      )}
+      <PackedIn subject={subject} desk={desk} />
+      {correcting && (
+        <p className={s.note}>
+          Only what you change is put right, as of when it was measured. The rest stays as it was. What it is packed in
+          is said as you press it.
+        </p>
       )}
       {offered && !f.noDimensions && (
         <div className={s.arrangement}>
@@ -1580,18 +1629,27 @@ function Photos({
     const photo = photos.get(face);
     if (photo) sides[face] = shown(photo);
   }
+  // A round thing wrapped in its photographs is drawn as its tub (D240).
+  const size = isRound(subject) ? roundSize(subject) : null;
+  const wrapped = size && subject.wrap ? { size, wrap: subject.wrap } : null;
   const showBox = box && (desk !== null || Object.keys(sides).length > 1);
-  // On the box, the sides need no tiles of their own until there is a camera.
-  const tiles = asked.filter((face) => (desk ? true : photos.has(face) && !(showBox && face !== "label")));
+  // On the box or the tub, its sides need no tiles of their own until there is a camera.
+  const onModel = (face: Face) => (showBox && face !== "label") || (wrapped !== null && face !== "label" && face !== "detail");
+  const tiles = asked.filter((face) => (desk ? true : photos.has(face) && !onModel(face)));
   const last = desk?.taken[desk.taken.length - 1];
   const facing = last && last !== "label" && last !== "detail" ? last : null;
 
-  if (!showBox && tiles.length === 0) return <Faint>No photos yet</Faint>;
+  if (!showBox && !wrapped && tiles.length === 0) return <Faint>No photos yet</Faint>;
   return (
     <div className={s.photos}>
       {showBox && (
         <Suspense fallback={<div className={s.box} />}>
           <BoxView faces={sides} size={boxSize(subject)} facing={facing} label={subject.code} />
+        </Suspense>
+      )}
+      {wrapped && (
+        <Suspense fallback={<div className={s.box} />}>
+          <RoundView size={wrapped.size} wrap={wrapped.wrap} label={subject.code} />
         </Suspense>
       )}
       {tiles.length > 0 && (
@@ -1637,7 +1695,9 @@ function Photos({
 /** What it is packed in, in GS1's words, and whose saying it is (D191). */
 function packedInWords(subject: CaptureSubject, types: PackagingType[]): ReactNode {
   if (!subject.packed_in) return <Faint>Not said</Faint>;
-  const name = types.find((t) => t.code === subject.packed_in)?.name ?? subject.packed_in;
+  const type = types.find((t) => t.code === subject.packed_in);
+  const named = type?.name ?? subject.packed_in;
+  const name = shapeless(type) && subject.box_shaped ? `${named}, box-shaped` : named;
   if (subject.packed_in_source === "style") return `${name} (the family's)`;
   if (subject.packed_in_source === "item") return `${name} (the item's carton)`;
   return name;
@@ -1698,15 +1758,22 @@ function WayUp({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDes
   );
 }
 
+/** A type with no shape of its own (D239): a wrapper, shrink-wrap, a band; not a box, not round. */
+function shapeless(type: PackagingType | undefined): boolean {
+  return type !== undefined && !type.six_sided && !type.round;
+}
+
 /**
  * What it is packed in (D191): GS1's common types as buttons, the rest in a
- * list. A type without six sides is photographed as a thing, not a box.
+ * list. A type without six sides is photographed as a thing, not a box,
+ * unless a wrapping is said to be round a block with six flat sides (D239).
  */
 function PackedIn({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
   const types = desk.packagingTypes;
   if (types.length === 0) return null;
   const own = subject.packed_in_source === "own" ? subject.packed_in : null;
   const rest = types.filter((t) => t.common === null);
+  const wrapped = shapeless(types.find((t) => t.code === subject.packed_in));
   return (
     <div className={s.packedIn}>
       <span className={s.fieldLabel}>Packed in{subject.packed_in && !own ? `: ${packedInWords(subject, types) as string}` : ""}</span>
@@ -1735,6 +1802,23 @@ function PackedIn({ subject, desk }: { subject: CaptureSubject; desk: Properties
         onValueChange={(code) => void desk.packIn(subject, code)}
         options={rest.map((t) => ({ value: t.code, label: t.name }))}
       />
+      {wrapped && (
+        <div className={s.ships}>
+          <Button
+            size="sm"
+            aria-pressed={subject.box_shaped}
+            disabled={desk.busy}
+            onClick={() => void desk.sayShape(subject, !subject.box_shaped)}
+          >
+            Box-shaped
+          </Button>
+          <Faint>
+            {subject.box_shaped
+              ? "Six flat sides: each photo is cut to its face, and it is drawn as a box."
+              : "Wrapped round six flat sides? Then its photos are cut to their faces and it is drawn."}
+          </Faint>
+        </div>
+      )}
     </div>
   );
 }
@@ -1926,14 +2010,14 @@ function weightOf(s: CaptureSubject): ReactNode {
 }
 
 function sizeOf(s: CaptureSubject): ReactNode {
-  if (s.diameter_mm !== null) return roundSize(s);
+  if (s.diameter_mm !== null) return roundWords(s);
   const d = [s.length_mm, s.width_mm, s.height_mm];
   if (d.some((v) => v !== null)) return `${d.map((v) => (v === null ? "?" : centimetres(v))).join(" × ")} cm`;
   return <Faint>{s.dimensions_absent ? "No size" : "Not measured"}</Faint>;
 }
 
 /** A round thing's size: "30 cm across, 25 at the base, 40 tall, straight for 8". */
-function roundSize(s: CaptureSubject): string {
+function roundWords(s: CaptureSubject): string {
   const parts = [`${centimetres(s.diameter_mm ?? 0)} cm across`];
   if (s.base_diameter_mm !== null && s.base_diameter_mm !== s.diameter_mm) parts.push(`${centimetres(s.base_diameter_mm)} at the base`);
   if (s.height_mm !== null) parts.push(`${centimetres(s.height_mm)} tall`);

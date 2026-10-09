@@ -415,6 +415,15 @@
   font-size: var(--ui-text-xs);
 }
 
+/* A round thing's side unwrapped (D240): one strip, the whole way round. */
+.wrapSide {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-sunken);
+}
+
 /* The crop screen: the photograph with its corners, and the face straightened beside it. */
 .crop {
   display: flex;

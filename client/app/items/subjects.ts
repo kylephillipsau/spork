@@ -87,21 +87,77 @@ export function nameOf(s: CaptureSubject, item?: Pick<ItemView, "item_id" | "uni
   return s.item_style_id ? `${named} of the ${s.code} family` : named;
 }
 
+type Level = "each" | "inner" | "carton";
+
+/** NetSuite's Pack Unit as a word, a CTN being a carton (D218); null where it says nothing. */
+function netsuiteWord(item: Pick<ItemView, "unit">): string | null {
+  const said = item.unit.netsuite_unit?.trim();
+  if (!said) return null;
+  const u = said.toUpperCase();
+  if (u === "CTN" || u === "CS" || u === "CASE") return "Carton";
+  if (u === "UNT") return "Unit";
+  return sentence(said.toLowerCase());
+}
+
 /**
- * What one of it is called in NetSuite (D218): its Pack Unit as a word, a
- * CTN being a carton; or, with none, its level's name.
+ * NetSuite's word for one of the item's levels: the level its Pack Unit
+ * means, whatever Spork says it is sold as (D239). Sold by the carton where
+ * NetSuite says "Roll", the roll is what is in the carton, not the carton.
  */
-export function unitWord(item: Pick<ItemView, "unit">): string {
+function wordFor(item: Pick<ItemView, "unit">, level: Level): string | null {
+  return item.unit.netsuite_level === level ? netsuiteWord(item) : null;
+}
+
+/** An item, and its cards where there are any to say what each level is packed in. */
+type Named = Pick<ItemView, "unit"> & { subjects?: readonly CaptureSubject[] | undefined };
+
+/**
+ * What a pack or a carton is called (D240): what its own card says it is
+ * packed in where that is a round thing, "Bucket", "Can"; else "Pack" and
+ * "Carton". A box keeps the level's name: its case or box is the carton.
+ */
+function containerWord(item: Named, level: "inner" | "carton"): string {
+  const own = item.subjects?.find(
+    (s) => s.item_id !== null && !s.item_style_id && !s.lot_id && !s.item_part_id && s.packaging_level === level,
+  );
+  if (own?.round && own.packed_in_name) return sentence(own.packed_in_name.toLowerCase());
+  return level === "inner" ? "Pack" : "Carton";
+}
+
+/**
+ * What one of it is called (D218): NetSuite's word where it means what it is
+ * sold as; else that level's name.
+ */
+export function unitWord(item: Named): string {
   // Two single ones is a pair, whatever NetSuite's word (D233).
   if (singlesOf(item) === 2) return "Pair";
-  const said = item.unit.netsuite_unit?.trim();
-  if (said) {
-    const u = said.toUpperCase();
-    if (u === "CTN" || u === "CS" || u === "CASE") return "Carton";
-    if (u === "UNT") return "Unit";
-    return sentence(said.toLowerCase());
-  }
-  return { each: "Each", inner: "Pack", carton: "Carton" }[item.unit.level];
+  const level = item.unit.level;
+  return wordFor(item, level) ?? (level === "each" ? "Each" : containerWord(item, level));
+}
+
+/**
+ * A single one's own name, where NetSuite's word is one (D239): "Roll", but
+ * not "Each" or "Unit", which name nothing; null for a pair's single ones.
+ */
+function singleWord(item: Pick<ItemView, "unit">): string | null {
+  const word = wordFor(item, "each");
+  return word && word !== "Each" && word !== "Unit" && singlesOf(item) === 1 ? word : null;
+}
+
+/** So many single ones, by their name where they have one: "8 rolls", "16 × each". */
+function singles(n: number, single: string | null): string {
+  return single ? `${n.toLocaleString()} ${plural(single, n)}` : `${n.toLocaleString()} × each`;
+}
+
+/**
+ * The offer to measure the single product inside what it is sold as: "Measure
+ * a single roll", "Measure a single one from the box".
+ */
+export function singleOffer(item: Pick<ItemView, "unit">): string {
+  const single = singleWord(item);
+  if (single) return `Measure a single ${single.toLowerCase()}`;
+  const word = unitWord(item);
+  return `Measure a single one${word === "Each" ? "" : ` from the ${word.toLowerCase()}`}`;
 }
 
 /** A word for so many of a thing: "boxes", "packs", "each". */
@@ -133,44 +189,50 @@ function inUnits(item: Pick<ItemView, "unit">, singles: number): string | null {
 
 /**
  * One of the item's own levels, named from what it is sold as (D218): the
- * unit by NetSuite's word and what it holds, "Box of 100"; a carton by how
- * many of that it holds, "Carton of 10 boxes"; a pack by its count; and the
- * single product inside a pack or carton it is sold as, "Single item". A pair
- * is two single ones (D233): its pack, when it is packed as one, is "Pair",
- * and the glove or boot inside it "Single one".
+ * unit by its word and what it holds, "Box of 100"; a carton by how many of
+ * that it holds, "Carton of 10 boxes"; a pack by its count; and the single
+ * product inside a pack or carton it is sold as, "Single item". NetSuite's
+ * word names the level it means (D239): sold by the carton where NetSuite
+ * says "Roll", the carton is "Carton of 8 rolls" and the single one "Roll".
+ * A pair is two single ones (D233): its pack, when it is packed as one, is
+ * "Pair", and the glove or boot inside it "Single one".
  */
-export function levelName(level: "each" | "inner" | "carton", item: Pick<ItemView, "unit" | "packing">): string {
+export function levelName(level: Level, item: Pick<ItemView, "unit" | "packing"> & Named): string {
   const unit = item.unit.level;
   const word = unitWord(item);
   const per = item.packing?.units_per_inner ?? null;
   const inners = item.packing?.inners_per_carton ?? null;
   const count = (n: number) => n.toLocaleString();
   const several = singlesOf(item) > 1;
+  const pack = containerWord(item, "inner"), carton = containerWord(item, "carton");
   if (several) {
     if (level === "each") return "Single one";
     if (level === unit) return word;
     if (level === "inner") {
       const pairs = per ? inUnits(item, per) : null;
-      return per && per > 1 ? `Pack of ${count(per)}${pairs ? ` (${pairs})` : ""}` : "Pack";
+      return per && per > 1 ? `${pack} of ${count(per)}${pairs ? ` (${pairs})` : ""}` : pack;
     }
   }
+  // What is in it, by the single one's name where NetSuite has one: "of 8 rolls".
+  const single = singleWord(item);
+  const of = (n: number) => (single ? `${count(n)} ${plural(single, n)}` : count(n));
   if (level === unit) {
-    if (unit === "inner" && per && per > 1) return `${word} of ${count(per)}`;
+    if (unit === "inner" && per && per > 1) return `${word} of ${of(per)}`;
     if (unit === "carton" && inners) {
       const n = inners * (per ?? 1);
-      return n > 1 ? `${word} of ${count(n)}` : word;
+      return n > 1 ? `${word} of ${of(n)}` : word;
     }
     return word;
   }
   if (level === "carton") {
-    if (!inners) return "Carton";
-    if (unit === "inner") return `Carton of ${count(inners)} ${plural(word, inners)}`;
+    if (!inners) return carton;
+    if (unit === "inner") return `${carton} of ${count(inners)} ${plural(word, inners)}`;
     const pairs = several ? inUnits(item, inners * (per ?? 1)) : null;
-    const said = per && per > 1 ? `Carton of ${count(inners)} packs` : `Carton of ${count(inners)}`;
+    const said = per && per > 1 ? `${carton} of ${count(inners)} ${plural(pack, inners)}` : `${carton} of ${of(inners)}`;
     return pairs ? `${said} (${pairs})` : said;
   }
-  if (level === "inner") return per && per > 1 ? `Pack of ${count(per)}` : "Pack";
-  return "Single item";
+  if (level === "inner") return per && per > 1 ? `${pack} of ${of(per)}` : pack;
+  return single ?? "Single item";
 }
 
 /** Its newest photograph of each face, its own only. */
@@ -238,16 +300,19 @@ export function cartonHolds(p: Counts | null): number | null {
   return p.inners_per_carton * (p.units_per_inner ?? 1);
 }
 
-/** What a carton holds, in words: "16 × each", "6 packs of 50 (300 × each)", or that nobody has said. */
-export function holdsInWords(p: Counts | null, pack = "pack"): string {
+/**
+ * What a carton holds, in words: "16 × each", "6 packs of 50 (300 × each)",
+ * "8 rolls" where the single one has a name, or that nobody has said.
+ */
+export function holdsInWords(p: Counts | null, pack = "pack", single: string | null = null): string {
   if (!p) return "No carton on file yet";
   const n = p.inners_per_carton;
   const u = p.units_per_inner;
   if (n === null) return "Not said yet";
-  if (u === 1) return `${n.toLocaleString()} × each`;
+  if (u === 1) return singles(n, single);
   const packs = plural(pack, n);
   if (u === null) return `${n.toLocaleString()} ${packs}, how many in each not said`;
-  return `${n.toLocaleString()} ${packs} of ${u.toLocaleString()} (${(n * u).toLocaleString()} × each)`;
+  return `${n.toLocaleString()} ${packs} of ${u.toLocaleString()} (${singles(n * u, single)})`;
 }
 
 /**
@@ -259,7 +324,7 @@ export function holdsOf(item: Pick<ItemView, "unit" | "packing">): string {
   const p = item.packing;
   const several = severalWord(item);
   if (!several || !p || p.inners_per_carton === null) {
-    return holdsInWords(p, item.unit.level === "inner" ? unitWord(item) : "pack");
+    return holdsInWords(p, item.unit.level === "inner" ? unitWord(item) : "pack", singleWord(item));
   }
   const n = p.inners_per_carton;
   const u = p.units_per_inner;
@@ -279,7 +344,7 @@ export function packHolds(item: Pick<ItemView, "unit" | "packing">): string | nu
   const u = item.packing?.units_per_inner ?? null;
   if (u === null || u <= 1) return null;
   const pairs = inUnits(item, u);
-  return pairs ? `${pairs} (${u.toLocaleString()} single)` : `${u.toLocaleString()} × each`;
+  return pairs ? `${pairs} (${u.toLocaleString()} single)` : singles(u, singleWord(item));
 }
 
 /**

@@ -44,7 +44,7 @@ pub struct WorkWaiting {
     /// Discrepancies open or under investigation — the findings screen's own
     /// default view, so the badge and the screen agree by construction.
     pub findings: i64,
-    /// Photographs waiting to be cut: the crop queue's own query (D181).
+    /// Photographs waiting to be cut, and round things to wrap: the queues' own queries (D181, D240).
     pub crop: i64,
     /// True when the session names no site. Everything above is then zero, and
     /// the screen must say *choose where you are working* rather than *nothing
@@ -104,8 +104,11 @@ pub async fn waiting(
                                AND cp.consignment_id IS NULL),
                            (SELECT count(*) FROM discrepancy d
                              WHERE d.state IN ('open', 'investigating')),
-                           (SELECT count(*) FROM ({uncut}) u)",
-                        uncut = crate::cuts::UNCUT),
+                           -- Photographs to cut, and round things to wrap (D240).
+                           (SELECT count(*) FROM ({uncut}) u)
+                             + (SELECT count(*) FROM ({unwrapped}) w)",
+                        uncut = crate::cuts::UNCUT,
+                        unwrapped = crate::wraps::UNWRAPPED),
                         &[&site],
                     )
                     .await?)

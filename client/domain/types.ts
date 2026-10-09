@@ -75,6 +75,27 @@ export interface PackUnit {
   /** Its sides cut from photographs (D176), by face, to draw it with; a side
    *  said to look like another wears that one's cut (D183). */
   faces: Partial<Record<"front" | "back" | "left" | "right" | "top" | "bottom", string>>;
+  /** Packed in a round type (D213): drawn as the tub it is, its widths these, its photographs wrapped round it (D240). */
+  round: boolean;
+  diameter_mm: number | null;
+  base_diameter_mm: number | null;
+  top_height_mm: number | null;
+  wrap: Wrap | null;
+}
+
+/**
+ * A round thing's photographs wrapped round it (D240): its side unwrapped,
+ * its lid and base as discs, or for an open one (D241) its inside wall
+ * unwrapped and its floor; and what they were made from.
+ */
+export interface Wrap {
+  side: string;
+  lid: string | null;
+  base: string | null;
+  inside: string | null;
+  floor: string | null;
+  /** The photographs, by id. */
+  made_from: Uuid[];
 }
 
 /** The product's own carton: how many are in one, and what one measures by the record. */
@@ -383,6 +404,8 @@ export interface CaptureSubject {
   dimensions_absent: boolean;
   /** What it is packed in, a GS1 packaging type code (D191); null when nobody has said. */
   packed_in: string | null;
+  /** That type's name, as GS1 has it: a round one names the thing (D240), "Bucket". */
+  packed_in_name: string | null;
   /** Whose saying that is: `own`, `item` (a variant's item's carton) or `style` (its family's carton). */
   packed_in_source: string | null;
   /** It goes to the carrier as it is rather than into a box (D196). */
@@ -393,10 +416,12 @@ export interface CaptureSubject {
   upright: boolean;
   /** Whose saying that is, in the same words. */
   upright_source: string;
-  /** Photographed side by side, cut to its faces and drawn: six-sided, or nothing said. */
+  /** Photographed side by side, cut to its faces and drawn: six-sided, nothing said, or a wrapping said to be box-shaped (D239). */
   box_shaped: boolean;
   /** Packed in a round type, a bucket or a tin: measured across, photographed by its side and lid (D213). */
   round: boolean;
+  /** Its photographs wrapped round it (D240), the newest wrapping; null until one is. */
+  wrap: Wrap | null;
   /** The level NetSuite counts one of (D218): the item as it is sold, offered first. */
   is_unit: boolean;
   /** Offered, not there (D218): a carton nobody has said it comes in, or the
@@ -1433,6 +1458,12 @@ export interface ItemUnit {
   /** NetSuite's Pack Unit, as it names it: "CTN", "Box", "Pair". */
   netsuite_unit: string | null;
   /**
+   * The level NetSuite's Pack Unit means: a "Roll" is a single one, a "Box" a
+   * pack. Its word names that level, whatever Spork says it is sold as (D239).
+   * Null where it says nothing.
+   */
+  netsuite_level: "each" | "inner" | "carton" | null;
+  /**
    * How many single ones one is, where it is counted in them: two for a pair,
    * packed as one (the level is its pack) or not (D233); one for the each;
    * null for a pack or carton of its own.
@@ -1670,6 +1701,19 @@ export interface UncutPhoto {
   family: string | null;
   /** A variant's name when it is of a variant (D182). */
   variant: string | null;
+}
+
+/** `GET /photos/unwrapped`: a round thing whose side waits to be wrapped in its photographs (D240). */
+export interface Unwrapped {
+  item_id: Uuid | null;
+  item_style_id: Uuid | null;
+  lot_id: Uuid | null;
+  item_part_id: Uuid | null;
+  packaging_level: "each" | "inner" | "carton" | null;
+  /** The item whose page shows it, where its shape and photographs are read. */
+  open_item: Uuid;
+  code: string;
+  description: string;
 }
 
 /** `POST /observation-images/{id}/cuts`. */

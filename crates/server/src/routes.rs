@@ -800,6 +800,8 @@ pub async fn read_image(
                          SELECT mime FROM box_picture WHERE digest = $1
                          UNION ALL
                          SELECT mime FROM reported_item_picture WHERE digest = $1
+                         UNION ALL
+                         SELECT mime FROM round_wrap_picture WHERE digest = $1
                          LIMIT 1",
                         &[&wanted],
                     )
@@ -9522,6 +9524,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::cuts::store_image)
         .service(crate::cuts::record_cut)
         .service(crate::cuts::uncut_photos)
+        .service(crate::wraps::unwrapped)
         .service(crate::cuts::same_as)
         .service(crate::cuts::record_move)
         .service(record_evidence)
@@ -9568,6 +9571,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::people::remove_person)
         .service(crate::shipping::say_ships_as_is)
         .service(crate::shipping::say_upright)
+        .service(crate::shipping::say_shape)
         .service(crate::shipping::suggest_box)
         .service(crate::shipping::box_weight)
         .service(crate::shipping::box_empty_weight)
@@ -9577,6 +9581,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(open_fulfilments)
         .service(fulfilment_status)
         .service(crate::cuts::record_box_picture)
+        .service(crate::wraps::record_wrap)
         .service(crate::lists::make_list)
         .service(crate::lists::lists)
         .service(crate::lists::change_list)

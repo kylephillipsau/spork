@@ -46,15 +46,14 @@ use crate::AppState;
 /// page shows it (a family's photograph opens on its first variant, a part's
 /// on its product). Every face of the seven; never a detail, which is evidence
 /// and not a side of anything.
-/// The cuts of subjects packed in something without six sides (D191), as a
-/// `FROM` clause: `SELECT 1 {NOT_A_BOX} WHERE x.digest = ...` asks of one.
+/// The cuts of subjects that are not a box (D191, D239), as a `FROM` clause:
+/// `SELECT 1 {NOT_A_BOX} WHERE x.digest = ...` asks of one.
 pub const NOT_A_BOX: &str = "
       FROM observation_image_cut x
       JOIN observation_image oi ON oi.id = x.observation_image_id
       JOIN observation_event e ON e.id = oi.observation_event_id
       JOIN observable o ON o.id = e.observable_id
-      JOIN LATERAL packed_in(o.item_id, o.item_style_id, o.lot_id, o.item_part_id, o.packaging_level) pk ON true
-      JOIN packaging_type t ON t.code = pk.packaging_type AND NOT t.six_sided";
+       AND NOT is_box(o.item_id, o.item_style_id, o.lot_id, o.item_part_id, o.packaging_level)";
 
 pub const UNCUT: &str = "
     WITH newest AS (
@@ -82,12 +81,8 @@ pub const UNCUT: &str = "
      WHERE NOT EXISTS (SELECT 1 FROM observation_image_cut c WHERE c.observation_image_id = n.image_id)
        -- A side said to look like another is cut with it (D183).
        AND n.same_as_id IS NULL
-       -- A thing not packed as a box has no faces to cut it to (D191).
-       AND NOT EXISTS (
-           SELECT 1
-             FROM packed_in(n.item_id, n.item_style_id, n.lot_id, n.item_part_id, n.packaging_level) pk
-             JOIN packaging_type t ON t.code = pk.packaging_type
-            WHERE NOT t.six_sided)";
+       -- A thing that is not a box has no faces to cut it to (D191, D239).
+       AND is_box(n.item_id, n.item_style_id, n.lot_id, n.item_part_id, n.packaging_level)";
 
 /// A photograph waiting to be cut.
 #[derive(Serialize, Debug)]
@@ -279,14 +274,14 @@ pub async fn record_box_picture(
                 tx.query_opt("SELECT 1 FROM item WHERE id = $1", &[&item_id])
                     .await?
                     .ok_or(ApiError::NotFound)?;
-                // Only a box is drawn: a thing in shrink-wrap is pictured by its photo (D191).
+                // Only a box is drawn: a brush in shrink-wrap is pictured by its photo (D191, D239).
                 let flat: bool = tx
                     .query_one(&format!("SELECT EXISTS (SELECT 1 {NOT_A_BOX} WHERE x.digest = $1)"), &[&body.made_from[0]])
                     .await?
                     .get(0);
                 if flat {
                     return Err(ApiError::Rejected(
-                        "only a box is drawn; this is packed in something without six sides".into(),
+                        "only a box is drawn; this is packed in something that is not box-shaped".into(),
                     ));
                 }
                 if client_events::claim_act(tx, &ev).await?.is_replay() {

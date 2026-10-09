@@ -56,6 +56,7 @@ mod round_http;
 mod search_http;
 mod setup_first_administrator;
 mod ships_as_is_http;
+mod wraps_http;
 mod sign_on;
 mod tenancy;
 mod to_pick_http;

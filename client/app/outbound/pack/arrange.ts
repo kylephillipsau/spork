@@ -1,5 +1,6 @@
 import type { BenchLine, PackUnit, Preset, StatedSize, Uuid } from "@domain/types";
 
+import { roundLook, type RoundLook } from "../../items/round.ts";
 import { DEFAULT_OBJECTIVE, type Freight, type Objective } from "./freight.ts";
 
 /**
@@ -44,6 +45,8 @@ export interface Kind {
   weight_g: number | null;
   /** Its sides, to draw it with. */
   faces: PackUnit["faces"];
+  /** A round thing's shape and wrapping, to draw it as the tub it is (D240); null for a box. */
+  round: RoundLook | null;
   /** It stays the way up it stands (D200): turned round, never onto its side. */
   upright: boolean;
   /** Its line's place on the bench, for telling kinds apart by colour. */
@@ -88,8 +91,9 @@ export interface AsIs extends Aside {
   /** Eaches in one of them. */
   per: number;
   size: Dims | null;
-  /** Its sides, to draw it with, and its line's place, for its colour. */
+  /** Its sides, or its shape when round (D240), to draw it with, and its line's place, for its colour. */
   faces: PackUnit["faces"];
+  round: RoundLook | null;
   index: number;
 }
 
@@ -325,6 +329,7 @@ function kinds(): KindOf {
         size,
         weight_g: unit.gross_weight_g,
         faces: unit.faces,
+        round: roundLook(unit),
         upright: unit.upright,
         index,
       };
@@ -366,7 +371,7 @@ function split(
       const alone = unit.ships_as_is && !inBox;
       if (level !== "each" && !alone && !size) continue;
       const count = Math.floor(units / unit.units);
-      if (alone) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size, faces: unit.faces, index });
+      if (alone) asIs.push({ ...aside(count * unit.units, unit), level, count, per: unit.units, size, faces: unit.faces, round: roundLook(unit), index });
       else if (size) pieces.push({ kind: kindOf(line, index, unit, size), count });
       else if (unit.no_size) loose.push(aside(count, unit));
       // Not measured, but what it weighs is what the record says all the same (D224).

@@ -76,6 +76,7 @@ import { ItemsPage } from "@app/items/ItemsPage";
 import { SearchPage } from "@app/scan/SearchPage";
 import { useSearchResults } from "@app/scan/useSearchResults";
 import { PhotosPage } from "@app/items/PhotosPage";
+import { useWrapQueue } from "@app/items/useWrapQueue";
 import { usePhotoQueue } from "@app/items/usePhotoQueue";
 import { askedFrom, useItems } from "@app/items/useItems";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
@@ -317,7 +318,7 @@ function LivePlace({ place }: { place: string }) {
 
 /** The photographs waiting to be cut to their faces, worked through here (D181). */
 function LivePhotos() {
-  return <PhotosPage desk={usePhotoQueue()} />;
+  return <PhotosPage desk={usePhotoQueue()} wraps={useWrapQueue()} />;
 }
 
 /** The site's places and their bins, and drafting them from the bin list. */

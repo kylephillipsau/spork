@@ -145,6 +145,14 @@ pub struct PackUnit {
     /// Its sides cut from photographs (D176), by face, to draw it with; a side
     /// said to look like another wears that one's cut (D183).
     pub faces: BTreeMap<String, String>,
+    /// Packed in a round type (D213), not a box: drawn as the tub it is,
+    /// across its rim and base and with the straight band under its rim,
+    /// its photographs wrapped round it when they are (D240).
+    pub round: bool,
+    pub diameter_mm: Option<i64>,
+    pub base_diameter_mm: Option<i64>,
+    pub top_height_mm: Option<i64>,
+    pub wrap: Option<crate::capture::Wrap>,
 }
 
 /// The product's own carton, as its case pack and its carton's measurements say.
@@ -623,6 +631,11 @@ fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements
                 source: m.map(|m| m.source.clone()).unwrap_or_else(|| "own".into()),
                 style_code: m.and_then(|m| m.style_code.clone()),
                 faces: BTreeMap::new(),
+                round: false,
+                diameter_mm: None,
+                base_diameter_mm: None,
+                top_height_mm: None,
+                wrap: None,
             })
         })
         .collect()
@@ -680,28 +693,49 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
         .map(|r| (r.get(0), r.get(1)))
         .collect();
     // Whether each level ships as it is (D196) and stays the way up it stands
-    // (D200): said, inherited or the default.
-    let handling: HashMap<(Uuid, String), (bool, bool)> = tx
+    // (D200): said, inherited or the default. And whether it is round (D213),
+    // its widths, and its wrapping (D240).
+    let handling: HashMap<(Uuid, String), tokio_postgres::Row> = tx
         .query(
-            "SELECT i.id, l.level, s.as_it_is, u.upright
+            "SELECT i.id, l.level, s.as_it_is, u.upright,
+                    coalesce(t.round, false) AND NOT is_box(i.id, NULL, NULL, NULL, l.level::packaging_level),
+                    mm.diameter, mm.base_diameter, mm.top_height,
+                    w.side, w.lid, w.base, w.inside, w.floor, w.made_from
                FROM unnest($1::uuid[]) AS i(id)
               CROSS JOIN unnest(ARRAY['each', 'inner', 'carton']) AS l(level)
               CROSS JOIN LATERAL ships_as_is(i.id, NULL, NULL, NULL, l.level::packaging_level) s
-              CROSS JOIN LATERAL keeps_upright(i.id, NULL, NULL, NULL, l.level::packaging_level) u",
+              CROSS JOIN LATERAL keeps_upright(i.id, NULL, NULL, NULL, l.level::packaging_level) u
+               LEFT JOIN LATERAL packed_in(i.id, NULL, NULL, NULL, l.level::packaging_level) pk ON true
+               LEFT JOIN packaging_type t ON t.code = pk.packaging_type
+               LEFT JOIN LATERAL (
+                   SELECT max(oc.value_numeric) FILTER (WHERE m.code = 'diameter')::bigint AS diameter,
+                          max(oc.value_numeric) FILTER (WHERE m.code = 'base_diameter')::bigint AS base_diameter,
+                          max(oc.value_numeric) FILTER (WHERE m.code = 'top_height')::bigint AS top_height
+                     FROM observable o
+                     JOIN observation_current oc ON oc.observable_id = o.id
+                     JOIN metric m ON m.id = oc.metric_id
+                    WHERE o.item_id = i.id AND o.packaging_level::text = l.level
+                      AND m.code IN ('diameter', 'base_diameter', 'top_height')) mm ON true
+               LEFT JOIN LATERAL wrap_of(i.id, NULL, NULL, NULL, l.level::packaging_level) w ON true",
             &[&ids],
         )
         .await?
-        .iter()
-        .map(|r| ((r.get(0), r.get(1)), (r.get(2), r.get(3))))
+        .into_iter()
+        .map(|r| ((r.get(0), r.get(1)), r))
         .collect();
     for line in lines.iter_mut() {
         line.picture = pictured.get(&line.item_id).cloned();
         line.tags = tagged.remove(&line.item_id).unwrap_or_default();
         for p in line.packs.iter_mut() {
             let key = (line.item_id, p.level.clone());
-            if let Some((as_is, upright)) = handling.get(&key) {
-                p.ships_as_is = *as_is;
-                p.upright = *upright;
+            if let Some(r) = handling.get(&key) {
+                p.ships_as_is = r.get(2);
+                p.upright = r.get(3);
+                p.round = r.get(4);
+                p.diameter_mm = r.get(5);
+                p.base_diameter_mm = r.get(6);
+                p.top_height_mm = r.get(7);
+                p.wrap = crate::capture::Wrap::read(r, 8);
             }
             p.faces = faces.remove(&key).unwrap_or_default();
             p.no_size = p.size.is_none() && sizeless.contains(&key);

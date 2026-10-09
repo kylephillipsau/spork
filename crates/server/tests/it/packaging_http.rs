@@ -1,8 +1,9 @@
 //! What a subject is packed in (D191), over HTTP.
 //!
 //! A GS1 packaging type said of the each, the carton or a family's carton. A
-//! type without six sides is not cut to faces and not drawn; a carton with
-//! nothing said of its own is packed as its family's.
+//! type without six sides is not cut to faces and not drawn, unless it is
+//! said to be box-shaped (D239); a carton with nothing said of its own is
+//! packed as its family's.
 
 use actix_web::{test, web, App};
 use serde_json::{json, Value};
@@ -155,6 +156,36 @@ async fn a_thing_packed_without_six_sides_is_photographed_not_drawn() {
     })))
     .await;
     assert_eq!(status, 400, "only a box is drawn: {refused}");
+
+    // ── said to be box-shaped (D239): cut to its faces and drawn after all ──
+    let (status, said) = call(test::TestRequest::post().uri("/shape").set_json(json!({
+        "item_id": item, "packaging_level": "each", "box_shaped": true,
+        "client_event_id": Uuid::new_v4(), "occurred_at": now,
+    })))
+    .await;
+    assert_eq!(status, 204, "{said}");
+    let (_, shaped) = page().await;
+    let each = subject(&shaped, "each");
+    assert_eq!((each["packed_in"].as_str(), each["box_shaped"].as_bool()), (Some("SW"), Some(true)), "{each}");
+    let (status, right) = call(
+        test::TestRequest::post()
+            .uri(&format!("/observations/{look_id}/images/right"))
+            .insert_header(("content-type", "image/png"))
+            .set_payload(common::png(1200, 1600)),
+    )
+    .await;
+    assert_eq!(status, 200, "{right}");
+    let (_, queue) = call(test::TestRequest::get().uri("/photos/uncut")).await;
+    assert!(
+        queue.as_array().unwrap().iter().any(|q| q["image_id"] == right["image_id"]),
+        "a box-shaped wrapping's sides are cut: {queue}"
+    );
+    let (status, drawing) = call(test::TestRequest::post().uri(&format!("/items/{item}/box-picture")).set_json(json!({
+        "digest": drawn["digest"], "made_from": [digest, digest, digest],
+        "client_event_id": Uuid::new_v4(), "occurred_at": now,
+    })))
+    .await;
+    assert_eq!(status, 200, "and drawn: {drawing}");
 
     // ── refused, in words ───────────────────────────────────────────────
     let (status, _) = say(json!({ "item_id": item, "packaging_level": "each", "packaging_type": "ZZ",

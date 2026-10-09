@@ -25,6 +25,11 @@ function each(size: Dims | null, over: Partial<PackUnit> = {}): PackUnit {
     source: "own",
     style_code: null,
     faces: {},
+    round: false,
+    diameter_mm: null,
+    base_diameter_mm: null,
+    top_height_mm: null,
+    wrap: null,
     ...over,
   };
 }
@@ -237,6 +242,7 @@ test("a thing goes in on its side when that is the only way it fits", () => {
     size: [100, 100, 300],
     weight_g: null,
     faces: {},
+    round: null,
     upright: false,
     index: 0,
   };

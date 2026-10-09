@@ -180,6 +180,8 @@ pub struct CaptureSubject {
     /// What it is packed in, a GS1 packaging type code (D191); absent when
     /// nobody has said.
     pub packed_in: Option<String>,
+    /// That type's name, as GS1 has it: a round one names the thing (D240), "Bucket".
+    pub packed_in_name: Option<String>,
     /// Whose saying that is: `own`, `item` (a variant's item's carton) or
     /// `style` (its family's carton).
     pub packed_in_source: Option<String>,
@@ -196,11 +198,14 @@ pub struct CaptureSubject {
     /// Whose saying that is, in the same words.
     pub upright_source: String,
     /// Photographed side by side, cut to its faces and drawn as a box: a
-    /// six-sided type, or nothing said, and not declared without a size.
+    /// six-sided type, or nothing said, or a wrapping said to be box-shaped
+    /// (D239, `is_box`); and not declared without a size.
     pub box_shaped: bool,
     /// Packed in a round type, a bucket or a tin: measured across its top and
     /// base, photographed by its side and its lid (D213).
     pub round: bool,
+    /// Its photographs wrapped round it (D240), the newest wrapping; absent until one is.
+    pub wrap: Option<Wrap>,
     /// The level NetSuite counts one of (D218): the item as it is sold,
     /// offered first and named by its unit.
     pub is_unit: bool,
@@ -234,6 +239,34 @@ pub struct CaptureSubject {
     /// How much is here, over every bin at this site. Zero is a real answer and
     /// the reason the walk excludes it: an empty bin is not a thing to walk to.
     pub soh: i64,
+}
+
+/// A round thing's photographs wrapped round it (D240): its side unwrapped,
+/// its lid and base as discs, or for an open one its inside wall unwrapped
+/// and its floor (D241), by content address; and the photographs they were
+/// made from.
+#[derive(Debug, Clone, Serialize)]
+pub struct Wrap {
+    pub side: String,
+    pub lid: Option<String>,
+    pub base: Option<String>,
+    pub inside: Option<String>,
+    pub floor: Option<String>,
+    pub made_from: Vec<Uuid>,
+}
+
+impl Wrap {
+    /// From `wrap_of`'s columns, starting at `at`: side, lid, base, inside, floor, made from.
+    pub fn read(r: &tokio_postgres::Row, at: usize) -> Option<Wrap> {
+        r.get::<_, Option<String>>(at).map(|side| Wrap {
+            side,
+            lid: r.get(at + 1),
+            base: r.get(at + 2),
+            inside: r.get(at + 3),
+            floor: r.get(at + 4),
+            made_from: r.get(at + 5),
+        })
+    }
 }
 
 /// What the record says about one of the things a session produces.
@@ -535,6 +568,8 @@ async fn classified_subjects(
                 ships_as_is_source: "default".into(),
                 upright: false,
                 upright_source: "default".into(),
+                packed_in_name: None,
+                wrap: None,
                 box_shaped: !dimensions_absent,
                 round: false,
                 source: r.get(9),
@@ -893,27 +928,31 @@ async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubjec
     let levels: Vec<Option<String>> = found.iter().map(|s| s.packaging_level.clone()).collect();
     let rows = tx
         .query(
-            "SELECT k.n, p.packaging_type, p.source, t.six_sided, t.round,
-                    sa.as_it_is, sa.source, ku.upright, ku.source
+            "SELECT k.n, p.packaging_type, p.source,
+                    is_box(k.item, k.style, k.lot, k.part, k.level::packaging_level), t.round,
+                    sa.as_it_is, sa.source, ku.upright, ku.source,
+                    t.name, w.side, w.lid, w.base, w.inside, w.floor, w.made_from
                FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::uuid[], $5::text[])
                     WITH ORDINALITY AS k(item, style, lot, part, level, n)
                LEFT JOIN LATERAL packed_in(k.item, k.style, k.lot, k.part, k.level::packaging_level) p ON true
                LEFT JOIN packaging_type t ON t.code = p.packaging_type
               CROSS JOIN LATERAL ships_as_is(k.item, k.style, k.lot, k.part, k.level::packaging_level) sa
-              CROSS JOIN LATERAL keeps_upright(k.item, k.style, k.lot, k.part, k.level::packaging_level) ku",
+              CROSS JOIN LATERAL keeps_upright(k.item, k.style, k.lot, k.part, k.level::packaging_level) ku
+               LEFT JOIN LATERAL wrap_of(k.item, k.style, k.lot, k.part, k.level::packaging_level) w ON true",
             &[&items, &styles, &lots, &parts, &levels],
         )
         .await?;
     for r in &rows {
         let Some(s) = found.get_mut((r.get::<_, i64>(0) - 1) as usize) else { continue };
-        if let (Some(code), Some(six_sided), Some(round)) =
-            (r.get::<_, Option<String>>(1), r.get::<_, Option<bool>>(3), r.get::<_, Option<bool>>(4))
-        {
+        // Its type's shape, or what was said of a wrapping with none (D239).
+        s.box_shaped = !s.dimensions_absent && r.get::<_, bool>(3);
+        if let (Some(code), Some(round)) = (r.get::<_, Option<String>>(1), r.get::<_, Option<bool>>(4)) {
             s.packed_in = Some(code);
             s.packed_in_source = r.get(2);
-            s.box_shaped = !s.dimensions_absent && six_sided;
+            s.packed_in_name = r.get(9);
             s.round = !s.dimensions_absent && round;
         }
+        s.wrap = Wrap::read(r, 10);
         // Always a row: the default when nobody has said (D196).
         s.ships_as_is = r.get(5);
         s.ships_as_is_source = r.get(6);
@@ -1059,6 +1098,8 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         ships_as_is_source: "default".into(),
         upright: false,
         upright_source: "default".into(),
+        packed_in_name: None,
+        wrap: None,
         box_shaped: !dimensions_absent,
 
         round: false,
@@ -1110,6 +1151,8 @@ fn offered(each: &CaptureSubject, level: &str) -> CaptureSubject {
         ships_as_is_source: "default".into(),
         upright: false,
         upright_source: "default".into(),
+        packed_in_name: None,
+        wrap: None,
         box_shaped: true,
         round: false,
         source: None,

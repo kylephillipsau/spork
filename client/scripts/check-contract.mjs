@@ -236,6 +236,8 @@ const PAIRS = [
   ["ItemListRow", ["ItemListRow"]],
   ["CartonSaid", ["CartonSaid"]],
   ["UncutPhoto", ["UncutPhoto"]],
+  ["Unwrapped", ["Unwrapped"]],
+  ["Wrap", ["Wrap"]],
   ["LotAdded", ["LotAdded"]],
   ["PackagingType", ["PackagingType"]],
   ["BackupSummary", ["BackupSummary"]],

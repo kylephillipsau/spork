@@ -50,6 +50,7 @@ pub mod packaging;
 pub mod pdf_metrics;
 pub mod people;
 pub mod shipping;
+pub mod wraps;
 pub mod packing;
 pub mod passkeys;
 pub mod picking;
