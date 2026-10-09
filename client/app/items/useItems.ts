@@ -77,6 +77,8 @@ export interface ItemsDesk {
   removeList: () => Promise<boolean>;
   /** Where the list as asked downloads, every row of it (D216). */
   exportUrl: (format: "csv" | "xlsx" | "pdf") => string;
+  /** The full report of the list as asked, to print or keep as a PDF (D242). */
+  reportUrl: () => string;
   making: { busy: boolean; problem: string | null; dismiss: () => void };
 }
 
@@ -219,6 +221,10 @@ export function useItems(initial: Asked & { item?: string | null }): ItemsDesk {
     lists,
     pick: (list) => setAsked((a) => ({ ...a, list, order: list ? "list" : a.order === "list" ? "" : a.order })),
     exportUrl: (format) => api.itemsExportUrl(queryOf(asked), format),
+    reportUrl: () => {
+      const q = new URLSearchParams(queryOf(asked)).toString();
+      return href(`/items/report${q ? `?${q}` : ""}`);
+    },
     makeList: async (name, pasted) => {
       let made: ItemListRow | null = null;
       await making.press(`list:${name.trim()}:${pasted}`, async (act) => {

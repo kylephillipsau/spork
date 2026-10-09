@@ -73,6 +73,10 @@ function Export({ desk, narrowed }: { desk: ItemsDesk; narrowed: boolean }) {
       <MenuItem icon={<ClipboardList />} onSelect={get("pdf")}>
         Capture sheet (PDF)
       </MenuItem>
+      {/* Everything recorded, an item to a page, printed or kept as a PDF (D242). */}
+      <MenuItem icon={<FileText />} onSelect={() => window.open(desk.reportUrl(), "_blank")}>
+        Full report, every card and photo
+      </MenuItem>
     </Menu>
   );
 }

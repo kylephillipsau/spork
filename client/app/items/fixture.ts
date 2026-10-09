@@ -309,6 +309,7 @@ export function fixtureProperties(item: ItemView, over: Partial<PropertiesDesk> 
     shipAsIs: later,
     keepUpright: later,
     sayShape: later,
+    refresh: noop,
     flagBin: async () => null,
     sayPicture: async () => false,
     sayUnit: async () => false,
@@ -839,6 +840,7 @@ export function fixtureItems(
     takeOffList: async () => false,
     removeList: async () => false,
     exportUrl: (format) => `/api/items/export?format=${format}`,
+    reportUrl: () => "/items/report",
     making: { busy: false, problem: null, dismiss: noop },
     ...over,
   };
@@ -920,6 +922,8 @@ export function fixturePhotoQueue(over: Partial<QueueDesk> = {}): QueueDesk {
     again: noop,
     keep: later,
     move: async () => false,
+    itemOf: () => Promise.reject(new Error("no network in a fixture")),
+    refresh: noop,
     crop: { findFace: async () => FOUND, cut: later, uncrop: noop, busy: false, problem: null, dismiss: noop },
     ...over,
   };

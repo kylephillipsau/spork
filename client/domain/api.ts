@@ -69,6 +69,7 @@ import type {
   StoredImage,
   UncutPhoto,
   Unwrapped,
+  ExportRow,
   Resolution,
   SetupDone,
   SetupRequest,
@@ -814,6 +815,17 @@ export const api = {
     return `${transport.base}/items/export?${p.toString()}`;
   },
 
+  /**
+   * The list as asked, every row, as data (D216): what the files hold, read
+   * by the full report (D242), which says who recorded each card and how.
+   */
+  itemsExport: (query: { q?: string; stock?: string; needs?: string; has?: string; list?: Uuid; order?: string }) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v) p.set(k, String(v));
+    p.set("format", "json");
+    return send<ExportRow[]>("GET", `/items/export?${p.toString()}`);
+  },
+
   /** An item: what it is, what it measures, and where each record says it is. */
   item: (itemId: Uuid) => send<ItemView>("GET", `/items/${encodeURIComponent(itemId)}`),
 
@@ -1512,6 +1524,16 @@ export const api = {
   uncutPhotos: () => send<UncutPhoto[]>("GET", "/photos/uncut"),
   /** Round things whose side waits to be wrapped in its photographs (D240). */
   unwrapped: () => send<Unwrapped[]>("GET", "/photos/unwrapped"),
+  /**
+   * File a photograph again under the side it is really of (D243): the same
+   * bytes in the same look, the old filing marked moved; cut again after.
+   */
+  fileAsFace: (image: Uuid, face: string, act: Act) =>
+    send<{ image_id: Uuid }>("POST", `/observation-images/${encodeURIComponent(image)}/face`, {
+      face,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
   /** Keep a round thing's wrapping (D240): its side unwrapped, its lid and base, and the photographs they came from. */
   recordWrap: (
     subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,

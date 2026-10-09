@@ -230,6 +230,9 @@ export interface PropertiesDesk {
   typeCount: (next: string) => void;
   bind: (subject: CaptureSubject) => Promise<void>;
 
+  /** Read the item again now and as its figures settle: after its sides are arranged (D243). */
+  refresh: () => void;
+
   busy: boolean;
   problem: string | null;
   said: Said | null;
@@ -740,6 +743,11 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
         if (!live.current) return;
         await reload();
       }),
+
+    refresh: () => {
+      void reload();
+      settle();
+    },
 
     sayShape: (subject, boxShaped) =>
       press(`shape:${subjectKey(subject)}:${boxShaped}`, async (act) => {

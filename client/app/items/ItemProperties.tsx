@@ -34,6 +34,7 @@ import { centimetres, kg } from "@app/common/format";
 import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, isRound, measuredAspect, type BoxFace } from "./box";
 import { roundSize } from "./round";
 import { handheld } from "./crop";
+import { ArrangeSides } from "./ArrangeSides";
 import { FaceCrop } from "./FaceCrop";
 import {
   PRESENTATIONS,
@@ -312,13 +313,18 @@ function ownLevel(item: ItemView, s: CaptureSubject): boolean {
   );
 }
 
+/** Whether a card's sides can be arranged (D243): a box of the item's own, two sides or more photographed. */
+export function arrangeable(item: ItemView, s: CaptureSubject): boolean {
+  return ownLevel(item, s) && isBox(s) && photosOf(item, s).size >= 2;
+}
+
 /** Whether a card's figures can be put right a figure at a time (D236): its own, and recorded. */
 function correctable(item: ItemView, s: CaptureSubject): boolean {
   return ownLevel(item, s) && s.source === "own" && (s.gross_weight_g !== null || s.length_mm !== null);
 }
 
 /** Something recorded against the card itself: a family's figures or a variant's shown on it are not its own. */
-function recorded(s: CaptureSubject): boolean {
+export function recorded(s: CaptureSubject): boolean {
   if (s.source === "style" || s.source === "variant") return false;
   return s.gross_weight_g !== null || s.length_mm !== null || s.weight_absent || s.dimensions_absent || s.faces.length > 0;
 }
@@ -588,7 +594,7 @@ export function MatchDialog({
  * What one of it is, and what it comes in (D218): "Box of 100 · in cartons of
  * 10 boxes". Whose word it is, when Spork said it rather than NetSuite.
  */
-function soldAs(item: ItemView): ReactNode {
+export function soldAs(item: ItemView): ReactNode {
   // A pair not packed as one is two of the single one (D233).
   const k = singlesOf(item);
   const unit = item.unit.level === "each" && k > 1 ? `${unitWord(item)}, ${k} single` : levelName(item.unit.level, item);
@@ -683,7 +689,7 @@ function SoldAsDialog({ item, desk, onClose }: { item: ItemView; desk: Propertie
 }
 
 /** Its article number, as NetSuite says it: the field read as one (D238). */
-function artNo(item: ItemView): string | null {
+export function artNo(item: ItemView): string | null {
   return item.netsuite?.fields.find((f) => f.role === "art_no")?.value ?? null;
 }
 
@@ -787,10 +793,10 @@ export const NETSUITE_ROLES: { role: string; label: string }[] = [
 ];
 
 /** The order its fields are listed in: what tells it apart, what is compared, then the rest. */
-const ROLE_ORDER = ["art_no", "shown", "warning", "weight", "length", "width", "height", "barcode", "per_carton", "per_inner", "inners_per_carton", "note", "kept"];
+export const ROLE_ORDER = ["art_no", "shown", "warning", "weight", "length", "width", "height", "barcode", "per_carton", "per_inner", "inners_per_carton", "note", "kept"];
 
 /** Where a field read as this disagrees with Spork, said; none where it agrees or isn't compared. */
-function differs(ns: NonNullable<ItemView["netsuite"]>, role: string): string | null {
+export function differs(ns: NonNullable<ItemView["netsuite"]>, role: string): string | null {
   if (role === "weight" && ns.weight_differs) return "Differs from what was weighed";
   if (["length", "width", "height"].includes(role) && ns.size_differs) return "Differs from what was measured";
   if (role === "barcode" && ns.barcode_differs) return "Not a barcode scanned here";
@@ -967,6 +973,7 @@ function Subject({
   // A thing that is not a box is asked for every side only when somebody wants them.
   const [sides, setSides] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [arranging, setArranging] = useState(false);
   // An item's own carton is a box of so many of it (D178), and its pack too
   // (D234), but a pair packed as one, which holds its two (D233).
   const carton = isOwnCarton(subject);
@@ -1095,8 +1102,14 @@ function Subject({
             Move…
           </Button>
         )}
+        {arrangeable(item, subject) && (
+          <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => setArranging(true)}>
+            Arrange sides…
+          </Button>
+        )}
       </Toolbar>
       {moving && <MoveDialog item={item} subject={subject} desk={desk} onClose={() => setMoving(false)} />}
+      {arranging && <ArrangeSides item={item} subject={subject} onClose={() => setArranging(false)} onSaved={desk.refresh} />}
       {open === "weigh" && <WeighForm item={item} subject={subject} desk={desk} />}
       {open === "measure" && <MeasureForm item={item} subject={subject} desk={desk} />}
       {open === "correct" && <MeasureForm item={item} subject={subject} desk={desk} correcting />}
@@ -1693,7 +1706,7 @@ function Photos({
 }
 
 /** What it is packed in, in GS1's words, and whose saying it is (D191). */
-function packedInWords(subject: CaptureSubject, types: PackagingType[]): ReactNode {
+export function packedInWords(subject: CaptureSubject, types: PackagingType[]): ReactNode {
   if (!subject.packed_in) return <Faint>Not said</Faint>;
   const type = types.find((t) => t.code === subject.packed_in);
   const named = type?.name ?? subject.packed_in;
@@ -1709,20 +1722,31 @@ function packedInWords(subject: CaptureSubject, types: PackagingType[]): ReactNo
  * an each or an inner pack goes into a box; a roll in its own box is the kind
  * of thing somebody says otherwise about.
  */
-function Ships({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+/** Whose saying a fact of a card is, after the fact: its family's, its item's carton's, or nobody's yet. */
+function whose(source: string): string {
+  if (source === "style") return " (the family's)";
+  if (source === "item") return " (the item's carton)";
+  if (source === "default") return " unless said";
+  return "";
+}
+
+/** Whether it ships as it is (D196), in words, faint where it is not its own saying. */
+export function shipsWords(subject: CaptureSubject): ReactNode {
   const words = subject.ships_as_is ? "As it is" : "In a box";
-  const whose =
-    subject.ships_as_is_source === "style"
-      ? " (the family's)"
-      : subject.ships_as_is_source === "item"
-        ? " (the item's carton)"
-        : subject.ships_as_is_source === "default"
-          ? " unless said"
-          : "";
+  return subject.ships_as_is_source === "own" ? words : <Faint>{`${words}${whose(subject.ships_as_is_source)}`}</Faint>;
+}
+
+/** Whether it stays the way up it stands (D200), in words, faint where it is not its own saying. */
+export function wayUpWords(subject: CaptureSubject): ReactNode {
+  const words = subject.upright ? "This way up" : "Any way up";
+  return subject.upright_source === "own" ? words : <Faint>{`${words}${whose(subject.upright_source)}`}</Faint>;
+}
+
+function Ships({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
   return (
     <Fact label="Ships" always>
       <span className={s.ships}>
-        {subject.ships_as_is_source === "own" ? words : <Faint>{`${words}${whose}`}</Faint>}
+        {shipsWords(subject)}
         <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.shipAsIs(subject, !subject.ships_as_is)}>
           {subject.ships_as_is ? "Goes in a box" : "Ships as it is"}
         </Button>
@@ -1737,19 +1761,10 @@ function Ships({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDes
  * suggestion lays it on its biggest side.
  */
 function WayUp({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
-  const words = subject.upright ? "This way up" : "Any way up";
-  const whose =
-    subject.upright_source === "style"
-      ? " (the family's)"
-      : subject.upright_source === "item"
-        ? " (the item's carton)"
-        : subject.upright_source === "default"
-          ? " unless said"
-          : "";
   return (
     <Fact label="Way up" always>
       <span className={s.ships}>
-        {subject.upright_source === "own" ? words : <Faint>{`${words}${whose}`}</Faint>}
+        {wayUpWords(subject)}
         <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.keepUpright(subject, !subject.upright)}>
           {subject.upright ? "Any way up" : "Keep this way up"}
         </Button>
@@ -1996,7 +2011,7 @@ const METHOD: Record<string, string> = {
 };
 
 /** Whose figures these are and how they were come by: "Measured 3 Oct", "Copied from a list · the STY-7720 family's". */
-function provenance(s: CaptureSubject): string {
+export function provenance(s: CaptureSubject): string {
   const parts: string[] = [];
   if (s.method) parts.push(`${METHOD[s.method] ?? sentence(s.method)}${s.observed_at ? ` ${dateTime(s.observed_at)}` : ""}`);
   if (s.source === "style") parts.push(`the ${s.style_code ?? "family"}’s figures`);
@@ -2004,12 +2019,12 @@ function provenance(s: CaptureSubject): string {
   return parts.length ? parts.join(" · ") : "Nothing recorded yet";
 }
 
-function weightOf(s: CaptureSubject): ReactNode {
+export function weightOf(s: CaptureSubject): ReactNode {
   if (s.gross_weight_g !== null) return kg(s.gross_weight_g);
   return <Faint>{s.weight_absent ? "None, it was said" : "Not weighed"}</Faint>;
 }
 
-function sizeOf(s: CaptureSubject): ReactNode {
+export function sizeOf(s: CaptureSubject): ReactNode {
   if (s.diameter_mm !== null) return roundWords(s);
   const d = [s.length_mm, s.width_mm, s.height_mm];
   if (d.some((v) => v !== null)) return `${d.map((v) => (v === null ? "?" : centimetres(v))).join(" × ")} cm`;

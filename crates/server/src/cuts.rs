@@ -396,6 +396,104 @@ pub async fn same_as(
     Ok(HttpResponse::Ok().json(out))
 }
 
+/// A photograph that is of another side than the one it was filed as (D243).
+#[derive(Deserialize, Debug)]
+pub struct FaceRequest {
+    /// The side it is really of: one of the box's six, its label or a close-up.
+    pub face: String,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct FaceSaid {
+    /// The photograph as filed again, under its right side.
+    pub image_id: Uuid,
+}
+
+/// File a photograph again under the side it is of (D243): the same bytes in
+/// the same look, under the face given, and the photograph as it was filed
+/// moved there, as a look filed against the wrong item is (D190). Its cut is
+/// not carried over, as the side's shape is another, so it is cut again.
+/// Saying it again is the same act.
+#[post("/observation-images/{id}/face")]
+pub async fn file_as_face(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<FaceRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let from = path.into_inner();
+    let b = body.into_inner();
+    if !SIDES.contains(&b.face.as_str()) && b.face != "label" && b.face != "detail" {
+        return Err(ApiError::Rejected(format!("a photograph is of {}, its label or a close-up, not {}", SIDES.join(", "), b.face)));
+    }
+    let ev = NewClientEvent {
+        tenant_id: who.tenant_id,
+        client_event_id: b.client_event_id,
+        site_id: who.site_id,
+        recorded_by_id: who.person_id,
+        submitted_at: b.occurred_at,
+    };
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                if client_events::claim_act(tx, &ev).await?.is_replay() {
+                    let prior = tx
+                        .query_opt("SELECT moved_to_image_id FROM observation_image_move WHERE client_event_id = $1", &[&ev.client_event_id])
+                        .await?
+                        .ok_or_else(|| ApiError::Rejected("client_event exists but nothing was filed again; incomplete act".into()))?;
+                    return Ok(FaceSaid { image_id: prior.get(0) });
+                }
+                let src = tx
+                    .query_opt(
+                        "SELECT observation_event_id, face, digest, mime, byte_count, width_px, height_px, captured_at
+                           FROM observation_image oi
+                          WHERE id = $1
+                            AND NOT EXISTS (SELECT 1 FROM observation_image_move mv WHERE mv.observation_image_id = oi.id)",
+                        &[&from],
+                    )
+                    .await?
+                    .ok_or(ApiError::NotFound)?;
+                if src.get::<_, String>(1) == b.face {
+                    return Err(ApiError::Rejected("it is filed as that side already".into()));
+                }
+                let to: Uuid = tx
+                    .query_one(
+                        "INSERT INTO observation_image
+                             (tenant_id, observation_event_id, face, digest, mime, byte_count, width_px, height_px, captured_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                         RETURNING id",
+                        &[
+                            &ev.tenant_id,
+                            &src.get::<_, Uuid>(0),
+                            &b.face,
+                            &src.get::<_, String>(2),
+                            &src.get::<_, String>(3),
+                            &src.get::<_, i64>(4),
+                            &src.get::<_, Option<i32>>(5),
+                            &src.get::<_, Option<i32>>(6),
+                            &src.get::<_, DateTime<Utc>>(7),
+                        ],
+                    )
+                    .await?
+                    .get(0);
+                tx.execute(
+                    "INSERT INTO observation_image_move
+                         (tenant_id, observation_image_id, moved_to_image_id, client_event_id, recorded_by_id)
+                     VALUES ($1, $2, $3, $4, $5)",
+                    &[&ev.tenant_id, &from, &to, &ev.client_event_id, &ev.recorded_by_id],
+                )
+                .await?;
+                Ok(FaceSaid { image_id: to })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
 #[derive(Serialize, Debug)]
 pub struct SameAsSaid {
     pub image_id: Uuid,

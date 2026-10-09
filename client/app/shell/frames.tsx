@@ -10,11 +10,16 @@ import type { Screen } from "@app/routing/Router";
 import { AppShell } from "./AppShell";
 import s from "./frames.module.css";
 
-export type Frame = "app" | "auth";
+export type Frame = "app" | "auth" | "print";
 
-/** Which frame a screen gets (D171): sign-in and first choices on the anodised ground, the rest in the app shell. */
+/**
+ * Which frame a screen gets (D171): sign-in and first choices on the anodised
+ * ground; a report to print on nothing but the page (D242); the rest in the
+ * app shell.
+ */
 export function frameFor(screen: Screen): Frame {
   if (screen.id === "sign-in" || screen.id === "where" || screen.id === "setup") return "auth";
+  if (screen.id === "item-report") return "print";
   return "app";
 }
 
@@ -22,7 +27,9 @@ export function KitFrame({ screen, frame, children }: { screen: Screen; frame: F
   const touch = screen.surface === "floor";
   const body = touch ? <DockHost>{children}</DockHost> : children;
   const framed =
-    frame === "auth" ? (
+    frame === "print" ? (
+      body
+    ) : frame === "auth" ? (
       <AuthLayout>{body}</AuthLayout>
     ) : (
       <AppShell screenId={screen.id} title={screen.title} showSearch={wantsChromeLocator(screen)}>

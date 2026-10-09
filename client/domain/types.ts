@@ -1703,6 +1703,68 @@ export interface UncutPhoto {
   variant: string | null;
 }
 
+/** One level of an item as `GET /items/export` has it: each, inner pack or carton (D216). */
+export interface ExportLevel {
+  weight_g: number | null;
+  weight_absent: boolean;
+  length_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
+  dimensions_absent: boolean;
+  diameter_mm: number | null;
+  base_diameter_mm: number | null;
+  top_height_mm: number | null;
+  packed_in: string | null;
+  ships_as_is: boolean;
+  upright: boolean;
+  /** How it was arranged when it was measured (D138). */
+  arranged: string | null;
+  photos: string[];
+  /** When its newest figure was recorded, in the site's time. */
+  measured: string | null;
+  method: string | null;
+  /** Who recorded it. */
+  by: string | null;
+  source: string | null;
+  /** A figure on file puts right one said wrongly (D236). */
+  corrected: boolean;
+  /** A figure on file was moved or copied here from another card (D219, D228). */
+  moved: boolean;
+}
+
+export interface ExportPicture {
+  digest: string;
+  kind: string;
+}
+
+/** One item as `GET /items/export?format=json` has it (D216). */
+export interface ExportRow {
+  item_id: Uuid;
+  code: string;
+  description: string;
+  active: boolean;
+  family: string | null;
+  selling_unit: string | null;
+  unit_level: string;
+  unit_singles: number | null;
+  supplier_part: string | null;
+  bin: string | null;
+  bin_on_hand: string | null;
+  netsuite_on_hand: string | null;
+  netsuite_bins: string | null;
+  spork_holds: number;
+  barcodes: string | null;
+  carton_holds: number | null;
+  packs_per_carton: number | null;
+  each_per_pack: number | null;
+  each: ExportLevel | null;
+  inner: ExportLevel | null;
+  carton: ExportLevel | null;
+  parts: string | null;
+  open_flags: string | null;
+  picture: ExportPicture | null;
+}
+
 /** `GET /photos/unwrapped`: a round thing whose side waits to be wrapped in its photographs (D240). */
 export interface Unwrapped {
   item_id: Uuid | null;

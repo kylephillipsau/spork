@@ -106,6 +106,9 @@ export const SCREENS: readonly ScreenSpec[] = [
   spec("search", "/search", "Search", "desk"),
   // Every item, searched and narrowed; the literal above the pattern.
   spec("items", "/items", "Items", "desk"),
+  // Everything recorded of a list's items, to print or keep as a PDF (D242).
+  // The literal above the pattern it would otherwise match.
+  spec("item-report", "/items/report", "Item report", "plain"),
   // What an item is and where it lives: where a scanned product lands (D111).
   // A floor screen for the bin page's reason: a product is scanned standing
   // beside it, and the answer is read there.

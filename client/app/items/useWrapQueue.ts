@@ -70,6 +70,8 @@ export function useWrapQueue(): WrapDesk {
   const phone = handheld();
   const turn = useRef<Promise<void>>(Promise.resolve());
   const urls = useRef<string[]>([]);
+  // Whether each was last said to be open: a making for the other is not shown.
+  const wanted = useRef(new Map<string, boolean>());
 
   const update = useCallback((key: string, next: Partial<Wrapping>) => {
     setWraps((ws) => ws.map((w) => (w.key === key ? { ...w, ...next } : w)));
@@ -87,7 +89,8 @@ export function useWrapQueue(): WrapDesk {
           const subject = item.subjects.find((s) => subjectKey(s) === key) ?? null;
           if (!subject) throw new Error("Its page no longer shows it.");
           // Open as it was said to be, or as it was wrapped last time.
-          const opened = open ?? subject.wrap?.inside != null;
+          const opened = open ?? wanted.current.get(key) ?? subject.wrap?.inside != null;
+          if (wanted.current.has(key) && wanted.current.get(key) !== opened) return;
           update(key, { open: opened });
           const { makeWrap } = await wrapping();
           const made = await makeWrap(item, subject, (step) => live.current && update(key, { step }), opened);
@@ -95,7 +98,7 @@ export function useWrapQueue(): WrapDesk {
             [made.side, made.lid, made.base, made.inside, made.floor].map((px) => (px ? blobUrl(px) : Promise.resolve(null))),
           );
           urls.current.push(...([side, lid, base, inside, floor].filter(Boolean) as string[]));
-          if (!live.current) return;
+          if (!live.current || (wanted.current.has(key) && wanted.current.get(key) !== opened)) return;
           const preview = { side: side!, lid: lid ?? null, base: base ?? null, inside: inside ?? null, floor: floor ?? null, made_from: made.made_from };
           update(key, { state: "made", step: "", subject, made, preview });
         } catch (error) {
@@ -150,7 +153,9 @@ export function useWrapQueue(): WrapDesk {
     setOpen: (key, open) => {
       const w = wraps.find((x) => x.key === key);
       if (!w || w.open === open) return;
-      update(key, { open, state: "waiting", step: "" });
+      // Said while it is being made, it is made again after: the newer making wins.
+      update(key, { open, state: "waiting", step: "", made: null, preview: null });
+      wanted.current.set(key, open);
       make(w.entry, open);
     },
   };

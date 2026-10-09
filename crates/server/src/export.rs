@@ -34,8 +34,9 @@ use crate::AppState;
 
 /// An observable, by the subject arms it names and its level.
 type ObservableKey = (Option<Uuid>, Option<Uuid>, Option<Uuid>, Option<String>);
-/// Who recorded an observable's newest figure, and how it was arranged.
-type Recorded = (Option<String>, Option<String>);
+/// Who recorded an observable's newest figure, how it was arranged, and
+/// whether any figure on file was put right (D236) or moved there (D219).
+type Recorded = (Option<String>, Option<String>, bool, bool);
 /// A level of a row, by its name: the each, the inner pack, the carton.
 type LevelOf = fn(&ExportRow) -> Option<&ExportLevel>;
 
@@ -79,6 +80,10 @@ pub struct ExportLevel {
     pub by: Option<String>,
     /// Whose figures: `own`, `style` (its family's), `variant` or `mixed`.
     pub source: Option<String>,
+    /// A figure on file puts right one said wrongly (D236).
+    pub corrected: bool,
+    /// A figure on file was moved or copied here from another card (D219, D228).
+    pub moved: bool,
 }
 
 /// Its picture, and what it is.
@@ -440,12 +445,15 @@ async fn rows_of(
         .iter()
         .map(|r| (r.get(0), r.get(1)))
         .collect();
-    // Who recorded each observable's newest figure, and how it was arranged.
+    // Who recorded each observable's newest figure, how it was arranged, and
+    // whether any figure on file was put right or moved there.
     let recorded: HashMap<ObservableKey, Recorded> =
         tx.query(
             "SELECT o.item_id, o.item_style_id, o.lot_id, o.packaging_level::text,
                     (array_agg(p.display_name ORDER BY oe.observed_at DESC))[1],
-                    (array_agg(pr.label ORDER BY oe.observed_at DESC) FILTER (WHERE pr.id IS NOT NULL))[1]
+                    (array_agg(pr.label ORDER BY oe.observed_at DESC) FILTER (WHERE pr.id IS NOT NULL))[1],
+                    bool_or(ob.corrects_observation_id IS NOT NULL),
+                    bool_or(oe.derived_from_event_id IS NOT NULL)
                FROM observable o
                JOIN observation_current oc ON oc.observable_id = o.id
                JOIN observation ob ON ob.id = oc.observation_id
@@ -459,7 +467,7 @@ async fn rows_of(
         )
         .await?
         .iter()
-        .map(|r| ((r.get(0), r.get(1), r.get(2), r.get(3)), (r.get(4), r.get(5))))
+        .map(|r| ((r.get(0), r.get(1), r.get(2), r.get(3)), (r.get(4), r.get(5), r.get(6), r.get(7))))
         .collect();
 
     // Every time shown, in the site's own time, in one go.
@@ -494,7 +502,7 @@ async fn rows_of(
                 s.packaging_level.clone(),
             ),
         };
-        let (by, arranged) = recorded.get(&key).cloned().unwrap_or((None, None));
+        let (by, arranged, corrected, moved) = recorded.get(&key).cloned().unwrap_or((None, None, false, false));
         ExportLevel {
             weight_g: s.gross_weight_g,
             weight_absent: s.weight_absent,
@@ -517,6 +525,8 @@ async fn rows_of(
             method: s.method.clone(),
             by,
             source: s.source.clone(),
+            corrected,
+            moved,
         }
     };
 
@@ -867,6 +877,8 @@ fn columns<'a>(link: &'a dyn Fn(&str) -> String) -> Vec<Column<'a>> {
             format!("{name} figures"),
             at(|l| words(&SOURCES, l.source.as_ref())),
         ));
+        c.push((format!("{name} put right"), at(|l| yes(l.corrected))));
+        c.push((format!("{name} moved here"), at(|l| yes(l.moved))));
     }
     c.push(("Parts".into(), Box::new(|r| text(r.parts.as_ref()))));
     c.push((

@@ -112,6 +112,8 @@ export const REACHED_ANOTHER_WAY = [
   // The plan editor, from the Warehouse screen (D209).
   "plan",
   "item",
+  // The full report, from the item list's Export (D242).
+  "item-report",
   // What the header's search matches, from Enter in it (D227).
   "search",
   "finding",

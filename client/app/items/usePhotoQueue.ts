@@ -72,6 +72,10 @@ export interface QueueDesk {
   move: (look: Uuid, code: string, level: string) => Promise<boolean>;
   /** What the crop screen asks of the queue. */
   crop: CropDesk;
+  /** An item's page, read once (D243): what its sides are arranged from. */
+  itemOf: (id: Uuid) => Promise<ItemView>;
+  /** Read the queue again: after a photograph is filed under another side (D243). */
+  refresh: () => void;
 }
 
 /** An item drawn as its box once front, right and top are cut (D186). Never fails a save. */
@@ -200,6 +204,11 @@ export function usePhotoQueue(): QueueDesk {
     read,
     queued,
     phone,
+    itemOf,
+    refresh: () => {
+      items.current.clear();
+      setRound((r) => r + 1);
+    },
     save: (image) => {
       const q = queued.find((x) => x.photo.image_id === image);
       if (!q?.corners || q.state !== "found") return turn.current;

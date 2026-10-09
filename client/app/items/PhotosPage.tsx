@@ -6,10 +6,13 @@ import { Alert, Button, Card, Dialog, EmptyState, Link, Page, PageHeader, Skelet
 import { imageUrl } from "@domain/api";
 import { Faint } from "@app/common/cells";
 
+import { ArrangeSides } from "./ArrangeSides";
+import { arrangeable } from "./ItemProperties";
 import { FaceCrop } from "./FaceCrop";
 import type { Face } from "./subjects";
 import type { QueueDesk, Queued } from "./usePhotoQueue";
 import type { WrapDesk, Wrapping } from "./useWrapQueue";
+import type { CaptureSubject, ItemView } from "@domain/types";
 import s from "./items.module.css";
 
 // three.js is its own chunk, fetched the first time a tub is shown.
@@ -34,6 +37,13 @@ export function PhotosPage({ desk, wraps }: { desk: QueueDesk; wraps?: WrapDesk 
   const looked = open.filter((q) => q.state !== "waiting" && q.state !== "finding").length;
   const still = open.length - looked;
   const [moving, setMoving] = useState<Queued | null>(null);
+  const [arranging, setArranging] = useState<{ item: ItemView; subject: CaptureSubject } | null>(null);
+  // Its item's page, to lay its sides out from (D243).
+  const arrange = (q: Queued) => {
+    if (!q.subject) return;
+    const subject = q.subject;
+    void desk.itemOf(q.photo.item_id).then((item) => arrangeable(item, subject) && setArranging({ item, subject }));
+  };
 
   return (
     <Page>
@@ -80,7 +90,7 @@ export function PhotosPage({ desk, wraps }: { desk: QueueDesk; wraps?: WrapDesk 
             </Toolbar>
             <ul className={s.queue} aria-label="Photos to crop">
               {open.map((q) => (
-                <QueuedPhoto key={q.photo.image_id} q={q} desk={desk} move={() => setMoving(q)} />
+                <QueuedPhoto key={q.photo.image_id} q={q} desk={desk} move={() => setMoving(q)} arrange={() => arrange(q)} />
               ))}
             </ul>
           </Card>
@@ -88,6 +98,9 @@ export function PhotosPage({ desk, wraps }: { desk: QueueDesk; wraps?: WrapDesk 
         </Stack>
       )}
       {moving && <MoveDialog desk={desk} q={moving} onClose={() => setMoving(null)} />}
+      {arranging && (
+        <ArrangeSides item={arranging.item} subject={arranging.subject} onClose={() => setArranging(null)} onSaved={desk.refresh} />
+      )}
       {desk.adjusting?.subject && (
         <FaceCrop
           key={desk.adjusting.photo.image_id}
@@ -186,7 +199,7 @@ function said(q: Queued): { text: string; out: boolean } {
 }
 
 /** One photograph: where its corners were found, drawn on it, and what to do with it. */
-function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () => void }) {
+function QueuedPhoto({ q, desk, move, arrange }: { q: Queued; desk: QueueDesk; move: () => void; arrange: () => void }) {
   const saving = q.state === "saving";
   const busy = saving || desk.crop.busy;
   const status = said(q);
@@ -235,6 +248,12 @@ function QueuedPhoto({ q, desk, move }: { q: Queued; desk: QueueDesk; move: () =
             <Button size="sm" disabled={busy} onClick={move}>
               Move…
             </Button>
+            {/* Not the side it was filed as, or the box measured lying another way (D243). */}
+            {q.subject?.box_shaped && (q.state === "turned" || status.out) && (
+              <Button size="sm" disabled={busy} onClick={arrange}>
+                Arrange sides…
+              </Button>
+            )}
           </>
         )}
       </div>
@@ -303,8 +322,8 @@ function WrapRow({ w, desk }: { w: Wrapping; desk: WrapDesk }) {
           ))}
         {w.state === "made" && w.step && <span className={s.cropLieOut}>{w.step}</span>}
         {shown && w.preview && <img className={s.wrapSide} src={w.preview.side} alt={`${e.code}, its side unwrapped`} />}
-        {/* A bucket with no lid is open: its top photo looks into it (D241). */}
-        {(w.state === "made" || w.state === "failed") && (
+        {/* A bucket with no lid is open: its top photo looks into it (D241). Said before it is made, or after. */}
+        {w.state !== "saving" && (
           <Tabs
             aria-label="Its top"
             value={w.open ? "open" : "lid"}

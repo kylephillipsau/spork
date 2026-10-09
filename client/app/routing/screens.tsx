@@ -77,6 +77,8 @@ import { SearchPage } from "@app/scan/SearchPage";
 import { useSearchResults } from "@app/scan/useSearchResults";
 import { PhotosPage } from "@app/items/PhotosPage";
 import { useWrapQueue } from "@app/items/useWrapQueue";
+import { ItemReport } from "@app/items/ItemReport";
+import { useItemReport } from "@app/items/useItemReport";
 import { usePhotoQueue } from "@app/items/usePhotoQueue";
 import { askedFrom, useItems } from "@app/items/useItems";
 import { LivePackQueue } from "@app/outbound/pack/PackQueuePage";
@@ -317,6 +319,11 @@ function LivePlace({ place }: { place: string }) {
 }
 
 /** The photographs waiting to be cut to their faces, worked through here (D181). */
+/** Everything recorded of the items a list asks for, to print or keep as a PDF (D242). */
+function LiveItemReport() {
+  return <ItemReport read={useItemReport(window.location.search)} />;
+}
+
 function LivePhotos() {
   return <PhotosPage desk={usePhotoQueue()} wraps={useWrapQueue()} />;
 }
@@ -369,6 +376,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   search: () => <LiveSearch />,
   items: () => <LiveItems />,
   item: (params) => <LiveItem item={params["item"] ?? ""} />,
+  "item-report": () => <LiveItemReport />,
   photos: () => <LivePhotos />,
   warehouse: () => <LiveWarehouse />,
   map: () => <LiveMap />,

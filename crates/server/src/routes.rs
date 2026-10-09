@@ -9581,6 +9581,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(open_fulfilments)
         .service(fulfilment_status)
         .service(crate::cuts::record_box_picture)
+        .service(crate::cuts::file_as_face)
         .service(crate::wraps::record_wrap)
         .service(crate::lists::make_list)
         .service(crate::lists::lists)

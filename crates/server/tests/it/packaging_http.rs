@@ -187,6 +187,27 @@ async fn a_thing_packed_without_six_sides_is_photographed_not_drawn() {
     .await;
     assert_eq!(status, 200, "and drawn: {drawing}");
 
+    // ── a photo filed under the wrong side, filed again under its own (D243) ──
+    let (status, filed) = call(test::TestRequest::post().uri(&format!("/observation-images/{}/face", right["image_id"].as_str().unwrap())).set_json(json!({
+        "face": "left", "client_event_id": Uuid::new_v4(), "occurred_at": now,
+    })))
+    .await;
+    assert_eq!(status, 200, "{filed}");
+    let (_, refiled) = page().await;
+    let faces: Vec<&str> = refiled["photos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["packaging_level"] == "each")
+        .map(|p| p["face"].as_str().unwrap())
+        .collect();
+    assert!(faces.contains(&"left") && !faces.contains(&"right"), "under its own side, and no longer the other: {faces:?}");
+    let (_, queue) = call(test::TestRequest::get().uri("/photos/uncut")).await;
+    assert!(
+        queue.as_array().unwrap().iter().any(|q| q["image_id"] == filed["image_id"] && q["face"] == "left"),
+        "and waits to be cut to its own side's shape: {queue}"
+    );
+
     // ── refused, in words ───────────────────────────────────────────────
     let (status, _) = say(json!({ "item_id": item, "packaging_level": "each", "packaging_type": "ZZ",
                                   "client_event_id": Uuid::new_v4(), "occurred_at": now }))
