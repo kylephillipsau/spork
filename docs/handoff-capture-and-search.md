@@ -341,6 +341,32 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   " or ". `item_netsuite_differs` now covers barcodes by level and pack
   counts. The Bridge sends fields under NetSuite's own labels.
 
+- D239, migration 133. NetSuite's Pack Unit names the level it means
+  (`ItemUnit.netsuite_level`, by `unit_level_of`), not the level Spork says
+  it is sold as: a carton sold where NetSuite says "Roll" is "Carton of 8
+  rolls" (`wordFor`, `singleWord` in `subjects.ts`). An each whose carton
+  holds one has **Sold in its carton**. Correct… carries Sold as (saved in
+  the same press) and Packed in. A wrapper, shrink-wrap or band can be said
+  **Box-shaped** (`subject_shape`, `POST /shape`): one SQL rule, `is_box`,
+  read by the item page, Photos to crop, the drawing's check and the list
+  picture.
+
+- D240, migration 134. A round thing is wrapped in its photographs at a
+  computer, under Photos to crop (`GET /photos/unwrapped`,
+  `POST /round-wraps`, `round_wrap` and `round_wrap_picture`, `wrap_of`):
+  the shape fitted to each side photo's outline and edges, the side read off
+  each and stitched (`round.ts`), the lid and base as discs; the pipeline is
+  `wrap.ts`, the queue `useWrapQueue.ts`. Drawn by `round3d.ts` on its card
+  (`RoundView`), in the packing plan (`pack3d.ts`, `Kind.round`) and as its
+  list picture (`box_picture`, `drawTub`). The face-finder answers every
+  outline at several points (`findWholes`). A round carton is "Bucket of
+  400" (`containerWord`). Round things are asked for front, right, back,
+  left, top and base.
+- D241, migration 135. An open round thing (Photos to crop › Open at the top)
+  has its top photo fitted from above and read onto its inside wall and floor
+  (`unwrap(..., inner)`, `floorOf`, `throughTheTop`); `roundGeometry(open)`
+  draws the wall two-faced. A base photo's top edge is the front.
+
 **Picking (2026-10-07)**
 - D231, migration 128. NetSuite's open orders are a report,
   `reported_order_line`: goods lines with something left to pick

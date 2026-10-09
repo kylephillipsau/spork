@@ -14148,6 +14148,9 @@ WebP. It carries its act and its person, as a cut does.
 picture on the list. The variant that stands for its carton now counts as its
 own, and any other variant as a last resort, captioned so.
 
+*Amended by D240:* a round thing is drawn as its tub from its wrapping, and
+the drawing names the wrapping's side, lid and base as a box's names its cuts.
+
 ### D187: A fulfilment finished in the other system is closed here
 
 *Adopted 2026-10-02, with migration 108.*
@@ -14274,6 +14277,9 @@ carton.
 side showed part of the brush and the bench behind it, and the drawing pasted
 those onto a box. Whether a thing is a box is not its level: an each can come
 boxed, and an inner pack can be a banded bundle.
+
+*Amended by D239:* a wrapping with no shape of its own can be said to be
+box-shaped, and is then cut and drawn as a box; one rule, `is_box`.
 
 ### D192: Whoever set a workspace up administers it
 
@@ -14991,6 +14997,9 @@ and they are enough to draw a tapered bucket and its lid.
 **Not yet.** Drawing it: a tapered cylinder with its side photo wrapped round
 and its lid photo on top, in the item's 3D view and the packing view.
 
+*Amended by D240:* it is drawn so, from its side photographed a quarter turn
+at a time, its lid and its base; it is asked for those, not one side.
+
 ### D214: A cut is checked against the face as measured before it is kept
 
 *Adopted 2026-10-05, with no migration. Extends D176, D177 and D181.*
@@ -15212,6 +15221,10 @@ list's "needs" and "has" filters count the unit.
 
 *Amended by D233:* NetSuite's Pair is two single ones, not the each; a pair
 packed as one is the pack.
+
+*Amended by D239:* NetSuite's word names the level it means, not the level
+Spork says it is sold as: a carton sold where NetSuite says "Roll" is "Carton
+of 8 rolls".
 
 ### D219: What was recorded on the wrong card is moved to the right one
 
@@ -15836,6 +15849,9 @@ parts of a measurement. So if I wanted to just update the length, say make a
 minor correction from 20 to 20.5, and then also set the quantity to 200, I
 should be able to do that."
 
+*Amended by D239:* Correct… also says what one of the item is (Sold as), in
+the same press, and what the card is packed in.
+
 ### D237: What NetSuite says of an item is kept beside what Spork recorded
 
 *Adopted 2026-10-08, with migration 131. Extends D212, D215 and D217.*
@@ -15943,3 +15959,148 @@ chose any extra column by its name; asked which, all four groups.
 
 **Not yet.** The history is kept and not yet shown beyond "since"; nothing
 yet says which NetSuite value an order line was picked against.
+
+### D239: NetSuite's word names what it means, and a wrapped pack can be box-shaped
+
+*Adopted 2026-10-09, with migration 133. Amends D191, D218 and D236.*
+
+**The finding.** Three items measured on 2026-10-09 could not be said right.
+- A tissue roll NetSuite counts by the "Roll" is sold by the carton of eight.
+  Said so (Sold as › Carton, D218), its carton was named "Roll of 8": the
+  unit took NetSuite's word, whichever level Spork said it was. Nothing could
+  change the name.
+- A stand comes boxed alone. Its carton, which holds one, was measured; its
+  each, which NetSuite counts, kept asking to be measured.
+- Ten pads wrapped in film are a block with six flat sides. Packed in a
+  Wrapper, they were photographed as a thing (D191): never cut to faces, never
+  drawn, though every side was taken.
+
+**Decision.**
+
+- **NetSuite's word names the level it means**, by `unit_level_of`, whatever
+  Spork says the item is sold as. The item read carries it
+  (`ItemUnit.netsuite_level`). Sold by the carton where NetSuite says "Roll",
+  the carton is "Carton of 8 rolls", it holds "8 rolls", the single one is
+  "Roll" and the quiet line is "Measure a single roll". A word that names
+  nothing ("Each", "Unit") leaves the single one "Single item". The unit is
+  named by NetSuite's word only where the word means it, else by its level.
+- **A carton of one is said as the unit.** Sold as › Carton says, for a
+  carton holding just one, that it is weighed, measured and packed as the
+  carton; and the each of such an item has **Sold in its carton**, one press.
+  The each is then only offered, as D218 has it, and the item's needs count
+  the carton.
+- **Correct… on a card puts right what it is recorded as**: what one of the
+  item is (Sold as, saved with the figures in the same press) and what it is
+  packed in.
+- **A wrapping can be said to be box-shaped** (`subject_shape`,
+  `POST /shape`): for a type with no shape of its own (a wrapper,
+  shrink-wrap, a band; not six-sided, not round), the card's Packed in has
+  **Box-shaped**. Said, its photos wait in Photos to crop, are cut to their
+  faces and it is drawn, as a box's are. Said of a subject as what it is
+  packed in is, with its inheritance; a six-sided type is a box whatever is
+  said, a round one never is. **One rule**, `is_box`, is read by the item
+  page, Photos to crop, the drawing's check and the list's picture, which had
+  each asked `six_sided` themselves.
+
+**Why.** The user, 2026-10-09: "it says for the carton that it is a roll of 8
+and not a carton, and I have no way to change it ... this item is a box of
+rolls but the carton is not the rolls itself"; of the boxed stand, "make it
+possible to set a carton with only 1 each as the main unit"; and of the
+wrapped pack, "it is still a cuboid shape and should be modelled as a 3D
+object". Asked, they chose "Carton of 8 rolls" over naming the carton by what
+it is packed in; Sold as and Packed in with Box-shaped in Correct…, not a name
+typed for the card; and saying the carton of one as the unit rather than
+taking it so without a word.
+
+### D240: A round thing is wrapped in its photographs
+
+*Adopted 2026-10-09, with migration 134. Amends D186 and D213. Amended by
+D241: an open one shows its inside, and a base's photograph has the front at
+its top.*
+
+**The finding.** D213 measured a bucket as the shape it is and left drawing
+it for later. Its side has no faces to cut a photograph to (D191), so it was
+pictured by one photo and drawn as nothing: not on its page, not in the
+packing plan, not in a list.
+
+**Decision.** At a computer, a round thing's photographs are wrapped round
+its measured shape, by geometry and by no model's guess at its look.
+
+- **The camera behind each photograph of its side is found.** The
+  face-finder (D177) is asked for every outline it sees at a few points,
+  alone and together; the measured shape (tapering, then straight under the
+  rim) is fitted to each, whole or without its band (which the face-finder
+  can take for a lid), and the best kept; then put right against the
+  photograph's own edges, the rings' curves being how high the camera was. A
+  phone's ordinary lens is assumed (26 mm, three quarters of the longest
+  side): on the first bucket it fitted better than any other.
+- **Its side is read off each photograph** where it faced the camera, only
+  within the outline the face-finder saw, trusted the more squarely it faced.
+  The four (front, right, back, left) are lined up on their detail below the
+  rim, the light between photographs evened out, and laid together into one
+  picture of the whole side, 4096 pixels round. **The turns between
+  photographs are found, not assumed**: the first bucket was turned 65°, 85°,
+  130° and 80°. Found all the way round, they must close the ring, so a pair
+  matching as well at the wrong place (ribs that repeat, a handle that moves)
+  is outvoted; a pair with nothing to match (a plain white back) has no say.
+  What no photograph saw is filled from round it.
+- **Its lid and base**, photographed square on, are the ellipse their outline
+  makes straightened back into a disc, never turned.
+- **Photos to crop wraps it** (`GET /photos/unwrapped`, a round thing with
+  two sides or more and no wrapping made from the newest), each made in turn
+  and shown as it would look, turned in 3D, its unwrapped side beside it, to
+  Save or Make again. Its badge counts these too. Nothing is kept until saved
+  (`POST /round-wraps`; `round_wrap`, its pictures `round_wrap_picture`, read
+  by `wrap_of`).
+- **One shape, drawn everywhere** (`round3d.ts`): on its card, turned by
+  dragging; in the packing plan, as the tub it is; and as its picture for
+  lists, an isometric drawing kept as a box's is (D186), naming the wrapping's
+  side, lid and base. Its photographs are asked for as the walk round it:
+  front, right, back, left, lid, base, label, close-up.
+- **A round carton or pack is called what it is**: "Bucket of 400", not
+  "Carton of 400". A box, a case or a wrapping keeps the level's name.
+
+**Why.** The user, 2026-10-09: "we recorded all the photos and dimensions of
+the bucket, but I'd like to actually model it as a cylinder, and then display
+the photos on it ... I'd really like to be able to do this as high quality
+as possible." A model that redraws the label would blur its print; the
+photographs' own pixels keep it sharp. Asked, they wanted it on the item
+page, as the list picture ("the isomorphic render would be awesome") and in
+the packing plan; and a round carton named for what it is.
+
+**Not yet.** Adjusting a fit by hand: a photograph the shape fits loosely is
+flagged, and the way to put it right is to take it again. A handle swinging
+in front of the side is unwrapped onto it. The working is on the page's own
+thread, so the page pauses for a few seconds at a time while a wrapping is
+made.
+
+### D241: An open round thing shows its inside, and a base is photographed tipped over
+
+*Adopted 2026-10-09, with migration 135. Amends D240.*
+
+**The finding.** The first open bucket wrapped (D240) had its top photograph
+laid flat across its rim as a lid: a picture of looking into it, painted on a
+lid that isn't there. And its base came out turned half round: its small
+notch, at the front of the bucket, was at the back.
+
+**Decision.**
+
+- **A wrapping says whether the thing is open**: Photos to crop has **Has a
+  lid** or **Open at the top** on each round thing, and making it again
+  remembers which. Open, its top photograph is fitted as its sides' are, the
+  camera looking down into it (the floor's edge, seen through the opening,
+  a crease to fit to), and read onto its **inside wall** (the side's rows
+  and columns, so the inside lines up with the outside round the rim) and its
+  **floor**, where the camera saw them through the opening; nothing past its
+  outline counts, and what it couldn't see is filled from round it. It has
+  no lid (`round_wrap_picture` parts `inside` and `floor`; `wrap_of` reads
+  them). Drawn, its wall is two-faced, the outside wrapped and the inside
+  showing its own; its floor is under the opening.
+- **A base is photographed tipped over front to back**, so the photograph's
+  top edge is the thing's front: as the first two buckets were. A lid's
+  photograph, from somebody standing in front, has the front at its bottom.
+- **The top photograph is called its top**, its lid or a look into it.
+
+**Why.** The user, 2026-10-09, of the first open bucket wrapped: "so close,
+but the top is not correct, and the bottom is 180° the wrong way." The bucket
+has no lid.
