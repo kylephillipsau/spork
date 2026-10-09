@@ -366,6 +366,12 @@ Each item is one decision in [domain-model.md](./domain-model.md).
   has its top photo fitted from above and read onto its inside wall and floor
   (`unwrap(..., inner)`, `floorOf`, `throughTheTop`); `roundGeometry(open)`
   draws the wall two-faced. A base photo's top edge is the front.
+- D242. Items › Export › Full report: `/items/report` (`ItemReport.tsx`,
+  `useItemReport.ts`, the "print" frame), drawn from the item page's read
+  and words, with `ExportRow` (now with `corrected` and `moved`) for who and
+  how; pictures as JPEG at print size.
+- D243. Arrange sides… (`ArrangeSides.tsx`): the box unfolded, turned by
+  correcting its figures, photos swapped by `POST /observation-images/{id}/face`.
 
 **Picking (2026-10-07)**
 - D231, migration 128. NetSuite's open orders are a report,

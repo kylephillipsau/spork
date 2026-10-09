@@ -16104,3 +16104,73 @@ notch, at the front of the bucket, was at the back.
 **Why.** The user, 2026-10-09, of the first open bucket wrapped: "so close,
 but the top is not correct, and the bottom is 180° the wrong way." The bucket
 has no lid.
+
+### D242: A list's items are reported in full, an item to a page
+
+*Adopted 2026-10-09, with no migration. Extends D216 and D217.*
+
+**The finding.** The capture sheet (D217) is the printed sheet with its
+boxes filled: four figures of the unit. The workbook (D216) has more, a row
+an item, but not the cards' own names, what NetSuite says, the barcodes or
+the photographs. What was collected on a list could not be handed over whole.
+
+**Decision.** Items › Export › **Full report, every card and photo** opens
+the list as asked as a report to print or keep as a PDF (`/items/report`, a
+page with no frame): an item to a page, its Art No., what it is sold as,
+where NetSuite has it; each card with anything on it, and the one it is sold
+as, by its own name, with its weight, size, what it is packed in, what it
+holds, how it ships, which way up, how it was arranged, how, when and by whom
+it was recorded, whether a figure was put right or moved there, its barcodes,
+and every side photographed and its wrapping; what NetSuite says, field by
+field. What is on file now: no history.
+
+- **Said in the item page's words, by its code**: the report is drawn in the
+  browser from the item page's read and its own word functions, so the two
+  cannot disagree. Who recorded each card and how it was arranged come from
+  the export's rows (`GET /items/export?format=json`), which now also say
+  whether a figure on file was put right (D236) or moved there (D219, D228),
+  as do the CSV and the workbook.
+- **Pictures at the size they print**, kept as JPEG: the 8 Oct list, 21
+  items, is a PDF of about 3 MB. Printing waits until they are drawn. The
+  page prints light whatever the screen's theme.
+
+**Why.** The user, 2026-10-09: "I want to be able to provide a more detailed
+export of the items and their sub-items that have been recorded, since the
+PDF that we export doesn't show the complete record of all the information
+that has been collected on these items." Asked, they chose a PDF report and
+what is on file now.
+
+### D243: A box's sides are arranged on it unfolded
+
+*Adopted 2026-10-09, with no migration. Extends D176, D190 and D236.*
+
+**The finding.** A pack photographed standing on its long edge was measured
+lying flat: its front and back read "not the measured shape" and its ends "a
+quarter turn out", every side photographed rightly against figures turned
+the other way. And photographs taken in another order than front, right,
+back, left are filed under the wrong sides.
+
+**Decision.** **Arrange sides…**, on a box card of the item's own with two
+sides or more photographed, and on a side in Photos to crop that is out of
+shape: the box unfolded (its top above its front; left, front, right and
+back in a row; its bottom below; its label and a close-up beside), each face
+drawn to its measured shape with its photograph filling it.
+
+- **Turn it**: tip it forward, stand it on its end or turn it round, trading
+  two of its length, width and height, until the photographs sit their
+  faces; saved as a correction of the figures, as of when they were measured
+  (D236).
+- **Swap sides**: drag a photograph onto the side it is of, or press one and
+  then the other; saved by filing each photograph that changed side again
+  under it (`POST /observation-images/{id}/face`): the same bytes in the
+  same look, the old filing marked moved, as a look filed against the wrong
+  item is (D190). Its cut is not carried over, as the side's shape is
+  another; it is cut again under Photos to crop.
+
+**Why.** The user, 2026-10-09: "I should be able to drag and arrange them on
+an unfolded 2D wrapped display of the 3D object with drag and drop handling
+... Either that or I should be able to adjust the rotation of the
+measurements so that I can confirm it."
+
+**Not yet.** A side already cut keeps its cut when the box is turned: crop it
+again from its card if it looks stretched.
