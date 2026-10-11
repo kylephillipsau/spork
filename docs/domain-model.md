@@ -16058,6 +16058,12 @@ its measured shape, by geometry and by no model's guess at its look.
   Save or Make again. Its badge counts these too. Nothing is kept until saved
   (`POST /round-wraps`; `round_wrap`, its pictures `round_wrap_picture`, read
   by `wrap_of`).
+- **Wrapped again from its page, and turned by hand.** A round thing's card
+  has Wrap again… at a computer, making it from its photographs as they are
+  now. There, or from Adjust… under Photos to crop, each photograph of its
+  side can be turned a degree at a time till the seams either side of it
+  line up, stitched again each time from the cameras already found; saved,
+  its side is stitched at full size at the turns it was left at.
 - **One shape, drawn everywhere** (`round3d.ts`): on its card, turned by
   dragging; in the packing plan, as the tub it is; and as its picture for
   lists, an isometric drawing kept as a box's is (D186), naming the wrapping's

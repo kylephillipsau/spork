@@ -423,6 +423,31 @@
   border-radius: var(--ui-radius);
   background: var(--ui-surface-sunken);
 }
+/* Wrapping it by hand (D240): the tub, then its side with a photo's turn under its middle. */
+.wrapLook {
+  width: min(100%, 300px);
+  margin: 0 auto;
+}
+.wrapStrip {
+  margin: 0;
+}
+.wrapStrip[data-stitching] .wrapSide {
+  opacity: 0.6;
+}
+.wrapTurns {
+  position: relative;
+  height: 36px;
+}
+.wrapTurn {
+  position: absolute;
+  top: var(--ui-space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: var(--ui-text-sm);
+}
 
 /* The crop screen: the photograph with its corners, and the face straightened beside it. */
 .crop {

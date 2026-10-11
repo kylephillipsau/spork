@@ -36,6 +36,7 @@ import { roundSize } from "./round";
 import { handheld } from "./crop";
 import { ArrangeSides } from "./ArrangeSides";
 import { FaceCrop } from "./FaceCrop";
+import { WrapAgain, wrappable } from "./WrapDialog";
 import {
   PRESENTATIONS,
   bindable,
@@ -974,6 +975,7 @@ function Subject({
   const [sides, setSides] = useState(false);
   const [moving, setMoving] = useState(false);
   const [arranging, setArranging] = useState(false);
+  const [wrapping, setWrapping] = useState(false);
   // An item's own carton is a box of so many of it (D178), and its pack too
   // (D234), but a pair packed as one, which holds its two (D233).
   const carton = isOwnCarton(subject);
@@ -1107,9 +1109,15 @@ function Subject({
             Arrange sides…
           </Button>
         )}
+        {wrappable(item, subject) && (
+          <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => setWrapping(true)}>
+            {subject.wrap ? "Wrap again…" : "Wrap in its photos…"}
+          </Button>
+        )}
       </Toolbar>
       {moving && <MoveDialog item={item} subject={subject} desk={desk} onClose={() => setMoving(false)} />}
       {arranging && <ArrangeSides item={item} subject={subject} onClose={() => setArranging(false)} onSaved={desk.refresh} />}
+      {wrapping && <WrapAgain item={item} subject={subject} onClose={() => setWrapping(false)} onSaved={desk.refresh} />}
       {open === "weigh" && <WeighForm item={item} subject={subject} desk={desk} />}
       {open === "measure" && <MeasureForm item={item} subject={subject} desk={desk} />}
       {open === "correct" && <MeasureForm item={item} subject={subject} desk={desk} correcting />}

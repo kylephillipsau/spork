@@ -9,6 +9,7 @@ import { Faint } from "@app/common/cells";
 import { ArrangeSides } from "./ArrangeSides";
 import { arrangeable } from "./ItemProperties";
 import { FaceCrop } from "./FaceCrop";
+import { WrapDialog, WrapNotes, WrapTop } from "./WrapDialog";
 import type { Face } from "./subjects";
 import type { QueueDesk, Queued } from "./usePhotoQueue";
 import type { WrapDesk, Wrapping } from "./useWrapQueue";
@@ -261,16 +262,13 @@ function QueuedPhoto({ q, desk, move, arrange }: { q: Queued; desk: QueueDesk; m
   );
 }
 
-/** Under this, how well the shape fitted a photograph is worth a look before saving. */
-const FITS = 0.9;
-/** Turned more than this between neighbouring photographs, the side between them was seen only edge-on. */
-const TURNED = 100;
-
 /**
  * The round things to wrap in their photographs (D240): each made in turn and
  * shown as it would look, its unwrapped side under it, to save or to leave.
  */
 function WrapList({ desk, wraps }: { desk: WrapDesk; wraps: Wrapping[] }) {
+  const [adjusting, setAdjusting] = useState<string | null>(null);
+  const adjusted = wraps.find((w) => w.key === adjusting);
   return (
     <Card padded={false}>
       <Toolbar>
@@ -282,18 +280,17 @@ function WrapList({ desk, wraps }: { desk: WrapDesk; wraps: Wrapping[] }) {
       </Toolbar>
       <ul className={s.queue} aria-label="Round things to wrap">
         {wraps.map((w) => (
-          <WrapRow key={w.key} w={w} desk={desk} />
+          <WrapRow key={w.key} w={w} desk={desk} adjust={() => setAdjusting(w.key)} />
         ))}
       </ul>
+      {adjusted && <WrapDialog w={adjusted} desk={desk} onClose={() => setAdjusting(null)} />}
     </Card>
   );
 }
 
-function WrapRow({ w, desk }: { w: Wrapping; desk: WrapDesk }) {
+function WrapRow({ w, desk, adjust }: { w: Wrapping; desk: WrapDesk; adjust: () => void }) {
   const e = w.entry;
   const level = e.packaging_level === "inner" ? "inner pack" : e.packaging_level;
-  const unsure = w.made?.fits.filter((f) => f.fit < FITS) ?? [];
-  const far = w.made?.turned.filter((t) => t.degrees > TURNED) ?? [];
   const shown = w.state === "made" || w.state === "saving";
   return (
     <li className={s.queued}>
@@ -315,40 +312,19 @@ function WrapRow({ w, desk }: { w: Wrapping; desk: WrapDesk }) {
         {w.state === "making" && <Faint>{w.step}</Faint>}
         {w.state === "failed" && <span className={s.cropLieOut}>{w.step}</span>}
         {w.state === "saving" && <Faint>Saving…</Faint>}
-        {w.state === "made" &&
-          (unsure.length > 0 ? (
-            <span className={s.cropLieOut}>
-              The shape fits the {unsure.map((f) => f.face).join(" and ")} {unsure.length === 1 ? "photo" : "photos"} loosely: check the label lines up
-            </span>
-          ) : (
-            <Faint>Fitted to every photo: check the label reads right round it</Faint>
-          ))}
-        {w.state === "made" &&
-          far.map((t) => (
-            <span key={t.from} className={s.cropLieOut}>
-              Turned {t.degrees}° from the {t.from} photo to the {t.to}, so the side between them was only seen edge-on: retake one a quarter turn from the
-              other
-            </span>
-          ))}
-        {w.state === "made" && w.step && <span className={s.cropLieOut}>{w.step}</span>}
+        {w.stitching ? <Faint>Stitching…</Faint> : <WrapNotes w={w} />}
         {shown && w.preview && <img className={s.wrapSide} src={w.preview.side} alt={`${e.code}, its side unwrapped`} />}
-        {/* A bucket with no lid is open: its top photo looks into it (D241). Said before it is made, or after. */}
-        {w.state !== "saving" && (
-          <Tabs
-            aria-label="Its top"
-            value={w.open ? "open" : "lid"}
-            onValueChange={(v) => desk.setOpen(w.key, v === "open")}
-            items={[
-              { value: "lid", label: "Has a lid" },
-              { value: "open", label: "Open at the top" },
-            ]}
-          />
-        )}
+        <WrapTop w={w} desk={desk} />
       </div>
       <div className={s.queueActions}>
         {shown && (
           <Button size="sm" icon={<Check />} loading={w.state === "saving"} onClick={() => void desk.save(w.key)}>
             Save
+          </Button>
+        )}
+        {w.state === "made" && (
+          <Button size="sm" onClick={adjust}>
+            Adjust…
           </Button>
         )}
         {(w.state === "made" || w.state === "failed") && (
