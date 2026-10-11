@@ -693,8 +693,17 @@ export function blend(layers: Layer[], gain: number[] = layers.map(() => 1)): Pi
   return px;
 }
 
-/** The ellipse an outline is, from its spread: middle, half-widths and turn. */
-export function ellipseOf(mask: Mask): { cx: number; cy: number; a: number; b: number; angle: number } | null {
+/** An ellipse in a photograph: its middle, its half-widths and its turn. */
+export interface Ellipse {
+  cx: number;
+  cy: number;
+  a: number;
+  b: number;
+  angle: number;
+}
+
+/** The ellipse an outline is, from its spread. */
+export function ellipseOf(mask: Mask): Ellipse | null {
   let n = 0, sx = 0, sy = 0;
   for (let y = 0; y < mask.height; y++) {
     for (let x = 0; x < mask.width; x++) {
@@ -768,23 +777,40 @@ export function floorOf(view: View, size: RoundSize, side: number): Pixels {
   return px;
 }
 
-/**
- * Of the face-finder's outlines of a lid or a base, the one that is a disc:
- * the most of it, filling its ellipse most nearly, as a lid does and the
- * table under it does not.
- */
-export function discOf(masks: Mask[]): NonNullable<ReturnType<typeof ellipseOf>> | null {
-  let best: { e: NonNullable<ReturnType<typeof ellipseOf>>; score: number } | null = null;
-  for (const m of masks) {
-    const e = ellipseOf(m);
-    if (!e || e.b <= 0) continue;
-    let area = 0;
-    for (const v of m.data) area += v;
-    const fill = area / (Math.PI * e.a * e.b);
-    const score = (1 - Math.min(Math.abs(1 - fill), 1)) * Math.sqrt(area);
-    if (!best || score > best.score) best = { e, score };
+/** How nearly an outline is its ellipse: what both cover over what either does. */
+function ellipseFit(m: Mask, e: Ellipse): { fit: number; area: number } {
+  const ca = Math.cos(e.angle), sa = Math.sin(e.angle);
+  let both = 0, area = 0, inside = 0;
+  for (let y = 0; y < m.height; y++) {
+    for (let x = 0; x < m.width; x++) {
+      const dx = x + 0.5 - e.cx, dy = y + 0.5 - e.cy;
+      const p = (ca * dx + sa * dy) / e.a, q = (-sa * dx + ca * dy) / e.b;
+      const inEllipse = p * p + q * q <= 1, inMask = m.data[y * m.width + x] === 1;
+      if (inEllipse) inside++;
+      if (inMask) area++;
+      if (inEllipse && inMask) both++;
+    }
   }
-  return best?.e ?? null;
+  return { fit: both / (area + inside - both), area };
+}
+
+/** How nearly an outline must be its ellipse to be a lid: a lid is, give or take its ragged edge. */
+const DISC_FIT = 0.93;
+
+/**
+ * Of the face-finder's outlines of a lid or a base, the one that is it: the
+ * largest that is an ellipse, as a lid or a base seen square on is, so the
+ * whole lid and not the panel in it. The floor round it, or the lid with its
+ * shadow, spread as widely and are not one. When none is, the nearest.
+ */
+export function discOf(masks: Mask[]): Ellipse | null {
+  const found = masks.flatMap((m) => {
+    const e = ellipseOf(m);
+    return e && e.b > 0 ? [{ e, ...ellipseFit(m, e) }] : [];
+  });
+  const discs = found.filter((d) => d.fit >= DISC_FIT);
+  const pick = discs.length ? discs.reduce((a, b) => (b.area > a.area ? b : a)) : found.reduce<(typeof found)[number] | null>((a, b) => (!a || b.fit > a.fit ? b : a), null);
+  return pick?.e ?? null;
 }
 
 /**
@@ -794,7 +820,7 @@ export function discOf(masks: Mask[]): NonNullable<ReturnType<typeof ellipseOf>>
  * nearest whoever took it); `side` pixels across, transparent outside it.
  * `scale` takes the outline's pixels to the photograph's.
  */
-export function disc(photo: Pixels, e: NonNullable<ReturnType<typeof ellipseOf>>, scale: number, side: number): Pixels {
+export function disc(photo: Pixels, e: Ellipse, scale: number, side: number): Pixels {
   const data = new Uint8ClampedArray(side * side * 4);
   const ca = Math.cos(e.angle), sa = Math.sin(e.angle);
   const { data: src, width: sw, height: sh } = photo;

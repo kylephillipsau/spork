@@ -16045,7 +16045,9 @@ its measured shape, by geometry and by no model's guess at its look.
   is outvoted; a pair with nothing to match (a plain white back) has no say.
   What no photograph saw is filled from round it.
 - **Its lid and base**, photographed square on, are the ellipse their outline
-  makes straightened back into a disc, never turned.
+  makes straightened back into a disc, never turned. The outline is the
+  largest of the face-finder's that is an ellipse: the floor round a lid, or
+  the lid with its shadow, spread as widely and are not one.
 - **Photos to crop wraps it** (`GET /photos/unwrapped`, a round thing with
   two sides or more and no wrapping made from the newest), each made in turn
   and shown as it would look, turned in 3D, its unwrapped side beside it, to
