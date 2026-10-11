@@ -16039,11 +16039,15 @@ its measured shape, by geometry and by no model's guess at its look.
   The four (front, right, back, left) are lined up on their detail below the
   rim, the light between photographs evened out, and laid together into one
   picture of the whole side, 4096 pixels round. **The turns between
-  photographs are found, not assumed**: the first bucket was turned 65°, 85°,
-  130° and 80°. Found all the way round, they must close the ring, so a pair
-  matching as well at the wrong place (ribs that repeat, a handle that moves)
-  is outvoted; a pair with nothing to match (a plain white back) has no say.
-  What no photograph saw is filled from round it.
+  photographs are found, not assumed.** Two are compared wherever both saw
+  the side inside their outlines, however slantwise, so a quarter turn apart
+  they still share the side between them; a turn too far for them to share
+  any is neither for nor against. Found all the way round, they must close
+  the ring, so a pair matching as well at the wrong place (ribs that repeat,
+  a handle that moves) is outvoted; a pair with nothing to match (a plain
+  white back) has no say. What no photograph saw is filled from round it.
+  Turned more than 100° between neighbours, Photos to crop says so: the side
+  between them was seen only edge-on, and one of them wants retaking.
 - **Its lid and base**, photographed square on, are the ellipse their outline
   makes straightened back into a disc, never turned. The outline is the
   largest of the face-finder's that is an ellipse: the floor round a lid, or

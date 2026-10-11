@@ -493,23 +493,33 @@ function detail(l: Layer, radius = 6): Float32Array {
 }
 
 /**
+ * Trusted this much in both photographs, a point of the side is one both saw:
+ * inside both outlines (past one it is trusted a thousandth), however
+ * slantwise. Two photographs a quarter turn apart or more see the side
+ * between them only at a slant, and must still be compared there.
+ */
+const SEEN_BY_BOTH = 0.002;
+
+/**
  * How well `b` moved round by each shift from `-reach` to `reach` columns
  * matches `a` where both saw the same part of the side: the normalised
- * cross-correlation of their detail, over the rows from `rows[0]` to
- * `rows[1]`. −1 where they share too little to say.
+ * cross-correlation of their detail, each point by how squarely both saw it,
+ * over the rows from `rows[0]` to `rows[1]`. −1 where they share less than
+ * two columns of it, too little to say.
  */
 export function matches(a: Layer, b: Layer, reach: number, rows: [number, number] = [0, a.height]): Float64Array {
   const da = detail(a), db = detail(b);
   const out = new Float64Array(2 * reach + 1).fill(-1);
   for (let s = -reach; s <= reach; s++) {
-    let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+    let count = 0, n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
     for (let j = rows[0]; j < rows[1]; j++) {
       for (let i = 0; i < a.width; i++) {
         const oa = j * a.width + i;
         const ob = j * b.width + ((i - s + b.width) % b.width);
         const w = Math.min(a.weight[oa]!, b.weight[ob]!);
-        if (w < 0.05) continue;
+        if (w < SEEN_BY_BOTH) continue;
         const va = da[oa]!, vb = db[ob]!;
+        count++;
         n += w;
         sa += w * va;
         sb += w * vb;
@@ -518,7 +528,7 @@ export function matches(a: Layer, b: Layer, reach: number, rows: [number, number
         sab += w * va * vb;
       }
     }
-    if (n < 50) continue;
+    if (count < 2 * (rows[1] - rows[0])) continue;
     const cov = sab / n - (sa / n) * (sb / n);
     const varA = saa / n - (sa / n) ** 2, varB = sbb / n - (sb / n) ** 2;
     out[s + reach] = cov / Math.sqrt(Math.max(varA * varB, 1e-6));
@@ -549,11 +559,14 @@ export function lineUp(layers: Layer[], reach: number, rows?: [number, number], 
     return { at: out, match: n > 1 ? total / (n - 1) : 0 };
   }
   // Each pair's say is how far a shift stands out from its usual match: a
-  // plain white back matches every shift alike, and so says nothing.
+  // plain white back matches every shift alike, and so says nothing; nor
+  // does a shift too far for the two to share any of the side, which is
+  // no worse than any other.
   const curves = layers.map((l, k) => {
     const c = matches(l, layers[(k + 1) % n]!, reach, rows);
-    const usual = [...c].sort((a, b) => a - b)[Math.floor(c.length / 2)]!;
-    return c.map((v) => v - usual);
+    const said = c.filter((v) => v > -1).sort((a, b) => a - b);
+    const usual = said[Math.floor(said.length / 2)] ?? 0;
+    return c.map((v) => (v > -1 ? v - usual : 0));
   });
   const at = (k: number, s: number) => (Math.abs(s) <= reach ? curves[k]![s + reach]! : -Infinity);
   let best = { shifts: new Array<number>(n).fill(0), match: -Infinity };
@@ -575,6 +588,24 @@ export function lineUp(layers: Layer[], reach: number, rows?: [number, number], 
   const out = [0];
   for (let k = 0; k < n - 1; k++) out.push(out[k]! + best.shifts[k]!);
   return { at: out, match: best.match / n };
+}
+
+/**
+ * How far it was turned from each photograph of its side to the one a
+ * quarter on, as they were lined up: `quarters` says which quarter each was
+ * taken as (front 0, right 1, …), `turns` where each was found to be. Either
+ * way round, in radians. Turned much more than a quarter, the side between
+ * them was seen only edge-on.
+ */
+export function turnedBetween(quarters: number[], turns: number[]): { from: number; to: number; by: number }[] {
+  return quarters.flatMap((q, from) => {
+    const to = quarters.indexOf((q + 1) % 4);
+    if (to < 0) return [];
+    let by = (turns[to]! - turns[from]!) % (2 * Math.PI);
+    if (by > Math.PI) by -= 2 * Math.PI;
+    else if (by <= -Math.PI) by += 2 * Math.PI;
+    return [{ from, to, by: Math.abs(by) }];
+  });
 }
 
 /** A layer moved round by so many columns. */

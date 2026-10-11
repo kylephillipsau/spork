@@ -263,6 +263,8 @@ function QueuedPhoto({ q, desk, move, arrange }: { q: Queued; desk: QueueDesk; m
 
 /** Under this, how well the shape fitted a photograph is worth a look before saving. */
 const FITS = 0.9;
+/** Turned more than this between neighbouring photographs, the side between them was seen only edge-on. */
+const TURNED = 100;
 
 /**
  * The round things to wrap in their photographs (D240): each made in turn and
@@ -291,6 +293,7 @@ function WrapRow({ w, desk }: { w: Wrapping; desk: WrapDesk }) {
   const e = w.entry;
   const level = e.packaging_level === "inner" ? "inner pack" : e.packaging_level;
   const unsure = w.made?.fits.filter((f) => f.fit < FITS) ?? [];
+  const far = w.made?.turned.filter((t) => t.degrees > TURNED) ?? [];
   const shown = w.state === "made" || w.state === "saving";
   return (
     <li className={s.queued}>
@@ -319,6 +322,13 @@ function WrapRow({ w, desk }: { w: Wrapping; desk: WrapDesk }) {
             </span>
           ) : (
             <Faint>Fitted to every photo: check the label reads right round it</Faint>
+          ))}
+        {w.state === "made" &&
+          far.map((t) => (
+            <span key={t.from} className={s.cropLieOut}>
+              Turned {t.degrees}° from the {t.from} photo to the {t.to}, so the side between them was only seen edge-on: retake one a quarter turn from the
+              other
+            </span>
           ))}
         {w.state === "made" && w.step && <span className={s.cropLieOut}>{w.step}</span>}
         {shown && w.preview && <img className={s.wrapSide} src={w.preview.side} alt={`${e.code}, its side unwrapped`} />}

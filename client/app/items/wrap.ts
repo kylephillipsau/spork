@@ -22,6 +22,7 @@ import {
   roundSize,
   scaled,
   slant,
+  turnedBetween,
   unwrap,
   type Mask,
   type RoundSize,
@@ -77,6 +78,8 @@ export interface Made {
   made_from: Uuid[];
   /** How well the shape fitted each photograph of its side, 0 to 1: under 0.9, look at it. */
   fits: { face: string; fit: number }[];
+  /** How far it was turned from each photograph of its side to the next, in degrees: much over a quarter, retake one. */
+  turned: { from: string; to: string; degrees: number }[];
 }
 
 /** The outlines the face-finder sees in a photograph, at its size. */
@@ -120,13 +123,13 @@ export async function makeWrap(
   const size = roundSize(subject);
   if (!size) throw new Error("Measure it across the top and its height first.");
   const photos = photosOf(item, subject);
-  const views: (View & { face: string; fit: number })[] = [];
+  const views: (View & { face: string; quarter: number; fit: number })[] = [];
   for (const [face, quarter] of SIDES) {
     const photo = photos.get(face);
     if (!photo) continue;
     said(`Finding it in the ${face} photo…`);
     const view = await viewOf(await loadPhoto(photo.digest), photo.image_id, size, "side");
-    if (view) views.push({ ...view, face, turn: (quarter * Math.PI) / 2 });
+    if (view) views.push({ ...view, face, quarter, turn: (quarter * Math.PI) / 2 });
   }
   if (views.length < 2) throw new Error("Photograph at least two sides of it, a quarter turn apart, to wrap it.");
 
@@ -148,6 +151,11 @@ export async function makeWrap(
   said("Wrapping the photos round it…");
   const layers = views.map((v, k) => unwrap({ ...v, turn: best!.turns[k]! }, size, AROUND_PX, high));
   const side = blend(layers, gains(layers));
+  const turned = turnedBetween(views.map((v) => v.quarter), best!.turns).map((t) => ({
+    from: views[t.from]!.face,
+    to: views[t.to]!.face,
+    degrees: Math.round((t.by * 180) / Math.PI),
+  }));
 
   const flat = async (face: "top" | "bottom"): Promise<Pixels | null> => {
     const photo = photos.get(face);
@@ -175,7 +183,7 @@ export async function makeWrap(
   const lid = open ? null : await flat("top");
   const base = await flat("bottom");
   const used = [...views.map((v) => photos.get(v.face)!.image_id), ...(["top", "bottom"] as const).flatMap((f) => (photos.get(f) ? [photos.get(f)!.image_id] : []))];
-  return { size, side, lid, base, inside, floor, made_from: used, fits: views.map((v) => ({ face: v.face, fit: v.fit })) };
+  return { size, side, lid, base, inside, floor, made_from: used, fits: views.map((v) => ({ face: v.face, fit: v.fit })), turned };
 }
 
 /** A made picture as WebP, kept by its content address. */

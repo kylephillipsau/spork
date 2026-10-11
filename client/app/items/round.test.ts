@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { discOf, fitPose, outlineOf, profile, type Lens, type Mask, type Pose, type RoundSize } from "./round.ts";
+import { discOf, fitPose, lineUp, outlineOf, profile, turnedBetween, type Layer, type Lens, type Mask, type Pose, type RoundSize } from "./round.ts";
 
 /** The outline a camera would see, filled in, as the face-finder gives one. */
 function maskOf(pose: Pose, lens: Lens, size: RoundSize, width: number, height: number): Mask {
@@ -50,4 +50,36 @@ test("a lid is found as the largest outline that is an ellipse, not the floor ro
   const e = discOf(masks)!;
   assert.ok(Math.abs(e.cx - 150) < 1 && Math.abs(e.cy - 200) < 1, `middle ${e.cx}, ${e.cy}`);
   assert.ok(Math.abs(e.a - 70) < 2 && Math.abs(e.b - 70) < 2, `half-widths ${e.a}, ${e.b}`);
+});
+
+test("how far it was turned between neighbouring photos is found either way round, the last back to the first (D240)", () => {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const deg = (t: { by: number }[]) => t.map((x) => Math.round((x.by * 180) / Math.PI));
+  // A bucket turned 65°, 85°, 129° and 81°, lined up turning right, and then left.
+  assert.deepEqual(deg(turnedBetween([0, 1, 2, 3], [0, 65, 150, 279].map(rad))), [65, 85, 129, 81]);
+  assert.deepEqual(deg(turnedBetween([0, 1, 2, 3], [0, -76, -206, -280].map(rad))), [76, 130, 74, 80]);
+  // Without its left photo, nothing to say past the back.
+  assert.deepEqual(deg(turnedBetween([0, 1, 2], [0, 65, 150].map(rad))), [65, 85]);
+});
+
+test("photos a quarter turn apart are lined up though they share the side between them only at a slant (D240)", () => {
+  // A side 360 columns round, a degree each, patterned at random; four photos
+  // of it meant a quarter turn apart and each a few degrees out, each trusted
+  // less and less away from where it faced, as a photo from nearby is.
+  const width = 360, height = 20, out = [0, 5, -4, 3];
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 255;
+  const side = Float32Array.from({ length: width * height }, random);
+  const layers: Layer[] = out.map((e, k) => {
+    const rgb = new Float32Array(width * height * 3), weight = new Float32Array(width * height);
+    for (let j = 0; j < height; j++) {
+      for (let i = 0; i < width; i++) {
+        const o = j * width + i, v = side[j * width + ((i + e + width) % width)]!;
+        rgb.fill(v, o * 3, o * 3 + 3);
+        weight[o] = Math.max(Math.cos(((i - k * 90) * Math.PI) / 180), 0) ** 12;
+      }
+    }
+    return { width, height, rgb, weight };
+  });
+  assert.deepEqual(lineUp(layers, 45).at, out);
 });
