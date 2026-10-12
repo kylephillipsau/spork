@@ -2,6 +2,7 @@ import { Package } from "lucide-react";
 
 import { Alert, Button, Card, DataTable, Link, Page, PageHeader, Section, Skeleton, Stack, type Column } from "@ui/index";
 import { useNavigate } from "@app/routing/Router";
+import { usePageTitle } from "@app/routing/title";
 import { Progress } from "@app/common/cells";
 import type { OrderLineView } from "@domain/types";
 
@@ -17,6 +18,8 @@ import s from "./orders.module.css";
 export function OrderPage({ desk }: { desk: OrderDesk }) {
   const navigate = useNavigate();
   const read = desk.read;
+  const loaded = read.kind === "ready" ? read.order : null;
+  usePageTitle([loaded && (loaded.confirmation_number ?? loaded.external_ref), loaded?.customer_name]);
 
   if (read.kind !== "ready") {
     return (

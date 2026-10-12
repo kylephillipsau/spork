@@ -26,6 +26,7 @@ import {
   cx,
 } from "@ui/index";
 import { imageUrl } from "@domain/api";
+import { usePageTitle } from "@app/routing/title";
 import type { CaptureSubject, FamilyMember, ItemTags, ItemView, PackagingType, Picture, RecordedCard, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime, sentence, shortDate } from "@app/common/cells";
@@ -231,6 +232,9 @@ export function ItemDrawer({
   const d = desk ?? own;
   const item = d.read.kind === "ready" ? d.read.item : null;
   const walks = previous !== undefined || next !== undefined;
+  // Open in front of the page, it is what the tab is about.
+  const titled = itemId !== null ? item : null;
+  usePageTitle([titled?.code, titled?.description], true);
 
   return (
     <Drawer

@@ -27,6 +27,7 @@ import {
 import { imageUrl } from "@domain/api";
 import type { DiscrepancyRow } from "@domain/types";
 import { Faint, ago, dateTime, sentence, signed } from "@app/common/cells";
+import { usePageTitle } from "@app/routing/title";
 
 import { evidenceSubjectName, type FindingsDesk } from "./useFindings";
 import { VIEWS, type ViewKey } from "./views";
@@ -47,6 +48,7 @@ const STATE_TONE: Record<string, Tone> = {
 export function FindingsPage({ desk }: { desk: FindingsDesk }) {
   const st = desk.status;
   const rows = st.kind === "ready" ? st.findings : [];
+  usePageTitle([desk.selected && subjectLine(desk.selected), desk.selected && sentence(desk.selected.kind)]);
 
   return (
     <Page>

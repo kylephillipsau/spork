@@ -3,6 +3,7 @@ import { Check, ChevronLeft, ChevronRight, LogOut, Undo2 } from "lucide-react";
 
 import { Alert, Badge, Button, Card, Page, PageHeader } from "@ui/index";
 import { Faint } from "@app/common/cells";
+import { usePageTitle } from "@app/routing/title";
 import { Thumb } from "@app/common/Thumb";
 
 import type { ToPickDesk, TripWalk } from "./useToPick";
@@ -25,6 +26,7 @@ export function WalkView({ desk, walk }: { desk: ToPickDesk; walk: TripWalk }) {
   const done = walk.done.includes(walk.at);
   const finished = walk.done.length >= trip.stops.length;
   const total = (i: number) => trip.stops[i]!.takes.reduce((n, t) => n + t.quantity, 0);
+  usePageTitle([walk.label, trip.orders.join(", ")]);
 
   return (
     <Page>

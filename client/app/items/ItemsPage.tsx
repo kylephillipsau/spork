@@ -41,6 +41,7 @@ import {
 import type { ItemListRow, ItemRow } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
 import { Faint, dateTime } from "@app/common/cells";
+import { usePageTitle } from "@app/routing/title";
 
 import { ItemDrawer, ItemTagsLine } from "./ItemProperties";
 import type { PropertiesDesk } from "./useItemProperties";
@@ -101,6 +102,7 @@ export function ItemsPage({ desk, panel }: { desk: ItemsDesk; panel?: Properties
   const ready = st.kind === "ready" ? st : null;
   const narrowed = desk.asked.q.trim() || desk.asked.stock || desk.asked.needs || desk.asked.has || desk.asked.list;
   const [dialog, setDialog] = useState<ListDialogKind | "remove" | null>(null);
+  usePageTitle([desk.list?.name, desk.asked.q.trim() && `“${desk.asked.q.trim()}”`]);
   const rows = ready?.items ?? [];
   const at = rows.findIndex((r) => r.item_id === desk.chosen);
   const step = (by: number) => {

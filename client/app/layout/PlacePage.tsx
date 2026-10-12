@@ -3,6 +3,7 @@ import { Boxes, ChevronRight, MapPin, SquareDashed } from "lucide-react";
 
 import { Alert, Card, EmptyState, Link, Page, PageHeader, Section, Skeleton, Stack, Tabs, cx } from "@ui/index";
 import type { GridCell, PlaceView } from "@domain/types";
+import { usePageTitle } from "@app/routing/title";
 
 import type { BinDesk, PlaceDesk, Read } from "./usePlace";
 import s from "./layout.module.css";
@@ -22,6 +23,8 @@ import s from "./layout.module.css";
  */
 export function BinPage({ desk }: { desk: BinDesk }) {
   const read = desk.read;
+  const loaded = read.kind === "ready" ? read.value : null;
+  usePageTitle([loaded?.code, loaded?.place?.name]);
   if (read.kind !== "ready") return <Waiting title="Bin" read={read} />;
   const bin = read.value;
   const place = bin.place;
@@ -53,6 +56,7 @@ export function BinPage({ desk }: { desk: BinDesk }) {
 /** One place: its face if it holds bins, what is inside it, and the plan. */
 export function PlacePage({ desk }: { desk: PlaceDesk }) {
   const read = desk.read;
+  usePageTitle([read.kind === "ready" && read.value.name]);
   if (read.kind !== "ready") return <Waiting title="Place" read={read} />;
   const place = read.value;
   const holds = place.bins.length > 0 || place.bays * place.levels * place.rows > 1;

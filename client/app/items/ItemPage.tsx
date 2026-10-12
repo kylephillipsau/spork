@@ -20,6 +20,7 @@ import {
 } from "@ui/index";
 import type { BinFlagged, ItemFlag, ItemHeld, ItemReported, ItemView } from "@domain/types";
 import { Faint, ago, dateTime } from "@app/common/cells";
+import { usePageTitle } from "@app/routing/title";
 
 import { Family, ItemDrawer, ItemProperties, ItemSummary, NetSuiteSays } from "./ItemProperties";
 import type { BinFlag, PropertiesDesk } from "./useItemProperties";
@@ -43,6 +44,8 @@ import s from "./items.module.css";
  */
 export function ItemPage({ desk, asking }: { desk: PropertiesDesk; asking?: Asking }) {
   const read = desk.read;
+  const loaded = read.kind === "ready" ? read.item : null;
+  usePageTitle([loaded?.code, loaded?.description]);
   // Another of its family, open beside the page (D228).
   const [looking, setLooking] = useState<string | null>(null);
 

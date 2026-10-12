@@ -2,6 +2,7 @@ import { ArrowRight, SearchX } from "lucide-react";
 
 import { Alert, Card, EmptyState, Link, List, ListItem, Page, PageHeader, Skeleton, Stack } from "@ui/index";
 import { href } from "@app/routing/location";
+import { usePageTitle } from "@app/routing/title";
 
 import { FOUND_GROUPS } from "./found";
 import type { SearchDesk } from "./useSearchResults";
@@ -16,6 +17,7 @@ import s from "./search-page.module.css";
 export function SearchPage({ desk }: { desk: SearchDesk }) {
   const q = desk.q.trim();
   const read = desk.read;
+  usePageTitle([q && `“${q}”`]);
   return (
     <Page>
       <PageHeader title="Search" description={q ? `What matches “${q}”.` : "Type in the search at the top."} />

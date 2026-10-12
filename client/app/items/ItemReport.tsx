@@ -4,6 +4,7 @@ import { Alert, Button, Spinner, applyTheme } from "@ui/index";
 import { imageUrl } from "@domain/api";
 import type { BoundBarcode, CaptureSubject, ExportLevel, ItemView, PackagingType } from "@domain/types";
 import { Faint, shortDate } from "@app/common/cells";
+import { usePageTitle } from "@app/routing/title";
 
 import { faceName, facesToAsk } from "./box";
 import {
@@ -39,6 +40,8 @@ import s from "./report.module.css";
 export function ItemReport({ read }: { read: ReportRead }) {
   const [drawn, setDrawn] = useState(0);
   const done = useCallback(() => setDrawn((n) => n + 1), []);
+  // Saved as a PDF, the title is its file's name.
+  usePageTitle([read.kind === "ready" && read.title]);
   // Paper is white: printed in the light theme, whatever the screen is in.
   useEffect(() => {
     applyTheme("light");

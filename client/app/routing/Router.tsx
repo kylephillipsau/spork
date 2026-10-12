@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { resolve } from "@domain/routing";
 import type { Params, Pattern } from "@domain/routing";
 import { BASE, currentPath, go, href, subscribe } from "./location";
+import { titleScreen } from "./title";
 
 /**
  * The router: which screen, and how you get to another one.
@@ -102,10 +103,10 @@ export function Router({
   useIntercept(routes);
   const found = resolve(routes, path);
 
-  // The tab says which screen this is. It said "Pack · Spork" on all of them.
-  useEffect(() => {
-    document.title = found ? `${found.route.title} · Spork` : "Not found · Spork";
-  }, [found]);
+  // The tab says which screen this is, after whatever the page says it is
+  // about (`usePageTitle`). It said "Pack · Spork" on all of them.
+  const screenTitle = found ? found.route.title : "Not found";
+  useEffect(() => titleScreen(screenTitle), [screenTitle]);
 
   // No screen means no session and no frame to put it in: the sign-in ground.
   if (!found) return <LostFrame>{notFound(path)}</LostFrame>;

@@ -23,6 +23,7 @@ import {
 import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OwnCarton, PackedRow, Picture, StatedSize, Uuid } from "@domain/types";
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
+import { usePageTitle } from "@app/routing/title";
 import { Faint } from "@app/common/cells";
 import { kg } from "@app/common/format";
 import { ItemDrawer, ItemLine } from "@app/items/ItemProperties";
@@ -49,6 +50,8 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
   // The item whose size, weight and photos are open beside the bench (D174).
   const [looking, setLooking] = useState<string | null>(null);
   const st = bench.status;
+  const loaded = st.kind === "ready" ? st.screen : null;
+  usePageTitle([loaded?.order_reference, loaded?.reference, loaded?.customer]);
 
   if (st.kind !== "ready") {
     return (

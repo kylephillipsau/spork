@@ -23,6 +23,7 @@ import {
 } from "@ui/index";
 import { href } from "@app/routing/location";
 import { useNavigate } from "@app/routing/Router";
+import { usePageTitle } from "@app/routing/title";
 import { Faint, Progress, StateBadge, dateTime, shortDate } from "@app/common/cells";
 import type { FulfilmentSummary, OrderMatch } from "@domain/types";
 
@@ -54,6 +55,9 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
   const navigate = useNavigate();
   const st = desk.state;
   const busy = st.kind === "searching";
+  usePageTitle([st.kind === "found" && `“${st.reference}”`]);
+  // One open beside the list is what the tab is about.
+  usePageTitle([open && (open.confirmation_number ?? open.external_ref), open?.customer_name], true);
   const orders = st.kind === "found" || st.kind === "listed" ? st.orders : [];
 
   return (
