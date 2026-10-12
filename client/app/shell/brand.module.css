@@ -46,7 +46,7 @@
 }
 .reading {
   fill: none;
-  stroke: var(--ui-brand-hivis);
+  stroke: var(--ui-brand-reading);
   stroke-width: 3.5;
   stroke-linecap: round;
 }

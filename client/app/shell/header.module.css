@@ -145,7 +145,7 @@
   flex: none;
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 .resultsDetail {
   flex: 1;

@@ -174,7 +174,7 @@ export class PackScene {
     const scale = 2 / Math.max(L, W, H);
     this.lineMaterial.color.copy(this.stage.token("--ui-border-strong"));
     this.boxMaterial.color.copy(this.stage.token("--ui-text-muted"));
-    this.toAddMaterial.color.copy(this.stage.token("--ui-accent"));
+    this.toAddMaterial.color.copy(this.stage.token("--ui-lit"));
 
     for (const { g, x: gx, y: gy } of placed) {
       const [gl, gw, gh] = g.size;

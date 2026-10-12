@@ -1828,15 +1828,32 @@ choice as a whole screen, and a canvas plus a light solver running every frame.
 The standard conventions exist because people already know them.
 
 **The look.** Light and neutral by default, with dark as a per-browser setting
-(Light, Dark or System). One accent colour, 6–8px radii, ordinary shadows. Four
+(Light, Dark or System). One accent, 6–8px radii, ordinary shadows. Four
 status colours with their usual meanings: success, warning, danger, info. Amber
 is no longer reserved for findings. Interface text is functional labels. It
 does not explain the design.
 
+**Ink to act, hi-vis to point.** The accent follows the brand: black anodised
+and hi-vis yellow (#DFFF1A). On a light page hi-vis cannot be a line or a
+letter (on white it all but vanishes), so there the accent is ink: buttons,
+the focus ring, the current item's tick, progress; a selected row or the
+current item is laid in a pale hi-vis like a highlighter, and a link is ink
+with a hi-vis underline. On the dark page hi-vis does both, acting and
+pointing, with black on it. Whatever is *lit*, a bin on the rack face, the
+place chosen on the plan or in 3D, the next thing to pack, is hi-vis in both,
+edged in ink on a light page, as the mark lights one bin (`--ui-lit`).
+Warnings are orange, so nothing amber can be taken for the brand. Codes are
+read to the character, so they are set in Atkinson Hyperlegible Mono, drawn so
+look-alikes (0 and O, 1 and l, 5 and S) cannot be taken for each other, carried
+with the app; at the body size in tables and lists, never smaller, and medium
+rather than bold where they are small. (B612 Mono, the wordmark's face, was
+tried for them first and read poorly at a table's size.)
+
 **The character stays, the machinery goes.** The frame is still anodised
 aluminium and labels are still nylon (D118, D122 in spirit): the sidebar and
-sign-in ground are blasted metal with a lit top edge, and work counts and the
-site tag are woven nylon, the site tag dyed to the accent. Data surfaces stay
+sign-in ground are blasted metal with a lit top edge, clear anodised on a
+light page and black anodised on a dark one, and work counts and the site tag
+are woven nylon, the site tag black and lettered in hi-vis. Data surfaces stay
 plain so they read. The finishes are static CSS; the light solver, the canvas
 and pointer parallax (D121) are gone.
 

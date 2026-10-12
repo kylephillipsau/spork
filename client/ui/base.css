@@ -5,6 +5,16 @@
  * the kit (none today) gets the browser's defaults rather than half of ours.
  */
 
+/* Codes are read to the character, an O for a 0 is a wrong order: Atkinson
+   Hyperlegible Mono, drawn so look-alikes cannot be taken for each other,
+   carried with the app (OFL, fonts/AtkinsonHyperlegibleMono-OFL.txt). */
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  src: url("./fonts/AtkinsonHyperlegibleMono.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 body[data-ui="kit"] {
   margin: 0;
   background: var(--ui-bg);

@@ -1,12 +1,15 @@
 /* ---- links ---- */
+/* Underlined, always: in ink on white a link is only a link by its line. */
 .link {
   color: var(--ui-accent);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: var(--ui-link-line);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
   font-weight: 500;
 }
 .link:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-color: currentColor;
 }
 .plainLink {
   color: inherit;

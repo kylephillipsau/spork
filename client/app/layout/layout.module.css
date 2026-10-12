@@ -61,7 +61,7 @@
   color: var(--ui-text-muted);
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 .levelLabel {
   padding: 0 var(--ui-space-2);
@@ -110,9 +110,9 @@
   );
 }
 .lit {
-  border-color: var(--ui-accent);
-  background: var(--ui-accent);
-  color: var(--ui-accent-fg);
+  border-color: var(--ui-lit-line);
+  background: var(--ui-lit);
+  color: var(--ui-lit-fg);
   box-shadow: 0 0 0 var(--ui-space-0-5) var(--ui-ring);
 }
 .slotCode {
@@ -201,8 +201,8 @@
   fill: var(--ui-border);
 }
 .focus {
-  fill: var(--ui-accent);
-  stroke: var(--ui-accent);
+  fill: var(--ui-lit);
+  stroke: var(--ui-lit-line);
 }
 .outer.focus {
   fill: var(--ui-accent-soft);

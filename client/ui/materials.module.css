@@ -60,7 +60,8 @@
     0 1px 1px rgba(var(--ui-ano-shade), 0.35);
 }
 
-/* Dyed to the accent: the one label that says where you are. */
+/* Dyed black and lettered in hi-vis: the one label that says where you are. */
 .dyed {
   background-color: var(--ui-nylon-dyed);
+  color: var(--ui-nylon-dyed-ink);
 }

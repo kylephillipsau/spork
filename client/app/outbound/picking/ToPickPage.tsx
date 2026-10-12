@@ -146,7 +146,8 @@ export function ToPickPage({ desk }: { desk: ToPickDesk }) {
             onChange={(e) => desk.paste(e.target.value)}
           />
           <Toolbar>
-            <Button type="submit" variant="primary" disabled={!desk.pasted.trim()}>
+            {/* One primary at a time: once there is something to print, printing is it. */}
+            <Button type="submit" variant={batch?.plan && waitingCount > 0 ? "secondary" : "primary"} disabled={!desk.pasted.trim()}>
               Look up
             </Button>
             <Button onClick={desk.everything}>Everything open</Button>

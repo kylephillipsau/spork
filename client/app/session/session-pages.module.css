@@ -104,7 +104,7 @@
   min-width: 44px;
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ui-accent);
 }
 .siteName {

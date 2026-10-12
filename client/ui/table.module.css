@@ -67,7 +67,7 @@ tbody tr:last-child .td {
 
 .mono {
   font-family: var(--ui-font-mono);
-  font-size: var(--ui-text-sm);
+  font-size: var(--ui-text-base);
   font-variant-numeric: tabular-nums;
 }
 

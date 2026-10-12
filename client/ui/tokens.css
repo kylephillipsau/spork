@@ -28,7 +28,7 @@
 /* ---- 1. scale ---------------------------------------------------------- */
 :root {
   --ui-font: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --ui-font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --ui-font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
 
   --ui-text-2xs: 11px;
   --ui-text-xs: 12px;
@@ -112,32 +112,40 @@
 :root {
   color-scheme: light;
 
-  --ui-bg: #f6f7f9;
+  --ui-bg: #f4f5f6;
   --ui-surface: #ffffff;
-  --ui-surface-sunken: #f1f3f5;
-  --ui-surface-hover: #f3f4f6;
-  --ui-surface-active: #e9ebef;
+  --ui-surface-sunken: #f1f2f4;
+  --ui-surface-hover: #f2f3f5;
+  --ui-surface-active: #e8eaed;
   --ui-overlay: rgba(15, 17, 21, 0.45);
 
-  --ui-border: #e3e5e9;
-  --ui-border-strong: #cfd3d9;
+  --ui-border: #e3e5e8;
+  --ui-border-strong: #cdd1d7;
 
-  --ui-text: #16181d;
-  --ui-text-muted: #515761;
+  --ui-text: #121417;
+  --ui-text-muted: #535862;
   --ui-text-faint: #6b717b;
 
-  --ui-accent: #4f46e5;
-  --ui-accent-hover: #4338ca;
+  /* Ink to act, hi-vis to point: on white, hi-vis is a highlighter, never a line or a letter. */
+  --ui-accent: #121417;
+  --ui-accent-hover: #2a2e35;
   --ui-accent-fg: #ffffff;
   /* A selected row, the current item, a highlight: seen at a glance on white. */
-  --ui-accent-soft: #e0e7ff;
-  --ui-accent-soft-fg: #3730a3;
-  --ui-ring: rgba(79, 70, 229, 0.45);
+  --ui-accent-soft: #f5fdcc;
+  --ui-accent-soft-fg: #121417;
+  --ui-ring: #121417;
+  /* Under a link: a hi-vis deep enough to show on white. */
+  --ui-link-line: #c6e600;
+  /* A lit bin, the next thing to add, the place chosen: hi-vis as the mark lights one, edged in ink. */
+  --ui-lit: #dfff1a;
+  --ui-lit-fg: #121417;
+  --ui-lit-line: #121417;
 
   --ui-success: #15803d;
   --ui-success-soft: #ecfdf3;
-  --ui-warning: #b45309;
-  --ui-warning-soft: #fff8eb;
+  /* Orange, not amber: the brand's hi-vis is yellow, and a warning must not look like it. */
+  --ui-warning: #b4410c;
+  --ui-warning-soft: #fff2e8;
   --ui-danger: #dc2626;
   --ui-danger-soft: #fef2f2;
   --ui-danger-solid: #dc2626;
@@ -152,36 +160,61 @@
 
   --ui-tooltip-bg: #1b1d22;
   --ui-tooltip-fg: #ffffff;
+
+  /* The frame: clear anodised aluminium, light to match the page. */
+  --ui-ano-top: #f3f4f6;
+  --ui-ano-bottom: #e5e7ea;
+  --ui-ano-raised: #ffffff;
+  --ui-ano-pressed: #f6f7f8;
+  --ui-ano-hi: 255, 255, 255;
+  --ui-ano-shade: 16, 24, 40;
+  --ui-ano-edge: rgba(255, 255, 255, 0.9);
+  --ui-ano-rule: rgba(16, 24, 40, 0.08);
+  --ui-ano-hover: rgba(16, 24, 40, 0.05);
+  --ui-ano-ink: #1d2127;
+  --ui-ano-ink-strong: #0b0c0e;
+  --ui-ano-ink-muted: #4b515b;
+  --ui-ano-ink-faint: #5f656f;
+  --ui-ano-accent: #121417;
+  --ui-nylon: #e2e5e9;
+  --ui-nylon-ink: #2a2e35;
+  /* The wordmark's reading: ink on the light frame, where hi-vis would not show. */
+  --ui-brand-reading: #121417;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --ui-bg: #0d0e11;
-  --ui-surface: #16181c;
-  --ui-surface-sunken: #111316;
-  --ui-surface-hover: #1e2126;
-  --ui-surface-active: #262a30;
+  --ui-bg: #0b0c0e;
+  --ui-surface: #141518;
+  --ui-surface-sunken: #101114;
+  --ui-surface-hover: #1b1d21;
+  --ui-surface-active: #23262b;
   --ui-overlay: rgba(0, 0, 0, 0.6);
 
-  --ui-border: #272a30;
-  --ui-border-strong: #3a3e46;
+  --ui-border: #24262b;
+  --ui-border-strong: #383b42;
 
   --ui-text: #eceef1;
   --ui-text-muted: #a4a9b2;
   --ui-text-faint: #8a909a;
 
-  --ui-accent: #6366f1;
-  --ui-accent-hover: #7c7ff5;
-  --ui-accent-fg: #ffffff;
-  --ui-accent-soft: rgba(99, 102, 241, 0.16);
-  --ui-accent-soft-fg: #c7cbff;
-  --ui-ring: rgba(129, 140, 248, 0.55);
+  /* On black anodised, hi-vis does both: it acts and it points. */
+  --ui-accent: #dfff1a;
+  --ui-accent-hover: #eaff5c;
+  --ui-accent-fg: #0b0c0e;
+  --ui-accent-soft: rgba(223, 255, 26, 0.1);
+  --ui-accent-soft-fg: #eaff7a;
+  --ui-ring: #dfff1a;
+  --ui-link-line: rgba(223, 255, 26, 0.35);
+  --ui-lit: #dfff1a;
+  --ui-lit-fg: #0b0c0e;
+  --ui-lit-line: #eaff5c;
 
   --ui-success: #4ade80;
   --ui-success-soft: rgba(34, 197, 94, 0.14);
-  --ui-warning: #fbbf24;
-  --ui-warning-soft: rgba(245, 158, 11, 0.14);
+  --ui-warning: #fb923c;
+  --ui-warning-soft: rgba(251, 146, 60, 0.14);
   --ui-danger: #f87171;
   --ui-danger-soft: rgba(239, 68, 68, 0.14);
   --ui-danger-solid: #dc2626;
@@ -194,38 +227,44 @@
   --ui-shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--ui-border);
 
   --ui-tooltip-bg: #2a2d34;
-}
 
-/* ---- materials (fixed across themes) ------------------------------------ */
-/*
- * Anodised aluminium for the frame and nylon for labels, kept from Hard
- * Anodise as static finishes (D171): no light solver, no canvas.
- */
-:root {
-  --ui-tex-blast: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23b)'/%3E%3C/svg%3E");
+  /* The frame: black anodised aluminium. */
   --ui-ano-top: #1b1e24;
   --ui-ano-bottom: #121418;
   --ui-ano-raised: #23272e;
   --ui-ano-pressed: #2b3038;
   --ui-ano-hi: 214, 228, 255;
   --ui-ano-shade: 0, 0, 0;
-  --ui-ano-edge: rgba(var(--ui-ano-hi), 0.07);
-  --ui-ano-rule: rgba(var(--ui-ano-hi), 0.06);
-  --ui-ano-hover: rgba(var(--ui-ano-hi), 0.05);
+  --ui-ano-edge: rgba(214, 228, 255, 0.07);
+  --ui-ano-rule: rgba(214, 228, 255, 0.06);
+  --ui-ano-hover: rgba(214, 228, 255, 0.05);
   --ui-ano-ink: #e4e8ef;
   --ui-ano-ink-strong: #ffffff;
   --ui-ano-ink-muted: #9aa2ae;
   --ui-ano-ink-faint: #6f7783;
-  --ui-ano-accent: #a5acff;
+  --ui-ano-accent: #dfff1a;
   --ui-nylon: #2a2d35;
-  --ui-nylon-dyed: #2e2a6b;
-  --ui-nylon-ink: #d9ddf9;
+  --ui-nylon-ink: #d4d8de;
+  --ui-brand-reading: #dfff1a;
+}
+
+/* ---- materials (fixed across themes) ------------------------------------ */
+/*
+ * Anodised aluminium for the frame and nylon for labels, kept from Hard
+ * Anodise as static finishes (D171): no light solver, no canvas. The frame
+ * follows the theme, clear anodised or black (above); these stay as they are.
+ */
+:root {
+  --ui-tex-blast: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23b)'/%3E%3C/svg%3E");
+  /* The one dyed label, the site: black nylon lettered in hi-vis. */
+  --ui-nylon-dyed: #15171b;
+  --ui-nylon-dyed-ink: #dfff1a;
   /* The mark: black anodised, its bins lit off-white, one in hi-vis. */
   --ui-brand-tile: #101114;
   --ui-brand-lit: #eef0f3;
   --ui-brand-hivis: #dfff1a;
-  --ui-brand-edge: rgba(var(--ui-ano-hi), 0.12);
-  --ui-brand-rip: rgba(var(--ui-ano-hi), 0.06);
-  --ui-brand-sheen-hi: rgba(var(--ui-ano-hi), 0.08);
-  --ui-brand-sheen-lo: rgba(var(--ui-ano-shade), 0.3);
+  --ui-brand-edge: rgba(214, 228, 255, 0.12);
+  --ui-brand-rip: rgba(214, 228, 255, 0.06);
+  --ui-brand-sheen-hi: rgba(214, 228, 255, 0.08);
+  --ui-brand-sheen-lo: rgba(0, 0, 0, 0.3);
 }

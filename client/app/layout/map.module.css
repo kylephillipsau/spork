@@ -64,7 +64,7 @@
   color: var(--ui-tooltip-fg);
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   pointer-events: none;
 }
@@ -140,7 +140,7 @@
 
 .code {
   font-family: var(--ui-font-mono);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* ── the layer and its legend, laid over the bottom left ──────────── */

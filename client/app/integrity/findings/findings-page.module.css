@@ -27,7 +27,7 @@
 }
 .mono {
   font-family: var(--ui-font-mono);
-  font-size: var(--ui-text-sm);
+  font-size: var(--ui-text-base);
 }
 .variance {
   color: var(--ui-warning);

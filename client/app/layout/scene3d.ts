@@ -111,9 +111,9 @@ const TOKENS: Record<keyof Palette, string> = {
   line: "--ui-text-faint",
   floorLine: "--ui-border-strong",
   outerLine: "--ui-border-strong",
-  chosen: "--ui-accent",
-  chosenLine: "--ui-accent-hover",
-  chosenGrid: "--ui-accent-fg",
+  chosen: "--ui-lit",
+  chosenLine: "--ui-lit-line",
+  chosenGrid: "--ui-lit-fg",
   hover: "--ui-accent",
 };
 
