@@ -12,6 +12,7 @@ import { ScanSearch } from "./ScanSearch";
 import type { ChromeScan } from "@app/scan/useScan";
 import type { SiteRow } from "@domain/types";
 import { SiteSwitcher } from "./SiteSwitcher";
+import { Brand, useOnline } from "./Brand";
 import { UserMenu } from "./UserMenu";
 import { useSession } from "@app/session/SessionContext";
 import { Unreachable } from "@app/session/Unreachable";
@@ -82,6 +83,9 @@ export function AppShell({
   // Backup is an administrator's (D192): not offered to anyone else.
   const session = useSession();
   const administrator = session.kind === "signed-in" && session.who.administrator;
+  // The wordmark's o dims when nothing reaches the server.
+  const online = useOnline();
+  const reachable = online && session.kind !== "unreachable";
   const settings: NavGroup = { ...SETTINGS, items: SETTINGS.items.filter((i) => !i.administrators || administrator) };
   // Keyed on the sidebar item, not the screen: /findings and /findings/:id are
   // two screens and one place, and choosing a row is not arriving anywhere.
@@ -102,10 +106,7 @@ export function AppShell({
       <aside className={cx(s.sidebar, materials.anodise)} aria-label="Main" data-density="desktop">
         <div className={s.brand}>
           <Link variant="plain" href="/" className={s.brandLink}>
-            <span className={cx(s.mark, materials.nylon, materials.dyed)} aria-hidden>
-              S
-            </span>
-            <span className={s.wordmark}>Spork</span>
+            <Brand markClassName={s.mark} wordmarkClassName={s.wordmark} state={reachable ? "ready" : "offline"} />
           </Link>
         </div>
 

@@ -22,25 +22,20 @@
 }
 .authBrand {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: var(--ui-space-3);
   color: var(--ui-ano-ink);
 }
 .authMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--ui-mark-lg);
-  height: var(--ui-mark-lg);
-  border-radius: var(--ui-radius-lg);
-  font-size: var(--ui-text-xl);
-  font-weight: 700;
+  display: block;
+  flex: none;
+  width: calc(var(--ui-mark-lg) * 1.5);
+  height: calc(var(--ui-mark-lg) * 1.5);
 }
 .authWordmark {
-  font-size: var(--ui-text-2xl);
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  display: block;
+  flex: none;
+  height: calc(var(--ui-mark-lg) * 1.2);
+  aspect-ratio: 279 / 126;
 }
 
 /* ---- handheld ---- */

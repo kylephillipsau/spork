@@ -1,0 +1,103 @@
+/* Spork's mark and wordmark (Brand.tsx). Colours are the brand's own and fixed across themes. */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2-5);
+}
+
+/* ---- the mark ---- */
+.tile {
+  fill: var(--ui-brand-tile);
+}
+.rip {
+  fill: none;
+  stroke: var(--ui-brand-rip);
+  stroke-width: 2;
+}
+.sheenHi {
+  stop-color: var(--ui-brand-sheen-hi);
+}
+.sheenLo {
+  stop-color: var(--ui-brand-sheen-lo);
+}
+.edge {
+  fill: none;
+  stroke: var(--ui-brand-edge);
+  stroke-width: 2;
+}
+.lit {
+  fill: var(--ui-brand-lit);
+}
+.off {
+  fill: var(--ui-brand-lit);
+  opacity: 0.12;
+}
+.spot {
+  fill: var(--ui-brand-hivis);
+}
+
+/* ---- the wordmark ---- */
+.rule {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.35;
+  stroke-width: 1.5;
+}
+.reading {
+  fill: none;
+  stroke: var(--ui-brand-hivis);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+.notch {
+  fill: black;
+}
+.turn {
+  transform-origin: 142.7px 52.5px;
+}
+
+/* Ready: the o open and the reading under it. Measuring: the o closed, the
+   reading the whole rule. Offline: the o dimmed and the reading out. */
+.measuring .notch {
+  fill: white;
+}
+.offline .o {
+  opacity: 0.4;
+}
+.offline .reading {
+  opacity: 0;
+}
+
+/* Hovered, it scans once: the notch turns, the reading runs to the s, the k and back. */
+@keyframes scan-reading {
+  0% {
+    transform: translateX(0);
+  }
+  30% {
+    transform: translateX(-118.5px);
+  }
+  80% {
+    transform: translateX(103.5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes scan-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.brand:hover .ready .reading {
+  animation: scan-reading 1.4s cubic-bezier(0.45, 0, 0.25, 1) 1;
+}
+.brand:hover .turn {
+  animation: scan-turn 1.4s cubic-bezier(0.45, 0, 0.25, 1) 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand:hover .ready .reading,
+  .brand:hover .turn {
+    animation: none;
+  }
+}

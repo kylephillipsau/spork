@@ -8,6 +8,7 @@ import { wantsChromeLocator } from "@app/routing/manifest";
 import type { Screen } from "@app/routing/Router";
 
 import { AppShell } from "./AppShell";
+import { Brand, useOnline } from "./Brand";
 import s from "./frames.module.css";
 
 export type Frame = "app" | "auth" | "print";
@@ -68,14 +69,12 @@ export function LostFrame({ children }: { children: ReactNode }) {
 
 /** Sign-in and first choices: a centred card on the anodised ground. */
 export function AuthLayout({ children }: { children: ReactNode }) {
+  const online = useOnline();
   return (
     <div className={cx(s.auth, materials.anodise)} data-density="desktop">
       <div className={s.authColumn}>
         <div className={s.authBrand}>
-          <span className={cx(s.authMark, materials.nylon, materials.dyed)} aria-hidden>
-            S
-          </span>
-          <span className={s.authWordmark}>Spork</span>
+          <Brand markClassName={s.authMark} wordmarkClassName={s.authWordmark} state={online ? "ready" : "offline"} />
         </div>
         {children}
       </div>

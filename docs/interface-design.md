@@ -1835,10 +1835,21 @@ does not explain the design.
 
 **The character stays, the machinery goes.** The frame is still anodised
 aluminium and labels are still nylon (D118, D122 in spirit): the sidebar and
-sign-in ground are blasted metal with a lit top edge, and work counts, the site
-tag and the brand mark are woven nylon, the site tag dyed to the accent. Data
-surfaces stay plain so they read. The finishes are static CSS; the light
-solver, the canvas and pointer parallax (D121) are gone.
+sign-in ground are blasted metal with a lit top edge, and work counts and the
+site tag are woven nylon, the site tag dyed to the accent. Data surfaces stay
+plain so they read. The finishes are static CSS; the light solver, the canvas
+and pointer parallax (D121) are gone.
+
+**The mark and the wordmark** (`client/app/shell/Brand.tsx`). The mark is the
+Rack S: an S lit on a rack face of bins, black anodised, lit off-white with one
+bin in hi-vis yellow, the bin page's lit bin as the brand. The wordmark is
+"spork" in B612 Bold, the face made for Airbus cockpit screens, outlined from
+the font so it needs none, over a rule with a tick at each letter's edge and a
+hi-vis reading under the o. The o is a reticle: notched when ready, dimmed with
+the reading out when the server cannot be reached; hovered, it scans once, and
+not for someone who asks for reduced motion. The geometry and colours are in
+`rackS.ts` once, and every favicon, home-screen icon, the web manifest and the
+native app's icons are drawn from it by `npm run icons`.
 
 **How the styling is built.** One source of values, one owner per pattern,
 and checks rather than conventions:

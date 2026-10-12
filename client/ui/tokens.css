@@ -220,4 +220,12 @@
   --ui-nylon: #2a2d35;
   --ui-nylon-dyed: #2e2a6b;
   --ui-nylon-ink: #d9ddf9;
+  /* The mark: black anodised, its bins lit off-white, one in hi-vis. */
+  --ui-brand-tile: #101114;
+  --ui-brand-lit: #eef0f3;
+  --ui-brand-hivis: #dfff1a;
+  --ui-brand-edge: rgba(var(--ui-ano-hi), 0.12);
+  --ui-brand-rip: rgba(var(--ui-ano-hi), 0.06);
+  --ui-brand-sheen-hi: rgba(var(--ui-ano-hi), 0.08);
+  --ui-brand-sheen-lo: rgba(var(--ui-ano-shade), 0.3);
 }

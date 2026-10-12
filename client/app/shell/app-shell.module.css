@@ -40,21 +40,17 @@
   color: var(--ui-ano-ink);
 }
 .mark {
-  display: inline-flex;
+  display: block;
   flex: none;
-  align-items: center;
-  justify-content: center;
   width: var(--ui-mark);
   height: var(--ui-mark);
-  border-radius: var(--ui-radius);
-  font-size: var(--ui-text-md);
-  font-weight: 700;
 }
+/* The wordmark's outline is 279 by 126 units: its letters, then the rule. */
 .wordmark {
-  font-size: var(--ui-text-md);
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  display: block;
+  flex: none;
+  height: calc(var(--ui-mark) * 0.8);
+  aspect-ratio: 279 / 126;
 }
 
 .nav {
