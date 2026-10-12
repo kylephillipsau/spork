@@ -16189,9 +16189,9 @@ again from its card if it looks stretched.
 
 ### D244: The packer checks the order as it is packed
 
-*Adopted 2026-10-12. Decided ahead of the build; nothing below is written yet.
-D244 to D252 are one design for the pack bench, decided together; the order
-they are built in closes D252.*
+*Adopted 2026-10-12, with migration 136. D244 to D252 are one design for the
+pack bench, decided together; the order they are built in closes D252. This
+one is built; the rest were decided ahead of the build.*
 
 **The finding.** The bench records what goes into a carton, and nothing on it
 asks the packer whether what reached the bench is what the order asked for. A
@@ -16210,19 +16210,23 @@ it can be sealed.
 - **A check is a fact** (`pack_check`): the line, the count expected, the
   count seen, who and when, under a client event (S19). A line's newest
   check wins.
-- **When they differ**: short, the line says so and the plan packs what is
-  there, and the shortfall is a finding for whoever picked it, here or in
-  NetSuite (D172). Over, the extra goes back. A wrong item is taken out to its
-  bin, as taking out works now.
+- **When they differ**: short, the line says so, the plan packs what is there
+  and the tally counts the rest as short; the shortfall is for whoever picked
+  it, here or in NetSuite (D172). Over, the extra goes back. A wrong item is
+  taken out to its bin, as taking out works now. A check made against another
+  count than the line now commits asks to be made again.
 - **The weight is the second check.** A carton's typed weight (the scale is
   read by eye) is compared with what it should weigh: its contents' recorded
-  weights and the box's empty weight (D224). Within the tolerance, it ticks.
-  Outside it, the bench says what would explain the difference: "1.4 kg
-  heavy: 2 more of ABC-1234 at 0.7 kg?" The tolerance is a workspace
-  setting, 3% to start.
-- **Sealing waits for the checks**: a carton with an unchecked line in it
-  cannot be sealed. A thing that ships as it is (D196) is sealed as it is
-  made, so its line is checked before it is made.
+  weights and the box's empty weight (D224). Within the tolerance, it agrees.
+  Outside it, the bench says what would explain the difference, the fewest
+  miscounted first: "1.4 kg heavy: 2 more of ABC-1234 at 0.700 kg?" The
+  tolerance is the site's, set in Workspace (`site.weight_tolerance_per_mille`,
+  3% to start), and the bench read says whether a weight agrees.
+- **Sealing waits for the checks**: the bench does not offer the seal of a
+  carton with an unchecked line in it. A thing that ships as it is (D196) is
+  sealed as it is made, so its line is checked before it is made. A seal that
+  happens anyway is still a seal (D5): it is recorded, with a warning naming
+  the lines not checked.
 
 **Why.** The user, 2026-10-12: "one of the really important parts about this
 is the ability for the packer to check the boxes at the packing station to
@@ -16304,8 +16308,10 @@ bench's own code.
   went into each, less what has since moved out of it to another package.
   Without the netting, a carton sealed after units left it would still count
   them. Amends D100; J68 checks the same.
-- **Nothing goes into a sealed package**: a pick, a handover or a repack into
-  one is refused by the server, "open it first".
+- **Nothing goes into a sealed package**: the bench offers no pick, handover
+  or repack into one, "open it first", and the server records one that
+  happens anyway with that warning (D5), as it does a seal with lines
+  unchecked (D244).
 - **Putting a package in or on another** refuses a loop, more than three
   deep (D24's wrap, pallet, carton, still raised as `nesting_too_deep` for
   facts that arrive out of order), and a parent that is sealed, despatched or
