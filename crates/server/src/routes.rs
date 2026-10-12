@@ -2236,7 +2236,8 @@ pub async fn seal_package(
                     package_id,
                     source: source.clone(),
                 };
-                let problems = despatching::check_seal(&proposed, pkg_state.as_ref());
+                let unchecked = crate::checking::unchecked_in(tx, package_id).await?;
+                let problems = despatching::check_seal(&proposed, pkg_state.as_ref(), &unchecked);
                 let hard: Vec<String> = problems
                     .iter()
                     .filter(|p| despatching::seal_is_hard(p))
@@ -9575,6 +9576,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::shipping::suggest_box)
         .service(crate::shipping::box_weight)
         .service(crate::shipping::box_empty_weight)
+        .service(crate::checking::check_line)
         .service(crate::backup::backup_summary)
         .service(crate::backup::download_backup)
         .service(crate::search::global_search)
@@ -9600,6 +9602,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::workspace::workspace)
         .service(crate::workspace::set_pack_location)
         .service(crate::workspace::set_owner)
+        .service(crate::workspace::set_weight_tolerance)
         .service(record_correction)
         .service(record_adjustment)
         .service(record_count)

@@ -415,6 +415,16 @@ export const api = {
     });
   },
 
+  /** A line checked at the bench (D244): what was shown, and what the packer saw. */
+  checkLine: (input: { line: Uuid; expected: number; seen: number; act: Act }) =>
+    send<void>("POST", "/pack-checks", {
+      fulfilment_line_id: input.line,
+      expected_quantity: input.expected,
+      seen_quantity: input.seen,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
+
   /**
    * **Two events, because they were come by two ways.** The weight is read off
    * a scale; a cut-down height is known because the packer cut the box.
@@ -1153,6 +1163,9 @@ export const api = {
   /** Say where a site packs, by a location code; a code the site lacks is made. */
   setPackLocation: (siteId: Uuid, code: string) =>
     send<PackLocationSet>("POST", `/workspace/sites/${encodeURIComponent(siteId)}/pack-location`, { code }),
+  /** How far a carton's weight may be off and still agree, in parts per thousand (D244). */
+  setWeightTolerance: (siteId: Uuid, perMille: number) =>
+    send<void>("POST", `/workspace/sites/${encodeURIComponent(siteId)}/weight-tolerance`, { per_mille: perMille }),
 
   /** Say that a site's stock belongs to this business. */
   setSiteOwner: (siteId: Uuid) =>

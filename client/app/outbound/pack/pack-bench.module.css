@@ -15,11 +15,63 @@
     grid-template-columns: minmax(0, 1fr) clamp(360px, 33%, 32rem);
   }
 }
-.cartons {
+/* Each side of the bench: cards, one under the other. */
+.stack {
   display: flex;
   flex-direction: column;
   gap: var(--ui-space-4);
   min-width: 0;
+}
+
+/* ---- checking the order (D244) ---- */
+.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* What it is, what should be there, and the check: on one row where there is
+   room, what should be there over the check where there is not. */
+.checkRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-4);
+  padding: var(--ui-space-2-5) var(--ui-space-4);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.checkRow > :first-child {
+  grid-row: span 2;
+}
+.checkRow > :last-child {
+  justify-self: end;
+}
+@media (min-width: 1500px) {
+  .checkRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .checkRow > :first-child {
+    grid-row: auto;
+  }
+}
+.checkRow[data-state="open"] {
+  background: var(--ui-accent-soft);
+}
+.checkExpect {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+.expect {
+  font-size: var(--ui-text-md);
+  font-weight: 600;
+}
+.checked {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-space-2);
 }
 
 /* ---- lines ---- */
@@ -81,6 +133,23 @@
 .big {
   font-size: var(--ui-text-xl);
   font-weight: 650;
+}
+/* The scale against the expectation, and what would explain it (D244). */
+.verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1-5);
+}
+.why {
+  display: block;
+  color: var(--ui-warning);
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+}
+/* A code is not broken at its hyphens. */
+.whole {
+  white-space: nowrap;
 }
 .note {
   display: block;

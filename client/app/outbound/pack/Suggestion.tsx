@@ -11,6 +11,7 @@ import { copyText } from "@app/common/copy";
 
 import { arrange, contentsOf, type Aside, type AsIs, type BoxPlan, type Dims, type Kind, type Layer, type OpenCarton } from "./arrange";
 import { bookingCm, bookingText, gathered, type Freight } from "./freight";
+import { onTheBench } from "./check";
 import { wholeOrder, type OrderLine, type OrderView, type Parcel, type ParcelState } from "./order";
 import type { ParcelShape } from "./pack3d";
 import { tone } from "./tones";
@@ -50,7 +51,8 @@ export function Suggestion({
   canShip: (line: Uuid) => boolean;
 }) {
   const open = useMemo(() => openOf(screen, bench.openCarton), [screen, bench.openCarton]);
-  const plan = useMemo(() => arrange(screen.lines, screen.presets, open), [screen.lines, screen.presets, open]);
+  // What is on the bench: a line found short is planned for what is there (D244).
+  const plan = useMemo(() => arrange(onTheBench(screen.lines), screen.presets, open), [screen.lines, screen.presets, open]);
   const order = useMemo(() => wholeOrder(screen, plan), [screen, plan]);
   const shapes = useMemo(() => orderShapes(order), [order]);
   const pictures = useMemo(() => new Map(screen.lines.map((l) => [l.item_id, l.picture])), [screen.lines]);
@@ -226,6 +228,7 @@ function tally(o: OrderView): string {
   if (o.planned > 0) parts.push(`${o.planned} planned`);
   if (o.unplaced > 0) parts.push(`${o.unplaced} can't be placed yet`);
   if (o.notBoxed > 0) parts.push(`${o.notBoxed} picked, not in a carton`);
+  if (o.short > 0) parts.push(`${o.short} short`);
   if (o.missing > 0) parts.push(`${o.missing} not accounted for`);
   else if (o.unplaced === 0 && o.notBoxed === 0) parts.push(o.packed === o.committed ? "all packed" : "everything accounted for");
   return parts.join(" · ");
@@ -283,7 +286,7 @@ function WholeOrder({
     <div className={s.order}>
       <ul className={s.orderLines} aria-label="The order's lines">
         {order.lines.map((l) => {
-          const trouble = l.missing > 0 || l.unplaced > 0 || l.notBoxed > 0;
+          const trouble = l.missing > 0 || l.unplaced > 0 || l.notBoxed > 0 || l.short > 0;
           return (
             <li key={l.line} className={s.orderLine} data-done={l.done || undefined} data-trouble={(!l.done && trouble) || undefined}>
               <span className={s.orderMark} aria-label={l.done ? "Packed" : trouble ? "Needs attention" : "Not packed yet"} role="img">
@@ -402,6 +405,7 @@ function whereWords(l: OrderLine): string {
   const parts = l.where.map((w) => `${w.parcel}${w.state === "planned" ? ", to go in" : ""} · ${w.units}`);
   if (l.unplaced > 0) parts.push(`${l.unplaced} can't be placed yet`);
   if (l.notBoxed > 0) parts.push(`${l.notBoxed} picked, not in a carton`);
+  if (l.short > 0) parts.push(`${l.short} short at the check`);
   if (l.missing > 0) parts.push(`${l.missing} not accounted for`);
   return parts.length > 0 ? parts.join("; ") : "Nothing yet";
 }

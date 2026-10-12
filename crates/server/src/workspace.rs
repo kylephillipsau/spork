@@ -54,6 +54,9 @@ pub struct WorkspaceSite {
     pub pack_location: Option<String>,
     /// Whose goods it holds, by name, when it has said (migration 95).
     pub owner: Option<String>,
+    /// How far a carton's typed weight may be from what it should weigh and
+    /// still agree, in parts per thousand (D244).
+    pub weight_tolerance_per_mille: i32,
 }
 
 #[derive(Serialize, Debug)]
@@ -95,13 +98,14 @@ pub async fn workspace(
                         "SELECT s.id, s.code, s.name, s.timezone, s.active,
                                 count(l.id),
                                 count(l.id) FILTER (WHERE l.pick_sequence IS NOT NULL),
-                                pl.code, o.name
+                                pl.code, o.name, s.weight_tolerance_per_mille
                            FROM site s
                            LEFT JOIN location l
                              ON l.site_id = s.id AND l.active
                            LEFT JOIN location pl ON pl.id = s.pack_location_id
                            LEFT JOIN party o ON o.id = s.owner_party_id
-                          GROUP BY s.id, s.code, s.name, s.timezone, s.active, pl.code, o.name
+                          GROUP BY s.id, s.code, s.name, s.timezone, s.active, pl.code, o.name,
+                                   s.weight_tolerance_per_mille
                           ORDER BY s.code",
                         &[],
                     )
@@ -130,6 +134,7 @@ pub async fn workspace(
                                 current: at == Some(id),
                                 pack_location: r.get(7),
                                 owner: r.get(8),
+                                weight_tolerance_per_mille: r.get(9),
                             }
                         })
                         .collect(),
@@ -218,6 +223,47 @@ pub async fn set_pack_location(
         })
         .await?;
     Ok(HttpResponse::Ok().json(out))
+}
+
+/// How far a carton's weight may be off and still agree (D244).
+#[derive(Deserialize, Debug)]
+pub struct SetWeightTolerance {
+    pub per_mille: i32,
+}
+
+/// Say how far a carton's typed weight may be from what it should weigh and
+/// still agree, in parts per thousand: 30 is three per cent (D244).
+#[post("/workspace/sites/{site_id}/weight-tolerance")]
+pub async fn set_weight_tolerance(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<SetWeightTolerance>,
+) -> Result<HttpResponse, ApiError> {
+    let who = caller(&state, &req).await?;
+    let site_id = path.into_inner();
+    let per_mille = body.per_mille;
+    if !(1..=500).contains(&per_mille) {
+        return Err(ApiError::Rejected("a tolerance between 0.1% and 50%".into()));
+    }
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let changed = tx
+                    .execute(
+                        "UPDATE site SET weight_tolerance_per_mille = $2 WHERE id = $1",
+                        &[&site_id, &per_mille],
+                    )
+                    .await?;
+                if changed == 0 {
+                    return Err(ApiError::NotFound);
+                }
+                Ok(())
+            })
+        })
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Whose goods a site holds. `business` is the only answer taken so far: the

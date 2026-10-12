@@ -311,6 +311,7 @@ async fn carton_view(
                         lot_code: r.get(2),
                         quantity: r.get(3),
                         picks: vec![],
+                        each_g: None,
                     })
                     .collect();
                 let from_lines: i64 = lines.iter().map(|l| l.quantity).sum();

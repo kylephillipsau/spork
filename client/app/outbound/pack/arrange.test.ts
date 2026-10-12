@@ -48,6 +48,8 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
     elsewhere: null,
     own_carton: null,
     picture: null,
+    unit: { level: "each", said: false, netsuite_unit: null, netsuite_level: null, singles: 1 },
+    check: null,
     packs,
     kit: null,
     ...over,

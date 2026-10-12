@@ -46,6 +46,18 @@ export interface BenchLine {
   packs: PackUnit[];
   /** The kit it is a part of, when it is one (D223). The kit's own line is no work and isn't a line here. */
   kit: KitOf | null;
+  /** Which level of it is one, and NetSuite's word for it (D218, D239): what the line counts. */
+  unit: ItemUnit;
+  /** Its newest check at the bench, or none yet (D244). */
+  check: LineCheck | null;
+}
+
+/** A line checked at the bench (D244): what should have been there, what was seen, who and when. */
+export interface LineCheck {
+  expected: number;
+  seen: number;
+  by: string | null;
+  at: string;
 }
 
 /** The kit a bench line is a part of, as the order has it (D223). */
@@ -173,6 +185,8 @@ export interface PackedRow {
    *  these in order — a row is not one movement, and pretending it is fails on
    *  the second pick of the same item into the same carton. */
   picks: [Uuid, number][];
+  /** What one weighs, as the carton's expected weight counts it (D244). */
+  each_g: number | null;
 }
 
 /**
@@ -200,6 +214,10 @@ export interface ExpectedWeight extends WeightBaseline {
   /** Weighed minus expected. Null until somebody puts the carton on a scale. */
   delta_g: number | null;
   delta_per_mille: number | null;
+  /** How far it may be off and still agree: the site's to say (D244). */
+  tolerance_per_mille: number;
+  /** Whether the scale agrees, within that. Null until it is weighed. */
+  agrees: boolean | null;
 }
 
 export interface CartonSummary {
@@ -1153,6 +1171,8 @@ export interface WorkspaceSite {
   pack_location: string | null;
   /** Whose goods it holds, by name, when it has said. */
   owner: string | null;
+  /** How far a carton's typed weight may be off and still agree, in parts per thousand (D244). */
+  weight_tolerance_per_mille: number;
 }
 
 /** `POST /workspace/sites/{id}/pack-location`: what setting it did. */

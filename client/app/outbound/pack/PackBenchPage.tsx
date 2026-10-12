@@ -29,6 +29,8 @@ import { kg } from "@app/common/format";
 import { ItemDrawer, ItemLine } from "@app/items/ItemProperties";
 
 import { piecesOf, type AsIs } from "./arrange";
+import { explain, needsCheck, offBy, onTheBench, uncheckedIn } from "./check";
+import { Checks } from "./Checks";
 import { Suggestion, shipLabel } from "./Suggestion";
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
@@ -90,8 +92,9 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
   // inner packs or eaches somebody said travel on their own. The same reading
   // the suggestion makes, so the line and the suggestion offer the same thing.
   // From the bin chosen when this site holds the stock, else handed over.
-  const asIs = piecesOf(screen.lines).asIs;
-  const canShip = (l: BenchLine) => !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere);
+  const asIs = piecesOf(onTheBench(screen.lines)).asIs;
+  // Sealed as it is made, so its line is checked first (D244).
+  const canShip = (l: BenchLine) => !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere) && !needsCheck(l);
   const ship = (a: AsIs) => {
     const l = screen.lines.find((x) => x.line_id === a.line);
     if (!l || !canShip(l)) return;
@@ -173,7 +176,15 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
                 icon={<Boxes />}
                 disabled={!canShip(l)}
                 onClick={() => ship(a)}
-                title={a.level === "carton" && l.own_carton ? describeOwn(l.own_carton) : a.size ? `${a.size.join(" × ")} mm` : "size not recorded"}
+                title={
+                  needsCheck(l)
+                    ? "Check it first: it is sealed as it is made"
+                    : a.level === "carton" && l.own_carton
+                      ? describeOwn(l.own_carton)
+                      : a.size
+                        ? `${a.size.join(" × ")} mm`
+                        : "size not recorded"
+                }
               >
                 {shipLabel(a)}
               </Button>
@@ -254,33 +265,36 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       )}
 
       <div className={s.split}>
-        <Card
-          title="To pack"
-          description={[
-            elsewhere?.provenance,
-            bench.openCarton ? "Items are added to the open carton." : "Start a carton to add items.",
-          ]
-            .filter(Boolean)
-            .join(". ")}
-          padded={false}
-        >
-          <DataTable
-            aria-label="Lines to pack"
-            columns={lineColumns}
-            rows={screen.lines}
-            rowKey={(l) => l.line_id}
-            empty={<EmptyState title="Nothing committed" />}
-          />
-        </Card>
+        <div className={s.stack}>
+          <Checks lines={screen.lines} bench={bench} look={setLooking} />
+          <Card
+            title="To pack"
+            description={[
+              elsewhere?.provenance,
+              bench.openCarton ? "Items are added to the open carton." : "Start a carton to add items.",
+            ]
+              .filter(Boolean)
+              .join(". ")}
+            padded={false}
+          >
+            <DataTable
+              aria-label="Lines to pack"
+              columns={lineColumns}
+              rows={screen.lines}
+              rowKey={(l) => l.line_id}
+              empty={<EmptyState title="Nothing committed" />}
+            />
+          </Card>
+        </div>
 
-        <div className={s.cartons}>
+        <div className={s.stack}>
           <Suggestion screen={screen} bench={bench} look={setLooking} ship={ship} canShip={(line) => {
             const l = screen.lines.find((x) => x.line_id === line);
             return !!l && canShip(l);
           }} />
           <NewCarton screen={screen} bench={bench} />
           {screen.cartons.map((c) => (
-            <Carton key={c.id} carton={c} bench={bench} look={setLooking} pictures={pictures} />
+            <Carton key={c.id} carton={c} bench={bench} look={setLooking} pictures={pictures} lines={screen.lines} />
           ))}
         </div>
       </div>
@@ -334,12 +348,16 @@ function Carton({
   bench,
   look,
   pictures,
+  lines,
 }: {
   carton: CartonSummary;
   bench: PackBench;
   look: (itemId: string) => void;
   pictures: Map<Uuid, Picture | null>;
+  lines: BenchLine[];
 }) {
+  // Sealing waits for what is in it to be checked (D244).
+  const unchecked = uncheckedIn(carton, lines);
   const stated = carton.stated_size?.height_mm ?? null;
   const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : (carton.gross_weight_g / 1000).toFixed(3));
   const [height, setHeight] = useState(String(carton.height_mm ?? stated ?? ""));
@@ -416,7 +434,7 @@ function Carton({
             <Fact label="Gross">
               <span className={s.big}>{kg(carton.gross_weight_g)}</span>
             </Fact>
-            {carton.expected && <ExpectedFact expected={carton.expected} />}
+            {carton.expected && <ExpectedFact expected={carton.expected} contents={carton.contents} />}
             {carton.listed_weight_g !== null && (
               <Fact label="Listed">
                 <span>
@@ -454,7 +472,7 @@ function Carton({
               </div>
             </div>
             <Facts>
-              {carton.expected && <ExpectedFact expected={carton.expected} />}
+              {carton.expected && <ExpectedFact expected={carton.expected} contents={carton.contents} />}
               <Fact label="Footprint">{footprint}</Fact>
             </Facts>
           </div>
@@ -464,11 +482,16 @@ function Carton({
                 Discard
               </Button>
             )}
+            {unchecked.length > 0 && <span className={s.note}>Check {unchecked.join(", ")} to seal it</span>}
             <Spacer />
             <Button type="submit" disabled={bench.busy}>
               Record
             </Button>
-            <Button variant={open ? "primary" : "secondary"} disabled={bench.busy} onClick={() => void bench.seal(carton.id)}>
+            <Button
+              variant={open ? "primary" : "secondary"}
+              disabled={bench.busy || unchecked.length > 0}
+              onClick={() => void bench.seal(carton.id)}
+            >
               Seal
             </Button>
           </Toolbar>
@@ -490,17 +513,33 @@ function sized(size: StatedSize): string {
   return `${size.length_mm} × ${size.width_mm} × ${size.height_mm} mm`;
 }
 
-/** What this carton has weighed before, and on what basis. */
-function ExpectedFact({ expected }: { expected: ExpectedWeight }) {
-  const gap = agreement(expected);
+/**
+ * What this carton should weigh, and on what basis; once weighed, whether the
+ * scale agrees within the site's tolerance, and if not what would explain it
+ * (D244).
+ */
+function ExpectedFact({ expected, contents }: { expected: ExpectedWeight; contents: PackedRow[] }) {
+  // Said once: by the verdict when it is off, else beside where it came from.
+  const gap = expected.agrees === false ? null : agreement(expected);
+  const why = explain(expected, contents);
   return (
     <Fact label="Expected">
       <span>
-        {kg(expected.grams)}
+        <span className={s.verdict}>
+          {kg(expected.grams)}
+          {expected.agrees !== null && (
+            <Badge tone={expected.agrees ? "success" : "warning"}>{expected.agrees ? "Agrees" : offBy(expected)}</Badge>
+          )}
+        </span>
         <span className={s.note}>
           {provenance(expected)}
           {gap ? ` · ${gap}` : ""}
         </span>
+        {why.map((m) => (
+          <span key={m.code} className={s.why}>
+            {Math.abs(m.by)} {m.by > 0 ? "more" : "fewer"} of <span className={s.whole}>{m.code}</span> at {kg(m.each_g)}?
+          </span>
+        ))}
       </span>
     </Fact>
   );

@@ -24,6 +24,8 @@ export interface WorkspaceBench {
   dismiss: () => void;
   setPackLocation: (siteId: string, code: string) => Promise<void>;
   setOwner: (siteId: string) => Promise<void>;
+  /** How far a carton's weight may be off and still agree, in parts per thousand (D244). */
+  setWeightTolerance: (siteId: string, perMille: number) => Promise<void>;
   /** The box presets, the workspace's own first; null until read. */
   boxes: PackageTypeRow[] | null;
   /** Say whether the pack bench's suggestion may choose a box (D196). */
@@ -91,6 +93,12 @@ export function useWorkspace(): WorkspaceBench {
     [change],
   );
 
+  const setWeightTolerance = useCallback(
+    (siteId: string, perMille: number) =>
+      change(() => api.setWeightTolerance(siteId, perMille), "Could not change how far a weight may be off."),
+    [change],
+  );
+
   const suggest = useCallback(
     (boxId: string, suggested: boolean) => change(() => api.suggestBox(boxId, suggested), "Could not change whether that box is suggested."),
     [change],
@@ -122,6 +130,7 @@ export function useWorkspace(): WorkspaceBench {
     dismiss: () => setProblem(null),
     setPackLocation,
     setOwner,
+    setWeightTolerance,
     boxes,
     suggest,
     boxWeight,

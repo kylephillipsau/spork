@@ -1,4 +1,10 @@
-import type { BenchScreen } from "@domain/types";
+import type { BenchScreen, ItemUnit, LineCheck } from "@domain/types";
+
+/** Counted in eaches, NetSuite saying nothing of it. */
+const EACH: ItemUnit = { level: "each", said: false, netsuite_unit: null, netsuite_level: null, singles: 1 };
+
+/** Confirmed at the bench as it should be (D244). */
+const checked = (n: number, seen = n): LineCheck => ({ expected: n, seen, by: "Alex", at: "2026-10-03T09:41:00+10:00" });
 
 /**
  * IF400187 mid-pack, as the endpoint returns it.
@@ -32,6 +38,8 @@ export const PACK_FIXTURE: BenchScreen = {
       own_carton: null,
       picture: null,
       kit: null,
+      unit: EACH,
+      check: checked(8),
       packs: [],
       cells: [
         {
@@ -54,6 +62,8 @@ export const PACK_FIXTURE: BenchScreen = {
       own_carton: null,
       picture: null,
       kit: null,
+      unit: EACH,
+      check: checked(3),
       packs: [],
       cells: [
         {
@@ -77,6 +87,9 @@ export const PACK_FIXTURE: BenchScreen = {
       picture: null,
       // Measured as an each, so the suggestion has something to arrange.
       kit: { item_code: "PPE-KIT-06", description: "Apron and oversleeves kit", ordered: 6 },
+      unit: EACH,
+      // Not checked yet: what is in a carton of it can't be sealed (D244).
+      check: null,
       packs: [
         {
           level: "each",
@@ -123,6 +136,8 @@ export const PACK_FIXTURE: BenchScreen = {
       picture: null,
       // Ten to a carton, and a carton ships as it is unless somebody says not (D196).
       kit: { item_code: "PPE-KIT-06", description: "Apron and oversleeves kit", ordered: 6 },
+      unit: EACH,
+      check: checked(30),
       packs: [
         {
           level: "carton",
@@ -185,6 +200,8 @@ export const PACK_FIXTURE: BenchScreen = {
         established: true,
         delta_g: 2,
         delta_per_mille: 0,
+        tolerance_per_mille: 30,
+        agrees: true,
       },
       contents: [
         {
@@ -194,6 +211,7 @@ export const PACK_FIXTURE: BenchScreen = {
           lot_code: null,
           quantity: 8,
           picks: [["3f0e0000-0000-0000-0000-000000000001", 8]],
+          each_g: 496,
         },
       ],
     },
@@ -221,6 +239,8 @@ export const PACK_FIXTURE: BenchScreen = {
         established: false,
         delta_g: null,
         delta_per_mille: null,
+        tolerance_per_mille: 30,
+        agrees: null,
       },
       contents: [
         {
@@ -233,6 +253,7 @@ export const PACK_FIXTURE: BenchScreen = {
             ["3f0e0000-0000-0000-0000-000000000002", 2],
             ["3f0e0000-0000-0000-0000-000000000003", 1],
           ],
+          each_g: null,
         },
       ],
     },
@@ -280,6 +301,7 @@ export const PACK_FIXTURE: BenchScreen = {
           lot_code: null,
           quantity: 10,
           picks: [["3f0e0000-0000-0000-0000-000000000004", 10]],
+          each_g: null,
         },
       ],
     },
@@ -297,6 +319,9 @@ export const PACK_FIXTURE: BenchScreen = {
  * The same job with a small box open and two aprons in it (D198): the
  * suggestion fills this carton first, the two shown as in, the plan on the
  * next layer with something to put in.
+ *
+ * **Weighed, and heavy by two aprons (D244)**, and the aprons not checked yet:
+ * the screen says what would explain the weight, and the seal waits.
  */
 export const PACK_FILLING: BenchScreen = {
   ...PACK_FIXTURE,
@@ -311,10 +336,19 @@ export const PACK_FILLING: BenchScreen = {
       own_level: null,
       listed_weight_g: null,
       sealed: false,
-      gross_weight_g: null,
+      gross_weight_g: 950,
       height_mm: null,
       stated_size: { length_mm: 400, width_mm: 300, height_mm: 190 },
-      expected: null,
+      expected: {
+        grams: 590,
+        n: 6,
+        borrowed: false,
+        established: true,
+        delta_g: 360,
+        delta_per_mille: 610,
+        tolerance_per_mille: 30,
+        agrees: false,
+      },
       contents: [
         {
           item_id: "01990000-0000-7000-8000-00000000a003",
@@ -323,6 +357,7 @@ export const PACK_FILLING: BenchScreen = {
           lot_code: null,
           quantity: 2,
           picks: [["3f0e0000-0000-0000-0000-000000000005", 2]],
+          each_g: 180,
         },
       ],
     },
@@ -345,7 +380,8 @@ export const PACK_LOOSE: BenchScreen = {
       kit: null,
       packs: [{ ...l.packs[0]!, level: "each" as const, units: 1, size: null, ships_as_is: false, gross_weight_g: grams }],
     });
-    if (l.item_code === "GLV-NIT-BLU-M") return unmeasured(520);
+    // Seven seen of eight: the check says short (D244).
+    if (l.item_code === "GLV-NIT-BLU-M") return { ...unmeasured(520), check: checked(8, 7) };
     if (l.item_code === "HRN-DSP-WHT") return unmeasured(null);
     if (l.item_code === "APR-PE-CLR-L") return unmeasured(180);
     return { ...l, remaining: l.committed, kit: null, own_carton: null };

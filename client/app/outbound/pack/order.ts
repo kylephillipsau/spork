@@ -2,6 +2,7 @@ import type { BenchScreen, CartonSummary, Picture, Uuid } from "@domain/types";
 
 import { roundLook } from "../../items/round.ts";
 import { boxFreight, type Arrangement, type AsIs, type Aside, type BoxPlan, type Dims, type Layer } from "./arrange.ts";
+import { shortOf } from "./check.ts";
 import type { Freight } from "./freight";
 
 /**
@@ -77,6 +78,8 @@ export interface OrderLine {
   unplaced: number;
   /** Picked, or handed over, and not in a carton yet. */
   notBoxed: number;
+  /** Not there when the line was checked (D244): what the plan leaves out. */
+  short: number;
   /** None of those: the units the order would leave without. */
   missing: number;
   /** All of it is in a carton. */
@@ -94,6 +97,7 @@ export interface OrderView {
   planned: number;
   unplaced: number;
   notBoxed: number;
+  short: number;
   missing: number;
 }
 
@@ -263,7 +267,8 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
     // Picked or handed over and in no carton: what the bench counts as done
     // that no carton holds.
     const notBoxed = Math.max(0, l.committed - l.remaining - packed);
-    const missing = Math.max(0, l.committed - packed - planned - unplaced - notBoxed);
+    const short = Math.min(shortOf(l), Math.max(0, l.committed - packed - planned - unplaced - notBoxed));
+    const missing = Math.max(0, l.committed - packed - planned - unplaced - notBoxed - short);
     return {
       line: l.line_id,
       item_id: l.item_id,
@@ -275,6 +280,7 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       planned,
       unplaced,
       notBoxed,
+      short,
       missing,
       done: l.committed > 0 && packed >= l.committed,
       where,
@@ -291,6 +297,7 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
     planned: sum((l) => l.planned),
     unplaced: sum((l) => l.unplaced),
     notBoxed: sum((l) => l.notBoxed),
+    short: sum((l) => l.short),
     missing: sum((l) => l.missing),
   };
 }

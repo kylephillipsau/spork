@@ -60,6 +60,8 @@ export interface PackBench {
     count: number;
     stock?: Uuid;
   }) => Promise<void>;
+  /** A line checked (D244): what was shown, and what the packer saw. */
+  check: (input: { line: Uuid; expected: number; seen: number }) => Promise<void>;
   measure: (input: { carton: Uuid; weightKg?: string; heightMm?: string }) => Promise<void>;
   takeOut: (input: { picks: [Uuid, number][]; quantity: number }) => Promise<void>;
   seal: (carton: Uuid) => Promise<void>;
@@ -173,6 +175,12 @@ export function usePackBench(fulfilment: Uuid): PackBench {
           else await api.handOver({ line, quantity: units, carton, act: fill });
           await api.seal(carton, partOf(act, `carton-${n}:seal`));
         }
+      }),
+
+    check: ({ line, expected, seen }) =>
+      press(`check:${line}:${expected}:${seen}`, async (act) => {
+        if (!(seen >= 0)) throw new ApiError("How many do you see?", 400);
+        await api.checkLine({ line, expected, seen, act });
       }),
 
     measure: ({ carton, weightKg, heightMm }) =>

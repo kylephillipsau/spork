@@ -128,6 +128,33 @@ pub struct ItemUnit {
     pub singles: Option<i32>,
 }
 
+/// Which level of an item is one in NetSuite, and NetSuite's word for it
+/// (D218, D239): the item page and the pack bench read the same.
+pub async fn unit_of(tx: &tokio_postgres::Transaction<'_>, item: Uuid) -> Result<ItemUnit, ApiError> {
+    Ok(tx
+        .query_opt(
+            "SELECT level::text, said, netsuite_unit, singles,
+                    CASE WHEN btrim(netsuite_unit) <> '' THEN unit_level_of(netsuite_unit)::text END
+               FROM item_unit_level WHERE item_id = $1",
+            &[&item],
+        )
+        .await?
+        .map(|u| ItemUnit {
+            level: u.get(0),
+            said: u.get(1),
+            netsuite_unit: u.get(2),
+            singles: u.get(3),
+            netsuite_level: u.get(4),
+        })
+        .unwrap_or(ItemUnit {
+            level: "each".into(),
+            said: false,
+            netsuite_unit: None,
+            singles: Some(1),
+            netsuite_level: None,
+        }))
+}
+
 /// Something said on the floor against NetSuite's bins, still open (D215).
 #[derive(Serialize, Debug)]
 pub struct ItemFlag {
@@ -416,28 +443,7 @@ pub async fn item_page(
                     })
                     .collect();
 
-                let unit = tx
-                    .query_opt(
-                        "SELECT level::text, said, netsuite_unit, singles,
-                                CASE WHEN btrim(netsuite_unit) <> '' THEN unit_level_of(netsuite_unit)::text END
-                           FROM item_unit_level WHERE item_id = $1",
-                        &[&id],
-                    )
-                    .await?
-                    .map(|u| ItemUnit {
-                        level: u.get(0),
-                        said: u.get(1),
-                        netsuite_unit: u.get(2),
-                        singles: u.get(3),
-                        netsuite_level: u.get(4),
-                    })
-                    .unwrap_or(ItemUnit {
-                        level: "each".into(),
-                        said: false,
-                        netsuite_unit: None,
-                        singles: Some(1),
-                        netsuite_level: None,
-                    });
+                let unit = unit_of(tx, id).await?;
 
                 let flags = tx
                     .query(

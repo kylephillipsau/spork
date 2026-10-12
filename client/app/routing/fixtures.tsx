@@ -292,6 +292,7 @@ function packBench(screen: BenchScreen = PACK_FIXTURE) {
         addToCarton: noop,
         handOver: noop,
         shipAsIs: noop,
+        check: noop,
         measure: noop,
         takeOut: noop,
         seal: noop,

@@ -102,6 +102,11 @@ pub struct BenchLine {
     /// The kit it is a part of, when it is one (D223). The kit's own line is
     /// no work and isn't a line here; its parts say what was ordered.
     pub kit: Option<KitOf>,
+    /// Which level of it is one, and NetSuite's word for it (D218, D239): what
+    /// the line counts, so the check can say it in the words on the box.
+    pub unit: crate::items::ItemUnit,
+    /// Its newest check at the bench, or none yet (D244).
+    pub check: Option<crate::checking::LineCheck>,
 }
 
 /// The kit a line is a part of, as the order has it (D223).
@@ -291,6 +296,10 @@ pub struct ExpectedWeight {
     /// only once somebody has put this carton on a scale.
     pub delta_g: Option<i64>,
     pub delta_per_mille: Option<i32>,
+    /// How far it may be off and still agree, the site's to say (D244).
+    pub tolerance_per_mille: i32,
+    /// Whether the scale agrees, within that: absent until it is weighed.
+    pub agrees: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -305,6 +314,9 @@ pub struct PackedRow {
     /// a row is not one movement, and pretending it is would fail on the second
     /// pick of the same item into the same carton.
     pub picks: Vec<(Uuid, i64)>,
+    /// What one of it weighs, as the carton's expected weight counts it: so a
+    /// weight that is off can be said in so many of what is in it (D244).
+    pub each_g: Option<i64>,
 }
 
 /// The whole screen, in one transaction per read.
@@ -466,20 +478,20 @@ pub async fn bench_view(
                     let measured = crate::routes::measurements_of(tx, item_id).await?;
                     let case = case_pack(tx, item_id).await?;
                     // What NetSuite counts one of (D218): what was ordered is in it.
-                    let (unit, singles): (String, i64) = tx
-                        .query_opt(
-                            "SELECT level::text, coalesce(singles, 1)::bigint FROM item_unit_level WHERE item_id = $1",
-                            &[&item_id],
-                        )
-                        .await?
-                        .map(|r| (r.get(0), r.get(1)))
-                        .unwrap_or_else(|| ("each".into(), 1));
-                    let unit = Unit { level: &unit, singles };
+                    let said = crate::items::unit_of(tx, item_id).await?;
+                    let unit = Unit {
+                        level: &said.level,
+                        singles: said.singles.map(i64::from).unwrap_or(1),
+                    };
+                    let own = own_carton(case.as_ref(), &measured, unit);
+                    let packs = packs_of(case.as_ref(), &measured, unit);
                     out.push(BenchLine {
                         elsewhere,
-                        own_carton: own_carton(case.as_ref(), &measured, unit),
+                        own_carton: own,
                         picture: None,
-                        packs: packs_of(case.as_ref(), &measured, unit),
+                        packs,
+                        check: crate::checking::newest(tx, line_id).await?,
+                        unit: said,
                         line_id: l.get(0),
                         item_id,
                         item_code: l.get(1),
@@ -835,7 +847,7 @@ pub async fn cartons_on(
     fulfilment_id: Uuid,
 ) -> Result<Vec<CartonSummary>, ApiError> {
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
-    let (mut out, packed) = scope
+    let (mut out, packed, tolerance) = scope
         .run(move |tx| {
             Box::pin(async move {
                 let rows = tx
@@ -867,6 +879,17 @@ pub async fn cartons_on(
                         &[&fulfilment_id],
                     )
                     .await?;
+                // The site's say on how far a weight may be off (D244).
+                let tolerance: i32 = tx
+                    .query_opt(
+                        "SELECT s.weight_tolerance_per_mille
+                           FROM fulfilment f JOIN site s ON s.id = f.site_id
+                          WHERE f.id = $1",
+                        &[&fulfilment_id],
+                    )
+                    .await?
+                    .map(|r| r.get(0))
+                    .unwrap_or(30);
                 let mut out = vec![];
                 // What is in each carton, in base units, kept beside the
                 // summaries so the weights can be looked up in one go once the
@@ -973,12 +996,14 @@ pub async fn cartons_on(
                                         .zip(left)
                                         .filter(|(_, q)| *q > 0)
                                         .collect(),
+                                    // Filled in below, with the weights.
+                                    each_g: None,
                                 }
                             })
                             .collect(),
                     });
                 }
-                Ok((out, packed))
+                Ok((out, packed, tolerance))
             })
         })
         .await?;
@@ -995,6 +1020,9 @@ pub async fn cartons_on(
         .flat_map(|p| p.rows.iter().map(|(item, _)| (*item, None)))
         .collect();
     let weights = baseline::for_items(state, who, &items, "each").await?;
+    for row in out.iter_mut().flat_map(|c| c.contents.iter_mut()) {
+        row.each_g = weights.get(&row.item_id).map(|b| b.grams);
+    }
 
     for Packed { carton, tare, rows } in &packed {
         // A line whose item has never been weighed is not a line worth nothing —
@@ -1017,10 +1045,13 @@ pub async fn cartons_on(
         };
         if let Some(c) = out.iter_mut().find(|c| c.id == *carton) {
             let d = c.gross_weight_g.map(|w| baseline::delta(w, e.grams));
+            let per_mille = d.and_then(|d| d.per_mille);
             c.expected = Some(ExpectedWeight {
                 baseline: e.into(),
                 delta_g: d.map(|d| d.grams),
-                delta_per_mille: d.and_then(|d| d.per_mille),
+                delta_per_mille: per_mille,
+                tolerance_per_mille: tolerance,
+                agrees: per_mille.map(|p| p.abs() <= tolerance),
             });
         }
     }

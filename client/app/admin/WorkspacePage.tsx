@@ -83,6 +83,9 @@ const current = (sites: WorkspaceSite[]) => sites.find((x) => x.current) ?? null
  */
 function Packing({ site, organisation, bench }: { site: WorkspaceSite; organisation: Organisation; bench: WorkspaceBench }) {
   const [code, setCode] = useState(site.pack_location ?? "PACK");
+  const percent = (site.weight_tolerance_per_mille / 10).toString();
+  const [tolerance, setTolerance] = useState(percent);
+  const perMille = Math.round(Number.parseFloat(tolerance) * 10);
   return (
     <Card
       title={`Packing at ${site.code}`}
@@ -120,6 +123,29 @@ function Packing({ site, organisation, bench }: { site: WorkspaceSite; organisat
           </div>
           <Button type="submit" disabled={bench.busy || !code.trim() || code.trim() === site.pack_location}>
             Pack here
+          </Button>
+        </form>
+        {/* The weight check at the bench (D244): how far off still agrees. */}
+        <form
+          className={s.formRow}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (perMille >= 1 && perMille <= 500) void bench.setWeightTolerance(site.id, perMille);
+          }}
+        >
+          <div className={s.grow} style={{ maxWidth: 320 }}>
+            <TextField
+              label="A carton's weight agrees within"
+              hint="Of what it should weigh, when the packer types what the scale says."
+              inputMode="decimal"
+              trailing="%"
+              value={tolerance}
+              onChange={(e) => setTolerance(e.target.value)}
+              disabled={bench.busy}
+            />
+          </div>
+          <Button type="submit" disabled={bench.busy || !(perMille >= 1 && perMille <= 500) || perMille === site.weight_tolerance_per_mille}>
+            Save
           </Button>
         </form>
         {!site.owner && (

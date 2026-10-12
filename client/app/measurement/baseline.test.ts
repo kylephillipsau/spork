@@ -20,6 +20,8 @@ function expected(over: Partial<ExpectedWeight> = {}): ExpectedWeight {
     established: true,
     delta_g: null,
     delta_per_mille: null,
+    tolerance_per_mille: 30,
+    agrees: null,
     ...over,
   };
 }

@@ -43,6 +43,10 @@ pub enum SealProblem {
     InvalidSource,
     /// Soft: status already sealed or despatched (or we already have the event).
     AlreadySealed,
+    /// Soft: lines with units in it that nobody has checked at the bench
+    /// (D244). The bench does not offer the seal; a seal that happened anyway
+    /// is still a seal (D5), and is said.
+    Unchecked { codes: Vec<String> },
 }
 
 impl std::fmt::Display for SealProblem {
@@ -61,12 +65,17 @@ impl std::fmt::Display for SealProblem {
                 "the package is already sealed or despatched; a second seal event is still \
                  recorded if you insist, but the fold will not move"
             ),
+            SealProblem::Unchecked { codes } => write!(
+                f,
+                "sealed with {} not checked at the bench",
+                codes.join(", ")
+            ),
         }
     }
 }
 
 pub fn seal_is_hard(p: &SealProblem) -> bool {
-    !matches!(p, SealProblem::AlreadySealed)
+    !matches!(p, SealProblem::AlreadySealed | SealProblem::Unchecked { .. })
 }
 
 const SOURCES: &[&str] = &[
@@ -78,8 +87,16 @@ const SOURCES: &[&str] = &[
     "keyed",
 ];
 
-pub fn check_seal(proposed: &ProposedSeal, package: Option<&PackageState>) -> Vec<SealProblem> {
+/// `unchecked` is the codes of lines with units in it and no check (D244).
+pub fn check_seal(
+    proposed: &ProposedSeal,
+    package: Option<&PackageState>,
+    unchecked: &[String],
+) -> Vec<SealProblem> {
     let mut problems = vec![];
+    if !unchecked.is_empty() {
+        problems.push(SealProblem::Unchecked { codes: unchecked.to_vec() });
+    }
     if !SOURCES.contains(&proposed.source.as_str()) {
         problems.push(SealProblem::InvalidSource);
     }
@@ -396,7 +413,21 @@ mod tests {
         };
         let mut pkg = pkg();
         pkg.status = Some("open".into());
-        assert!(check_seal(&p, Some(&pkg)).is_empty());
+        assert!(check_seal(&p, Some(&pkg), &[]).is_empty());
+    }
+
+    #[test]
+    fn seal_with_a_line_not_checked_is_soft() {
+        let p = ProposedSeal {
+            tenant_id: u(10),
+            package_id: u(1),
+            source: "operator_scan".into(),
+        };
+        let mut pkg = pkg();
+        pkg.status = Some("open".into());
+        let problems = check_seal(&p, Some(&pkg), &["ABC-1234".into()]);
+        assert_eq!(problems, vec![SealProblem::Unchecked { codes: vec!["ABC-1234".into()] }]);
+        assert!(!problems.iter().any(seal_is_hard));
     }
 
     #[test]
@@ -406,7 +437,7 @@ mod tests {
             package_id: u(1),
             source: "operator_scan".into(),
         };
-        let problems = check_seal(&p, Some(&pkg()));
+        let problems = check_seal(&p, Some(&pkg()), &[]);
         assert!(problems.contains(&SealProblem::AlreadySealed));
         assert!(!problems.iter().any(seal_is_hard));
     }

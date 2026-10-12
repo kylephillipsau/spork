@@ -17,16 +17,16 @@ const WORKSPACE: Workspace = {
     // state no type. A site with none is expected, not broken.
     { id: "5171e000-0000-0000-0000-000000000001", code: "BRI", name: "Brisbane",
       timezone: "Australia/Brisbane", active: true, locations: 2140, sequenced: 2035, current: false,
-      pack_location: "DESP-1", owner: "Harbourline" },
+      pack_location: "DESP-1", owner: "Harbourline", weight_tolerance_per_mille: 30 },
     { id: "5171e000-0000-0000-0000-000000000002", code: "PER", name: "Perth",
       timezone: "Australia/Perth", active: true, locations: 0, sequenced: 0, current: false,
-      pack_location: null, owner: null },
+      pack_location: null, owner: null, weight_tolerance_per_mille: 30 },
     { id: "5171e000-0000-0000-0000-000000000003", code: "MEL", name: "Melbourne",
       timezone: "Australia/Melbourne", active: true, locations: 1620, sequenced: 1620, current: true,
-      pack_location: null, owner: null },
+      pack_location: null, owner: null, weight_tolerance_per_mille: 30 },
     { id: "5171e000-0000-0000-0000-000000000004", code: "SYD", name: "Sydney",
       timezone: "Australia/Sydney", active: true, locations: 2160, sequenced: 2150, current: false,
-      pack_location: "PACK", owner: "Harbourline" },
+      pack_location: "PACK", owner: "Harbourline", weight_tolerance_per_mille: 30 },
   ],
 };
 
@@ -76,6 +76,7 @@ export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
     dismiss: () => {},
     setPackLocation: noop,
     setOwner: noop,
+    setWeightTolerance: noop,
     boxes: state.kind === "ready" ? BOXES : null,
     suggest: noop,
     boxWeight: noop,
