@@ -111,6 +111,25 @@ Carriers and labels are booked in NetSuite and MachShip. The pack bench plans
 the boxes and lists each parcel's size and weight, ready to copy into the
 booking (D224).
 
+## Packing at the bench
+
+Under Outbound, Packing, an order opens on the pack bench:
+- check what came to the bench, a line at a time: each says what should be
+  there in the units on the box, Enter confirms it, and a number typed first
+  says what was seen; a short line is planned for what is there (D244);
+- put each line into a carton, or ship whole cartons as they are (D196);
+- see the whole order planned in boxes, in 3D or as a list, every unit
+  accounted for (D195, D202);
+- weigh each carton: the bench says whether the weight agrees with what it
+  should weigh, within the site's tolerance (Workspace, Packing), and what
+  would explain it when it doesn't (D244);
+- seal it once what is in it is checked, and copy the parcels' sizes and
+  weights for the booking (D224).
+
+Dragging an order onto boxes and pallets, breakdown pallets built through the
+day, and carriers' pallet rules as settings are decided and not yet built
+(D245 to D252).
+
 ## Picking from the tickets
 
 Picks are still recorded in NetSuite on the handheld, because Spork doesn't
@@ -147,7 +166,7 @@ record, the invariant and open-question registers, and the analyses behind them.
 Start at [docs/architecture.md](docs/architecture.md).
 
 Where work stands is in the newest handoff,
-[docs/handoff-capture-and-search.md](docs/handoff-capture-and-search.md).
+[docs/handoff-pack-bench.md](docs/handoff-pack-bench.md).
 
 ## Licence
 

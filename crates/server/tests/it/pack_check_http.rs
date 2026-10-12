@@ -205,4 +205,24 @@ async fn a_line_is_checked_and_a_carton_sealed_without_its_check_says_so() {
     assert!(warnings.contains("not checked at the bench"), "{sealed}");
     assert!(warnings.contains(&unchecked_code), "names the line: {sealed}");
     assert!(!warnings.contains(&checked_code), "not the line that was checked: {sealed}");
+
+    // ── how far a weight may be off is the site's to say ─────────────────
+    let (_, ws) = call(&app, test::TestRequest::get().uri("/workspace").insert_header(auth.clone())).await;
+    let site = ws["sites"].as_array().unwrap().iter().find(|s| s["current"] == true).cloned().expect("the caller's site");
+    let set = |per_mille: i64| {
+        test::TestRequest::post()
+            .uri(&format!("/workspace/sites/{}/weight-tolerance", site["id"].as_str().unwrap()))
+            .insert_header(auth.clone())
+            .set_json(json!({ "per_mille": per_mille }))
+    };
+    let was = site["weight_tolerance_per_mille"].as_i64().unwrap();
+    let (status, body) = call(&app, set(50)).await;
+    assert_eq!(status, 204, "{body}");
+    let (_, ws) = call(&app, test::TestRequest::get().uri("/workspace").insert_header(auth.clone())).await;
+    let now = ws["sites"].as_array().unwrap().iter().find(|s| s["current"] == true).unwrap()["weight_tolerance_per_mille"].clone();
+    assert_eq!(now, 50, "five per cent: {ws}");
+    let (status, refused) = call(&app, set(0)).await;
+    assert_eq!(status, 400, "nought is no tolerance: {refused}");
+    let (status, _) = call(&app, set(was)).await;
+    assert_eq!(status, 204, "put back as it was");
 }

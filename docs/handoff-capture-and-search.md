@@ -1,6 +1,8 @@
 # Handoff: capture, crops, search, backups and picking
 
-Written 2026-10-02, brought up to date 2026-10-07. Read this first. The
+Written 2026-10-02, brought up to date 2026-10-07. The newest handoff is
+[handoff-pack-bench.md](./handoff-pack-bench.md) (2026-10-12): read it first;
+this one still covers capture, crops, search, backups and picking. The
 earlier handoff, [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md),
 still covers the toolchain, tests, layout and packing.
 
