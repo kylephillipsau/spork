@@ -16186,3 +16186,412 @@ measurements so that I can confirm it."
 
 **Not yet.** A side already cut keeps its cut when the box is turned: crop it
 again from its card if it looks stretched.
+
+### D244: The packer checks the order as it is packed
+
+*Adopted 2026-10-12. Decided ahead of the build; nothing below is written yet.
+D244 to D252 are one design for the pack bench, decided together; the order
+they are built in closes D252.*
+
+**The finding.** The bench records what goes into a carton, and nothing on it
+asks the packer whether what reached the bench is what the order asked for. A
+wrong item or a short count is found by the customer.
+
+**Decision.** Each line on the bench is **checked** before a carton holding
+it can be sealed.
+
+- **What it shows** is what should be on the bench, in the units the packer
+  sees: "2 cartons of 12 and 5 loose", with the photograph of that level
+  (D141), its code and what it is, each level in NetSuite's word for it
+  (D239).
+- **The packer confirms it or says what they see.** Enter confirms the line
+  and moves to the next; typing a number says the count seen. The expected
+  count is shown: the user chose confirming over counting blind, as quicker.
+- **A check is a fact** (`pack_check`): the line, the count expected, the
+  count seen, who and when, under a client event (S19). A line's newest
+  check wins.
+- **When they differ**: short, the line says so and the plan packs what is
+  there, and the shortfall is a finding for whoever picked it, here or in
+  NetSuite (D172). Over, the extra goes back. A wrong item is taken out to its
+  bin, as taking out works now.
+- **The weight is the second check.** A carton's typed weight (the scale is
+  read by eye) is compared with what it should weigh: its contents' recorded
+  weights and the box's empty weight (D224). Within the tolerance, it ticks.
+  Outside it, the bench says what would explain the difference: "1.4 kg
+  heavy: 2 more of ABC-1234 at 0.7 kg?" The tolerance is a workspace
+  setting, 3% to start.
+- **Sealing waits for the checks**: a carton with an unchecked line in it
+  cannot be sealed. A thing that ships as it is (D196) is sealed as it is
+  made, so its line is checked before it is made.
+
+**Why.** The user, 2026-10-12: "one of the really important parts about this
+is the ability for the packer to check the boxes at the packing station to
+make sure that the order is correct." There is no scanner at the bench and
+its scale is read by eye, so the checks are the packer's eyes and a typed
+weight. Asked whether to count blind, the user chose "Confirm is more
+efficient".
+
+### D245: The order is packed by dragging, on one board
+
+*Adopted 2026-10-12. Decided ahead of the build. Replaces the bench's forms;
+extends D198 and D202.*
+
+**The finding.** The bench is a set of forms: a count typed against a line,
+Add to the open carton (always the first one unsealed), Seal. Nothing moves
+from one carton to another, and taking out sends units back to their bin. The
+packing plan is worked out afresh each time it is drawn and never kept, so a
+planned box has no link to the carton made from it.
+
+**Decision.** The bench becomes one **board** for the whole order, laid out
+for a 1080p screen, a mouse and a keyboard:
+
+- **To pack**, on the left: each line as something to drag, with its
+  photograph, code, count left and its check (D244).
+- **The parcels**, in the middle: each carton with what is in it, how full
+  it is and its weight against its limit; each pallet with the cartons on
+  it. A planned parcel is outlined dashed and a made one solid; a sealed one
+  is shut, and opening it again is an act (`POST /packages/{id}/open`).
+- **The chosen parcel in 3D**, on the right. While something is dragged, a
+  ghost of it where it would go, and a verdict: "fits · 72% full", "120 mm
+  too tall", "hides a label".
+- **Above**: the tally (D202), Suggest, and the booking (D224).
+
+What a drag does:
+
+- **Goods onto a parcel**: as many as fit go in, the rest stay, and it says
+  so ("8 of 12 fit"), with Undo. Onto empty space: a new parcel of the
+  smallest box that fits.
+- **A carton onto a pallet** puts it on; dragged off, it is taken off.
+- **Several at once**, chosen with Shift or Ctrl, go together.
+- **Every drag has a keyboard way**: choose, then Move to…, with a count.
+- **Into a planned parcel** a drag changes the plan only. **Into a made,
+  open carton** it is the act itself (D246). **Make** turns a planned parcel
+  into a carton and puts its contents in: one press, after it is packed.
+
+**The plan is kept as what the packer placed** (a line's units to a parcel, a
+parcel to a pallet), per fulfilment, on the server: a draft, overwritten as it
+changes, not a fact. Suggest plans everything not placed by hand around what
+was, as D198 plans round the open carton. A planned parcel holds the id its
+carton will have (`POST /packages` takes one), so the carton made from it is
+the same parcel.
+
+**One drag for the app.** The kit gains a pointer drag with its keyboard way
+and choosing several, written here; no library.
+
+**Why.** The user, 2026-10-12: "it should be possible to drag and drop the
+items from cartons and arrange the items into boxes, skids or pallets. We
+should be able to take the entire order and put them on pallets or something
+if we want to".
+
+### D246: Units move between cartons, and a carton goes onto a pallet
+
+*Adopted 2026-10-12. Decided ahead of the build. Amends D24, D100 and J68.*
+
+**The finding.** Containment is there: `POST /packages/{id}/contain` writes a
+`contained` event and no movement (D166), and placing the package anywhere
+ends it. Nothing calls it, and it refuses only a package as its own parent:
+not a loop, not D24's depth, not a sealed or despatched parent. No act moves
+units from one carton to another: taking out and picking again says they went
+back to their bin. And a pick into a sealed carton is refused only by the
+bench's own code.
+
+**Decision.**
+
+- **A repack** moves units from one package to another, naming their line
+  (`POST /repacks`): one movement, from package to package, the shape D99
+  already counts as not picked again. Both must be open.
+- **Packed is what a line has in sealed or despatched packages, net**: what
+  went into each, less what has since moved out of it to another package.
+  Without the netting, a carton sealed after units left it would still count
+  them. Amends D100; J68 checks the same.
+- **Nothing goes into a sealed package**: a pick, a handover or a repack into
+  one is refused by the server, "open it first".
+- **Putting a package in or on another** refuses a loop, more than three
+  deep (D24's wrap, pallet, carton, still raised as `nesting_too_deep` for
+  facts that arrive out of order), and a parent that is sealed, despatched or
+  void. An order's pallet takes only its order's parcels; a breakdown pallet
+  (D247) takes sealed parcels of any order.
+- **Where it went on**: the act can say the spot, from the front left corner
+  of the pallet's deck, and which way round (`package_event` gains the
+  position). Front is where the forks go in. D248 needs it.
+- **Taken off** is placed back at the pack location
+  (`POST /packages/{id}/place`).
+- **The bench read** says each parcel's parent and kind (a box, a pallet or
+  skid, a thing as it is), and pallet presets give their footprint and build
+  height, so the planner can use them (D195 leaves them out).
+
+**Why.** The board (D245) moves things between parcels, and each move has to
+say what happened, not a take-out and a new pick.
+
+### D247: A pallet goes as one, or is broken down
+
+*Adopted 2026-10-12. Decided ahead of the build. Extends D6, D15 and D224.*
+
+**Decision.** A pallet or skid says whether it is **delivered as one** or
+**broken down** at the carrier's depot into the parcels on it, each delivered
+on its own (`package.breaks_down`). That one fact decides:
+
+- **What is delivered**: the pallet, or each parcel on it. Labels must be
+  seen on what is delivered (D250). A consignment carries what is delivered,
+  and nothing goes both as itself and inside something delivered as one (an
+  invariant).
+- **Despatch**: despatching a pallet despatches everything on it, each line
+  in each package.
+- **The booking** (D224): a pallet delivered as one is one line: its weight
+  the parcels' and the pallet's own unless it is weighed, its height the
+  plan's and the base's, confirmed by hand. A broken-down pallet adds nothing
+  to any order's booking; each carton is booked with its order.
+- **Whose it is**: a pallet delivered as one belongs to its order. A breakdown
+  pallet belongs to no order (`fulfilment_id` empty, as D6 allows and D15
+  expected) and carries many.
+- **The pallet sheet**, printed: what is on a pallet; for a breakdown pallet,
+  each order on it and its cartons.
+
+**Why.** The user, 2026-10-12, of "the breakdown pallet which is where all the
+[one carrier's] orders are combined into one pallet to be sent out and broken
+down into the individual orders to be sent separately". A pallet that is one
+parcel and a pallet that carries many are the same thing on the floor and
+opposite things to the carrier, so it is said once, on the pallet.
+
+### D248: A breakdown pallet is built through the day
+
+*Adopted 2026-10-12. Decided ahead of the build.*
+
+**Decision.**
+
+- **One open breakdown pallet for each set of build rules** (D250), which
+  is to say for each carrier that takes them, started from the bench or from
+  an order's board.
+- **The queue can be put heaviest and largest first**, by what each order
+  should weigh and its volume: the order the packers already work in, so
+  what goes on first can go at the bottom.
+- **When an order is finished**, its cartons sealed and labelled, its board
+  offers the open breakdown pallets. Choosing one plans a spot for each
+  carton round what is on already, which stays where it is (D251). The packer
+  puts them on and confirms, and the spots are kept (D246).
+- **Which side to label**: when a carton going on a breakdown pallet is
+  sealed, the board says which side its label goes on ("a long side"), and
+  the planner turns it so that side faces out.
+- **Full**: when the next carton will not go on within the rules, the board
+  says "Full: wrap it and start another". Wrapping is sealing the pallet,
+  with its height and weight when known; the next starts empty.
+
+**Why.** The user, 2026-10-12: "The breakdown pallet in practice usually gets
+the heavier and larger orders processed first at the packing bench and then
+put on the breakdown pallet when suitable after those boxes have been
+labelled and the processing of that order is finished. Sometimes the
+breakdown pallet gets full and then we wrap it and then do another breakdown
+pallet." A pallet built as orders finish cannot be planned whole. It can be
+planned round what is on it, and packing the heavy orders first is what keeps
+the heavy cartons low.
+
+**Not yet.** Keeping room for orders still in the queue.
+
+### D249: What a box can carry on top
+
+*Adopted 2026-10-12. Decided ahead of the build. Extends D200.*
+
+**The finding.** The user's first figure, 10 kg on a hollow box, was an
+example, and they asked whether there is a standard. There is a method, not a
+figure:
+
+- A box's strength is measured by crushing it empty between plates (ASTM
+  D642, ISO 12048, TAPPI T804), or estimated from its board's edge crush and
+  its size (McKee's formula).
+- That is reduced for the conditions it will meet: the Fibre Box
+  Association's multipliers for humidity, time under load, stacking pattern,
+  gaps in the deck and handling.
+- A stacking test loads it with the weight above it times a factor (ASTM
+  D4169). The weight that counts is everything above, not the next box.
+- Corners over corners carry the most; interlocked layers lose 35–60%.
+- Nothing standard covers a smaller box sitting in the middle of a hollow
+  lid, which is the case the 10 kg was about: a lid sags long before the
+  walls give.
+
+For scale: single-wall boxes 495×330×305 mm crushed empty at about 290 kg (32
+ECT board) and 400 kg (44 ECT) in a 2021 study for the Association, where
+McKee's formula gives 270. The Medium Box (450×340) in single-wall 32 ECT
+comes to about 240 kg; a third of that is left after 70% humidity,
+interlocking, deck gaps and handling, and a factor of 3 for the road leaves
+about 30 kg on its walls. And no pack configuration on file records a
+supplier's pallet pattern (`layers_per_pallet`, none of 945), so nothing can
+be read from one.
+
+**Decision.**
+
+- **A thing takes weight unless it says otherwise**: a subject can say it
+  takes up to so many kilograms on top, or nothing (`subject_load`), said and
+  inherited as "this way up" is (D200). It is for things that are not solid
+  or sit awkwardly.
+- **A box type has two limits**: **on its walls**, when what is above sits
+  across its edges, and **on its lid**, when something sits within its top.
+  The wall limit is estimated from its size and board, single-wall 32 ECT
+  unless the box type says its grade, or set from a test on the floor. The
+  lid limit is 10 kg to start. Both are settings in Workspace › Boxes.
+- **A carton we pack is solid or hollow**, said when it is sealed. The plan
+  proposes it from how full the box is and whether what fills it takes
+  weight, and the packer says the other with one press. A solid carton's lid
+  carries what its walls do.
+- **The load is counted through the stack**: each box carries its share of
+  everything above it, by the area each rests on, and an arrangement is
+  wrong if any box carries more than it can where the weight lands.
+- **The conditions are the warehouse's**: the multipliers are one workspace
+  setting, not a carrier's.
+
+**Why.** The user, 2026-10-12: the heavier boxes give better support, "but
+not all heavy boxes are tightly packed, so we need to be able to model heavy
+boxes that should not be load bearing as a property"; "the default load
+bearing should be takes weight, it should be a configurable property for
+items that are not solid or sit awkwardly"; "if a box is hollow it can still
+hold lighter boxes on top of it, but it should probably not hold anything
+above 10kg". Then: "I actually have no idea if 10kg is a good recommendation
+... I'd like to review and research this to make sure there aren't any
+existing specifications or standards/conventions for this already."
+
+**Not yet.** The Association's multipliers come from data of the 1960s and
+70s and were being revised for a 2025 edition; the setting takes the newer
+figures when they are published.
+
+### D250: A carrier's rules are settings
+
+*Adopted 2026-10-12. Decided ahead of the build.*
+
+**Decision.** How a pallet must be built is a named set of **build rules**
+(`build_rules`). Each rule is one of a fixed list and is a **must** or a
+**preference** with a weight:
+
+- **Height**: the most the load may stand, with its base or from the deck.
+- **Weight**: the most the pallet and its load may weigh.
+- **Overhang**, each side its own: front, back, left and right, front being
+  where the forks go in and left and right either side of it. How far, and
+  must or prefer none.
+- **Labels**: each delivered parcel's label on a side facing out and hidden
+  behind nothing. Whether the top face of the top layer counts is its own
+  setting, off to start. A pallet's own label goes on a side.
+- **Support**: the least share of each box's base that rests on something.
+- **Heavy**: a parcel over so many kilograms is marked heavy, and the bench
+  says so.
+- **Loose**: a parcel over so many kilograms goes on a pallet.
+- **Together**: each order's parcels next to one another.
+- **Columns**: corners over corners where the boxes allow.
+- **Low and centred**, and **flat on top**: preferences only.
+
+A carrier, or one of its services, names the set its breakdown pallets are
+built to and the set its pallets that go as one are built to. A pallet keeps
+the set it was started under, as it stood then, so changing a carrier's rules
+does not judge old pallets again. The planner (D251) and the checks read
+rules and never a carrier: a new carrier, or one that changes what it allows,
+is a change of settings. A new kind of rule is code, because the planner has
+to understand it.
+
+To start, from what the user said: the usual carrier allows overhang but
+would rather not, and prefers labels out; the second carrier must have every
+label out and none hidden, and no overhang left or right. The second
+carrier's published fact sheet (2016) asks for no overhang on any side,
+labels on a pallet's side and not its top, columns, a flat top, and "heavy"
+on a box over 20 kg; what it asks now is worth confirming with them.
+
+**Why.** The user, 2026-10-12: "the boxes must face the outside so that the
+stickers can always be on the outside face of the pallet, for [the second
+carrier] no labels may ever be hidden behind another box, and there can't be
+any overhang on the left and right side with [it], only with [the usual
+carrier] is this possible, but not ideal. We need to find a way to model this
+architecturally without baking in the carrier handling logic into the model,
+it needs to remain architecturally generalisable and configurable." Left and
+right are either side of the pallet from where the forklift tines go in; of a
+label on top, "I wouldn't imagine the top layer would count, but that should
+be adjustable just for good measure."
+
+### D251: One planner, for boxes and pallets
+
+*Adopted 2026-10-12. Decided ahead of the build. Replaces how D195 puts
+things in, once it is as good.*
+
+**Decision.** One planner puts goods in a box and boxes on a pallet.
+
+- **It is given** the container (a box's inside, or a pallet's deck and
+  build height), its build rules (D250; a box has none but its limits), the
+  things (size, weight, way up, load, which order, which side is labelled)
+  and any spots already fixed (D248).
+- **It must** keep within the footprint and the overhang allowed, the height
+  and the weight; keep upright things upright (D200); rest each box on
+  enough support; load no box past its limit (D249); and keep labels out
+  where that is a must.
+- **It prefers**, by the rules' weights: the heavy and weight-taking low;
+  the load low and centred; corners over corners; a flat top; each order
+  together; and, choosing among boxes and pallets, the freight objective
+  (D224).
+- **How**: it places things one at a time where they sit lowest, best
+  supported and tightest to the walls and corners, many times over in
+  different orders and turns, in the background so the screen does not wait,
+  and keeps the best.
+- **What it gives**: each thing's spot; the order to build it in, bottom up
+  and back to front from where the packer stands; and every rule, kept or
+  not, with its figures: the centre of gravity's height and how far off
+  centre, the most loaded box against its limit.
+- **The same check runs on what the packer does by hand**: a drag that hides
+  a label that must be seen, or puts 15 kg on a hollow lid, says so as it
+  happens.
+- **It replaces the layered suggestion** (D195) when it is never worse over a
+  set of real orders kept as a test.
+
+**Why.** The user, 2026-10-12: "I want to also be able to find the optimal
+configuration for boxes to be arranged on a pallet, and this isn't just
+related to the measurement, but also the heavier boxes provide better
+structural support". Mixed-case palletising with load-bearing limits has a
+literature (Junqueira, Morabito and Yamashita, 2012; Kır and Yazgan, 2019)
+and no one standard method. Placing one at a time and keeping the best of
+many tries is the common practical answer, and it can say why each box is
+where it is.
+
+### D252: A box can be cut down to set heights
+
+*Adopted 2026-10-12. Decided ahead of the build. Extends D196, D199 and D224.*
+
+**The finding.** The warehouse's boxes are cut at the corners and folded down
+to set heights. The fast fulfilment script keeps the heights as a list;
+Spork has each box at one height, and one cut, Extra Small Box (1/2), as a
+box of its own. Box types have no photographs: the `observable` union
+declared a package-type arm (migration 7) that was never added.
+
+**Decision.**
+
+- **A cut is a box of its own, cut from a full box**
+  (`package_type.cut_from_id`): the full box's length and width, its own
+  height, and its own name for the booking when it has one. It takes the
+  full box's weight limit, empty weight and load limits (D249) unless it says
+  its own, and is suggested or not on its own (D196). Extra Small Box (1/2)
+  becomes Extra Small Box's half.
+- **Workspace › Boxes** lists each full box with its **heights**, to add to
+  and take from; the first is the full box.
+- **The suggestion chooses a box and its height together**, the lowest that
+  takes everything. The bench says "cut to 28 cm" when the carton is
+  started, and the booking gives each cut its own size.
+- **Box types are photographed** as items are: `observable` gains the
+  package-type arm, and Photos and cutting faces (D176) work the same.
+- **A cut box is drawn with its full box's photographs, from the bottom edge
+  up to its height**: a box cut to 28 of 41 cm shows the bottom 68% of each
+  side at true scale, with the print where it is on the box. Never squashed,
+  and not centred as a thing's photograph is (`cover`). Its top is the full
+  box's.
+
+**Why.** The user, 2026-10-12: "our box model allows us to cut the corners of
+the boxes down to fold them into smaller boxes ... We will need to be able to
+model this so that the bottom of the box face stays aligned to the bottom
+edge on the 3D model, and the cut out of the top height crops the image
+instead of squashing it." The heights, in centimetres: Extra Small Box, a
+half; Small Box 30, 25, 20, 15, 10; Medium Box 41, 34.5, 28, 21; Large Box
+46, 41, 36, 31, 26, 21, 16. A row for each height means the suggestion, the
+bench and the booking need nothing new to use them.
+
+**The order of building D244 to D252.**
+
+1. Checking (D244), on the bench as it is.
+2. The server's acts and rules: repacks, packed netted, sealed refused,
+   nesting refused and placed, pallets that go as one or are broken down,
+   despatching a pallet whole (D246, D247).
+3. Cut boxes and box photographs (D252).
+4. The drag and the board (D245).
+5. The planner, with load limits and build rules (D249, D250, D251).
+6. Breakdown pallets through the day, the pallet sheet and the booking
+   (D247, D248).
