@@ -390,7 +390,36 @@ pub enum ContainProblem {
     AlreadyTerminal { which: &'static str, status: String },
     /// Soft: projected parent already matches.
     AlreadyContained,
+    /// Hard: the parent is in or on the package, so it would be inside itself.
+    Loop,
+    /// Hard: more than [`MOST_LEVELS`] deep (D24).
+    TooDeep { levels: usize },
+    /// Soft: onto a sealed (wrapped) pallet. One that happened is recorded (D5).
+    IntoSealed,
+    /// Soft: the pallet belongs to one order and the carton to another (D247).
+    OtherOrder,
+    /// Soft: an open carton on a breakdown pallet, where each is delivered on
+    /// its own and must be sealed and labelled first (D247).
+    OpenOnBreakdown,
 }
+
+/// What a containment would make, read from the events now rather than the
+/// lagging fold (`package_parent_now`, `package_status_now`, migration 139).
+#[derive(Clone, Debug, Default)]
+pub struct Nesting {
+    /// The parent is the package, or is in or on it.
+    pub loops: bool,
+    /// The packages in the deepest chain it would make, the outermost counted.
+    pub levels: usize,
+    pub parent_sealed: bool,
+    pub child_sealed: bool,
+    pub parent_breaks_down: bool,
+    /// The parent is an order's and the package another order's.
+    pub other_order: bool,
+}
+
+/// A wrap, a pallet and a carton (D24): three packages in a chain at most.
+pub const MOST_LEVELS: usize = 3;
 
 impl std::fmt::Display for ContainProblem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -417,12 +446,27 @@ impl std::fmt::Display for ContainProblem {
                 "the package is already projected under that parent; the contain event \
                  is still recorded and the fold is compare-and-set (J6)"
             ),
+            ContainProblem::Loop => write!(f, "it would be inside itself: the parent is in or on it"),
+            ContainProblem::TooDeep { levels } => {
+                write!(f, "{levels} deep: a wrap, a pallet and a carton is the most (D24)")
+            }
+            ContainProblem::IntoSealed => write!(f, "onto a sealed pallet: open it first"),
+            ContainProblem::OtherOrder => write!(f, "the pallet is another order's"),
+            ContainProblem::OpenOnBreakdown => {
+                write!(f, "an open carton on a breakdown pallet: seal and label it first")
+            }
         }
     }
 }
 
 pub fn contain_is_hard(p: &ContainProblem) -> bool {
-    !matches!(p, ContainProblem::AlreadyContained)
+    !matches!(
+        p,
+        ContainProblem::AlreadyContained
+            | ContainProblem::IntoSealed
+            | ContainProblem::OtherOrder
+            | ContainProblem::OpenOnBreakdown
+    )
 }
 
 /// Check a contain. Soft problems travel with success; hard ones block.
@@ -430,6 +474,7 @@ pub fn check_contain(
     proposed: &ProposedContain,
     package: Option<&PackageRef>,
     parent: Option<&PackageRef>,
+    nesting: &Nesting,
 ) -> (Vec<ContainProblem>, Vec<ContainProblem>) {
     let mut hard = vec![];
     let mut soft = vec![];
@@ -478,6 +523,22 @@ pub fn check_contain(
         soft.push(ContainProblem::AlreadyContained);
     }
 
+    if nesting.loops && proposed.package_id != proposed.parent_package_id {
+        hard.push(ContainProblem::Loop);
+    }
+    if nesting.levels > MOST_LEVELS {
+        hard.push(ContainProblem::TooDeep { levels: nesting.levels });
+    }
+    if nesting.parent_sealed {
+        soft.push(ContainProblem::IntoSealed);
+    }
+    if nesting.other_order && !nesting.parent_breaks_down {
+        soft.push(ContainProblem::OtherOrder);
+    }
+    if nesting.parent_breaks_down && !nesting.child_sealed {
+        soft.push(ContainProblem::OpenOnBreakdown);
+    }
+
     (hard, soft)
 }
 
@@ -518,9 +579,37 @@ mod contain_tests {
         }
     }
 
+    /// A carton onto a pallet on the floor: two packages in the chain.
+    fn onto() -> Nesting {
+        Nesting { levels: 2, ..Default::default() }
+    }
+
+    #[test]
+    fn a_loop_or_a_fourth_level_is_refused() {
+        let (h, _) = check_contain(&good(), Some(&child()), Some(&parent()), &Nesting { loops: true, ..onto() });
+        assert!(h.contains(&ContainProblem::Loop));
+        let (h, _) = check_contain(&good(), Some(&child()), Some(&parent()), &Nesting { levels: 3, ..onto() });
+        assert!(h.is_empty(), "a wrap, a pallet and a carton: {h:?}");
+        let (h, _) = check_contain(&good(), Some(&child()), Some(&parent()), &Nesting { levels: 4, ..onto() });
+        assert_eq!(h, vec![ContainProblem::TooDeep { levels: 4 }]);
+    }
+
+    #[test]
+    fn a_sealed_pallet_another_order_or_an_open_carton_on_a_breakdown_pallet_is_said() {
+        let said = |n: Nesting| check_contain(&good(), Some(&child()), Some(&parent()), &n);
+        let (h, s) = said(Nesting { parent_sealed: true, other_order: true, ..onto() });
+        assert!(h.is_empty());
+        assert_eq!(s, vec![ContainProblem::IntoSealed, ContainProblem::OtherOrder]);
+        // A breakdown pallet takes any order's cartons, sealed.
+        let (_, s) = said(Nesting { parent_breaks_down: true, other_order: true, child_sealed: true, ..onto() });
+        assert!(s.is_empty(), "{s:?}");
+        let (_, s) = said(Nesting { parent_breaks_down: true, other_order: true, ..onto() });
+        assert_eq!(s, vec![ContainProblem::OpenOnBreakdown]);
+    }
+
     #[test]
     fn a_well_formed_contain_passes() {
-        let (h, s) = check_contain(&good(), Some(&child()), Some(&parent()));
+        let (h, s) = check_contain(&good(), Some(&child()), Some(&parent()), &onto());
         assert!(h.is_empty(), "{h:?}");
         assert!(s.is_empty());
     }
@@ -529,7 +618,7 @@ mod contain_tests {
     fn self_parent_is_hard() {
         let mut p = good();
         p.parent_package_id = p.package_id;
-        let (h, _) = check_contain(&p, Some(&child()), Some(&child()));
+        let (h, _) = check_contain(&p, Some(&child()), Some(&child()), &onto());
         assert!(h.contains(&ContainProblem::SelfParent));
     }
 
@@ -537,7 +626,7 @@ mod contain_tests {
     fn despatched_child_is_hard() {
         let mut c = child();
         c.status = Some("despatched".into());
-        let (h, _) = check_contain(&good(), Some(&c), Some(&parent()));
+        let (h, _) = check_contain(&good(), Some(&c), Some(&parent()), &onto());
         assert!(h.iter().any(|x| matches!(
             x,
             ContainProblem::AlreadyTerminal {
@@ -551,7 +640,7 @@ mod contain_tests {
     fn already_under_parent_is_soft() {
         let mut c = child();
         c.parent_package_id = Some(u(3));
-        let (h, s) = check_contain(&good(), Some(&c), Some(&parent()));
+        let (h, s) = check_contain(&good(), Some(&c), Some(&parent()), &onto());
         assert!(h.is_empty());
         assert_eq!(s, vec![ContainProblem::AlreadyContained]);
         assert!(!s.iter().any(contain_is_hard));
@@ -568,6 +657,64 @@ pub const WHAT: &str = "coalesce(pt.name, oi.code || CASE p.own_level
 
 /// The join [`WHAT`] needs: the item a package is one of, as it is.
 pub const OWN_ITEM: &str = "LEFT JOIN item oi ON oi.id = p.own_item_id";
+
+/// What putting `child` in or on `parent` would make, from the events now
+/// rather than the lagging fold (migration 139): whether it loops, how many
+/// packages deep the chain would be, and what each side is.
+pub async fn nesting(
+    tx: &tokio_postgres::Transaction<'_>,
+    child: Uuid,
+    parent: Uuid,
+) -> Result<Nesting, crate::error::ApiError> {
+    // Up from the parent: the parent and everything it is in or on.
+    let up = tx
+        .query_one(
+            "WITH RECURSIVE up(id, n) AS (
+                 SELECT $1::uuid, 1
+                 UNION ALL
+                 SELECT package_parent_now(u.id), u.n + 1 FROM up u
+                  WHERE package_parent_now(u.id) IS NOT NULL AND u.n < 16)
+             SELECT coalesce(bool_or(id = $2), false), max(n)::bigint FROM up",
+            &[&parent, &child],
+        )
+        .await?;
+    // Down from the package: it, and what is in or on it, level by level.
+    let down: i64 = tx
+        .query_one(
+            "WITH RECURSIVE down(id, n) AS (
+                 SELECT $1::uuid, 1
+                 UNION
+                 SELECT e.package_id, d.n + 1 FROM down d
+                   JOIN package_event e ON e.parent_package_id = d.id AND e.asserts_placement
+                  WHERE package_parent_now(e.package_id) = d.id AND d.n < 16)
+             SELECT max(n)::bigint FROM down",
+            &[&child],
+        )
+        .await?
+        .get(0);
+    let sides = tx
+        .query_opt(
+            "SELECT package_status_now(p.id) IS NOT DISTINCT FROM 'sealed',
+                    package_status_now(c.id) IS NOT DISTINCT FROM 'sealed',
+                    p.breaks_down,
+                    p.fulfilment_id IS NOT NULL AND c.fulfilment_id IS DISTINCT FROM p.fulfilment_id
+               FROM package p, package c
+              WHERE p.id = $1 AND c.id = $2",
+            &[&parent, &child],
+        )
+        .await?;
+    let (parent_sealed, child_sealed, parent_breaks_down, other_order) = sides
+        .map(|r| (r.get(0), r.get(1), r.get(2), r.get(3)))
+        .unwrap_or_default();
+    Ok(Nesting {
+        loops: up.get(0),
+        levels: (up.get::<_, i64>(1) + down) as usize,
+        parent_sealed,
+        child_sealed,
+        parent_breaks_down,
+        other_order,
+    })
+}
 
 /// What one of an item as it is measures, at its level, as the item's
 /// measurements say (D201): read, never copied onto the package (migration 98).

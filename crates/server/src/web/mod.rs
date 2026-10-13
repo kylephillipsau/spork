@@ -270,24 +270,24 @@ async fn carton_view(
                     .await?
                     .ok_or(ApiError::NotFound)?;
 
-                // Netted through `stock_movement_effective` (D103), so a pick
-                // that was partly reversed prints what is left rather than the
-                // sum of both movements.
+                // What the carton holds (`package_line_content`): netted for a
+                // pick partly reversed (D103), which prints what is left rather
+                // than the sum of both movements, and for units moved on to
+                // another carton (D246).
                 let rows = tx
                     .query(
                         "SELECT i.code, i.description, l.code,
-                                sum(e.effective_quantity)::bigint,
+                                sum(c.quantity)::bigint,
                                 o.confirmation_number, i.id
-                           FROM stock_movement m
-                           JOIN stock_movement_effective e ON e.movement_id = m.id
-                           JOIN item i ON i.id = m.item_id
-                           JOIN fulfilment_line fl ON fl.id = m.fulfilment_line_id
+                           FROM package_line_content c
+                           JOIN item i ON i.id = c.item_id
+                           JOIN fulfilment_line fl ON fl.id = c.fulfilment_line_id
                            JOIN order_line ol ON ol.id = fl.order_line_id
                            JOIN \"order\" o ON o.id = ol.order_id
-                           LEFT JOIN lot l ON l.id = m.to_lot_id
-                          WHERE m.to_package_id = $1 AND m.fulfilment_line_id IS NOT NULL
+                           LEFT JOIN lot l ON l.id = c.lot_id
+                          WHERE c.package_id = $1
                           GROUP BY i.id, i.code, i.description, l.code, o.confirmation_number
-                         HAVING sum(e.effective_quantity) <> 0
+                         HAVING sum(c.quantity) <> 0
                           ORDER BY i.code, l.code NULLS FIRST",
                         &[&package_id],
                     )

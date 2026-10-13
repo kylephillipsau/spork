@@ -161,13 +161,11 @@ pub async fn queue(
                            LEFT JOIN site st ON st.id = f.site_id
                            LEFT JOIN party p ON p.id = o.customer_party_id
                            LEFT JOIN fulfilment_line fl ON fl.fulfilment_id = f.id
+                           -- What cartons hold of it, netted for repacks (D246).
                            LEFT JOIN LATERAL (
-                               SELECT coalesce(sum(v.effective_quantity), 0)::bigint AS q
-                                 FROM stock_movement m
-                                 JOIN stock_movement_effective v
-                                   ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
-                                WHERE m.fulfilment_line_id = fl.id
-                                  AND m.to_package_id IS NOT NULL) bx ON true
+                               SELECT coalesce(sum(c.quantity), 0)::bigint AS q
+                                 FROM package_line_content c
+                                WHERE c.fulfilment_line_id = fl.id) bx ON true
                           WHERE f.state <> 'cancelled'
                             AND f.closed_elsewhere IS NULL
                             AND ($1::uuid IS NULL OR f.site_id = $1)

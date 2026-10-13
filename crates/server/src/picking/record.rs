@@ -95,12 +95,16 @@ pub async fn record_pick(
                     .await?;
                 let dest = match landing {
                     picking::Landing::Package(id) => tx
-                        .query_opt("SELECT id, tenant_id FROM package WHERE id = $1", &[&id])
+                        .query_opt(
+                            "SELECT id, tenant_id, package_status_now(id) FROM package WHERE id = $1",
+                            &[&id],
+                        )
                         .await?
                         .map(|r| {
                             picking::Destination::Package(picking::Package {
                                 id: r.get(0),
                                 tenant_id: r.get(1),
+                                status: r.get(2),
                             })
                         }),
                     picking::Landing::Location(id) => tx

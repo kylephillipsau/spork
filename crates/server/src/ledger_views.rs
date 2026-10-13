@@ -86,13 +86,17 @@ pub async fn line_progress_ledger(
                  SELECT coalesce(sum(e.eq) FILTER (
                             WHERE e.from_kind IN ('pick_face', 'bulk', 'overflow')),
                         0)::bigint AS picked,
-                        coalesce(sum(e.eq) FILTER (
-                            WHERE p.status IN ('sealed', 'despatched')), 0)::bigint AS packed,
+                        -- D246: what sealed and despatched packages hold of
+                        -- the line, netted for units moved on to another.
+                        (SELECT coalesce(sum(c.quantity), 0)::bigint
+                           FROM package_line_content c
+                           JOIN package p ON p.id = c.package_id
+                          WHERE c.fulfilment_line_id = $1
+                            AND p.status IN ('sealed', 'despatched')) AS packed,
                         coalesce(sum(e.eq) FILTER (
                             WHERE e.to_location_id IS NULL
                               AND e.to_package_id IS NULL), 0)::bigint AS despatched
                    FROM effective e
-                   LEFT JOIN package p ON p.id = e.to_package_id
              ),
              intention AS (
                  SELECT coalesce(sum(quantity), 0)::bigint AS covered
@@ -156,16 +160,10 @@ pub async fn package_status_ledger(
     tx: &Transaction<'_>,
     package_id: Uuid,
 ) -> Result<Option<String>, ApiError> {
-    let row = tx
-        .query_opt(
-            "SELECT kind
-               FROM package_event
-              WHERE package_id = $1
-                AND kind IN ('created','placed','contained','sealed','opened','despatched','voided')
-              ORDER BY occurred_at DESC, recorded_at DESC, id DESC
-              LIMIT 1",
-            &[&package_id],
-        )
-        .await?;
-    Ok(row.map(|r| r.get(0)))
+    // The newest status event, as the fold will have it (`package_status_now`,
+    // migration 138): a placement after a seal leaves it sealed.
+    Ok(tx
+        .query_one("SELECT package_status_now($1)", &[&package_id])
+        .await?
+        .get(0))
 }

@@ -307,8 +307,8 @@ pub fn spec(id: Id) -> Invariant {
         J67 => Invariant { id, owners: "D24, D96", asserts_absence: true,
             statement: "Every collapsed asserted_unit names a package whose SSCC agrees with the one declared, where both carry one. The function refuses a mismatch at the write; package.sscc is a fold of package_event and can move afterwards, which is what makes this a job",
             check: Check::Run(checks::j67_a_collapse_is_evidenced_by_its_licence_plate) },
-        J68 => Invariant { id, owners: "D53, D99, D100", asserts_absence: false,
-            statement: "fulfilment_line's picked, packed and despatched quantities each equal the fold of stock_movement over that line, on D99's shape rules: picked left a storage location, packed went into a carton whose winning status is sealed or despatched, despatched has no to side at all. A reversed movement and its reversal both leave the fold. It reported this gap before D100 moved the maintainer and asserts the agreement after, without the query changing",
+        J68 => Invariant { id, owners: "D53, D99, D100, D246", asserts_absence: false,
+            statement: "fulfilment_line's picked, packed and despatched quantities each equal the fold of stock_movement over that line, on D99's shape rules: picked left a storage location, packed is what packages whose winning status is sealed or despatched hold of it (package_line_content: in, less what went on to another holder, D246), despatched has no to side at all. A reversed movement and its reversal both leave the fold. It reported this gap before D100 moved the maintainer and asserts the agreement after, without the query changing",
             check: Check::Run(checks::j68_outbound_progress_against_the_ledger) },
         J74 => Invariant { id, owners: "D172", asserts_absence: false,
             statement: "fulfilment_line.external_picked_quantity equals the sum, over the line's external lines, of each one's newest external_pick by observed_at, recorded_at and id. A level, so the newest report wins rather than adding up; and never picked_quantity, which is this system's own ledger (J68)",
@@ -3036,11 +3036,14 @@ pub mod checks {
     /// - **picked** — the movement left a storage location. Re-handling after a
     ///   pick is holder-to-holder, so a consolidation from tote to carton names
     ///   the same line and is correctly not counted twice.
-    /// - **packed** — the movement went into a carton whose winning status is
-    ///   `sealed` or `despatched`. D100 reads `package.status`, a fold of
-    ///   `package_event`, rather than `package.sealed_at`, which the application
-    ///   may UPDATE. Opening a carton to repack it moves its status off `sealed`,
-    ///   which is what stops a repack being counted at both cartons.
+    /// - **packed** — what the line has in packages whose winning status is
+    ///   `sealed` or `despatched`, as `package_line_content` holds it: what went
+    ///   in, less what has since gone on to another holder (D246). D100 reads
+    ///   `package.status`, a fold of `package_event`, rather than
+    ///   `package.sealed_at`, which the application may UPDATE. Opening a carton
+    ///   moved its status off `sealed`, which stopped a repack counting at both
+    ///   cartons only while it stayed open; netting is what stops it after it is
+    ///   sealed again.
     /// - **despatched** — no `to` side at all. The exact mirror of D45's arrival
     ///   test, which is what stops a pick and a despatch against one line summing
     ///   to double the units that moved.
@@ -3063,18 +3066,32 @@ pub mod checks {
     pub fn j68_outbound_progress_against_the_ledger(
         c: &mut Client,
     ) -> Result<(usize, Vec<Finding>), postgres::Error> {
-        // (column, the predicate that selects the movements it should equal).
-        // `p` is the package a movement went into, joined for the packed arm.
-        const LEDGER: &[(&str, &str)] = &[
+        // (column, what it should equal per line, as `(fulfilment_line_id, q)`).
+        const MOVED: &str = "SELECT m.fulfilment_line_id, sum(v.effective_quantity)::bigint AS q
+                               FROM stock_movement m
+                               JOIN stock_movement_effective v
+                                 ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                               LEFT JOIN location fl ON fl.id = m.from_location_id
+                              WHERE m.fulfilment_line_id IS NOT NULL AND";
+        let ledger = [
             // D166, migration 91: out of *storage*, not merely out of a location.
             // A leg from `staging` into a carton moves goods already picked.
-            ("picked_quantity", "fl.kind IN ('pick_face', 'bulk', 'overflow')"),
-            ("packed_quantity", "p.status IN ('sealed', 'despatched')"),
-            ("despatched_quantity", "m.to_location_id IS NULL AND m.to_package_id IS NULL"),
+            ("picked_quantity", format!("{MOVED} fl.kind IN ('pick_face', 'bulk', 'overflow') GROUP BY 1")),
+            // D246: what sealed and despatched packages hold, netted for repacks.
+            (
+                "packed_quantity",
+                "SELECT c.fulfilment_line_id, sum(c.quantity)::bigint AS q
+                   FROM package_line_content c
+                   JOIN package p ON p.id = c.package_id
+                  WHERE p.status IN ('sealed', 'despatched')
+                  GROUP BY 1"
+                    .to_string(),
+            ),
+            ("despatched_quantity", format!("{MOVED} m.to_location_id IS NULL AND m.to_package_id IS NULL GROUP BY 1")),
         ];
         let mut findings = vec![];
 
-        for (col, shape) in LEDGER {
+        for (col, of) in &ledger {
             // Only lines the ledger says something about. A line with no movement
             // naming it is not evidence of disagreement -- it is a commitment
             // nobody has picked yet, which is the ordinary state of most of them.
@@ -3082,16 +3099,7 @@ pub mod checks {
                 format!(
                     "SELECT fl.id::text, fl.{col}, g.q
                        FROM fulfilment_line fl
-                       JOIN (SELECT m.fulfilment_line_id,
-                                    sum(v.effective_quantity)::bigint AS q
-                               FROM stock_movement m
-                               JOIN stock_movement_effective v
-                                 ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
-                               LEFT JOIN package p ON p.id = m.to_package_id
-                               LEFT JOIN location fl ON fl.id = m.from_location_id
-                              WHERE m.fulfilment_line_id IS NOT NULL
-                                AND {shape}
-                              GROUP BY m.fulfilment_line_id) g
+                       JOIN ({of}) g
                          ON g.fulfilment_line_id = fl.id
                       WHERE fl.{col} <> g.q"
                 )
@@ -3114,7 +3122,7 @@ pub mod checks {
                 &[],
             )?
             .get(0);
-        Ok((named as usize * LEDGER.len(), findings))
+        Ok((named as usize * ledger.len(), findings))
     }
 
     /// D172. What another system says is picked, against the reports it made.

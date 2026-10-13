@@ -35,6 +35,8 @@ mod order_search;
 mod outbound_reads;
 mod own_carton_http;
 mod pack_check_http;
+mod pallet_http;
+mod repack_http;
 mod packaging_http;
 mod packed_http;
 mod pack_walk_http;

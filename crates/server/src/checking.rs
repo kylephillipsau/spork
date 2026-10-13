@@ -120,16 +120,13 @@ pub async fn unchecked_in(tx: &tokio_postgres::Transaction<'_>, package: Uuid) -
     Ok(tx
         .query(
             "SELECT i.code
-               FROM stock_movement m
-               JOIN stock_movement_effective v
-                 ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
-               JOIN item i ON i.id = m.item_id
-              WHERE m.to_package_id = $1
-                AND m.fulfilment_line_id IS NOT NULL
-                AND NOT EXISTS (SELECT 1 FROM pack_check c
-                                 WHERE c.fulfilment_line_id = m.fulfilment_line_id)
-              GROUP BY m.fulfilment_line_id, i.code
-             HAVING sum(v.effective_quantity) > 0
+               FROM package_line_content c
+               JOIN item i ON i.id = c.item_id
+              WHERE c.package_id = $1
+                AND NOT EXISTS (SELECT 1 FROM pack_check k
+                                 WHERE k.fulfilment_line_id = c.fulfilment_line_id)
+              GROUP BY c.fulfilment_line_id, i.code
+             HAVING sum(c.quantity) > 0
               ORDER BY i.code",
             &[&package],
         )

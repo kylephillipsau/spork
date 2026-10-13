@@ -82,6 +82,8 @@ pub struct FulfilmentLine {
 pub struct Package {
     pub id: Uuid,
     pub tenant_id: Uuid,
+    /// Its status from its events (`package_status_now`): sealed is said (D246).
+    pub status: Option<String>,
 }
 
 /// Somewhere the goods were put down: the packing station, a staging bay.
@@ -165,6 +167,9 @@ pub enum Problem {
     OverAvailable { available: i64, proposed: i64 },
     /// Soft: line already fully despatched on the projection. Still recordable.
     LineAlreadyDespatched,
+    /// Soft: into a sealed carton. The bench does not offer it; one that
+    /// happened is recorded (D5, D246).
+    IntoSealed,
 }
 
 impl std::fmt::Display for Problem {
@@ -206,6 +211,7 @@ impl std::fmt::Display for Problem {
                 "the line's despatched quantity already meets its commitment; the pick \
                  is still recorded if it happened on the floor"
             ),
+            Problem::IntoSealed => write!(f, "put into a sealed carton: open it first"),
         }
     }
 }
@@ -217,6 +223,7 @@ pub fn is_hard(p: &Problem) -> bool {
         Problem::OverAvailable { .. }
             | Problem::LineAlreadyDespatched
             | Problem::FromPackageHeldStorage
+            | Problem::IntoSealed
     )
 }
 
@@ -282,6 +289,12 @@ pub fn check(
 
     if line.despatched_quantity >= line.quantity {
         problems.push(Problem::LineAlreadyDespatched);
+    }
+
+    if let Destination::Package(p) = destination {
+        if p.status.as_deref() == Some("sealed") {
+            problems.push(Problem::IntoSealed);
+        }
     }
 
     let _ = cell.item_id; // carried onto the movement by the write path
@@ -367,7 +380,16 @@ mod tests {
         Destination::Package(Package {
             id: u(7),
             tenant_id: u(10),
+            status: None,
         })
+    }
+
+    #[test]
+    fn into_a_sealed_carton_is_said_not_refused() {
+        let sealed = Destination::Package(Package { id: u(7), tenant_id: u(10), status: Some("sealed".into()) });
+        let problems = check(&good(), Some(&line()), Some(&cell()), Some(&sealed));
+        assert_eq!(problems, vec![Problem::IntoSealed]);
+        assert!(!problems.iter().any(is_hard));
     }
 
     /// The packing station: where a trolley pick is put down (D166).

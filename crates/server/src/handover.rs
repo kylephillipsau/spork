@@ -75,7 +75,8 @@ pub struct Line {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Destination {
-    Package,
+    /// A carton, and whether it is sealed now (D246).
+    Package { sealed: bool },
     /// A location, and the site it is at.
     Location { site_id: Option<Uuid> },
 }
@@ -92,11 +93,14 @@ pub enum Problem {
     NoOwner,
     /// Soft: more handed over than the other system reports picked.
     PastTheReport { reported: i64, handed: i64 },
+    /// Soft: into a sealed carton. The bench does not offer it; one that
+    /// happened is recorded (D5, D246).
+    IntoSealed,
 }
 
 impl Problem {
     pub fn is_hard(&self) -> bool {
-        !matches!(self, Problem::PastTheReport { .. })
+        !matches!(self, Problem::PastTheReport { .. } | Problem::IntoSealed)
     }
 }
 
@@ -125,6 +129,7 @@ impl std::fmt::Display for Problem {
                 "{handed} handed over against {reported} reported picked; the count at the \
                  bench is recorded, and the difference is a finding"
             ),
+            Problem::IntoSealed => write!(f, "put into a sealed carton: open it first"),
         }
     }
 }
@@ -149,6 +154,7 @@ pub fn check(quantity: i64, one_destination: bool, facts: &Facts) -> Vec<Problem
                 Some(Destination::Location { site_id }) if site_id != line.site_id => {
                     out.push(Problem::ElsewhereOnSite)
                 }
+                Some(Destination::Package { sealed: true }) => out.push(Problem::IntoSealed),
                 _ => {}
             }
         }
@@ -235,9 +241,12 @@ pub async fn record_handover(
                 facts.handed = handed(tx, body.fulfilment_line_id).await?;
 
                 facts.destination = if let Some(p) = body.to_package_id {
-                    tx.query_opt("SELECT 1 FROM package WHERE id = $1", &[&p])
-                        .await?
-                        .map(|_| Destination::Package)
+                    tx.query_opt(
+                        "SELECT package_status_now(id) IS NOT DISTINCT FROM 'sealed' FROM package WHERE id = $1",
+                        &[&p],
+                    )
+                    .await?
+                    .map(|r| Destination::Package { sealed: r.get(0) })
                 } else if let Some(l) = body.to_location_id {
                     tx.query_opt("SELECT site_id FROM location WHERE id = $1", &[&l])
                         .await?
@@ -339,7 +348,7 @@ mod tests {
             report: Some(Uuid::from_u128(9)),
             reported: 4,
             handed: 0,
-            destination: Some(Destination::Package),
+            destination: Some(Destination::Package { sealed: false }),
             owner: Some(Uuid::from_u128(7)),
         }
     }
@@ -354,6 +363,15 @@ mod tests {
         let p = check(5, true, &ready());
         assert_eq!(p, vec![Problem::PastTheReport { reported: 4, handed: 5 }]);
         assert!(!p[0].is_hard(), "the count at the bench outranks the report");
+    }
+
+    #[test]
+    fn into_a_sealed_carton_is_recorded_with_a_warning() {
+        let mut f = ready();
+        f.destination = Some(Destination::Package { sealed: true });
+        let p = check(4, true, &f);
+        assert_eq!(p, vec![Problem::IntoSealed]);
+        assert!(!p[0].is_hard());
     }
 
     #[test]

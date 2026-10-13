@@ -404,13 +404,11 @@ pub async fn bench_view(
                            -- The kit it is a part of (D223).
                            LEFT JOIN order_line kl ON kl.id = ol.kit_line_id
                            LEFT JOIN item ki ON ki.id = kl.item_id
+                           -- What cartons hold of it, netted for repacks (D246).
                            LEFT JOIN LATERAL (
-                               SELECT coalesce(sum(v.effective_quantity), 0)::bigint AS q
-                                 FROM stock_movement m
-                                 JOIN stock_movement_effective v
-                                   ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
-                                WHERE m.fulfilment_line_id = fl.id
-                                  AND m.to_package_id IS NOT NULL) bx ON true
+                               SELECT coalesce(sum(c.quantity), 0)::bigint AS q
+                                 FROM package_line_content c
+                                WHERE c.fulfilment_line_id = fl.id) bx ON true
                           WHERE fl.fulfilment_id = $1
                           -- A kit's parts together, where the kit's code sorts.
                           ORDER BY coalesce(ki.code, i.code), kl.id NULLS FIRST, i.code",
@@ -866,13 +864,9 @@ pub async fn cartons_on(
                            FROM package p
                            LEFT JOIN package_type pt ON pt.id = p.package_type_id
                            LEFT JOIN item own_item ON own_item.id = p.own_item_id
-                           LEFT JOIN LATERAL (
-                               SELECT e.kind FROM package_event e
-                                WHERE e.package_id = p.id
-                                  AND e.kind IN ('created','placed','contained','sealed',
-                                                 'opened','despatched','voided')
-                                ORDER BY e.occurred_at DESC, e.recorded_at DESC, e.id DESC
-                                LIMIT 1) w ON true
+                           -- Its status from its events (migration 138): putting a
+                           -- sealed carton on a pallet leaves it sealed.
+                           LEFT JOIN LATERAL (SELECT package_status_now(p.id) AS kind) w ON true
                           WHERE p.fulfilment_id = $1
                             AND w.kind IS DISTINCT FROM 'voided'
                           ORDER BY p.sequence NULLS LAST, p.id",
@@ -897,28 +891,30 @@ pub async fn cartons_on(
                 let mut packed: Vec<Packed> = vec![];
                 for r in &rows {
                     let id: Uuid = r.get(0);
-                    // Netted through `stock_movement_effective`, like the
-                    // packing list: a reversed pick must stop reading as packed.
+                    // What it holds, as the packing list reads it: netted for
+                    // reversed picks and for units moved on to another carton
+                    // (`package_line_content`, D246). A row for each line as
+                    // well as each item: two lines of one code packed into one
+                    // carton are two rows. The picks behind a row are what
+                    // taking out reverses, newest first.
                     let contents = tx
                         .query(
-                            "SELECT i.code, i.description, l.code,
-                                    sum(e.effective_quantity)::bigint,
-                                    m.item_id,
-                                    array_agg(m.id ORDER BY m.recorded_at DESC),
-                                    array_agg(e.effective_quantity ORDER BY m.recorded_at DESC)
-                               FROM stock_movement m
-                               JOIN stock_movement_effective e ON e.movement_id = m.id
-                               JOIN item i ON i.id = m.item_id
-                               LEFT JOIN lot l ON l.id = m.to_lot_id
-                              WHERE m.to_package_id = $1
-                                AND m.fulfilment_line_id IS NOT NULL
-                              -- Still grouped by the fulfilment line as well as
-                              -- the item: two lines of one code packed into one
-                              -- carton are two rows, and were before `item_id`
-                              -- joined the select list.
-                              GROUP BY i.code, i.description, l.code,
-                                       m.fulfilment_line_id, m.item_id
-                             HAVING sum(e.effective_quantity) <> 0
+                            "SELECT i.code, i.description, l.code, c.quantity, c.item_id,
+                                    coalesce(pk.ids, '{}'::uuid[]), coalesce(pk.left, '{}'::bigint[])
+                               FROM package_line_content c
+                               JOIN item i ON i.id = c.item_id
+                               LEFT JOIN lot l ON l.id = c.lot_id
+                               LEFT JOIN LATERAL (
+                                   SELECT array_agg(m.id ORDER BY m.recorded_at DESC) AS ids,
+                                          array_agg(e.effective_quantity ORDER BY m.recorded_at DESC) AS left
+                                     FROM stock_movement m
+                                     JOIN stock_movement_effective e ON e.movement_id = m.id
+                                    WHERE m.to_package_id = c.package_id
+                                      AND m.fulfilment_line_id = c.fulfilment_line_id
+                                      AND m.item_id = c.item_id
+                                      AND m.to_lot_id IS NOT DISTINCT FROM c.lot_id) pk ON true
+                              WHERE c.package_id = $1
+                                AND c.quantity <> 0
                               ORDER BY i.code",
                             &[&id],
                         )

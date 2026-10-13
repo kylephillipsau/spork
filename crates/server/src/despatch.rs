@@ -146,19 +146,15 @@ pub struct Provider {
     pub kind: String,
 }
 
-/// The winning `package_event`, which is what says where a carton is.
+/// The status its events give it now, which is what says where a carton is.
 ///
 /// `package.status` is a fold and lags the act that just happened, so a carton
 /// sealed or despatched a second ago still reads by its previous state. The
-/// pack bench learned this the same way and for the same reason.
+/// pack bench learned this the same way and for the same reason. Status events
+/// only (`package_status_now`, migration 138): a sealed carton put on a pallet
+/// is still sealed.
 const WINNING: &str = "
-    LEFT JOIN LATERAL (
-        SELECT e.kind FROM package_event e
-         WHERE e.package_id = p.id
-           AND e.kind IN ('created','placed','contained','sealed',
-                          'opened','despatched','voided')
-         ORDER BY e.occurred_at DESC, e.recorded_at DESC, e.id DESC
-         LIMIT 1) w ON true";
+    LEFT JOIN LATERAL (SELECT package_status_now(p.id) AS kind) w ON true";
 
 pub async fn screen(
     state: &web::Data<AppState>,
@@ -302,14 +298,12 @@ pub async fn screen(
                 if !ids.is_empty() {
                     let lines = tx
                         .query(
-                            "SELECT m.to_package_id, m.fulfilment_line_id,
-                                    sum(e.effective_quantity)::bigint
-                               FROM stock_movement m
-                               JOIN stock_movement_effective e ON e.movement_id = m.id
-                              WHERE m.to_package_id = ANY($1)
-                                AND m.fulfilment_line_id IS NOT NULL
-                              GROUP BY m.to_package_id, m.fulfilment_line_id
-                             HAVING sum(e.effective_quantity) <> 0",
+                            // What each holds of each line (D246).
+                            "SELECT c.package_id, c.fulfilment_line_id, sum(c.quantity)::bigint
+                               FROM package_line_content c
+                              WHERE c.package_id = ANY($1)
+                              GROUP BY c.package_id, c.fulfilment_line_id
+                             HAVING sum(c.quantity) <> 0",
                             &[&ids],
                         )
                         .await?;

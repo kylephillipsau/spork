@@ -1614,6 +1614,10 @@ pub struct CreatePackageRequest {
     pub own_level: Option<String>,
     /// Where the package comes into existence (D97: created asserts placement).
     pub location_id: Uuid,
+    /// A pallet broken down at the carrier's depot, its parcels each delivered
+    /// on their own (D247). It carries many orders, so it names none.
+    #[serde(default)]
+    pub breaks_down: bool,
     pub barcode: Option<String>,
     pub sscc: Option<String>,
     /// Defaults to operator_scan.
@@ -1693,6 +1697,9 @@ pub async fn create_package(
                     .iter()
                     .map(|p| p.to_string())
                     .collect::<Vec<_>>();
+                if body.breaks_down && body.fulfilment_id.is_some() {
+                    problems.push("a breakdown pallet carries many orders: name none".into());
+                }
                 // **One of a product as it is, is one of something on the order**
                 // (migration 98, D196). A case pack or an item the fulfilment
                 // does not carry is a mistake the bench cannot make and a
@@ -1779,8 +1786,8 @@ pub async fn create_package(
                 tx.execute(
                     "INSERT INTO package (
                          id, tenant_id, fulfilment_id, package_type_id, sequence,
-                         item_packing_config_id, own_item_id, own_level)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::packaging_level)",
+                         item_packing_config_id, own_item_id, own_level, breaks_down)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::packaging_level, $9)",
                     &[
                         &package_id,
                         &tenant,
@@ -1790,6 +1797,7 @@ pub async fn create_package(
                         &body.item_packing_config_id,
                         &own.as_ref().map(|o| o.0),
                         &own.as_ref().map(|o| o.1.clone()),
+                        &body.breaks_down,
                     ],
                 )
                 .await?;
@@ -2012,6 +2020,18 @@ pub struct ContainPackageRequest {
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
     pub source: Option<String>,
+    /// Where on the parent it went, when known (D246, migration 139).
+    pub at: Option<Spot>,
+}
+
+/// A spot on a pallet: from the front left corner of its deck, front being
+/// where the forks go in; `turned` a quarter round.
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub struct Spot {
+    pub x_mm: i32,
+    pub y_mm: i32,
+    pub z_mm: i32,
+    pub turned: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -2082,8 +2102,13 @@ pub async fn contain_package(
                     parent_package_id: body.parent_package_id,
                     source: source.clone(),
                 };
-                let (hard, soft) =
-                    packages::check_contain(&proposed, child_pkg.as_ref(), parent_pkg.as_ref());
+                let nesting = packages::nesting(tx, package_id, body.parent_package_id).await?;
+                let (hard, soft) = packages::check_contain(
+                    &proposed,
+                    child_pkg.as_ref(),
+                    parent_pkg.as_ref(),
+                    &nesting,
+                );
                 if !hard.is_empty() {
                     if hard.len() == 1
                         && matches!(
@@ -2134,13 +2159,16 @@ pub async fn contain_package(
                     });
                 }
 
-                // parent_package_id set, location_id null — holder CHECK.
+                // parent_package_id set, location_id null — holder CHECK. The
+                // spot is all four or none (`package_event_spot_ck`).
+                let spot = body.at;
                 let event_id: Uuid = tx
                     .query_one(
                         "INSERT INTO package_event (
                              tenant_id, client_event_id, package_id, kind, source,
-                             occurred_at, recorded_by_id, parent_package_id)
-                         VALUES ($1, $2, $3, 'contained', $4, $5, $6, $7)
+                             occurred_at, recorded_by_id, parent_package_id,
+                             at_x_mm, at_y_mm, at_z_mm, turned)
+                         VALUES ($1, $2, $3, 'contained', $4, $5, $6, $7, $8, $9, $10, $11)
                          RETURNING id",
                         &[
                             &tenant,
@@ -2150,6 +2178,10 @@ pub async fn contain_package(
                             &body.occurred_at,
                             &who.person_id,
                             &body.parent_package_id,
+                            &spot.map(|s| s.x_mm),
+                            &spot.map(|s| s.y_mm),
+                            &spot.map(|s| s.z_mm),
+                            &spot.map(|s| s.turned),
                         ],
                     )
                     .await?
@@ -5722,28 +5754,24 @@ pub async fn package_contents(
                     return Err(ApiError::NotFound);
                 };
 
-                // The picks that filled this carton, netted for corrections.
-                // `stock_movement_effective` holds roots only and a correction is
-                // a term in its target's sum, so joining it is what stops a
-                // reversed pick still reading as packed.
+                // What the carton holds, netted for corrections and for units
+                // moved on to another carton (`package_line_content`, D246).
                 let line_rows = tx
                     .query(
                         "SELECT i.code, i.description, l.code, l.expiry_date,
-                                sum(e.effective_quantity)::bigint,
-                                m.fulfilment_line_id, fl.order_line_id, o.confirmation_number
-                           FROM stock_movement m
-                           JOIN stock_movement_effective e ON e.movement_id = m.id
-                           JOIN item i ON i.id = m.item_id
-                           JOIN fulfilment_line fl ON fl.id = m.fulfilment_line_id
+                                sum(c.quantity)::bigint,
+                                c.fulfilment_line_id, fl.order_line_id, o.confirmation_number
+                           FROM package_line_content c
+                           JOIN item i ON i.id = c.item_id
+                           JOIN fulfilment_line fl ON fl.id = c.fulfilment_line_id
                            JOIN order_line ol ON ol.id = fl.order_line_id
                            JOIN \"order\" o ON o.id = ol.order_id
-                           LEFT JOIN lot l ON l.id = m.to_lot_id
-                          WHERE m.to_package_id = $1
-                            AND m.fulfilment_line_id IS NOT NULL
+                           LEFT JOIN lot l ON l.id = c.lot_id
+                          WHERE c.package_id = $1
                           GROUP BY i.code, i.description, l.code, l.expiry_date,
-                                   m.fulfilment_line_id, fl.order_line_id,
+                                   c.fulfilment_line_id, fl.order_line_id,
                                    o.confirmation_number
-                         HAVING sum(e.effective_quantity) <> 0
+                         HAVING sum(c.quantity) <> 0
                           ORDER BY i.code, l.code NULLS FIRST",
                         &[&package_id],
                     )
@@ -5989,18 +6017,7 @@ pub async fn void_package(
 
                 // `package.status` is a fold of the log, so it lags until the
                 // maintainer runs. The winning event is the answer now.
-                let winning: Option<String> = tx
-                    .query_opt(
-                        "SELECT kind FROM package_event
-                          WHERE package_id = $1
-                            AND kind IN ('created','placed','contained','sealed',
-                                         'opened','despatched','voided')
-                          ORDER BY occurred_at DESC, recorded_at DESC, id DESC
-                          LIMIT 1",
-                        &[&package_id],
-                    )
-                    .await?
-                    .map(|r| r.get(0));
+                let winning = ledger_views::package_status_ledger(tx, package_id).await?;
 
                 Ok(VoidPackageResponse {
                     event_id,
@@ -9709,6 +9726,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::shipping::box_weight)
         .service(crate::shipping::box_empty_weight)
         .service(crate::checking::check_line)
+        .service(crate::repacking::repack)
         .service(crate::backup::backup_summary)
         .service(crate::backup::download_backup)
         .service(crate::search::global_search)
