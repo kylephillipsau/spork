@@ -26,6 +26,7 @@ import { href } from "@app/routing/location";
 import { usePageTitle } from "@app/routing/title";
 import { Faint } from "@app/common/cells";
 import { kg } from "@app/common/format";
+import { cutSaying } from "@app/items/box";
 import { ItemDrawer, ItemLine } from "@app/items/ItemProperties";
 
 import { piecesOf, type AsIs } from "./arrange";
@@ -413,6 +414,8 @@ function Carton({
           ) : null}
         </span>
       }
+      // Until it is sealed, what to cut its box down to (D252).
+      description={carton.sealed ? undefined : (cutSaying(carton.cut, carton.stated_size) ?? undefined)}
       actions={
         carton.sealed ? (
           <Link variant="plain" href={href(`/print/packing-list/${carton.id}`)} className={s.print}>

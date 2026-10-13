@@ -9,6 +9,7 @@ import { kg } from "@app/common/format";
 import { keep, recall } from "@app/common/remembered";
 import { copyText } from "@app/common/copy";
 
+import { cutSaying } from "@app/items/box";
 import { arrange, contentsOf, type Aside, type AsIs, type BoxPlan, type Dims, type Kind, type Layer, type OpenCarton } from "./arrange";
 import { bookingCm, bookingText, gathered, type Freight } from "./freight";
 import { onTheBench } from "./check";
@@ -205,7 +206,7 @@ export function Suggestion({
 
       {box && !box.carton && (
         <Toolbar placement="bottom">
-          <span className={s.note}>Not started yet</span>
+          <span className={s.note}>{cutSaying(box.preset.cut, box.preset.size) ?? "Not started yet"}</span>
           <Spacer />
           {/* Secondary: Start carton below is the bench's one primary act. */}
           <Button
@@ -235,8 +236,8 @@ function tally(o: OrderView): string {
 }
 
 /** A closed thing to draw: one placement filling its own size. */
-function closed(size: Dims, code: string, index: number, faces: Kind["faces"], round: Kind["round"]): ParcelShape {
-  const kind: Kind = { line: "", item_id: "", item_code: code, level: "carton", units: 1, size, weight_g: null, faces, round, upright: false, index };
+function closed(size: Dims, code: string, index: number, look: Pick<Parcel, "faces" | "round" | "keep">): ParcelShape {
+  const kind: Kind = { line: "", item_id: "", item_code: code, level: "carton", units: 1, size, weight_g: null, ...look, upright: false, index };
   return { size, outline: false, layers: [{ z: 0, height: size[2], placements: [{ kind, x: 0, y: 0, z: 0, dims: size, axes: [0, 1, 2] }] }] };
 }
 
@@ -250,8 +251,8 @@ function orderShapes(o: OrderView): ParcelShape[] {
   o.parcels.forEach((p, i) => {
     if (!p.size) return;
     if (p.layers) out.push({ size: p.size, layers: p.layers, outline: true });
-    else if (p.asIs) for (let n = 0; n < p.count; n++) out.push(closed(p.size, p.asIs.item_code, p.index ?? i, p.faces, p.round));
-    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, p.faces, p.round));
+    else if (p.asIs) for (let n = 0; n < p.count; n++) out.push(closed(p.size, p.asIs.item_code, p.index ?? i, p));
+    else out.push(closed(p.size, p.state === "sealed" ? `${p.title} ✓` : p.title, i, p));
   });
   return out;
 }

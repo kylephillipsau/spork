@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useLive } from "@app/acting";
 import { anAct } from "@domain/acts";
 import { api, reason } from "@domain/api";
-import type { PackageTypeRow, ReportedField, Workspace } from "@domain/types";
+import type { PackageTypeRow, ReportedField, Side, Workspace } from "@domain/types";
+import { handheld } from "@app/items/crop";
+import type { Pixels, Point } from "@app/items/cut";
+import type { CropOpen } from "@app/items/FaceCrop";
+
+const model = () => import("@app/items/faceModel");
 
 /**
  * The organisation and its warehouses, and the two things a site says about
@@ -34,6 +39,23 @@ export interface WorkspaceBench {
   boxWeight: (boxId: string, grams: number | null) => Promise<void>;
   /** Say what a box weighs empty, in grams, or null until one is weighed (D224). */
   boxEmptyWeight: (boxId: string, grams: number | null) => Promise<void>;
+  /**
+   * Add a height a box is cut down to, in centimetres as typed, booked as
+   * `name` when one is given (D252). True when it was added.
+   */
+  addHeight: (boxId: string, cm: string, name: string) => Promise<boolean>;
+  /** Take a height away: only one nothing was packed in (D252). */
+  removeHeight: (boxId: string) => Promise<void>;
+  /** Photograph a side of a box (D252); at a desk it then opens to be cropped. */
+  photographBox: (box: PackageTypeRow, face: Side, image: Blob) => Promise<void>;
+  /** The photograph open to be cut to its face, if one is. */
+  cropping: CropOpen | null;
+  crop: (cropping: CropOpen) => void;
+  uncrop: () => void;
+  /** Cut the open photograph at these corners, `make` straightening it (D176). */
+  cut: (corners: number[], make: () => Promise<Blob>) => Promise<void>;
+  /** Where the face is in a photograph (D177), as the item page finds it. */
+  findFace: (key: string, pixels: Pixels, at?: Point) => Promise<number[] | null>;
   /** NetSuite's fields, and what each is read as (D238); null until read. */
   fields: ReportedField[] | null;
   /** Say what one of them means. */
@@ -48,6 +70,7 @@ export function useWorkspace(): WorkspaceBench {
   const live = useLive();
 
   const [boxes, setBoxes] = useState<PackageTypeRow[] | null>(null);
+  const [cropping, setCropping] = useState<CropOpen | null>(null);
   const [fields, setFields] = useState<ReportedField[] | null>(null);
 
   const read = useCallback(async () => {
@@ -114,6 +137,57 @@ export function useWorkspace(): WorkspaceBench {
     [change],
   );
 
+  const addHeight = useCallback(
+    async (boxId: string, cm: string, name: string) => {
+      const mm = Math.round(Number(cm.trim().replace(",", ".")) * 10);
+      if (!cm.trim() || !Number.isFinite(mm) || mm <= 0) {
+        setProblem("Say the height in centimetres: 28, or 34.5.");
+        return false;
+      }
+      let added = false;
+      await change(async () => {
+        await api.addHeight(boxId, mm, name.trim() || null);
+        added = true;
+      }, "Could not add that height.");
+      return added;
+    },
+    [change],
+  );
+
+  const removeHeight = useCallback(
+    (boxId: string) => change(() => api.removeHeight(boxId), "Could not take that height away."),
+    [change],
+  );
+
+  // One look a photograph, as a retake is a new row (D132); at a desk, straight
+  // on to marking its corners, as the item page does (D181).
+  const photographBox = useCallback(
+    async (box: PackageTypeRow, face: Side, image: Blob) => {
+      const sent: { photo: { image_id: string; digest: string } | null } = { photo: null };
+      await change(async () => {
+        const look = await api.recordCapture({ box: box.id, level: null, measurements: [], photographs: true, act: anAct() });
+        sent.photo = await api.photograph(look.observation_event_id, face, image);
+      }, `Could not keep the photograph of the ${face}.`);
+      const { photo } = sent;
+      if (photo && live.current && !handheld()) {
+        const subject = { box_shaped: true, length_mm: box.length_mm, width_mm: box.width_mm, height_mm: box.height_mm };
+        setCropping({ subject, face, image_id: photo.image_id, digest: photo.digest, corners: null });
+      }
+    },
+    [change, live],
+  );
+
+  const cut = useCallback(
+    (corners: number[], make: () => Promise<Blob>) =>
+      change(async () => {
+        if (!cropping) return;
+        const straight = await api.storeImage(await make());
+        await api.recordCut(cropping.image_id, { digest: straight.digest, corners, act: anAct() });
+        if (live.current) setCropping(null);
+      }, "Could not keep the crop."),
+    [change, cropping, live],
+  );
+
   const sayField = useCallback(
     (field: ReportedField, meaning: { role: string; unit: string | null; unit_field: string | null; level: string | null }) =>
       change(
@@ -135,6 +209,14 @@ export function useWorkspace(): WorkspaceBench {
     suggest,
     boxWeight,
     boxEmptyWeight,
+    addHeight,
+    removeHeight,
+    photographBox,
+    cropping,
+    crop: setCropping,
+    uncrop: () => setCropping(null),
+    cut,
+    findFace: (key, pixels, at) => model().then((m) => m.findFace(key, pixels, at)),
     fields,
     sayField,
   };

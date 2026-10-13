@@ -1,5 +1,6 @@
 import type { BenchScreen, CartonSummary, Picture, Uuid } from "@domain/types";
 
+import { keepOf } from "../../items/box.ts";
 import { roundLook } from "../../items/round.ts";
 import { boxFreight, type Arrangement, type AsIs, type Aside, type BoxPlan, type Dims, type Layer } from "./arrange.ts";
 import { shortOf } from "./check.ts";
@@ -56,6 +57,8 @@ export interface Parcel {
   index: number | null;
   faces: AsIs["faces"];
   round: AsIs["round"];
+  /** A cut box shows this share of its full box's photographs, from the bottom (D252); 1 otherwise. */
+  keep: number;
   /** What one weighs: on the scale when `weighed`, else by the record; null when nothing says (D224). */
   weight_g: number | null;
   weighed: boolean;
@@ -106,12 +109,14 @@ const LEVEL_WORDS = { each: "as it is", inner: "inner pack", carton: "carton" } 
 /**
  * A carton that is one of a product as it is (D196) looks like the product at
  * that level: its sides, as photographed and cut, or the tub it is (D240). A
- * box type has neither.
+ * box type looks like its photographs, and a cut one like the bottom of its
+ * full box's (D252).
  */
-function lookOf(screen: BenchScreen, c: CartonSummary): Pick<Parcel, "faces" | "round"> {
-  const line = c.own_carton_of ? screen.lines.find((l) => l.item_code === c.own_carton_of) : undefined;
+function lookOf(screen: BenchScreen, c: CartonSummary): Pick<Parcel, "faces" | "round" | "keep"> {
+  if (!c.own_carton_of) return { faces: c.faces, round: null, keep: keepOf(c.cut, c.stated_size) };
+  const line = screen.lines.find((l) => l.item_code === c.own_carton_of);
   const unit = line?.packs.find((p) => p.level === (c.own_level ?? "carton"));
-  return { faces: unit?.faces ?? {}, round: unit ? roundLook(unit) : null };
+  return { faces: unit?.faces ?? {}, round: unit ? roundLook(unit) : null, keep: 1 };
 }
 
 /** What a box's weight by the record leaves out: pieces nobody weighed, and the box itself. */
@@ -206,8 +211,9 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       loose: plan.looseBox === i ? plan.placedLoose : [],
       layers: b.layers,
       index: null,
-      faces: {},
+      faces: b.preset.faces,
       round: null,
+      keep: keepOf(b.preset.cut, b.preset.size),
       weight_g: boxFreight(b).weight_g,
       weighed: false,
       weightNote: boxNote(b),
@@ -229,6 +235,7 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       index: a.index,
       faces: a.faces,
       round: a.round,
+      keep: 1,
       weight_g: a.weight_g === null ? null : a.weight_g / a.count,
       weighed: false,
       weightNote: a.weight_g === null ? "not weighed" : null,

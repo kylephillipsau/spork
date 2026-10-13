@@ -1940,7 +1940,7 @@ function FromPhotos({ faces, name, subject, desk }: { faces: readonly Face[]; na
  * neither a camera nor the phone's photos. `camera` opens the rear camera on a
  * handheld; without it, the photos to choose from.
  */
-function FilePress({
+export function FilePress({
   label,
   text,
   icon,

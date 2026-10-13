@@ -241,7 +241,7 @@ export class PackScene {
       if (digest) {
         this.loader.load(this.imageUrl(digest), (image) => {
           if (painting !== this.painting) return;
-          const texture = faceTexture(image, face, kind.size, TEXTURE_PX);
+          const texture = faceTexture(image, face, kind.size, TEXTURE_PX, kind.keep);
           this.textures.push(texture);
           material.map = texture;
           material.needsUpdate = true;

@@ -1,4 +1,4 @@
-import type { PackageTypeRow, Workspace, ReportedField } from "@domain/types";
+import type { BoxPhoto, PackageTypeRow, Workspace, ReportedField, Side } from "@domain/types";
 import type { WorkspaceBench, WorkspaceState } from "./useWorkspace";
 
 /** The workspace as a deployment looks after a bin import. */
@@ -56,12 +56,42 @@ const box = (name: string, code: string | null, size: [number, number, number] |
   max_payload_g: null,
   tenant_owned: true,
   suggested,
+  cut: null,
+  packed: 0,
+  photos: [],
 });
+
+const MEDIUM = box("Medium Box", "CTN", [450, 340, 410]);
+
+/** A height of a box, cut from it (D252): its own name for the booking. */
+const cut = (from: PackageTypeRow, n: number, height: number, packed = 0): PackageTypeRow => ({
+  ...from,
+  id: `9a7e0000-0000-0000-0000-0000000c${String(n).padStart(4, "0")}`,
+  name: `${from.name}, cut to ${height / 10}`,
+  height_mm: height,
+  cut: { from_id: from.id, from_name: from.name, full_height_mm: from.height_mm! },
+  packed,
+});
+
+/** The medium box photographed round, its back not yet cropped. */
+const shot = (face: Side, n: number, cropped = true): BoxPhoto => ({
+  face,
+  image_id: `01990000-0000-7000-8000-0000000b${String(n).padStart(4, "0")}`,
+  digest: `b0c5${String(n).padStart(4, "0")}a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b4c3d2e1f0011`,
+  captured_at: "2026-10-14T10:00:00Z",
+  cut: cropped ? { digest: `c7d1${String(n).padStart(4, "0")}a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b4c3d2e1f0011`, corners: [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9] } : null,
+});
+
+/** The medium box, opened to its heights and photographs (D252). */
+export const OPEN_BOX = MEDIUM.id;
 
 export const BOXES: PackageTypeRow[] = [
   box("Extra Small Box", "CTN", [320, 230, 160]),
   box("Small Box", "CTN", [390, 310, 300]),
-  box("Medium Box", "CTN", [450, 340, 410]),
+  { ...MEDIUM, packed: 40, photos: [shot("front", 1), shot("right", 2), shot("back", 3, false), shot("top", 4)] },
+  cut(MEDIUM, 1, 345, 3),
+  cut(MEDIUM, 2, 280, 12),
+  cut(MEDIUM, 3, 210),
   { ...box("Large Box", "CTN", [660, 440, 460]), max_payload_g: 25000 },
   box("Shovel Box", "CTN", [1400, 340, 400], false),
   box("Satchel", null, null),
@@ -81,6 +111,14 @@ export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
     suggest: noop,
     boxWeight: noop,
     boxEmptyWeight: noop,
+    addHeight: async () => false,
+    removeHeight: noop,
+    photographBox: noop,
+    cropping: null,
+    crop: () => {},
+    uncrop: () => {},
+    cut: noop,
+    findFace: async () => null,
     fields: state.kind === "ready" ? FIELDS : null,
     sayField: noop,
   };

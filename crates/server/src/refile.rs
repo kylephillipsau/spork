@@ -198,6 +198,7 @@ async fn card_of(
         item_id: Some(item),
         item_style_id: None,
         item_part_id: None,
+        package_type_id: None,
         packaging_level: Some(level.to_string()),
     };
     Ok(observable_for(tx, tenant, &subject, at).await?.0)

@@ -1,4 +1,4 @@
-import type { BenchScreen, ItemUnit, LineCheck } from "@domain/types";
+import type { BenchScreen, ItemUnit, LineCheck, Preset } from "@domain/types";
 
 /** Counted in eaches, NetSuite saying nothing of it. */
 const EACH: ItemUnit = { level: "each", said: false, netsuite_unit: null, netsuite_level: null, singles: 1 };
@@ -17,6 +17,24 @@ const checked = (n: number, seen = n): LineCheck => ({ expected: n, seen, by: "A
  * **The screen renders from this with no network**, which is what makes both
  * densities and both faces reviewable without a running warehouse.
  */
+/** The small box's sides, photographed and cut (D252). */
+const SMALL_BOX_FACES = {
+  front: "b0c50000a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b4c3d2e1f00112233",
+  right: "b0c50000a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b4c3d2e1f00112244",
+  top: "b0c50000a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b4c3d2e1f00112255",
+};
+const SMALL_BOX: Preset = {
+  id: "9a7e0000-0000-0000-0000-0000000000b1",
+  name: "small box",
+  size: { length_mm: 400, width_mm: 300, height_mm: 190 },
+  suggested: true,
+  max_payload_g: null,
+  tare_weight_g: null,
+  deck: null,
+  cut: null,
+  faces: SMALL_BOX_FACES,
+};
+
 export const PACK_FIXTURE: BenchScreen = {
   reference: "IF400187",
   order_reference: "S260052",
@@ -187,6 +205,8 @@ export const PACK_FIXTURE: BenchScreen = {
       breaks_down: false,
       // Sealed, and put on the order's pallet (D246).
       on: { id: "ca470000-0000-0000-0000-000000000002", name: "PALLET", sequence: "2", breaks_down: false },
+      cut: null,
+      faces: SMALL_BOX_FACES,
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -226,6 +246,8 @@ export const PACK_FIXTURE: BenchScreen = {
       kind: "pallet",
       breaks_down: false,
       on: null,
+      cut: null,
+      faces: {},
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -276,6 +298,8 @@ export const PACK_FIXTURE: BenchScreen = {
       kind: "pallet",
       breaks_down: false,
       on: null,
+      cut: null,
+      faces: {},
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -298,6 +322,8 @@ export const PACK_FIXTURE: BenchScreen = {
       kind: "as_is",
       breaks_down: false,
       on: null,
+      cut: null,
+      faces: {},
       own_carton_of: "SLV-PE-BLU",
       own_level: "carton",
       listed_weight_g: 3600,
@@ -320,10 +346,10 @@ export const PACK_FIXTURE: BenchScreen = {
     },
   ],
   presets: [
-    { id: "9a7e0000-0000-0000-0000-0000000000b1", name: "small box", size: { length_mm: 400, width_mm: 300, height_mm: 190 }, suggested: true, max_payload_g: null, tare_weight_g: null, deck: null },
-    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true, max_payload_g: null, tare_weight_g: null, deck: null },
-    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 } },
-    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 } },
+    SMALL_BOX,
+    { id: "9a7e0000-0000-0000-0000-0000000000b2", name: "medium box", size: { length_mm: 450, width_mm: 340, height_mm: 410 }, suggested: true, max_payload_g: null, tare_weight_g: null, deck: null, cut: null, faces: {} },
+    { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 }, cut: null, faces: {} },
+    { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 }, cut: null, faces: {} },
   ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };
@@ -348,6 +374,8 @@ export const PACK_FILLING: BenchScreen = {
       kind: "box",
       breaks_down: false,
       on: null,
+      cut: null,
+      faces: {},
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -402,4 +430,24 @@ export const PACK_LOOSE: BenchScreen = {
     if (l.item_code === "APR-PE-CLR-L") return unmeasured(180);
     return { ...l, remaining: l.committed, kit: null, own_carton: null };
   }),
+};
+
+/**
+ * Three aprons left, and the small box cut down to 10 (D252): the suggestion
+ * chooses the cut, the lowest box that takes them, and says what to cut it to
+ * before it is started. The sealed carton is drawn with its box's photographs.
+ */
+export const PACK_CUT: BenchScreen = {
+  ...PACK_FIXTURE,
+  lines: PACK_FIXTURE.lines.map((l) => (l.item_code === "APR-PE-CLR-L" ? { ...l, remaining: 3, committed: 3 } : l)),
+  presets: [
+    ...PACK_FIXTURE.presets,
+    {
+      ...SMALL_BOX,
+      id: "9a7e0000-0000-0000-0000-0000000000b4",
+      name: "small box, cut to 10",
+      size: { length_mm: 400, width_mm: 300, height_mm: 100 },
+      cut: { from_id: SMALL_BOX.id, from_name: "small box", full_height_mm: 190 },
+    },
+  ],
 };

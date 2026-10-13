@@ -35,7 +35,7 @@ pub enum Id {
     J41, J42, J43, J44, J45, J46, J47, J48, J49, J50,
     J51, J52, J53, J54, J55, J56, J57, J58, J59, J60, J61, J62, J63, J64, J65, J66,
     J67, J68, J69, J70, J71, J72, J73, J74, J75, J76, J77, J78,
-    J79, J80, J81,
+    J79, J80, J81, J82,
 }
 
 impl fmt::Display for Id {
@@ -53,7 +53,7 @@ pub const ALL: &[Id] = &[
     Id::J50, Id::J51, Id::J52, Id::J53, Id::J54, Id::J55, Id::J56, Id::J57,
     Id::J58, Id::J59, Id::J60, Id::J61, Id::J62, Id::J63, Id::J64, Id::J65, Id::J66,
     Id::J67, Id::J68, Id::J69, Id::J70, Id::J71, Id::J72, Id::J73, Id::J74, Id::J75,
-    Id::J76, Id::J77, Id::J78, Id::J79, Id::J80, Id::J81,
+    Id::J76, Id::J77, Id::J78, Id::J79, Id::J80, Id::J81, Id::J82,
 ];
 
 /// What a failing job-asserted invariant produces.
@@ -347,6 +347,9 @@ pub fn spec(id: Id) -> Invariant {
         J81 => Invariant { id, owners: "D247", asserts_absence: true,
             statement: "What is booked is what is delivered: no package on a consignment is in or on a pallet that goes as one, and no pallet broken down at the depot is on one. Each is either delivered itself or carried, never both",
             check: Check::Run(checks::j81_what_is_booked_is_what_is_delivered) },
+        J82 => Invariant { id, owners: "D252", asserts_absence: true,
+            statement: "A cut box is cut from a full box: the same workspace's, lower than it, with its length and width, and not itself cut from another. The act refuses each; the footprint is held by the reference, and this says when a box was changed under its cuts some other way",
+            check: Check::Run(checks::j82_a_cut_is_cut_from_a_full_box) },
     }
 }
 
@@ -3537,6 +3540,41 @@ pub mod checks {
             })
             .collect();
         let examined: i64 = c.query_one("SELECT count(*) FROM consignment_package", &[])?.get(0);
+        Ok((examined as usize, findings))
+    }
+
+    pub fn j82_a_cut_is_cut_from_a_full_box(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "SELECT c.name, f.name,
+                        CASE WHEN c.tenant_id IS DISTINCT FROM f.tenant_id
+                                 THEN 'its full box is another workspace''s'
+                             WHEN f.cut_from_id IS NOT NULL
+                                 THEN 'its full box is itself cut from another'
+                             WHEN (c.length_mm, c.width_mm) IS DISTINCT FROM (f.length_mm, f.width_mm)
+                                 THEN 'its length and width are not its full box''s'
+                             ELSE 'it is no lower than its full box' END
+                   FROM package_type c
+                   JOIN package_type f ON f.id = c.cut_from_id
+                  WHERE c.tenant_id IS DISTINCT FROM f.tenant_id
+                     OR f.cut_from_id IS NOT NULL
+                     OR (c.length_mm, c.width_mm) IS DISTINCT FROM (f.length_mm, f.width_mm)
+                     OR c.height_mm >= f.height_mm
+                  ORDER BY c.name",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J82, "cut_box_conflict",
+                    format!("{} is cut from {}, and {}",
+                        r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2)))
+            })
+            .collect();
+        let examined: i64 = c
+            .query_one("SELECT count(*) FROM package_type WHERE cut_from_id IS NOT NULL", &[])?
+            .get(0);
         Ok((examined as usize, findings))
     }
 

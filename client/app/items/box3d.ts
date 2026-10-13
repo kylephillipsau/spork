@@ -15,7 +15,7 @@ import {
 
 import { Stage } from "@app/common/stage3d";
 
-import { MATERIAL_ORDER, cover, faceAspect, toward, type BoxFace } from "./box";
+import { MATERIAL_ORDER, cover, coverCut, faceAspect, isSide, toward, type BoxFace } from "./box";
 
 /**
  * An item as a box made of its own photographs, turned by dragging. Sized by
@@ -49,6 +49,7 @@ export class BoxScene {
   private painting = 0;
   private faces: Partial<Record<BoxFace, string>> = {};
   private size: [number, number, number] = [1, 1, 1];
+  private keep = 1;
 
   constructor(
     host: HTMLElement,
@@ -67,10 +68,14 @@ export class BoxScene {
     this.stage.pose({ position: new Vector3(...HOME).normalize().multiplyScalar(DISTANCE), target: new Vector3(), zoom: 1 });
   }
 
-  /** Draw this box: its photographs by face, and its size in millimetres, or a cube. */
-  set(faces: Partial<Record<BoxFace, string>>, size: [number, number, number] | null): void {
+  /**
+   * Draw this box: its photographs by face, and its size in millimetres, or a
+   * cube. `keep` is the share of the photographs' height a cut box shows (D252).
+   */
+  set(faces: Partial<Record<BoxFace, string>>, size: [number, number, number] | null, keep = 1): void {
     this.faces = faces;
     this.size = size ?? [1, 1, 1];
+    this.keep = keep;
     // The longest side is two units, so every box fills the view alike.
     const [l, w, h] = this.size;
     const scale = 2 / Math.max(l, w, h);
@@ -118,7 +123,7 @@ export class BoxScene {
       this.loader.load(this.imageUrl(digest), (image) => {
         // Painted again since (other photos, or the theme): this one is stale.
         if (painting !== this.painting) return;
-        this.dress(material, faceTexture(image, face, this.size, TEXTURE_PX));
+        this.dress(material, faceTexture(image, face, this.size, TEXTURE_PX, this.keep));
       });
     });
   }
@@ -152,10 +157,14 @@ export class BoxScene {
  * covering the face without stretching. The one way a photo goes on a box, so
  * a thing looks the same on its page and in the packing plan.
  */
-export function faceTexture(image: HTMLImageElement, face: BoxFace, size: [number, number, number], px: number): Texture {
+export function faceTexture(image: HTMLImageElement, face: BoxFace, size: [number, number, number], px: number, keep = 1): Texture {
   const texture = new Texture(shrink(image, px));
   texture.colorSpace = SRGBColorSpace;
-  const fit = cover(faceAspect(face, size), image.width / image.height);
+  // A cut box wears its full box's sides, from the bottom edge up (D252).
+  const fit =
+    keep < 1 && isSide(face)
+      ? coverCut(faceAspect(face, size), image.width / image.height, keep)
+      : cover(faceAspect(face, size), image.width / image.height);
   texture.repeat.set(...fit.repeat);
   texture.offset.set(...fit.offset);
   texture.needsUpdate = true;

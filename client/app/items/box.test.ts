@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { BOX_FACES, MATERIAL_ORDER, boxSize, cover, faceAspect, faceName, facesToAsk, isBox, isRound, toward } from "./box.ts";
+import { BOX_FACES, MATERIAL_ORDER, boxSize, cover, coverCut, cutSaying, faceAspect, keepOf, faceName, facesToAsk, isBox, isRound, toward } from "./box.ts";
 
 /** An item as a box: which faces to ask for, and how a photo sits on one. */
 
@@ -44,6 +44,22 @@ test("a photo covers its face without stretching, centred", () => {
   // A wide photo on a square face loses its sides.
   assert.deepEqual(cover(1, 2), { repeat: [0.5, 1], offset: [0.25, 0] });
   assert.deepEqual(cover(1.5, 1.5), { repeat: [1, 1], offset: [0, 0] });
+});
+
+test("a cut box shows the bottom of its full box's photograph, at true scale, never squashed (D252)", () => {
+  // A side 2:1 cut from a 1:1 side, its photograph 1:1: all of it across, the bottom half up.
+  assert.deepEqual(coverCut(2, 1, 0.5), { repeat: [1, 0.5], offset: [0, 0] });
+  // Cut to 28 of 41: the photograph fitted to the full side, the bottom 68% of that shown.
+  const cut = coverCut((450 / 280), 450 / 410, 280 / 410);
+  assert.ok(Math.abs(cut.repeat[1] - 280 / 410) < 1e-9 && cut.repeat[0] === 1 && cut.offset[1] === 0);
+  // Not cut, it is the full box's cover.
+  assert.deepEqual(coverCut(1.5, 2, 1), cover(1.5, 2));
+  const medium = { from_id: "", from_name: "Medium Box", full_height_mm: 410 };
+  const size = { length_mm: 450, width_mm: 340, height_mm: 345 };
+  assert.equal(cutSaying(medium, size), "Cut a Medium Box down to 34.5 cm");
+  assert.equal(cutSaying(null, size), null);
+  assert.equal(keepOf(medium, size), 345 / 410);
+  assert.equal(keepOf(null, size), 1);
 });
 
 test("the six faces are three.js's six, and each is seen from its own side", () => {

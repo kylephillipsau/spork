@@ -12,6 +12,7 @@ mod allocation_replay;
 mod api_mount;
 mod baseline_read;
 mod binding_over_http;
+mod boxes_http;
 mod backup_http;
 mod capture_walk;
 mod capture_worklist;

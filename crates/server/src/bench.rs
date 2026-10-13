@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 use crate::auth::Caller;
 use crate::baseline::{self, Grams};
+use crate::boxes::BoxCut;
 use crate::error::ApiError;
 use crate::pictures::{self, Picture};
 use crate::tenancy::TenantScope;
@@ -233,6 +234,11 @@ pub struct Preset {
     /// length and width. Its height is the stack's, and its limit a carrier's
     /// rule (D250). Absent for a box.
     pub deck: Option<Footprint>,
+    /// The full box it is cut down from, when it is a height of one (D252):
+    /// the bench says what to cut it to.
+    pub cut: Option<BoxCut>,
+    /// Its sides as photographed and cut, the full box's for a cut (D252).
+    pub faces: BTreeMap<String, String>,
 }
 
 /// A deck's length and width, in millimetres.
@@ -297,6 +303,11 @@ pub struct CartonSummary {
     pub breaks_down: bool,
     /// What it is in or on now, when anything (D246).
     pub on: Option<OnParent>,
+    /// The full box its box is cut down from, when it is a height of one (D252).
+    pub cut: Option<BoxCut>,
+    /// Its box type's sides as photographed and cut, the full box's for a cut
+    /// (D252). Empty for one of a product as it is: that wears the product's.
+    pub faces: BTreeMap<String, String>,
 }
 
 /// What is physically in one carton, carried out of the read transaction so the
@@ -822,23 +833,27 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
     scope
         .run(move |tx| {
             Box::pin(async move {
+                // A cut's empty weight and limit are its full box's unless it
+                // says its own (`package_type_effective`, D252).
                 let rows = tx
                     .query(
-                        "SELECT id, name,
-                                dimensions_fixed AND coalesce(carrier_package_code, '')
-                                    NOT IN ('PAL', 'SKI', 'SKD'),
+                        "SELECT id, name, dimensions_fixed AND NOT carries,
                                 length_mm, width_mm, height_mm, suggested, max_payload_g,
-                                tare_weight_g,
-                                coalesce(carrier_package_code, '') IN ('PAL', 'SKI', 'SKD')
-                           FROM package_type
+                                tare_weight_g, carries,
+                                cut_from_id, cut_from_name, full_height_mm, pictured_as
+                           FROM package_type_effective
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
                         &[],
                     )
                     .await?;
+                let pictured: Vec<Uuid> = rows.iter().map(|r| r.get(13)).collect();
+                let faces = crate::boxes::faces(tx, &pictured).await?;
                 Ok(rows
                     .iter()
                     .map(|r| Preset {
+                        cut: BoxCut::of(r.get(10), r.get(11), r.get(12)),
+                        faces: faces.get(&r.get::<_, Uuid>(13)).cloned().unwrap_or_default(),
                         id: r.get(0),
                         name: r.get(1),
                         size: match (r.get::<_, bool>(2), r.get(3), r.get(4), r.get(5)) {
@@ -898,13 +913,15 @@ pub async fn cartons_on(
                                 pt.height_mm, pt.tare_weight_g, p.own_item_id, own_item.code,
                                 p.own_level::text,
                                 CASE WHEN p.own_item_id IS NOT NULL THEN 'as_is'
-                                     WHEN coalesce(pt.carrier_package_code, '') IN ('PAL', 'SKI', 'SKD')
-                                         THEN 'pallet'
+                                     WHEN pt.carries THEN 'pallet'
                                      ELSE 'box' END,
                                 p.breaks_down,
-                                op.id, opt.name, op.sequence::text, op.breaks_down
+                                op.id, opt.name, op.sequence::text, op.breaks_down,
+                                pt.cut_from_id, pt.cut_from_name, pt.full_height_mm, pt.pictured_as
                            FROM package p
-                           LEFT JOIN package_type pt ON pt.id = p.package_type_id
+                           -- A cut's empty weight is its full box's unless it
+                           -- says its own (D252).
+                           LEFT JOIN package_type_effective pt ON pt.id = p.package_type_id
                            LEFT JOIN item own_item ON own_item.id = p.own_item_id
                            -- Its status from its events (migration 138): putting a
                            -- sealed carton on a pallet leaves it sealed.
@@ -1028,6 +1045,9 @@ pub async fn cartons_on(
                             sequence: r.get(18),
                             breaks_down: r.get::<_, Option<bool>>(19).unwrap_or(false),
                         }),
+                        cut: BoxCut::of(r.get(20), r.get(21), r.get(22)),
+                        // Filled in below, for every box type at once.
+                        faces: BTreeMap::new(),
                         contents: contents
                             .iter()
                             .map(|c| {
@@ -1051,6 +1071,16 @@ pub async fn cartons_on(
                             })
                             .collect(),
                     });
+                }
+                // Each box type's sides, for every carton at once (D252). One
+                // of a product as it is wears the product's, from its line.
+                let pictured: Vec<Option<Uuid>> = rows.iter().map(|r| r.get(23)).collect();
+                let ids: Vec<Uuid> = pictured.iter().flatten().copied().collect();
+                let faces = crate::boxes::faces(tx, &ids).await?;
+                for (carton, of) in out.iter_mut().zip(&pictured) {
+                    if let (None, Some(sides)) = (&carton.own_carton_of, of.and_then(|id| faces.get(&id))) {
+                        carton.faces = sides.clone();
+                    }
                 }
                 Ok((out, packed, tolerance))
             })

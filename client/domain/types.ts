@@ -86,7 +86,7 @@ export interface PackUnit {
   style_code: string | null;
   /** Its sides cut from photographs (D176), by face, to draw it with; a side
    *  said to look like another wears that one's cut (D183). */
-  faces: Partial<Record<"front" | "back" | "left" | "right" | "top" | "bottom", string>>;
+  faces: Partial<Record<Side, string>>;
   /** Packed in a round type (D213): drawn as the tub it is, its widths these, its photographs wrapped round it (D240). */
   round: boolean;
   diameter_mm: number | null;
@@ -136,6 +136,9 @@ export interface PickedElsewhere {
   provenance: string;
 }
 
+/** A side of a box, as photographed and drawn. */
+export type Side = "front" | "back" | "left" | "right" | "top" | "bottom";
+
 export interface Preset {
   id: Uuid;
   name: string;
@@ -149,6 +152,35 @@ export interface Preset {
   tare_weight_g: number | null;
   /** A pallet or skid's deck, the cartons it carries stand on (D246); null for a box. */
   deck: Footprint | null;
+  /** The full box it is cut down from, when it is a height of one (D252). */
+  cut: BoxCut | null;
+  /** Its sides as photographed and cut, the full box's for a cut (D252). */
+  faces: Partial<Record<Side, string>>;
+}
+
+/** The full box a cut box is cut down from (D252). */
+export interface BoxCut {
+  from_id: Uuid;
+  from_name: string;
+  /** The full box's height: a cut wears its photographs, the bottom `height / full_height_mm` of each side. */
+  full_height_mm: number;
+}
+
+/** One side of a box type, as last photographed (D252). */
+export interface BoxPhoto {
+  face: Side;
+  image_id: Uuid;
+  digest: string;
+  captured_at: string;
+  /** Its newest cut to the face, when somebody has marked one. */
+  cut: PhotoCut | null;
+}
+
+/** `POST /package-types/{id}/heights`: the cut made, or the box on file linked. */
+export interface AddedHeight {
+  id: Uuid;
+  name: string;
+  linked: boolean;
 }
 
 /** A deck's length and width, in millimetres. */
@@ -182,6 +214,12 @@ export interface PackageTypeRow {
   tenant_owned: boolean;
   /** The pack bench's suggestion may choose it (D196). */
   suggested: boolean;
+  /** The full box this is cut down from, when it is a height of one (D252). */
+  cut: BoxCut | null;
+  /** Cartons packed in it: one packed in cannot be taken away. */
+  packed: number;
+  /** Its photographs, a side each, the workspace's own boxes only (D252). */
+  photos: BoxPhoto[];
 }
 
 /** A box states its size; a pallet's height is the stack and only the
@@ -260,6 +298,10 @@ export interface CartonSummary {
   breaks_down: boolean;
   /** What it is in or on now, when anything (D246). */
   on: OnParent | null;
+  /** The full box its box is cut down from, when it is a height of one (D252). */
+  cut: BoxCut | null;
+  /** Its box type's sides as photographed and cut, the full box's for a cut (D252). */
+  faces: Partial<Record<Side, string>>;
 }
 
 /** `GET /fulfilments/{id}/bench` — the whole screen, in one read. */

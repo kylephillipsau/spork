@@ -15,6 +15,7 @@ pub mod baseline;
 pub mod bench;
 pub mod binding;
 pub mod bins;
+pub mod boxes;
 pub mod allocating;
 pub mod capture;
 pub mod backup;

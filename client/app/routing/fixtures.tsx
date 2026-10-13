@@ -30,7 +30,7 @@ import { Dashboard } from "@app/home/Dashboard";
 import { DASHBOARD, DASHBOARD_NO_SITE, DASHBOARD_QUIET } from "@app/home/dashboard-fixture";
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
-import { PACK_FILLING, PACK_FIXTURE, PACK_LOOSE } from "@app/outbound/pack/fixture";
+import { PACK_CUT, PACK_FILLING, PACK_FIXTURE, PACK_LOOSE } from "@app/outbound/pack/fixture";
 import { SearchPage } from "@app/scan/SearchPage";
 import { SEARCH_FAMILY } from "@app/scan/fixture";
 import { PackQueuePage } from "@app/outbound/pack/PackQueuePage";
@@ -144,7 +144,7 @@ import {
 } from "@app/items/fixture";
 import { ItemsPage, ListDialog } from "@app/items/ItemsPage";
 import { PhotosPage } from "@app/items/PhotosPage";
-import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
+import { EMPTY as WS_EMPTY, FAILED as WS_FAILED, OPEN_BOX, READY as WS_READY, fixtureWorkspace } from "@app/admin/workspace-fixture";
 
 import type { Screen, Surface } from "./Router";
 
@@ -400,6 +400,8 @@ export const FIXTURES: readonly Screen[] = [
   app("f-pack-filling", "/fixtures/pack/filling", "Pack order — filling a carton", "bench", { screen: "pack-one" }, () =>
     packBench(PACK_FILLING),
   ),
+  // A box cut down to a set height, chosen and said before it is started (D252).
+  app("f-pack-cut", "/fixtures/pack/cut", "Pack order — a box cut down", "bench", { screen: "pack-one" }, () => packBench(PACK_CUT)),
   // Cartons as they came and loose things not measured: what the loose things weigh (D224).
   app("f-pack-loose", "/fixtures/pack/loose", "Pack order — loose things to box by hand", "bench", { screen: "pack-one" }, () =>
     packBench(PACK_LOOSE),
@@ -865,6 +867,10 @@ export const FIXTURES: readonly Screen[] = [
   // state no type.
   app("f-workspace", "/fixtures/workspace", "Workspace", "desk", { screen: "workspace" }, () => (
     <WorkspacePage bench={fixtureWorkspace(WS_READY)} />
+  )),
+  // A box opened to the heights it is cut down to and its photographs (D252).
+  app("f-workspace-box", "/fixtures/workspace/box", "Workspace — a box's heights and photos", "desk", { screen: "workspace" }, () => (
+    <WorkspacePage bench={fixtureWorkspace(WS_READY)} openBox={OPEN_BOX} />
   )),
   app("f-workspace-empty", "/fixtures/workspace/empty", "Workspace — no warehouses", "desk", { screen: "workspace" }, () => (
     <WorkspacePage bench={fixtureWorkspace(WS_EMPTY)} />

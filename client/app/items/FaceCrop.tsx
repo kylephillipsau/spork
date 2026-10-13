@@ -3,6 +3,7 @@ import { RotateCw } from "lucide-react";
 
 import { Alert, Button, Dialog, cx } from "@ui/index";
 import { imageUrl } from "@domain/api";
+import type { CaptureSubject } from "@domain/types";
 import { Faint } from "@app/common/cells";
 
 import { draw, handheld, loadPhoto, pixelsOf, ratioOf, straightened } from "./crop";
@@ -35,6 +36,14 @@ import s from "./items.module.css";
  */
 export type CropDesk = Pick<PropertiesDesk, "findFace" | "cut" | "uncrop" | "busy" | "problem" | "dismiss">;
 
+/**
+ * The photograph open to be cut. Of its subject only the size matters here,
+ * to check the corners against: a box type opens it as an item does (D252).
+ */
+export type CropOpen = Omit<Cropping, "subject"> & {
+  subject: Pick<CaptureSubject, "box_shaped" | "length_mm" | "width_mm" | "height_mm">;
+};
+
 /** What the face-finder is doing, as the screen says it. */
 type Finding = "looking" | "found" | "missed" | "broken" | "phone" | null;
 const FINDING: Record<Exclude<Finding, null>, string> = {
@@ -58,7 +67,7 @@ export function FaceCrop({
   aspect,
   desk,
 }: {
-  cropping: Cropping;
+  cropping: CropOpen;
   /** The face, as the screen names it: "Front", "Label", "Photo". */
   name: string;
   /** Its width over its height when its size is measured; otherwise from the corners. */

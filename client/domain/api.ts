@@ -1,6 +1,7 @@
 import type { Act } from "./acts";
 import type { AuthenticationOptions, RegistrationOptions } from "./webauthn";
 import type {
+  AddedHeight,
   ApiToken,
   BookedCarton,
   BinFlagged,
@@ -1113,6 +1114,13 @@ export const api = {
   /** Say whether the pack bench's suggestion may choose a box (D196). */
   suggestBox: (id: Uuid, suggested: boolean) => send<void>("POST", `/package-types/${encodeURIComponent(id)}/suggested`, { suggested }),
 
+  /** Add a height a box is cut down to, booked as `name` when given; a box on file by that name is linked (D252). */
+  addHeight: (id: Uuid, height_mm: number, name: string | null) =>
+    send<AddedHeight>("POST", `/package-types/${encodeURIComponent(id)}/heights`, { height_mm, name }),
+
+  /** Take a height away: only a cut nothing was packed in (D252). */
+  removeHeight: (id: Uuid) => send<void>("DELETE", `/package-types/${encodeURIComponent(id)}`),
+
   /** Bins, items and orders matching what was typed, best first (D189). */
   search: (q: string, limit?: number) =>
     send<SearchAnswer>("GET", `/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ""}`),
@@ -1496,6 +1504,8 @@ export const api = {
   recordCapture: (input: {
     item?: Uuid;
     style?: Uuid;
+    /** D252. A box type, photographed; it takes no packaging level. */
+    box?: Uuid;
     /** D139. A part takes no packaging level: there is one handle. */
     part?: Uuid;
     /** D182. A run that looks different takes none either. */
@@ -1520,6 +1530,7 @@ export const api = {
       ...(input.style ? { item_style_id: input.style } : {}),
       ...(input.part ? { item_part_id: input.part } : {}),
       ...(input.lot ? { lot_id: input.lot } : {}),
+      ...(input.box ? { package_type_id: input.box } : {}),
       ...(input.presentation ? { presentation: input.presentation } : {}),
       packaging_level: input.level,
       measurements: input.measurements,

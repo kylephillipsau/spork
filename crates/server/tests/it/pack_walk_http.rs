@@ -261,11 +261,13 @@ async fn the_pack_walkthrough_runs_end_to_end_over_http() {
         "GET /stock",
     )
     .await;
+    // On a shelf: held in a bin, not in a carton, whose resolved location
+    // `location_code` also names.
     let on_a_shelf = |code: &str| {
         shelved.as_array().is_some_and(|rows| {
             rows.iter().any(|r| {
                 r["item_code"].as_str() == Some(code)
-                    && r["location_code"].is_string()
+                    && r["holder_location_id"].is_string()
                     && r["quantity"].as_i64().unwrap_or(0) >= 2
             })
         })
@@ -317,7 +319,7 @@ async fn the_pack_walkthrough_runs_end_to_end_over_http() {
         .iter()
         .find(|r| {
             r["item_code"].as_str() == Some(item_code.as_str())
-                && r["location_code"].is_string()
+                && r["holder_location_id"].is_string()
                 && r["quantity"].as_i64().unwrap_or(0) >= 2
         })
         .expect("a location-held cell holding what the line commits");
@@ -924,7 +926,7 @@ async fn a_packer_can_change_their_mind() {
         shelved.as_array().is_some_and(|rows| {
             rows.iter().any(|r| {
                 r["item_code"].as_str() == Some(code)
-                    && r["location_code"].is_string()
+                    && r["holder_location_id"].is_string()
                     && r["quantity"].as_i64().unwrap_or(0) >= 2
             })
         })
@@ -952,7 +954,7 @@ async fn a_packer_can_change_their_mind() {
         .iter()
         .find(|r| {
             r["item_code"].as_str() == Some(item_code.as_str())
-                && r["location_code"].is_string()
+                && r["holder_location_id"].is_string()
                 && r["quantity"].as_i64().unwrap_or(0) >= 2
         })
         .expect("a location-held cell holding what the line commits")["stock_id"]

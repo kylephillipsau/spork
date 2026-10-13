@@ -54,7 +54,7 @@ test("each parcel says what is in it and what is to go in", () => {
   assert.equal(asIs.count, 2);
 });
 
-test("a product's own carton looks like the product's carton, and a box type like a box", () => {
+test("a product's own carton looks like the product's carton, and a box type like its box", () => {
   const screen = structuredClone(PACK_FIXTURE);
   const sleeves = screen.lines.find((l) => l.item_code === "SLV-PE-BLU")!;
   const front = { front: "f0", top: "70" };
@@ -62,7 +62,9 @@ test("a product's own carton looks like the product's carton, and a box type lik
   const o = view(screen);
   assert.deepEqual(o.parcels.find((p) => p.title === "Carton 4")!.faces, front, "its own carton, already made");
   assert.deepEqual(o.parcels.find((p) => p.state === "as-is")!.faces, front, "and the ones still to ship");
-  assert.deepEqual(o.parcels.find((p) => p.title === "Carton 1")!.faces, {}, "a small box is a box");
+  const small = o.parcels.find((p) => p.title === "Carton 1")!;
+  assert.deepEqual(small.faces, PACK_FIXTURE.cartons[0]!.faces, "a small box wears its box's photographs (D252)");
+  assert.equal(small.keep, 1, "all of each side: it is not cut down");
 });
 
 test("filling the open carton, what is in it is packed and the rest is planned in it (D198)", () => {

@@ -19,16 +19,19 @@ export default function BoxView({
   size,
   facing,
   label,
+  keep = 1,
 }: {
   faces: Partial<Record<BoxFace, string>>;
   size: [number, number, number] | null;
   facing: BoxFace | null;
   label: string;
+  /** A box cut down from a taller one shows this share of its photographs, from the bottom (D252). */
+  keep?: number;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<BoxScene | null>(null);
   const [supported] = useState(BoxScene.supported);
-  const key = JSON.stringify([faces, size]);
+  const key = JSON.stringify([faces, size, keep]);
 
   useEffect(() => {
     if (!supported || !host.current) return;
@@ -40,7 +43,7 @@ export default function BoxView({
     };
   }, [supported]);
 
-  useEffect(() => scene.current?.set(faces, size), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => scene.current?.set(faces, size, keep), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (facing) scene.current?.show(facing);
   }, [facing]);

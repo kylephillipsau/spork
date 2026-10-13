@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 81, "the register holds 81 job-asserted invariants");
+    assert_eq!(seen.len(), 82, "the register holds 82 job-asserted invariants");
 }
 
 #[test]
@@ -1055,6 +1055,37 @@ fn j81_finds_what_is_booked_but_not_delivered() {
     let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
     assert!(said.iter().any(|d| d.contains(breakdown.as_str()) && d.contains("broken down")), "{said:?}");
     assert!(said.iter().any(|d| d.contains(carton.as_str()) && d.contains("carried")), "{said:?}");
+}
+
+/// J82 can fail: a cut no lower than the box it is cut from, written straight
+/// into the table as an import would, since the act refuses it.
+#[test]
+fn j82_finds_a_cut_no_lower_than_its_full_box() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    let (full, cut) = ("7ac00000-0000-0000-0000-000000008201", "7ac00000-0000-0000-0000-000000008202");
+    client
+        .batch_execute(&format!(
+            "INSERT INTO package_type (id, tenant_id, name, length_mm, width_mm, height_mm) VALUES
+                 ('{full}', '{J7X_TENANT}', 'J82 full box', 400, 300, 300);
+             INSERT INTO package_type (id, tenant_id, name, length_mm, width_mm, height_mm, cut_from_id) VALUES
+                 ('{cut}', '{J7X_TENANT}', 'J82 cut', 400, 300, 300, '{full}');"
+        ))
+        .expect("a cut as tall as its box");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J82);
+
+    client
+        .batch_execute(&format!("DELETE FROM package_type WHERE id IN ('{cut}', '{full}');"))
+        .expect("the test removes what it added");
+
+    let (_, examined, found) = outcome.expect("J82 runs");
+    assert!(examined >= 1, "J82 examined {examined}");
+    let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|d| d.contains("J82 cut") && d.contains("no lower")), "{said:?}");
 }
 
 /// J72 can fail, demonstrated rather than asserted.

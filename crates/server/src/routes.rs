@@ -5095,10 +5095,12 @@ async fn consignment_view(
     // only question. Reading the carton alone therefore handed a carrier a line
     // with no length and no width, which is not an honest absence — the box's
     // dimensions are known, they are simply held on the type rather than
-    // restated on every carton of it. Height is never inherited: that is the one
-    // a person actually measured, and an unmeasured carton has no height to
-    // claim. `uniform` is computed over the same coalesced values, so a line
-    // that inherits its footprint and disagrees on nothing is still uniform.
+    // restated on every carton of it. Height is inherited only from a box whose
+    // heights are a set list (D252): a cut, or a full box with cuts, is that
+    // tall because the list says so. Otherwise it is the one a person actually
+    // measured, and an unmeasured carton has no height to claim. `uniform` is
+    // computed over the same coalesced values, so a line that inherits its
+    // size and disagrees on nothing is still uniform.
     //
     // **One of a product as it is is its own line** (D201): "JWR-1002R as it
     // is", with the size its item is measured at at that level, read from the
@@ -5110,14 +5112,15 @@ async fn consignment_view(
                         sum(p.gross_weight_g)::bigint,
                         min(coalesce(p.length_mm, pt.length_mm)),
                         min(coalesce(p.width_mm, pt.width_mm)),
-                        min(p.height_mm),
+                        min(coalesce(p.height_mm, CASE WHEN pt.height_is_set THEN pt.height_mm END)),
                         count(DISTINCT (coalesce(p.length_mm, pt.length_mm),
                                         coalesce(p.width_mm, pt.width_mm),
-                                        p.height_mm)) = 1,
+                                        coalesce(p.height_mm,
+                                                 CASE WHEN pt.height_is_set THEN pt.height_mm END))) = 1,
                         p.own_item_id, p.own_level::text
                    FROM consignment_package cp
                    JOIN package p ON p.id = cp.package_id
-                   LEFT JOIN package_type pt ON pt.id = p.package_type_id
+                   LEFT JOIN package_type_effective pt ON pt.id = p.package_type_id
                    {own_item}
                   WHERE cp.consignment_id = $1
                   GROUP BY pt.name, pt.carrier_package_code, oi.code, p.own_item_id, p.own_level
@@ -7721,7 +7724,7 @@ pub async fn import_fulfilment(
 // Packaging presets
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug)]
 pub struct PackageTypeRow {
     pub id: Uuid,
     pub name: String,
@@ -7742,6 +7745,12 @@ pub struct PackageTypeRow {
     /// The pack bench's suggestion may choose it (D196). Any box can still be
     /// chosen by hand.
     pub suggested: bool,
+    /// The full box this is cut down from, when it is a height of one (D252).
+    pub cut: Option<crate::boxes::BoxCut>,
+    /// Cartons packed in it: one packed in cannot be taken away.
+    pub packed: i64,
+    /// Its photographs, a side each, the workspace's own boxes only (D252).
+    pub photos: Vec<crate::boxes::BoxPhoto>,
 }
 
 /// The packaging presets, shipped and tenant-owned together.
@@ -7926,17 +7935,24 @@ pub async fn package_types(
             Box::pin(async move {
                 // No WHERE tenant_id: row-level security applies the predicate,
                 // and adding one would be worse than redundant.
+                // What each box says itself, not what a cut inherits: a cut's
+                // empty weight left unsaid is its full box's, shown as such.
                 let rows = tx
                     .query(
-                        "SELECT id, name, carrier_package_code, dimensions_fixed,
-                                length_mm, width_mm, height_mm, tare_weight_g,
-                                reusable, max_payload_g, tenant_id IS NOT NULL, suggested
-                           FROM package_type
-                          WHERE effective_from <= CURRENT_DATE
-                          ORDER BY tenant_id IS NULL, name",
+                        "SELECT t.id, t.name, t.carrier_package_code, t.dimensions_fixed,
+                                t.length_mm, t.width_mm, t.height_mm, t.tare_weight_g,
+                                t.reusable, t.max_payload_g, t.tenant_id IS NOT NULL, t.suggested,
+                                e.cut_from_id, e.cut_from_name, e.full_height_mm,
+                                (SELECT count(*) FROM package p WHERE p.package_type_id = t.id)
+                           FROM package_type t
+                           JOIN package_type_effective e ON e.id = t.id
+                          WHERE t.effective_from <= CURRENT_DATE
+                          ORDER BY t.tenant_id IS NULL, t.name",
                         &[],
                     )
                     .await?;
+                let ids: Vec<Uuid> = rows.iter().filter(|r| r.get::<_, bool>(10)).map(|r| r.get(0)).collect();
+                let mut photos = crate::boxes::photos(tx, &ids).await?;
                 Ok(rows
                     .iter()
                     .map(|r| PackageTypeRow {
@@ -7952,6 +7968,9 @@ pub async fn package_types(
                         max_payload_g: r.get(9),
                         tenant_owned: r.get(10),
                         suggested: r.get(11),
+                        cut: crate::boxes::BoxCut::of(r.get(12), r.get(13), r.get(14)),
+                        packed: r.get(15),
+                        photos: photos.remove(&r.get::<_, Uuid>(0)).unwrap_or_default(),
                     })
                     .collect::<Vec<_>>())
             })
@@ -8126,6 +8145,7 @@ pub async fn record_evidence(
                     item_id: body.item_id,
                     item_style_id: body.item_style_id,
                     item_part_id: body.item_part_id,
+                    package_type_id: None,
                     packaging_level: body.packaging_level.clone(),
                 };
                 if subject_ref.named() != 1 {
@@ -8254,6 +8274,8 @@ pub struct SubjectRef {
     pub item_id: Option<Uuid>,
     pub item_style_id: Option<Uuid>,
     pub item_part_id: Option<Uuid>,
+    /// A box type, photographed (D252).
+    pub package_type_id: Option<Uuid>,
     /// Required with `item_id` or `item_style_id`, refused with anything else.
     pub packaging_level: Option<String>,
 }
@@ -8269,6 +8291,7 @@ impl SubjectRef {
             self.item_id,
             self.item_style_id,
             self.item_part_id,
+            self.package_type_id,
         ]
         .iter()
         .filter(|s| s.is_some())
@@ -8376,13 +8399,22 @@ pub async fn observable_for(
             subject.location_id,
             subject.lot_id,
             subject.item_part_id,
+            subject.package_type_id,
         ) {
-            (Some(id), _, _, _) => ("package_id", id, "package"),
-            (_, Some(id), _, _) => ("location_id", id, "location"),
-            (_, _, Some(id), _) => ("lot_id", id, "lot"),
+            (Some(id), _, _, _, _) => ("package_id", id, "package"),
+            (_, Some(id), _, _, _) => ("location_id", id, "location"),
+            (_, _, Some(id), _, _) => ("lot_id", id, "lot"),
             // A part carries no level, so it registers like a package rather
             // than like the item it belongs to.
-            (_, _, _, Some(id)) => ("item_part_id", id, "item_part"),
+            (_, _, _, Some(id), _) => ("item_part_id", id, "item_part"),
+            // The workspace's own box types: one the platform ships is not
+            // its to photograph (D252).
+            (_, _, _, _, Some(id)) => {
+                tx.query_opt("SELECT 1 FROM package_type WHERE id = $1 AND tenant_id IS NOT NULL", &[&id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?;
+                ("package_type_id", id, "package_type")
+            }
             _ => {
                 return Err(ApiError::Rejected(
                     "the observation has no subject".into(),
@@ -8456,6 +8488,10 @@ pub struct RecordObservationRequest {
     /// Migration 82. Takes no `packaging_level`: there is one handle, and until
     /// handles arrive in a carton of handles there is no such object.
     pub item_part_id: Option<Uuid>,
+    /// **The box-type arm** (D252, migration 141): a box the workspace packs
+    /// into, photographed so a carton of it is drawn as it looks. Photographs
+    /// only; nothing is measured of a box type here.
+    pub package_type_id: Option<Uuid>,
     /// `packaging_level`: each, inner, carton, layer, pallet. Only with
     /// `item_id` or `item_style_id`, and required with either.
     ///
@@ -8556,12 +8592,13 @@ pub async fn record_observation(
                     item_id: body.item_id,
                     item_style_id: body.item_style_id,
                     item_part_id: body.item_part_id,
+                    package_type_id: body.package_type_id,
                     packaging_level: body.packaging_level.clone(),
                 };
                 if subject_ref.named() != 1 {
                     return Err(ApiError::Rejected(
                         "name exactly one subject: package_id, location_id, lot_id, \
-                         item_id, item_style_id or item_part_id"
+                         item_id, item_style_id, item_part_id or package_type_id"
                             .into(),
                     ));
                 }
@@ -9880,6 +9917,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::shipping::suggest_box)
         .service(crate::shipping::box_weight)
         .service(crate::shipping::box_empty_weight)
+        .service(crate::boxes::add_height)
+        .service(crate::boxes::remove_height)
         .service(crate::checking::check_line)
         .service(crate::repacking::repack)
         .service(crate::backup::backup_summary)

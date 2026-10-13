@@ -101,3 +101,58 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* A box's heights in centimetres, the full box first (D252). */
+.heights {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A box opened: its heights beside its photographs, stacked on a phone. */
+.boxGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--ui-space-5);
+  align-items: start;
+}
+
+/* The box drawn at the height chosen, and what it shows. */
+.boxLook {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--ui-space-2);
+}
+
+.lookCaption {
+  flex: 1 1 100%;
+  margin: 0;
+  text-align: center;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+/* Where the drawing will be while three.js arrives. */
+.boxStage {
+  width: 100%;
+  max-width: 18rem;
+  aspect-ratio: 1;
+}
+
+.sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--ui-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-space-1);
+}

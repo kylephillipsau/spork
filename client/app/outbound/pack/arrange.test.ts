@@ -65,6 +65,8 @@ function box(name: string, [l, w, h]: Dims | [number, number, number], suggested
     max_payload_g,
     tare_weight_g: null,
     deck: null,
+    cut: null,
+    faces: {},
   };
 }
 
@@ -100,6 +102,14 @@ test("six aprons lie flat in the small box, one to a layer", () => {
   assert.equal(a.boxes[0]!.layers.length, 6);
   assert.ok(a.boxes[0]!.layers.every((l) => l.height === 30), "each laid on its biggest side");
   sound([400, 300, 190], a.boxes[0]!.layers.flatMap((l) => l.placements));
+});
+
+test("a box cut down is chosen when it is the lowest that takes everything (D252)", () => {
+  const cutTo10 = { ...box("small, cut to 10", [400, 300, 100]), cut: { from_id: SMALL.id, from_name: "small", full_height_mm: 190 } };
+  const a = arrange([line("APR", 3, [each([280, 220, 30])])], [MEDIUM, SMALL, cutTo10]);
+  assert.equal(a.boxes[0]!.preset.name, "small, cut to 10", "three aprons, 90 high, in the box cut to 10");
+  const b = arrange([line("APR", 4, [each([280, 220, 30])])], [MEDIUM, SMALL, cutTo10]);
+  assert.equal(b.boxes[0]!.preset.name, "small", "a fourth is too tall for the cut");
 });
 
 test("what does not fit the small box goes in the next one up", () => {
@@ -230,7 +240,7 @@ test("a thing too big for every box is said, and nothing else is lost", () => {
 });
 
 test("a preset with no size is never suggested", () => {
-  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 } }]);
+  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 }, cut: null, faces: {} }]);
   assert.deepEqual(a.boxes, []);
   assert.deepEqual(a.oversize.map((o) => o.item_code), ["APR"]);
 });

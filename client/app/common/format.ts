@@ -18,6 +18,11 @@ export function centimetres(value: number): string {
   return (value / 10).toFixed(1);
 }
 
+/** A box's height as its list of heights says it (D252): 280 -> "28", 345 -> "34.5". */
+export function heightCm(value: number): string {
+  return String(Math.round(value) / 10);
+}
+
 /** Grams as "41.800 kg", or a dash when unknown. */
 export function kg(value: number | null): string {
   return value === null ? "—" : `${grams(value)} kg`;

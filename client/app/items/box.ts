@@ -1,5 +1,6 @@
-import type { CaptureSubject } from "@domain/types";
+import type { BoxCut, CaptureSubject, StatedSize } from "@domain/types";
 
+import { heightCm } from "../common/format.ts";
 import { FACES, type Face } from "./subjects.ts";
 
 /**
@@ -102,6 +103,35 @@ export function cover(faceAspectRatio: number, imageAspectRatio: number): { repe
   const y = imageAspectRatio / faceAspectRatio;
   return { repeat: [1, y], offset: [0, (1 - y) / 2] };
 }
+
+/**
+ * How a full box's photograph covers a side of a box cut down from it (D252):
+ * fitted to the full side, then only its bottom `keep` shown, so the print
+ * stays where it is on the box, at true scale. Never squashed, and not centred
+ * as [`cover`] centres a thing's photograph. `faceAspectRatio` is the cut
+ * side's.
+ */
+export function coverCut(
+  faceAspectRatio: number,
+  imageAspectRatio: number,
+  keep: number,
+): { repeat: [number, number]; offset: [number, number] } {
+  const full = cover(faceAspectRatio * keep, imageAspectRatio);
+  return { repeat: [full.repeat[0], full.repeat[1] * keep], offset: full.offset };
+}
+
+/** The share of its full box's height a cut box keeps, or 1 for a box that is not cut (D252). */
+export function keepOf(cut: BoxCut | null, size: StatedSize | null): number {
+  return cut && size ? Math.min(1, size.height_mm / cut.full_height_mm) : 1;
+}
+
+/** What to cut a box to, as the bench says it (D252): "Cut a Medium Box down to 28 cm"; null for a box that is not cut. */
+export function cutSaying(cut: BoxCut | null, size: StatedSize | null): string | null {
+  return cut && size ? `Cut a ${cut.from_name} down to ${heightCm(size.height_mm)} cm` : null;
+}
+
+/** The sides a cut box shows less of: the top and bottom are the full box's own. */
+export const isSide = (face: BoxFace): boolean => face !== "top" && face !== "bottom";
 
 /**
  * A face's width over its height from what was measured, or nothing: a label

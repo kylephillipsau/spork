@@ -51,6 +51,8 @@ export interface Kind {
   upright: boolean;
   /** Its line's place on the bench, for telling kinds apart by colour. */
   index: number;
+  /** A box cut down from a taller one shows this share of its photographs, from the bottom (D252). */
+  keep?: number;
 }
 
 export interface Placement {
@@ -622,7 +624,7 @@ function fillOpen(
   const rest = packed.left
     .map((e) => ({ kind: e.kind, count: Math.min(e.count, stillToPack.get(e.kind) ?? 0) }))
     .filter((e) => e.count > 0);
-  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g, tare_weight_g: open.tare_weight_g, deck: null };
+  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g, tare_weight_g: open.tare_weight_g, deck: null, cut: null, faces: {} };
   return {
     plan: { ...plan(preset, packed.layers), carton: { id: open.id, sequence: open.sequence } },
     rest,

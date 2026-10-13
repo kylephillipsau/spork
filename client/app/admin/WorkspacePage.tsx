@@ -6,7 +6,6 @@ import {
   Badge,
   Button,
   Card,
-  Checkbox,
   DataTable,
   EmptyState,
   Fact,
@@ -18,15 +17,16 @@ import {
   TextField,
   type Column,
 } from "@ui/index";
-import type { Organisation, PackageTypeRow, ReportedField, WorkspaceSite } from "@domain/types";
+import type { Organisation, ReportedField, WorkspaceSite } from "@domain/types";
 import { NETSUITE_ROLES } from "@app/items/ItemProperties";
 import { Faint, Progress, shortDate } from "@app/common/cells";
 
+import { Boxes } from "./Boxes";
 import type { WorkspaceBench } from "./useWorkspace";
 import s from "./settings.module.css";
 
 /** The organisation and its warehouses, as the imports have described them. */
-export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
+export function WorkspacePage({ bench, openBox = null }: { bench: WorkspaceBench; /** A box opened to its heights and photos (D252). */ openBox?: string | null }) {
   const st = bench.state;
   const ws = st.kind === "ready" ? st.workspace : null;
   const here = ws ? current(ws.sites) : null;
@@ -57,7 +57,7 @@ export function WorkspacePage({ bench }: { bench: WorkspaceBench }) {
       </Card>
 
       {ws && here && <Packing site={here} organisation={ws.organisation} bench={bench} />}
-      {ws && bench.boxes && <Boxes boxes={bench.boxes} bench={bench} />}
+      {ws && bench.boxes && <Boxes boxes={bench.boxes} bench={bench} open={openBox} />}
       {ws && bench.fields && <NetSuiteFields fields={bench.fields} bench={bench} />}
 
       <Card title="Warehouses" padded={false}>
@@ -156,86 +156,6 @@ function Packing({ site, organisation, bench }: { site: WorkspaceSite; organisat
           </div>
         )}
       </div>
-    </Card>
-  );
-}
-
-/**
- * The boxes this workspace packs into, and which the pack bench may suggest
- * (D196). Every box can still be chosen by hand; a shovel box is the kind the
- * suggestion should leave alone. Only a box with a fixed size can be
- * suggested, and a pallet or a skid never is: it carries cartons.
- */
-function Boxes({ boxes, bench }: { boxes: PackageTypeRow[]; bench: WorkspaceBench }) {
-  const own = boxes.filter((b) => b.tenant_owned);
-  const fits = (b: PackageTypeRow) => b.dimensions_fixed && !["PAL", "SKI", "SKD"].includes(b.carrier_package_code ?? "");
-  const columns: Column<PackageTypeRow>[] = [
-    { key: "name", header: "Box", cell: (b) => <strong>{b.name}</strong>, sort: (b) => b.name },
-    {
-      key: "size",
-      header: "Inside (L × W × H)",
-      cell: (b) => (b.length_mm && b.width_mm && b.height_mm ? `${b.length_mm} × ${b.width_mm} × ${b.height_mm} mm` : <Faint>No fixed size</Faint>),
-      sort: (b) => (b.length_mm ?? 0) * (b.width_mm ?? 0) * (b.height_mm ?? 0),
-    },
-    {
-      key: "empty",
-      header: "Empty",
-      cell: (b) =>
-        fits(b) ? (
-          <Kilograms
-            label={`What ${b.name} weighs empty`}
-            grams={b.tare_weight_g}
-            placeholder="Not weighed"
-            disabled={bench.busy}
-            save={(g) => void bench.boxEmptyWeight(b.id, g)}
-          />
-        ) : (
-          <Faint>—</Faint>
-        ),
-      width: "150px",
-    },
-    {
-      key: "weight",
-      header: "Max weight",
-      cell: (b) =>
-        fits(b) ? (
-          <Kilograms
-            label={`Max weight of ${b.name}`}
-            grams={b.max_payload_g}
-            placeholder="No limit"
-            disabled={bench.busy}
-            save={(g) => void bench.boxWeight(b.id, g)}
-          />
-        ) : (
-          <Faint>—</Faint>
-        ),
-      width: "150px",
-    },
-    {
-      key: "suggest",
-      header: "Suggested",
-      cell: (b) =>
-        fits(b) ? (
-          <Checkbox
-            label={<span className={s.srOnly}>Suggest {b.name}</span>}
-            checked={b.suggested}
-            disabled={bench.busy}
-            onCheckedChange={(on) => void bench.suggest(b.id, on)}
-          />
-        ) : (
-          <Faint>{b.dimensions_fixed ? "Carries cartons" : "No fixed size"}</Faint>
-        ),
-      width: "160px",
-    },
-  ];
-  return (
-    <Card
-      title="Boxes"
-      count={own.length}
-      description="The boxes you pack into. The pack bench suggests ticked boxes, no heavier than their max weight, and weighs a box of goods as its goods and its empty weight; any box can still be chosen by hand."
-      padded={false}
-    >
-      <DataTable aria-label="Boxes" columns={columns} rows={own} rowKey={(b) => b.id} empty={<EmptyState title="No boxes yet" description="Boxes arrive with the packaging presets import." />} />
     </Card>
   );
 }
@@ -351,52 +271,6 @@ function NetSuiteFields({ fields, bench }: { fields: ReportedField[]; bench: Wor
   );
 }
 
-/**
- * A weight of a box, in kilograms as a scale reads, saved on Enter or on
- * leaving the field: the most its goods may weigh (D199), or what it weighs
- * empty (D224). Empty says nothing.
- */
-function Kilograms({
-  label,
-  grams,
-  placeholder,
-  disabled,
-  save,
-}: {
-  label: string;
-  grams: number | null;
-  placeholder: string;
-  disabled: boolean;
-  save: (grams: number | null) => void;
-}) {
-  const said = grams === null ? "" : String(grams / 1000);
-  const [typed, setTyped] = useState(said);
-  const commit = () => {
-    const t = typed.trim();
-    if (t === said) return;
-    const kg = Number(t);
-    if (t !== "" && !(kg > 0)) {
-      setTyped(said);
-      return;
-    }
-    save(t === "" ? null : Math.round(kg * 1000));
-  };
-  return (
-    <TextField
-      aria-label={label}
-      inputMode="decimal"
-      placeholder={placeholder}
-      trailing="kg"
-      value={typed}
-      disabled={disabled}
-      onChange={(e) => setTyped(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") commit();
-      }}
-    />
-  );
-}
 
 const COLUMNS: Column<WorkspaceSite>[] = [
   { key: "code", header: "Code", cell: (x) => <strong className={s.mono}>{x.code}</strong>, sort: (x) => x.code, width: "80px" },
