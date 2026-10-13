@@ -287,7 +287,7 @@ with a pallet count on every delivery, and that is not the yard.
 ## Current state
 
 Two hundred and fifty-four recorded decisions, a hundred and thirty-four rules the design must always
-satisfy, and a database that a hundred and thirty-seven migrations build and reverse cleanly, both
+satisfy, and a database that a hundred and thirty-nine migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
@@ -310,7 +310,7 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of a hundred and thirty endpoints and a
+policy resolver. Above it sits an API of a hundred and thirty-one endpoints and a
 projection scheduler. Above that is a React client of thirty-one screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, which checks each line and each carton's
@@ -341,10 +341,10 @@ the width it has.
 
 The gap worth naming is still on the writing half of that API, though it is much
 smaller. In August, fourteen of thirty-seven writing endpoints had never been
-exercised over HTTP. Now eight of seventy-five are never called by an HTTP test:
+exercised over HTTP. Now seven of seventy-six are never called by an HTTP test:
 - investigating a discrepancy;
 - the item import;
-- placing a package, opening one, and putting one inside another;
+- placing a package and opening one;
 - releasing an allocation;
 - refreshing the projections by hand;
 - finishing a passkey sign-in.

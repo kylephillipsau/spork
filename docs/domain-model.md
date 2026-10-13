@@ -16289,7 +16289,9 @@ if we want to".
 
 ### D246: Units move between cartons, and a carton goes onto a pallet
 
-*Adopted 2026-10-12. Decided ahead of the build. Amends D24, D100 and J68.*
+*Adopted 2026-10-12, with migrations 138 and 139. Amends D24, D100 and J68.
+Built on the server 2026-10-14, but for the bench read's parent and kind and
+the pallet presets' sizes; the bench does not call it yet.*
 
 **The finding.** Containment is there: `POST /packages/{id}/contain` writes a
 `contained` event and no movement (D166), and placing the package anywhere
@@ -16302,24 +16304,37 @@ bench's own code.
 **Decision.**
 
 - **A repack** moves units from one package to another, naming their line
-  (`POST /repacks`): one movement, from package to package, the shape D99
-  already counts as not picked again. Both must be open.
-- **Packed is what a line has in sealed or despatched packages, net**: what
-  went into each, less what has since moved out of it to another package.
-  Without the netting, a carton sealed after units left it would still count
-  them. Amends D100; J68 checks the same.
+  (`POST /repacks`, `repacking.rs`): one movement, from a package-held cell
+  to another package, keeping its lot, status and owner; the shape D99
+  already counts as not picked again. Out of or into a sealed carton it is
+  recorded with "open it first" (D5); into the carton it is in, or one
+  despatched or void, it is refused.
+- **What a package holds is said once** (`package_line_content`, migration
+  138): what went into it of each line, less what has since gone from it into
+  another holder, never below nought. Units despatched from it are still what
+  it carried. Packed is what sealed and despatched packages hold, so a carton
+  sealed after units left it no longer counts them. The fold, J68, the live
+  progress, the bench, the packing queue, the packing list, the contents
+  read, despatch and the check before a seal all read it, where each had
+  summed the movements into a package. Amends D100.
 - **Nothing goes into a sealed package**: the bench offers no pick, handover
   or repack into one, "open it first", and the server records one that
   happens anyway with that warning (D5), as it does a seal with lines
   unchecked (D244).
-- **Putting a package in or on another** refuses a loop, more than three
-  deep (D24's wrap, pallet, carton, still raised as `nesting_too_deep` for
-  facts that arrive out of order), and a parent that is sealed, despatched or
-  void. An order's pallet takes only its order's parcels; a breakdown pallet
-  (D247) takes sealed parcels of any order.
-- **Where it went on**: the act can say the spot, from the front left corner
-  of the pallet's deck, and which way round (`package_event` gains the
-  position). Front is where the forks go in. D248 needs it.
+- **Putting a package in or on another** refuses a loop and more than three
+  deep (D24's wrap, pallet, carton), read from the events now
+  (`package_parent_now`, migration 139) rather than the lagging fold, as it
+  refused a despatched or void one before. Onto a sealed pallet, an order's
+  pallet with another order's carton, or an open carton onto a breakdown
+  pallet (D247), it is recorded and said (D5).
+- **Where it went on**: the act can say the spot (`at`: from the front left
+  corner of the pallet's deck, up from it, and turned a quarter round or not;
+  `package_event.at_x_mm`, `at_y_mm`, `at_z_mm`, `turned`). Front is where
+  the forks go in. D248 needs it.
+- **Its status now is its newest status event** (`package_status_now`,
+  migration 138): sealed, opened, despatched or voided, the fold's own rule.
+  The live reads had taken the newest event of any kind, so a sealed carton
+  put on a pallet read as open on the bench.
 - **Taken off** is placed back at the pack location
   (`POST /packages/{id}/place`).
 - **The bench read** says each parcel's parent and kind (a box, a pallet or
@@ -16331,7 +16346,10 @@ say what happened, not a take-out and a new pick.
 
 ### D247: A pallet goes as one, or is broken down
 
-*Adopted 2026-10-12. Decided ahead of the build. Extends D6, D15 and D224.*
+*Adopted 2026-10-12, with migration 139. Extends D6, D15 and D224. Built so
+far: `package.breaks_down`, said when the pallet is made (`POST /packages`
+refuses one that names an order), and the containment warnings D246 lists.
+Delivery, despatch, booking and the pallet sheet are still to build.*
 
 **Decision.** A pallet or skid says whether it is **delivered as one** or
 **broken down** at the carrier's depot into the parcels on it, each delivered

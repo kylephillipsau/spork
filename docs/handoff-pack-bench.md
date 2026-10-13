@@ -8,11 +8,20 @@ toolchain, tests and layout.
 
 ## State
 
-- Spork `main` is pushed through b8f7b59: checking at the bench (D244), the
+- 2026-10-14, the server side of D246 and the start of D247 (migrations 138
+  and 139), on a fresh database (`spork_d246run`):
+  - every migration builds and reverses, 139 of them;
+  - the server's unit tests pass (311), and its integration tests 161 of 162;
+  - the one failure is `picking_http::a_trolley_pick…`, which passes alone on
+    another fresh database (`spork_d246p`): the order-dependence noted on
+    2026-10-07, when another test has used the walk's fixture line first;
+  - the invariant suite passes but for `structural_invariants_hold`, the
+    S7 and S10 entries that predate this work.
+- Spork `main` is pushed through b435fef: checking at the bench (D244), the
   design for the rest of packing (D245 to D252), the brand, the theme, page
-  titles, and the round-wrap fixes to D240.
-- The LAN server has run it since 15:43 on 2026-10-12. The live database is at
-  migration 136.
+  titles, the round-wrap fixes to D240, and on 2026-10-13 orders by item and
+  who packed (D253, D254). The live database was at migration 137 after
+  that. Migrations 138 and 139 are not yet live.
 - On 2026-10-12:
   - every migration builds and reverses, from empty and with both fixtures'
     rows (`verify-migrations.sh` against `spork_verify`, 136);
@@ -28,6 +37,32 @@ toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**On 2026-10-14: units between cartons, cartons onto pallets (D246; D247 begun)**
+- `POST /repacks` (`repacking.rs`): units of a line from a package-held cell
+  into another package, one movement keeping its lot, status and owner.
+  Refused into the carton it is in or one despatched or void; out of or into
+  a sealed one it is recorded with "open it first" (D5).
+- What a package holds is one view, `package_line_content` (migration 138):
+  in, less what went on to another holder, never below nought. Packed (the
+  fold, J68, the live progress) is what sealed and despatched packages hold,
+  so units repacked are counted once. The bench's remaining and contents, the
+  packing queue, the packing list, the contents read, despatch and the check
+  before a seal read it too.
+- Picks and handovers into a sealed carton are recorded with "open it first".
+- `POST /packages/{id}/contain` refuses a loop and a fourth level, read from
+  the events now (`package_parent_now`, migration 139, in
+  `packages::nesting`). It says a sealed pallet, another order's pallet, and
+  an open carton on a breakdown pallet. It takes the spot (`at`), kept on the
+  event (`at_x_mm`, `at_y_mm`, `at_z_mm`, `turned`).
+- `package_status_now` (migration 138) is a package's status from its status
+  events. The bench, despatch, void and the act responses had read the newest
+  event of any kind, so a sealed carton put on a pallet read as open.
+- `package.breaks_down`, said on `POST /packages`; a breakdown pallet that
+  names an order is refused.
+- Tests: `repack_http.rs` (ten in, four moved on, both sealed: packed ten) and
+  `pallet_http.rs` (spot, still sealed on the bench, three deep, the loop, the
+  breakdown pallet), and unit tests for each check.
 
 **Since, on 2026-10-13: orders by item, and who packed (D253, D254)**
 - The Orders search takes item codes when no order has the number typed:
@@ -172,8 +207,13 @@ toolchain, tests and layout.
   to 12. An item that has never been weighed gives the carton no expected
   weight, so no verdict.
 - **Packing is still the form bench** with the client-side plan (D195 to
-  D202). Nothing calls `POST /packages/{id}/contain` yet, and pallets are box
-  types with no size on the bench.
+  D202). Nothing on the bench calls `POST /repacks` or
+  `POST /packages/{id}/contain` yet, and pallets are box types with no size
+  on the bench.
+- **Taking out after a repack undoes the repack.** Take out reverses the
+  picks into a carton, newest first; in a carton units were repacked into,
+  that is the repack, so they go back to the carton they came from rather
+  than to their bin.
 - **Outstanding for the user:**
   - the board grade stamp on the box stock;
   - a floor test of each box's walls and lid;
@@ -213,12 +253,8 @@ toolchain, tests and layout.
 ## Next
 
 1. Check real orders at the bench, and set the tolerance if 3% is wrong.
-2. **D246 and D247 on the server:**
-   - `POST /repacks`, with packed netted in the fold and J68;
-   - containment that refuses loops, depth and sealed parents, and records
-     the spot;
-   - warnings for anything added to a sealed package;
-   - `package.breaks_down`;
+2. **The rest of D246 and D247 on the server** (repacks, containment and
+   `breaks_down` landed 2026-10-14):
    - despatching a pallet whole, and consignments of what is delivered;
    - the invariants: no loops, depth, nothing consigned twice;
    - the bench read gains each parcel's parent and kind, and pallet presets
