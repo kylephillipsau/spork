@@ -286,7 +286,7 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-Two hundred and fifty-two recorded decisions, a hundred and thirty-four rules the design must always
+Two hundred and fifty-three recorded decisions, a hundred and thirty-four rules the design must always
 satisfy, and a database that a hundred and thirty-six migrations build and reverse cleanly, both
 from empty and with data in them.
 
@@ -320,8 +320,8 @@ addresses, `/weigh` and `/capture`, that lead to the item list (D174):
   looked up against NetSuite's open orders, shared out between the people
   picking, walked with its route on the 3D bin map, and printed one order to
   a page (D230, D231);
-- orders, items and the warehouse, each with a page per order, item, place and
-  bin;
+- orders, found by number or by the items on them (D253), items and the
+  warehouse, each with a page per order, item, place and bin;
 - an item's weight, size and photographs, recorded at the item. A photograph
   is sent as WebP (D175), cut to its face where a model in the browser finds
   it and a person checks it (D176, D177), at a computer for a phone's photos
@@ -353,7 +353,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D252
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D253
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being

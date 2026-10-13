@@ -5227,7 +5227,8 @@ pub async fn consignment(
 
 #[derive(Deserialize, Debug)]
 pub struct OrderSearch {
-    /// A confirmation number or an external reference. Matched against both.
+    /// A confirmation number or an external reference. Matched against both,
+    /// and when neither answers, as item codes (D253).
     ///
     /// **Optional, because a search box is not a way in.** Somebody who has just
     /// been handed a job does not know its number; they know it is one of the
@@ -5243,6 +5244,11 @@ pub struct OrderSearch {
 /// the operator who cannot find their job in the last twenty knows its number
 /// and can type it.
 const LATEST_ORDERS: i64 = 20;
+
+/// How many orders a search by item answers, newest first (D253). More than
+/// the latest, because an item is on far fewer orders than come in, and the
+/// one being looked for is usually days old rather than hours.
+const LATEST_WITH_ITEMS: i64 = 50;
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct FulfilmentSummary {
@@ -5279,6 +5285,27 @@ pub struct OrderMatch {
     /// so one reference can name a cancelled order and the one that replaced it.
     pub supersedes_order_id: Option<Uuid>,
     pub fulfilments: Vec<FulfilmentSummary>,
+    /// How many of each item a search asked for the order wants (D253). Empty
+    /// unless the search was by item.
+    pub asked_for: Vec<ItemOnOrder>,
+}
+
+/// An item a search asked for, and how many the order wants across its lines.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct ItemOnOrder {
+    pub item_code: String,
+    pub quantity: i64,
+}
+
+/// What was typed, as item codes: split at spaces and commas, the case set
+/// aside as the codes' own is, each once.
+fn item_codes(typed: &str) -> Vec<String> {
+    let codes: std::collections::BTreeSet<String> = typed
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|c| !c.is_empty())
+        .map(str::to_uppercase)
+        .collect();
+    codes.into_iter().collect()
 }
 
 /// Find an order by the number a customer quotes, with its fulfilments.
@@ -5298,6 +5325,12 @@ pub struct OrderMatch {
 /// and the quantities come back beside it so a partly-picked fulfilment says how
 /// far rather than merely failing a gate. `as_at` says how old the projection is
 /// (D95), because a gate answered from a stale cache should say so.
+///
+/// **By what is on it, when no number answers (D253).** Somebody holding the
+/// goods knows what they are and not which order they were for. Typed codes
+/// find the latest orders at this site with every one of them on an active
+/// line, and `asked_for` says how many of each, so "the one with two" can be
+/// read off the list.
 #[get("/orders")]
 pub async fn find_orders(
     req: HttpRequest,
@@ -5321,19 +5354,49 @@ pub async fn find_orders(
                 // raised order carries a confirmation number and an EDI one an
                 // external reference, and D39 puts exactly one system of record
                 // on each.
+                let mut codes = vec![];
                 let orders = match &reference {
                     Some(r) => {
-                        tx.query(
-                            &format!(
-                                "SELECT {ORDER_COLUMNS}
-                               FROM \"order\" o
-                               LEFT JOIN party p ON p.id = o.customer_party_id
-                              WHERE o.confirmation_number = $1 OR o.external_ref = $1
-                              ORDER BY o.placed_at DESC NULLS LAST, o.id"
-                            ),
-                            &[r],
-                        )
-                        .await?
+                        let named = tx
+                            .query(
+                                &format!(
+                                    "SELECT {ORDER_COLUMNS}
+                                   FROM \"order\" o
+                                   LEFT JOIN party p ON p.id = o.customer_party_id
+                                  WHERE o.confirmation_number = $1 OR o.external_ref = $1
+                                  ORDER BY o.placed_at DESC NULLS LAST, o.id"
+                                ),
+                                &[r],
+                            )
+                            .await?;
+                        if !named.is_empty() {
+                            named
+                        } else {
+                            // No order by that number, so the codes of what is
+                            // on one: every code typed, at the site worked at,
+                            // as the latest are.
+                            codes = item_codes(r);
+                            tx.query(
+                                &format!(
+                                    "SELECT {ORDER_COLUMNS}
+                                   FROM \"order\" o
+                                   LEFT JOIN party p ON p.id = o.customer_party_id
+                                  WHERE o.id IN (SELECT ol.order_id
+                                                   FROM order_line ol
+                                                   JOIN item i ON i.id = ol.item_id
+                                                  WHERE upper(i.code) = ANY($1)
+                                                    AND ol.line_state = 'active'
+                                                  GROUP BY ol.order_id
+                                                 HAVING count(DISTINCT upper(i.code))
+                                                        = cardinality($1::text[]))
+                                    AND ($2::uuid IS NULL OR o.site_id = $2)
+                                  ORDER BY o.placed_at DESC NULLS LAST, o.id
+                                  LIMIT $3"
+                                ),
+                                &[&codes, &site, &LATEST_WITH_ITEMS],
+                            )
+                            .await?
+                        }
                     }
                     // The latest, at the site they signed on at. A person with no
                     // site sees the tenant's, which is the same rule the pack
@@ -5356,7 +5419,26 @@ pub async fn find_orders(
 
                 let mut matches = vec![];
                 for o in &orders {
-                    matches.push(order_match(tx, o).await?);
+                    let mut m = order_match(tx, o).await?;
+                    if !codes.is_empty() {
+                        m.asked_for = tx
+                            .query(
+                                "SELECT i.code, sum(ol.quantity_ordered)::bigint
+                                   FROM order_line ol
+                                   JOIN item i ON i.id = ol.item_id
+                                  WHERE ol.order_id = $1
+                                    AND upper(i.code) = ANY($2)
+                                    AND ol.line_state = 'active'
+                                  GROUP BY i.code
+                                  ORDER BY i.code",
+                                &[&m.order_id, &codes],
+                            )
+                            .await?
+                            .iter()
+                            .map(|r| ItemOnOrder { item_code: r.get(0), quantity: r.get(1) })
+                            .collect();
+                    }
+                    matches.push(m);
                 }
                 Ok(matches)
             })
@@ -5433,6 +5515,7 @@ async fn order_match(
                 as_at: r.get(10),
             })
             .collect(),
+        asked_for: vec![],
     })
 }
 

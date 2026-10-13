@@ -1007,6 +1007,15 @@ export interface OrderMatch {
    *  so one reference can name a cancelled order and the one that replaced it. */
   supersedes_order_id: Uuid | null;
   fulfilments: FulfilmentSummary[];
+  /** How many of each item a search asked for the order wants (D253). Empty
+   *  unless the search was by item. */
+  asked_for: ItemOnOrder[];
+}
+
+/** An item a search asked for, and how many the order wants across its lines. */
+export interface ItemOnOrder {
+  item_code: string;
+  quantity: number;
 }
 
 /** One line of an order, across every fulfilment that serves it. */

@@ -197,6 +197,33 @@ async fn the_pack_walkthrough_runs_end_to_end_over_http() {
             && l["ordered_quantity"].as_i64().unwrap() > 0),
         "each line says what and how many, got {lines:?}"
     );
+
+    // D253: by what is on it. A code typed in any case finds the order, and
+    // says how many of it the order wants: the fixture's second line of the
+    // same item was removed (D44), so only the first counts.
+    let code = lines[0]["item_code"].as_str().unwrap();
+    let wanted = lines[0]["ordered_quantity"].as_i64().unwrap();
+    let by_item = common::ok_json(
+        &app,
+        test::TestRequest::get()
+            .uri(&format!("/orders?reference={}", code.to_lowercase()))
+            .insert_header(("authorization", bearer.clone()))
+            .to_request(),
+        "GET /orders by item code",
+    )
+    .await;
+    let with_it = by_item
+        .as_array()
+        .expect("matches")
+        .iter()
+        .find(|o| o["order_id"] == order["order_id"])
+        .expect("the order with that item on it is found by its code");
+    assert_eq!(
+        with_it["asked_for"],
+        json!([{ "item_code": code, "quantity": wanted }]),
+        "and says how many of it the order wants"
+    );
+
     let missing = test::call_service(
         &app,
         test::TestRequest::get()

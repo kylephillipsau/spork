@@ -58,7 +58,7 @@ import { FINDINGS_CLEAR, FINDINGS_FIXTURE, SHORT_PICK, fixtureDesk } from "@app/
 
 import { OrdersPage } from "@app/outbound/orders/OrdersPage";
 import { OrderPage } from "@app/outbound/orders/OrderPage";
-import { FOUND, LATEST, NOTHING, ORDER, ORDER_MISSING, SUPERSEDED, fixtureOrder, fixtureOrders } from "@app/outbound/orders/fixture";
+import { BY_ITEM, FOUND, LATEST, NOTHING, ORDER, ORDER_MISSING, SUPERSEDED, fixtureOrder, fixtureOrders } from "@app/outbound/orders/fixture";
 import { BinPage, PlacePage } from "@app/layout/PlacePage";
 import { WarehousePage } from "@app/layout/WarehousePage";
 import {
@@ -561,6 +561,9 @@ export const FIXTURES: readonly Screen[] = [
   app("f-orders", "/fixtures/orders", "Orders — found", "desk", { screen: "orders" }, () => <OrdersPage desk={fixtureOrders(FOUND)} />),
   app("f-orders-superseded", "/fixtures/orders/superseded", "Orders — replaced", "desk", { screen: "orders" }, () => (
     <OrdersPage desk={fixtureOrders(SUPERSEDED)} />
+  )),
+  app("f-orders-by-item", "/fixtures/orders/by-item", "Orders — by item", "desk", { screen: "orders" }, () => (
+    <OrdersPage desk={fixtureOrders(BY_ITEM, BY_ITEM.kind === "found" ? BY_ITEM.reference : "")} />
   )),
   app("f-orders-nothing", "/fixtures/orders/nothing", "Orders — nothing", "desk", { screen: "orders" }, () => (
     <OrdersPage desk={fixtureOrders(NOTHING)} />

@@ -16601,3 +16601,33 @@ bench and the booking need nothing new to use them.
 5. The planner, with load limits and build rules (D249, D250, D251).
 6. Breakdown pallets through the day, the pallet sheet and the booking
    (D247, D248).
+
+### D253: An order is found by what is on it
+
+*Adopted 2026-10-13. Built. Extends D150 and D189.*
+
+**The finding.** Orders are found by number: a confirmation number or an
+external reference, typed whole. Somebody holding the goods (left at the
+bench, sent back, or asked about) knows what they are and not which order
+they were for. Finding it meant reading the database by hand.
+
+**Decision.**
+
+- **The Orders search takes item codes too.** When no order has the number
+  typed, the words are taken as item codes, in any case, split at spaces and
+  commas. It answers the latest 50 orders at the site worked at with **every**
+  code on an active line, newest first. A removed line (D44) is not on the
+  order.
+- **Each code typed is a column**, headed by the code, saying how many of it
+  the order wants across its lines, and sortable. "The one with two" is read
+  off the list. `OrderMatch.asked_for` carries it, empty for any other search.
+- **An item's page has "Orders with it"**, the same search for its code.
+- **Orders Spork knows.** An open order NetSuite reports and nobody has
+  picked yet (D231) is not an order here, so it is not found. To pick finds
+  those.
+
+**Why.** The user, 2026-10-13, after asking for a recent order with two of
+one item: "Surely there could be a feature that we could use to find a recent
+order by the products that it contains? That would be super useful". One box
+that already finds orders is where the question goes. A second screen for it
+would be a second way to find an order.

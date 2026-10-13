@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, MapPinPlus } from "lucide-react";
+import { ClipboardList, MapPin, MapPinPlus } from "lucide-react";
 
 import {
   Alert,
@@ -20,6 +20,7 @@ import {
 } from "@ui/index";
 import type { BinFlagged, ItemFlag, ItemHeld, ItemReported, ItemView } from "@domain/types";
 import { Faint, ago, dateTime } from "@app/common/cells";
+import { useNavigate } from "@app/routing/Router";
 import { usePageTitle } from "@app/routing/title";
 
 import { Family, ItemDrawer, ItemProperties, ItemSummary, NetSuiteSays } from "./ItemProperties";
@@ -48,6 +49,7 @@ export function ItemPage({ desk, asking }: { desk: PropertiesDesk; asking?: Aski
   usePageTitle([loaded?.code, loaded?.description]);
   // Another of its family, open beside the page (D228).
   const [looking, setLooking] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   if (read.kind !== "ready") {
     return (
@@ -80,6 +82,12 @@ export function ItemPage({ desk, asking }: { desk: PropertiesDesk; asking?: Aski
           </span>
         }
         description={item.description}
+        actions={
+          // The latest orders it is on (D253): from goods in the hand to the order they were for.
+          <Button size="sm" icon={<ClipboardList />} onClick={() => navigate(`/orders?reference=${encodeURIComponent(item.code)}`)}>
+            Orders with it
+          </Button>
+        }
       />
 
       <Stack gap={5}>

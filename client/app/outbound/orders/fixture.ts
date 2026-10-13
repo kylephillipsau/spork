@@ -50,6 +50,35 @@ export const FOUND: OrdersState = {
         fully_picked: false,
         as_at: null,
       })],
+      asked_for: [],
+    },
+  ],
+};
+
+/** Found by what is on them (D253): two codes typed, two orders with both,
+ *  and how many of each, so the one with two of them can be picked out. */
+export const BY_ITEM: OrdersState = {
+  kind: "found",
+  reference: "glove-m tray-foil-l",
+  orders: [
+    {
+      ...(FOUND.kind === "found" ? FOUND.orders[0]! : ({} as never)),
+      asked_for: [
+        { item_code: "GLOVE-M", quantity: 2 },
+        { item_code: "TRAY-FOIL-L", quantity: 6 },
+      ],
+    },
+    {
+      ...(FOUND.kind === "found" ? FOUND.orders[0]! : ({} as never)),
+      order_id: "0d1e0000-0000-0000-0000-000000000003",
+      confirmation_number: "S260017",
+      customer_name: "Hillside Catering",
+      placed_at: "2026-08-11T01:00:00Z",
+      fulfilments: [commitment({ fulfilment_id: "f01f0000-0000-0000-0000-000000000006", reference: "IF260077" })],
+      asked_for: [
+        { item_code: "GLOVE-M", quantity: 12 },
+        { item_code: "TRAY-FOIL-L", quantity: 1 },
+      ],
     },
   ],
 };

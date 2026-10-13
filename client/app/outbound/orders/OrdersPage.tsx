@@ -49,6 +49,10 @@ export function orderTotals(o: OrderMatch) {
  * number or reference names — one reference can name a cancelled order and
  * the one that replaced it. A row opens the order in a drawer, and the drawer
  * opens the order's own page.
+ *
+ * When no order has that number, what was typed is taken as item codes (D253):
+ * the latest orders here with every one of them, and a column for each saying
+ * how many the order wants.
  */
 export function OrdersPage({ desk }: { desk: OrdersDesk }) {
   const [open, setOpen] = useState<OrderMatch | null>(null);
@@ -59,6 +63,9 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
   // One open beside the list is what the tab is about.
   usePageTitle([open && (open.confirmation_number ?? open.external_ref), open?.customer_name], true);
   const orders = st.kind === "found" || st.kind === "listed" ? st.orders : [];
+  // Every order found by item has every item asked for, so the first says which.
+  const asked = orders[0]?.asked_for ?? [];
+  const columns = [COLUMNS[0]!, ...asked.map((a) => askedColumn(a.item_code)), ...COLUMNS.slice(1)];
 
   return (
     <Page>
@@ -75,8 +82,8 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
         >
           <div className={s.search}>
             <SearchField
-              aria-label="Confirmation number or reference"
-              placeholder="Confirmation number or reference"
+              aria-label="Order number, reference or item code"
+              placeholder="Order number, reference or item code"
               value={desk.reference}
               onChange={(e) => desk.type(e.target.value)}
               disabled={busy}
@@ -93,7 +100,16 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
         </form>
           <Spacer />
           <span className={s.caption}>
-            {st.kind === "found" ? (
+            {st.kind === "found" && asked.length > 0 ? (
+              <>
+                Latest orders with {asked.map((a, i) => (
+                  <span key={a.item_code}>
+                    {i > 0 && " and "}
+                    <code>{a.item_code}</code>
+                  </span>
+                ))}
+              </>
+            ) : st.kind === "found" ? (
               <>
                 Results for <code>{st.reference}</code>
               </>
@@ -110,7 +126,7 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
         ) : (
           <DataTable
             aria-label="Orders"
-            columns={COLUMNS}
+            columns={columns}
             rows={orders}
             rowKey={(o) => o.order_id}
             loading={busy || st.kind === "idle"}
@@ -123,7 +139,8 @@ export function OrdersPage({ desk }: { desk: OrdersDesk }) {
                   title="No matching order"
                   description={
                     <>
-                      Nothing answers to <code>{st.reference}</code> as a confirmation number or external reference.
+                      Nothing answers to <code>{st.reference}</code> as a confirmation number or external reference,
+                      and no order here has all of it as item codes.
                     </>
                   }
                 />
@@ -268,6 +285,12 @@ const COLUMNS: Column<OrderMatch>[] = [
     width: "90px",
   },
 ];
+
+/** How many of an item asked for an order wants, under the item's code (D253). */
+function askedColumn(code: string): Column<OrderMatch> {
+  const quantity = (o: OrderMatch) => o.asked_for.find((a) => a.item_code === code)?.quantity ?? 0;
+  return { key: `asked:${code}`, header: code, cell: quantity, sort: quantity, align: "right", mono: true, width: "130px" };
+}
 
 const FULFILMENT_COLUMNS: Column<FulfilmentSummary>[] = [
   {
