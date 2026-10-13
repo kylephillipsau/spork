@@ -16592,7 +16592,8 @@ where it is.
 
 ### D252: A box can be cut down to set heights
 
-*Adopted 2026-10-12. Decided ahead of the build. Extends D196, D199 and D224.*
+*Adopted 2026-10-12. Built 2026-10-14 with migration 141, the plan's M2.
+Extends D196, D199 and D224.*
 
 **The finding.** The warehouse's boxes are cut at the corners and folded down
 to set heights. The fast fulfilment script keeps the heights as a list;
@@ -16620,6 +16621,28 @@ declared a package-type arm (migration 7) that was never added.
   side at true scale, with the print where it is on the box. Never squashed,
   and not centred as a thing's photograph is (`cover`). Its top is the full
   box's.
+
+**As built.**
+
+- A height is added in Workspace › Boxes (`POST /package-types/{id}/heights`,
+  `boxes.rs`), named "Medium Box, cut to 28" unless it is booked as another
+  name. A box already on file by that name, the full box's footprint and that
+  height, becomes the cut rather than a second box: the half box is linked
+  this way. A cut is not cut again, a pallet is not cut, and a cut is lower
+  than its box.
+- The footprint travels with the reference (`package_type_cut_from_fk` over
+  length and width, `ON UPDATE CASCADE`), and J82 finds a cut that is not
+  lower than its box or is cut from a cut.
+- What a cut inherits is read in one place, `package_type_effective`: its
+  empty weight and limit, whether its height is set, and whose photographs it
+  wears. The bench, the suggestion and the booking read it.
+- The booking takes a carton's height from its box when the box's heights
+  are a set list (a cut, or a box with cuts), where before it took only a
+  measured height.
+- A height is taken away (`DELETE /package-types/{id}`) only when nothing was
+  packed in it; one that was stays, and is left out of the suggestion instead.
+- A box type is photographed in Workspace, a look with photographs and
+  nothing measured, each side cut to its face with the item page's crop.
 
 **Why.** The user, 2026-10-12: "our box model allows us to cut the corners of
 the boxes down to fold them into smaller boxes ... We will need to be able to

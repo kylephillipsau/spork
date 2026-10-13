@@ -224,6 +224,7 @@ examined nothing.
 | J79 | No package is inside itself, however far up the packages it is in or on are followed. The act that puts one package in or on another refuses a loop from the events as they stand; facts that arrive out of order, a phone that was offline and a second phone that was not, can still fold into one, and a pallet in a loop has no place on the floor and no parent to be despatched with | D24, D246 | ● |
 | J80 | No chain of packages is more than three deep: a wrap, a pallet and a carton. The act refuses a fourth level; this is the finding D24 named `nesting_too_deep`, for the facts that arrive out of order and fold into one anyway | D24, D246 | ● |
 | J81 | What is booked is what is delivered. No package on a consignment is in or on a pallet that goes as one, because the pallet carries it and booking both counts it twice; and no pallet broken down at the depot is on one, because its cartons go on with their own orders. The consignment refuses both from the events now; this catches a carton put on a pallet after it was booked | D247 | ● |
+| J82 | A cut box is cut from a full box: the same workspace's, lower than it, with its length and width, and not itself cut from another. A cut is drawn with its full box's photographs from the bottom up and takes its empty weight and limit, so a cut taller than its box or cut from a cut would be drawn and weighed from the wrong box. The act refuses each, and the footprint travels with the reference; this finds a box changed under its cuts some other way, an import writing the table directly | D252 | ● |
 
 ---
 
@@ -266,13 +267,13 @@ appears here as its current whole text.
 | | |
 |---|---|
 | Structural | 56 |
-| Job-asserted | 81 |
-| **Total** | **137** |
-| Marked for vacuity | 78 |
+| Job-asserted | 82 |
+| **Total** | **138** |
+| Marked for vacuity | 79 |
 | `specified` | 22 |
-| `implemented` | 115 |
+| `implemented` | 116 |
 
-Seventy-eight of a hundred and thirty-seven assert an absence and pass on an empty population.
+Seventy-nine of a hundred and thirty-eight assert an absence and pass on an empty population.
 That is the number worth watching, because those are the entries that will report
 success on the day they stop being checked.
 

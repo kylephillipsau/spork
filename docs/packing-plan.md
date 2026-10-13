@@ -44,7 +44,7 @@ weights (D224). These are not part of this plan:
 | D249 what a box carries | yes, with research | no |
 | D250 carrier rules as settings | yes, mocked | no |
 | D251 one planner | outline | no |
-| D252 cut-down boxes, box photos | yes, mocked | no |
+| D252 cut-down boxes, box photos | yes, mocked | built in M2, 2026-10-14 |
 
 The mockups are the canvas "Pack bench",
 https://claude.ai/artifact/9eMaJSZBNHoRe5KHjTq5TY.
@@ -161,6 +161,10 @@ try at the bench is the short finding; the rest waits for M3's board.*
 - The despatch screen with pallets, and the pallet sheet, mocked.
 
 **M2: boxes cut to their heights, and box photos (D252)**
+
+*Built 2026-10-14 (migration 141, J82). The user's heights are loaded once it
+is live.*
+
 - `package_type.cut_from_id`, with Workspace › Boxes' heights, adding and
   taking away. The user's list is loaded, and the half box is linked to its
   full box.

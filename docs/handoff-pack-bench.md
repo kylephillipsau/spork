@@ -8,6 +8,17 @@ toolchain, tests and layout.
 
 ## State
 
+- 2026-10-14, M2 of the plan, boxes cut to set heights and box photos
+  (D252, migration 141), on a fresh database (`spork_m2run`):
+  - every migration builds and reverses, 141 of them;
+  - the server's unit tests pass (314), and its integration tests 161 of 163;
+  - the two failures were `pack_walk_http`'s walkthrough taking a carton's
+    cell for a shelf's, since `location_code` names a carton's resolved
+    location too; it now takes `holder_location_id`, and both pass on that
+    database;
+  - the invariant suite passes but for S7 and S10, as before; J82 is new;
+  - the client's tests (241), contract and laws pass, and the render gate
+    passes over every fixture (144 fixtures, 468 renders).
 - 2026-10-14, M1 of [packing-plan.md](./packing-plan.md), the rest of D246
   and D247 on the server (migration 140), on a fresh database (`spork_m1`):
   - every migration builds and reverses, 140 of them;
@@ -48,6 +59,31 @@ toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**Later on 2026-10-14: M2, boxes cut to set heights and box photos (D252)**
+- Migration 141: `package_type.cut_from_id`, its footprint held by the
+  reference; `package_type_effective` (a cut's empty weight and limit from its
+  full box, whether its height is set, whose photographs it wears); and the
+  observable's package-type arm that migration 7 declared.
+- `boxes.rs`: `POST /package-types/{id}/heights` adds a height, or links a box
+  already on file by the name given (the half box); `DELETE /package-types/{id}`
+  takes one away when nothing was packed in it. `GET /package-types` gives each
+  box its cut, how many cartons were packed in it, and its photographs.
+- `POST /observations` takes `package_type_id`: a look with photographs only.
+- The bench's presets and cartons carry their cut and their box's cut faces.
+  The suggestion picks the lowest box that takes everything, cuts included,
+  and says "Cut a Medium Box down to 28 cm" before it is started and on the
+  open carton. A cut is drawn with the bottom of its full box's photographs
+  (`coverCut`, `keepOf` in `items/box.ts`), on the bench and in Workspace.
+- The booking takes a cut's height from its box.
+- Workspace › Boxes (`admin/Boxes.tsx`): each box with its heights; opened,
+  its heights with their weights and Suggested, Add height, and its sides
+  photographed and cropped with the item page's crop, the box drawn at the
+  height chosen.
+- J82: a cut is cut from a full box, lower, in its workspace.
+- Tests: `boxes_http.rs`, `boxes.rs` unit tests, `box.test.ts` (the crop),
+  `arrange.test.ts` (the cut chosen), and fixtures `pack/cut` and
+  `workspace/box`.
 
 **Later on 2026-10-14: M1, the rest of D246 and D247 on the server**
 - Despatching a pallet: `POST /packages/{id}/despatch` without a line writes
@@ -297,9 +333,9 @@ toolchain, tests and layout.
    short now lands in the findings queue: see that it names the right picker.
 2. M1 is on the server, so a real order tries only the short finding and
    despatch as it was; pallets are put together at the bench from M3.
-3. **D252:** `package_type.cut_from_id` and the heights in Workspace › Boxes,
-   with the user's list loaded. Then box types photographed (the observable's
-   package-type arm) and the bottom-anchored crop in 3D.
+3. **M2 live:** load the user's heights (Workspace › Boxes, or the endpoint),
+   with the half box linked by its name; photograph the box types; pack an
+   order that the suggestion puts in a cut box.
 4. **D245:** the kit's pointer drag, then the board on real cartons.
 5. **D249, D250, D251:** `subject_load`, wall and lid limits, `build_rules`,
    and the planner in a worker. It replaces `arrange.ts` once it is never

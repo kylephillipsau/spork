@@ -119,6 +119,8 @@ Under Outbound, Packing, an order opens on the pack bench:
   says what was seen; a short line is planned for what is there, and goes
   to the findings queue for whoever picked it (D244);
 - put each line into a carton, or ship whole cartons as they are (D196);
+- start the box the plan chose, cut down to the height it says when that is
+  the lowest that takes everything (D252);
 - see the whole order planned in boxes, in 3D or as a list, every unit
   accounted for (D195, D202);
 - weigh each carton: the bench says whether the weight agrees with what it
@@ -127,10 +129,14 @@ Under Outbound, Packing, an order opens on the pack bench:
 - seal it once what is in it is checked, and copy the parcels' sizes and
   weights for the booking (D224).
 
+Workspace, Boxes lists each box with the heights it is cut down to, to add
+to and take from, and its photographs: a carton is drawn with them, and a cut
+one with the bottom of its full box's (D252).
+
 Despatch books a pallet that goes as one as itself, with the cartons on it,
 and despatches them together (D247). Dragging an order onto boxes and
 pallets, breakdown pallets built through the day, and carriers' pallet rules
-as settings are decided and not yet built (D245 to D252).
+as settings are decided and not yet built (D245 to D251).
 
 ## Picking from the tickets
 

@@ -286,16 +286,16 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-Two hundred and fifty-four recorded decisions, a hundred and thirty-seven rules the design must always
-satisfy, and a database that a hundred and forty migrations build and reverse cleanly, both
+Two hundred and fifty-four recorded decisions, a hundred and thirty-eight rules the design must always
+satisfy, and a database that a hundred and forty-one migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
 suite rather than a document. Each rule carries its own metadata and its own
 identifier, so allocating the same number twice is a compile error rather than a
-mistake anyone can make. One hundred and fifteen rules are implemented and none fails.
+mistake anyone can make. One hundred and sixteen rules are implemented and none fails.
 
-Seventy-eight of the rules state that something does not happen, and a rule of
+Seventy-nine of the rules state that something does not happen, and a rule of
 that shape passes when there is nothing to check. The suite reports those
 separately: a check that examined nothing is recorded as proving nothing, rather
 than counted as a pass.
@@ -310,7 +310,7 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of a hundred and thirty-one endpoints and a
+policy resolver. Above it sits an API of a hundred and thirty-three endpoints and a
 projection scheduler. Above that is a React client of thirty-one screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, which checks each line and each carton's
@@ -341,7 +341,7 @@ the width it has.
 
 The gap worth naming is still on the writing half of that API, though it is much
 smaller. In August, fourteen of thirty-seven writing endpoints had never been
-exercised over HTTP. Now seven of seventy-six are never called by an HTTP test:
+exercised over HTTP. Now seven of seventy-eight are never called by an HTTP test:
 - investigating a discrepancy;
 - the item import;
 - placing a package and opening one;
