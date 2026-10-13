@@ -147,6 +147,24 @@ export interface Preset {
   max_payload_g: number | null;
   /** What it weighs empty, when the workspace says (D224). */
   tare_weight_g: number | null;
+  /** A pallet or skid's deck, the cartons it carries stand on (D246); null for a box. */
+  deck: Footprint | null;
+}
+
+/** A deck's length and width, in millimetres. */
+export interface Footprint {
+  length_mm: number;
+  width_mm: number;
+}
+
+/** The package a carton is in or on now (D246). */
+export interface OnParent {
+  id: Uuid;
+  /** Its preset's name: "PALLET", "medium box". */
+  name: string | null;
+  sequence: string | null;
+  /** A breakdown pallet, carrying many orders (D247). */
+  breaks_down: boolean;
 }
 
 /** `GET /package-types`: a box preset as Workspace lists it. */
@@ -236,6 +254,12 @@ export interface CartonSummary {
   stated_size: StatedSize | null;
   expected: ExpectedWeight | null;
   contents: PackedRow[];
+  /** A box, a pallet or skid, or one of a product as it is (D196, D246). */
+  kind: "box" | "pallet" | "as_is";
+  /** A pallet broken down at the depot rather than delivered as one (D247). */
+  breaks_down: boolean;
+  /** What it is in or on now, when anything (D246). */
+  on: OnParent | null;
 }
 
 /** `GET /fulfilments/{id}/bench` — the whole screen, in one read. */
@@ -294,6 +318,9 @@ export interface BookedCarton {
    *  read carries what is in the carton rather than making the screen fetch
    *  each one before it can act. */
   lines: CartonLine[];
+  /** What is in or on it, at any depth, each with its own lines: a pallet
+   *  delivered as one leaves with every carton on it (D247). */
+  inside: BookedCarton[];
 }
 
 export interface BookedConsignment {

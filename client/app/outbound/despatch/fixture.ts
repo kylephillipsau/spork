@@ -71,6 +71,7 @@ export const DESPATCH_FIXTURE: DespatchScreen = {
           reference: "IF265604",
           despatched: true,
           lines: [],
+          inside: [],
         },
         {
           id: "ca470000-0000-0000-0000-000000000022",
@@ -81,6 +82,47 @@ export const DESPATCH_FIXTURE: DespatchScreen = {
             {
               fulfilment_line_id: "f11e0000-0000-0000-0000-000000000021",
               quantity: 6,
+            },
+          ],
+          inside: [],
+        },
+      ],
+    },
+    {
+      // **A pallet that goes as one (D247)**, booked as itself, with the two
+      // cartons on it: despatching it despatches them by their lines, then the
+      // pallet.
+      consignment_id: "c0c00000-0000-0000-0000-000000000002",
+      carrier_name: "Swift Transport Services",
+      carrier_service_name: null,
+      status: null,
+      despatch_at: "2026-08-16T09:00:00Z",
+      package_count: 1,
+      awaiting_despatch: 1,
+      gross_weight_g: 212000,
+      packages: [
+        {
+          id: "ca470000-0000-0000-0000-000000000030",
+          sequence: "3",
+          reference: "IF265610",
+          despatched: false,
+          lines: [],
+          inside: [
+            {
+              id: "ca470000-0000-0000-0000-000000000031",
+              sequence: "1",
+              reference: "IF265610",
+              despatched: false,
+              lines: [{ fulfilment_line_id: "f11e0000-0000-0000-0000-000000000031", quantity: 12 }],
+              inside: [],
+            },
+            {
+              id: "ca470000-0000-0000-0000-000000000032",
+              sequence: "2",
+              reference: "IF265610",
+              despatched: false,
+              lines: [{ fulfilment_line_id: "f11e0000-0000-0000-0000-000000000031", quantity: 8 }],
+              inside: [],
             },
           ],
         },

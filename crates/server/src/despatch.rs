@@ -103,6 +103,9 @@ pub struct BookedCarton {
     /// them would have to fetch each one before it could act, which is the
     /// round trip per box that stage 6 already costs today.
     pub lines: Vec<CartonLine>,
+    /// What is in or on it, at any depth, each with its own lines: a pallet
+    /// delivered as one leaves with every carton on it (D247).
+    pub inside: Vec<BookedCarton>,
 }
 
 /// Netted through `stock_movement_effective`, like the packing list: a
@@ -156,6 +159,17 @@ pub struct Provider {
 const WINNING: &str = "
     LEFT JOIN LATERAL (SELECT package_status_now(p.id) AS kind) w ON true";
 
+/// The booked package, or the package on one, with this id.
+fn holding(packages: &mut [BookedCarton], id: Uuid) -> Option<&mut BookedCarton> {
+    packages.iter_mut().find_map(|p| {
+        if p.id == id {
+            Some(p)
+        } else {
+            p.inside.iter_mut().find(|i| i.id == id)
+        }
+    })
+}
+
 pub async fn screen(
     state: &web::Data<AppState>,
     who: &Caller,
@@ -195,6 +209,12 @@ pub async fn screen(
                                {WINNING}
                               WHERE cp.consignment_id IS NULL
                                 AND w.kind = 'sealed'
+                                -- On a pallet delivered as one, it goes with the
+                                -- pallet and is not booked on its own (D247).
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM package op
+                                     WHERE op.id = package_parent_now(p.id)
+                                       AND NOT op.breaks_down)
                                 AND ($1::uuid IS NULL OR f.site_id = $1)
                               ORDER BY f.reference NULLS LAST, f.id, p.sequence NULLS LAST",
                             what = crate::packages::WHAT,
@@ -264,6 +284,7 @@ pub async fn screen(
                         reference: r.get(7),
                         despatched,
                         lines: vec![],
+                        inside: vec![],
                     };
                     match booked.last_mut() {
                         Some(c) if c.consignment_id == consignment_id => {
@@ -288,12 +309,61 @@ pub async fn screen(
                     }
                 }
 
-                // One query for every booked carton's lines rather than one
-                // per carton: the screen is a page, and a page that costs a
-                // round trip per box is the thing being replaced.
-                let ids: Vec<Uuid> = booked
+                // What is in or on each booked package now, at any depth: a
+                // pallet that goes as one leaves with every carton on it (D247).
+                let roots: Vec<Uuid> = booked
                     .iter()
                     .flat_map(|c| c.packages.iter().map(|p| p.id))
+                    .collect();
+                if !roots.is_empty() {
+                    let rows = tx
+                        .query(
+                            "WITH RECURSIVE tree(root, id, n) AS (
+                                 SELECT r, r, 0 FROM unnest($1::uuid[]) r
+                                 UNION
+                                 SELECT t.root, e.package_id, t.n + 1
+                                   FROM tree t
+                                   JOIN package_event e
+                                     ON e.parent_package_id = t.id AND e.asserts_placement
+                                  WHERE package_parent_now(e.package_id) = t.id AND t.n < 4)
+                             SELECT DISTINCT t.root, p.id, coalesce(p.sequence::text, '—'),
+                                    coalesce(f.reference, '—'),
+                                    package_status_now(p.id) IS NOT DISTINCT FROM 'despatched'
+                               FROM tree t
+                               JOIN package p ON p.id = t.id
+                               LEFT JOIN fulfilment f ON f.id = p.fulfilment_id
+                              WHERE t.n > 0",
+                            &[&roots],
+                        )
+                        .await?;
+                    for r in &rows {
+                        let root: Uuid = r.get(0);
+                        let carton = BookedCarton {
+                            id: r.get(1),
+                            sequence: r.get(2),
+                            reference: r.get(3),
+                            despatched: r.get(4),
+                            lines: vec![],
+                            inside: vec![],
+                        };
+                        if let Some(p) = booked
+                            .iter_mut()
+                            .flat_map(|c| c.packages.iter_mut())
+                            .find(|p| p.id == root)
+                        {
+                            p.inside.push(carton);
+                        }
+                    }
+                }
+
+                // One query for every booked carton's lines, and what is on
+                // them, rather than one per carton: the screen is a page, and a
+                // page that costs a round trip per box is the thing being
+                // replaced.
+                let ids: Vec<Uuid> = booked
+                    .iter()
+                    .flat_map(|c| c.packages.iter())
+                    .flat_map(|p| std::iter::once(p.id).chain(p.inside.iter().map(|i| i.id)))
                     .collect();
                 if !ids.is_empty() {
                     let lines = tx
@@ -313,13 +383,12 @@ pub async fn screen(
                             fulfilment_line_id: r.get(1),
                             quantity: r.get(2),
                         };
-                        for consignment in booked.iter_mut() {
-                            if let Some(p) =
-                                consignment.packages.iter_mut().find(|p| p.id == package_id)
-                            {
-                                p.lines.push(line);
-                                break;
-                            }
+                        // Its own lines, or a carton's on a booked pallet.
+                        if let Some(p) = booked
+                            .iter_mut()
+                            .find_map(|c| holding(&mut c.packages, package_id))
+                        {
+                            p.lines.push(line);
                         }
                     }
                 }

@@ -121,24 +121,11 @@ async fn units_moved_between_cartons_are_packed_once() {
     .await;
     assert_eq!(status, 200, "{handed}");
 
-    // The cell in A, once the scheduler's fold has run.
-    db.execute("SELECT projection_run_all($1)", &[&tenant]).await.expect("fold");
-    let cell_in = |package: Uuid| {
-        let db = &db;
-        async move {
-            db.query_one("SELECT id FROM stock WHERE holder_package_id = $1", &[&package])
-                .await
-                .expect("a cell in the carton")
-                .get::<_, Uuid>(0)
-        }
-    };
-    let in_a = cell_in(a).await;
-
     // ── four moved on to B, sent twice: one act ──────────────────────────
     let act = Uuid::now_v7();
     let four = || {
         post("/repacks".into(), json!({
-            "fulfilment_line_id": line, "from_stock_id": in_a, "to_package_id": b, "quantity": 4,
+            "fulfilment_line_id": line, "from_package_id": a, "to_package_id": b, "quantity": 4,
             "client_event_id": act, "occurred_at": "2026-10-14T09:11:00Z"
         }))
     };
@@ -185,7 +172,7 @@ async fn units_moved_between_cartons_are_packed_once() {
     let (status, said) = call(
         &app,
         post("/repacks".into(), json!({
-            "fulfilment_line_id": line, "from_stock_id": in_a, "to_package_id": b, "quantity": 1,
+            "fulfilment_line_id": line, "from_package_id": a, "to_package_id": b, "quantity": 1,
             "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T09:13:00Z"
         })),
     )
@@ -199,10 +186,52 @@ async fn units_moved_between_cartons_are_packed_once() {
     let (status, refused) = call(
         &app,
         post("/repacks".into(), json!({
-            "fulfilment_line_id": line, "from_stock_id": in_a, "to_package_id": a, "quantity": 1,
+            "fulfilment_line_id": line, "from_package_id": a, "to_package_id": a, "quantity": 1,
             "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T09:14:00Z"
         })),
     )
     .await;
     assert_eq!(status, 400, "{refused}");
+
+    // ── taken out onto the bench, and back into a carton ─────────────────
+    // Straight after the move, with no fold run: the ledger says what is
+    // where.
+    let pack: Uuid = PACK.parse().unwrap();
+    let (status, out) = call(
+        &app,
+        post("/repacks".into(), json!({
+            "fulfilment_line_id": line, "from_package_id": b, "to_location_id": pack, "quantity": 2,
+            "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T09:15:00Z"
+        })),
+    )
+    .await;
+    assert_eq!(status, 200, "out of B onto the bench: {out}");
+    let (status, back) = call(
+        &app,
+        post("/repacks".into(), json!({
+            "fulfilment_line_id": line, "from_location_id": pack, "to_package_id": a, "quantity": 2,
+            "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T09:16:00Z"
+        })),
+    )
+    .await;
+    assert_eq!(status, 200, "from the bench into A: {back}");
+    let (status, shelf) = call(
+        &app,
+        post("/repacks".into(), json!({
+            "fulfilment_line_id": line, "from_package_id": a, "to_location_id": "10c00000-0000-0000-0000-000000000001",
+            "quantity": 1, "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T09:17:00Z"
+        })),
+    )
+    .await;
+    assert_eq!(status, 400, "a shelf is not the bench: {shelf}");
+
+    db.execute("SELECT projection_run_all($1)", &[&tenant]).await.expect("fold");
+    assert_eq!(packed().await, 10, "out and back, still ten");
+    let (_, bench) = call(&app, test::TestRequest::get().uri(&format!("/fulfilments/{fulfilment}/bench")).insert_header(auth.clone())).await;
+    let holds = |id: Uuid| -> i64 {
+        bench["cartons"].as_array().unwrap().iter().find(|c| c["id"] == id.to_string()).expect("the carton")["contents"][0]["quantity"]
+            .as_i64()
+            .unwrap()
+    };
+    assert_eq!((holds(a), holds(b)), (7, 3), "{bench}");
 }

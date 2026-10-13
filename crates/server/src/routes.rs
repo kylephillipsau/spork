@@ -2523,7 +2523,12 @@ pub async fn open_package(
 
 #[derive(Deserialize, Debug)]
 pub struct DespatchPackageRequest {
-    pub fulfilment_line_id: Uuid,
+    /// The line whose units leave from it. Absent when the package itself
+    /// leaves with nothing of its own: a pallet carrying cartons, each
+    /// despatched by its lines (D247).
+    #[serde(default)]
+    pub fulfilment_line_id: Option<Uuid>,
+    #[serde(default)]
     pub quantity: i64,
     /// Which cell in the package; if omitted, the sole cell for the line's item.
     pub from_stock_id: Option<Uuid>,
@@ -2544,8 +2549,115 @@ pub struct DespatchPackageResponse {
     pub package_status_ledger: Option<String>,
 }
 
+/// A package that left with nothing of its own moving, as a pallet carrying
+/// cartons does: the cartons go by their lines, the pallet by this (D247).
+#[derive(Serialize, Debug)]
+pub struct DespatchItselfResponse {
+    pub event_id: Uuid,
+    pub warnings: Vec<String>,
+    pub package_status_ledger: Option<String>,
+}
+
+/// Record that a package left, with no movement of its own: one `despatched`
+/// event. Refused for a voided package. Said, not refused (D5): one despatched
+/// already, and one still holding units of its own, whose lines should go
+/// with it.
+async fn despatch_itself(
+    state: &web::Data<AppState>,
+    who: &crate::auth::Caller,
+    package_id: Uuid,
+    body: &DespatchPackageRequest,
+    source: String,
+) -> Result<HttpResponse, ApiError> {
+    let tenant = who.tenant_id;
+    let (client_event_id, occurred_at) = (body.client_event_id, body.occurred_at);
+    let (person, site) = (who.person_id, who.site_id);
+    let mut scope = TenantScope::begin(&state.pool, tenant).await?;
+    let out = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let status: Option<String> = tx
+                    .query_opt("SELECT package_status_now(id) FROM package WHERE id = $1", &[&package_id])
+                    .await?
+                    .ok_or(ApiError::NotFound)?
+                    .get(0);
+                if status.as_deref() == Some("voided") {
+                    return Err(ApiError::Rejected("the package is voided".into()));
+                }
+                let mut warnings = vec![];
+                if status.as_deref() == Some("despatched") {
+                    warnings.push("the package is despatched already".to_string());
+                }
+                // What it still holds of its own, from the ledger: in, less
+                // everything out of it, despatches included.
+                let own: i64 = tx
+                    .query_one(
+                        "SELECT coalesce(sum(CASE WHEN m.to_package_id = $1 THEN v.effective_quantity
+                                                  ELSE -v.effective_quantity END), 0)::bigint
+                           FROM stock_movement m
+                           JOIN stock_movement_effective v
+                             ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                          WHERE (m.to_package_id = $1 OR m.from_package_id = $1)
+                            AND m.fulfilment_line_id IS NOT NULL",
+                        &[&package_id],
+                    )
+                    .await?
+                    .get(0);
+                if own > 0 {
+                    warnings.push(format!(
+                        "it still holds {own} units of its own: despatch their lines too"
+                    ));
+                }
+                let act = client_events::claim_act(
+                    tx,
+                    &NewClientEvent {
+                        tenant_id: tenant,
+                        client_event_id,
+                        site_id: site,
+                        recorded_by_id: person,
+                        submitted_at: occurred_at,
+                    },
+                )
+                .await?;
+                let event_id = if act.is_replay() {
+                    let (id, prior, kind) =
+                        client_events::require_one_package_event(tx, client_event_id).await?;
+                    if kind != "despatched" || prior != package_id {
+                        return Err(ApiError::Rejected(
+                            "client_event already recorded a different package act".into(),
+                        ));
+                    }
+                    warnings.push(client_events::REPLAY_WARNING.into());
+                    id
+                } else {
+                    let id: Uuid = tx
+                        .query_one(
+                            "INSERT INTO package_event (
+                                 tenant_id, client_event_id, package_id, kind, source,
+                                 occurred_at, recorded_by_id)
+                             VALUES ($1, $2, $3, 'despatched', $4, $5, $6)
+                             RETURNING id",
+                            &[&tenant, &client_event_id, &package_id, &source, &occurred_at, &person],
+                        )
+                        .await?
+                        .get(0);
+                    tx.execute("SELECT projection_mark_dirty($1, 'despatch')", &[&tenant]).await?;
+                    id
+                };
+                Ok(DespatchItselfResponse {
+                    event_id,
+                    warnings,
+                    package_status_ledger: ledger_views::package_status_ledger(tx, package_id).await?,
+                })
+            })
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(out))
+}
+
 /// Despatch: `package_event` despatched + `stock_movement` out of the package
 /// with no `to` side (D99), naming the line. Never UPDATEs progress columns.
+/// With no line, the package itself leaves ([`despatch_itself`]).
 #[post("/packages/{id}/despatch")]
 pub async fn despatch_package(
     req: HttpRequest,
@@ -2561,6 +2673,9 @@ pub async fn despatch_package(
         .source
         .clone()
         .unwrap_or_else(|| "operator_scan".to_string());
+    let Some(line_id) = body.fulfilment_line_id else {
+        return despatch_itself(&state, &who, package_id, &body, source).await;
+    };
 
     let mut scope = TenantScope::begin(&state.pool, tenant).await?;
     let result = scope
@@ -2580,7 +2695,7 @@ pub async fn despatch_package(
                            JOIN fulfilment f ON f.id = fl.fulfilment_id
                            JOIN order_line ol ON ol.id = fl.order_line_id
                           WHERE fl.id = $1",
-                        &[&body.fulfilment_line_id],
+                        &[&line_id],
                     )
                     .await?;
 
@@ -2636,7 +2751,7 @@ pub async fn despatch_package(
                 let proposed = ProposedDespatch {
                     tenant_id: tenant,
                     package_id,
-                    fulfilment_line_id: body.fulfilment_line_id,
+                    fulfilment_line_id: line_id,
                     quantity: body.quantity,
                     source: source.clone(),
                 };
@@ -2730,7 +2845,7 @@ pub async fn despatch_package(
                                     &stock.owner_id,
                                     &body.occurred_at,
                                     &who.person_id,
-                                    &body.fulfilment_line_id,
+                                    &line_id,
                                 ],
                             )
                             .await?
@@ -2745,7 +2860,7 @@ pub async fn despatch_package(
                 };
                 let ledger = ledger_views::line_progress_ledger(
                     tx,
-                    body.fulfilment_line_id,
+                    line_id,
                     line.quantity,
                 )
                 .await?;
@@ -2754,7 +2869,7 @@ pub async fn despatch_package(
                         "SELECT covered_quantity, picked_quantity, packed_quantity,
                                 despatched_quantity, uncovered_quantity
                            FROM fulfilment_line WHERE id = $1",
-                        &[&body.fulfilment_line_id],
+                        &[&line_id],
                     )
                     .await?;
                 let projection = ledger_views::line_progress_projection(
@@ -5163,6 +5278,46 @@ pub async fn record_consignment(
                              is still moving"
                         )),
                         _ => {}
+                    }
+                    // **What is delivered is what is booked** (D247): a pallet
+                    // that goes as one, or a broken-down pallet's cartons, each
+                    // with its order. Never both.
+                    let (breaks_down, rides, inside_booked): (bool, bool, i64) = tx
+                        .query_one(
+                            "SELECT p.breaks_down,
+                                    EXISTS (SELECT 1 FROM package op
+                                             WHERE op.id = package_parent_now(p.id)
+                                               AND NOT op.breaks_down),
+                                    (WITH RECURSIVE down(id, n) AS (
+                                         SELECT $1::uuid, 0
+                                         UNION
+                                         SELECT e.package_id, d.n + 1
+                                           FROM down d
+                                           JOIN package_event e
+                                             ON e.parent_package_id = d.id AND e.asserts_placement
+                                          WHERE package_parent_now(e.package_id) = d.id AND d.n < 4)
+                                     SELECT count(*) FROM down d
+                                       JOIN consignment_package c ON c.package_id = d.id
+                                      WHERE d.n > 0)
+                               FROM package p WHERE p.id = $1",
+                            &[&id],
+                        )
+                        .await
+                        .map(|r| (r.get(0), r.get(1), r.get(2)))?;
+                    if breaks_down {
+                        problems.push(format!(
+                            "pallet {id} is broken down at the depot: book its cartons, each with its order"
+                        ));
+                    }
+                    if rides {
+                        problems.push(format!(
+                            "carton {id} goes with the pallet it is on: book the pallet"
+                        ));
+                    }
+                    if inside_booked > 0 {
+                        problems.push(format!(
+                            "something on pallet {id} is booked on its own already"
+                        ));
                     }
                 }
                 if !problems.is_empty() {

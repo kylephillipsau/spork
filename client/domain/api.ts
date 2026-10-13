@@ -2,6 +2,7 @@ import type { Act } from "./acts";
 import type { AuthenticationOptions, RegistrationOptions } from "./webauthn";
 import type {
   ApiToken,
+  BookedCarton,
   BinFlagged,
   Refiled,
   CeremonyBegun,
@@ -326,6 +327,17 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
   return unwrap<T>(response);
 }
 
+/**
+ * A package leaving with nothing of its own moving: a pallet whose cartons
+ * went by their lines (D247). Named by the package, so a retry replays it.
+ */
+async function despatchItself(pkg: Uuid, act: Act): Promise<void> {
+  await send<unknown>("POST", `/packages/${pkg}/despatch`, {
+    client_event_id: act.id(`itself:${pkg}`),
+    occurred_at: act.at,
+  });
+}
+
 export const api = {
   bench: (fulfilment: Uuid) => send<BenchScreen>("GET", `/fulfilments/${fulfilment}/bench`),
 
@@ -538,10 +550,25 @@ export const api = {
   async despatchCarton(input: {
     carton: Uuid;
     lines: { fulfilment_line_id: Uuid; quantity: number }[];
+    /** What is on it, despatched first: a pallet leaves with its cartons (D247). */
+    inside?: BookedCarton[];
     act: Act;
   }): Promise<void> {
-    if (input.lines.length === 0) {
+    const inside = input.inside ?? [];
+    if (input.lines.length === 0 && inside.length === 0) {
       throw new ApiError("That carton is empty.", 409);
+    }
+    // The cartons on it by their lines, then anything on it with none of its
+    // own (a pallet within a wrap) by itself.
+    for (const p of [...inside].sort((a, b) => b.lines.length - a.lines.length)) {
+      if (p.despatched) continue;
+      if (p.lines.length > 0) await api.despatchCarton({ carton: p.id, lines: p.lines, act: input.act });
+      else await despatchItself(p.id, input.act);
+    }
+    // Nothing of its own: it leaves by itself, as a pallet carrying cartons does.
+    if (input.lines.length === 0) {
+      await despatchItself(input.carton, input.act);
+      return;
     }
     for (const line of input.lines) {
       await send<unknown>("POST", `/packages/${input.carton}/despatch`, {

@@ -622,7 +622,7 @@ function fillOpen(
   const rest = packed.left
     .map((e) => ({ kind: e.kind, count: Math.min(e.count, stillToPack.get(e.kind) ?? 0) }))
     .filter((e) => e.count > 0);
-  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g, tare_weight_g: open.tare_weight_g };
+  const preset = { id: open.id, name: open.name, size: open.size, suggested: true, max_payload_g: open.max_payload_g, tare_weight_g: open.tare_weight_g, deck: null };
   return {
     plan: { ...plan(preset, packed.layers), carton: { id: open.id, sequence: open.sequence } },
     rest,

@@ -142,6 +142,19 @@ async fn a_line_is_checked_and_a_carton_sealed_without_its_check_says_so() {
         .unwrap()
         .get(0);
     assert_eq!(kept, 1, "one check, however often it is sent");
+    // Short one: a finding against the line, naming the check (migration 140).
+    let found = db
+        .query_one(
+            "SELECT d.kind::text, d.variance::bigint, d.detail FROM discrepancy d
+               JOIN pack_check c ON c.id = d.pack_check_id
+              WHERE c.fulfilment_line_id = $1",
+            &[&checked],
+        )
+        .await
+        .expect("one finding for the short");
+    assert_eq!(found.get::<_, String>(0), "short_pick");
+    assert_eq!(found.get::<_, i64>(1), -1, "one short");
+    assert!(found.get::<_, String>(2).contains("11 seen of 12"), "{}", found.get::<_, String>(2));
 
     let (_, after) = call(&app, bench()).await;
     let said = &line(&after, checked)["check"];

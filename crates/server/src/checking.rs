@@ -71,27 +71,102 @@ pub async fn check_line(
                 if client_events::claim_act(tx, &ev).await?.is_replay() {
                     return Ok(());
                 }
-                tx.execute(
-                    "INSERT INTO pack_check
-                         (tenant_id, fulfilment_line_id, expected_quantity, seen_quantity,
-                          occurred_at, client_event_id, recorded_by_id)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                    &[
-                        &ev.tenant_id,
-                        &b.fulfilment_line_id,
-                        &b.expected_quantity,
-                        &b.seen_quantity,
-                        &b.occurred_at,
-                        &ev.client_event_id,
-                        &ev.recorded_by_id,
-                    ],
-                )
-                .await?;
+                let check: Uuid = tx
+                    .query_one(
+                        "INSERT INTO pack_check
+                             (tenant_id, fulfilment_line_id, expected_quantity, seen_quantity,
+                              occurred_at, client_event_id, recorded_by_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7)
+                         RETURNING id",
+                        &[
+                            &ev.tenant_id,
+                            &b.fulfilment_line_id,
+                            &b.expected_quantity,
+                            &b.seen_quantity,
+                            &b.occurred_at,
+                            &ev.client_event_id,
+                            &ev.recorded_by_id,
+                        ],
+                    )
+                    .await?
+                    .get(0);
+                if b.seen_quantity < b.expected_quantity {
+                    short(tx, &ev, check, b.fulfilment_line_id, b.expected_quantity, b.seen_quantity).await?;
+                }
                 Ok(())
             })
         })
         .await?;
     Ok(HttpResponse::NoContent().finish())
+}
+
+/// A short at the check is a finding (docs/packing-plan.md, settled 3): the
+/// line's shortfall in the findings queue, naming who picked it, there or in
+/// NetSuite. One open finding a line: counting it short again adds none.
+async fn short(
+    tx: &tokio_postgres::Transaction<'_>,
+    ev: &NewClientEvent,
+    check: Uuid,
+    line: Uuid,
+    expected: i64,
+    seen: i64,
+) -> Result<(), ApiError> {
+    let open: bool = tx
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM discrepancy d
+                              JOIN pack_check c ON c.id = d.pack_check_id
+                             WHERE c.fulfilment_line_id = $1
+                               AND d.state IN ('open', 'investigating'))",
+            &[&line],
+        )
+        .await?
+        .get(0);
+    if open {
+        return Ok(());
+    }
+    let about = tx
+        .query_one(
+            "SELECT ol.item_id,
+                    coalesce(f.reference, o.confirmation_number, o.external_ref, 'an order'),
+                    (SELECT ep.picked_by FROM external_pick ep WHERE ep.fulfilment_line_id = fl.id
+                      ORDER BY ep.observed_at DESC, ep.recorded_at DESC, ep.id DESC LIMIT 1),
+                    (SELECT p.display_name FROM stock_movement m
+                       JOIN location l ON l.id = m.from_location_id
+                       JOIN person p ON p.id = m.recorded_by_id
+                      WHERE m.fulfilment_line_id = fl.id
+                        AND l.kind IN ('pick_face', 'bulk', 'overflow')
+                      ORDER BY m.occurred_at DESC LIMIT 1)
+               FROM fulfilment_line fl
+               JOIN fulfilment f ON f.id = fl.fulfilment_id
+               JOIN order_line ol ON ol.id = fl.order_line_id
+               JOIN \"order\" o ON o.id = f.order_id
+              WHERE fl.id = $1",
+            &[&line],
+        )
+        .await?;
+    let (item, reference): (Uuid, String) = (about.get(0), about.get(1));
+    let picked = match (about.get::<_, Option<String>>(2), about.get::<_, Option<String>>(3)) {
+        (_, Some(here)) => format!("picked here by {here}"),
+        (Some(there), None) => format!("picked in NetSuite by {there}"),
+        (None, None) => "who picked it is not recorded".to_string(),
+    };
+    let detail = format!(
+        "short at the pack bench: {seen} seen of {expected} on {reference}, {picked}"
+    );
+    // Whole numbers as literals: the quantities are numeric and this crate
+    // has no NUMERIC ToSql, as the count's finding does.
+    tx.execute(
+        &format!(
+            "INSERT INTO discrepancy (
+                 tenant_id, kind, item_id, expected_quantity, observed_quantity,
+                 pack_check_id, detail, detected_at, detected_by_id, state)
+             VALUES ($1, 'short_pick', $2, {expected}::numeric, {seen}::numeric,
+                     $3, $4, now(), $5, 'open')"
+        ),
+        &[&ev.tenant_id, &item, &check, &detail, &ev.recorded_by_id],
+    )
+    .await?;
+    Ok(())
 }
 
 /// A line's newest check, or none.

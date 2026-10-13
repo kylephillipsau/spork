@@ -151,6 +151,8 @@ const PAIRS = [
   ["PackageTypeRow", ["PackageTypeRow"]],
   ["PickedElsewhere", ["PickedElsewhere"]],
   ["Preset", ["Preset"]],
+  ["Footprint", ["Footprint"]],
+  ["OnParent", ["OnParent"]],
   ["StatedSize", ["StatedSize"]],
   ["PackedRow", ["PackedRow"]],
   ["CartonSummary", ["CartonSummary"]],

@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 78, "the register holds 78 job-asserted invariants");
+    assert_eq!(seen.len(), 81, "the register holds 81 job-asserted invariants");
 }
 
 #[test]
@@ -969,6 +969,92 @@ fn j78_finds_a_place_inside_itself() {
     assert!(examined >= 2, "J78 examined {examined}");
     let said: Vec<&str> = findings.iter().map(|f| f.detail.as_str()).collect();
     assert!(said.iter().any(|d| d.contains("J78 outer")), "J78 did not report the loop: {said:?}");
+}
+
+/// J79 and J80 can fail: two packages each on the other, and four in a chain,
+/// written straight onto the fold as facts arriving out of order could leave it.
+#[test]
+fn j79_and_j80_find_a_loop_and_a_fourth_level() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    let ids: Vec<String> = (1..=6).map(|n| format!("7ac00000-0000-0000-0000-0000000079{n:02}")).collect();
+    let (a, b, w, p, c, d) = (&ids[0], &ids[1], &ids[2], &ids[3], &ids[4], &ids[5]);
+    client
+        .batch_execute(&format!(
+            "INSERT INTO package (id, tenant_id) VALUES
+                 ('{a}', '{J7X_TENANT}'), ('{b}', '{J7X_TENANT}'),
+                 ('{w}', '{J7X_TENANT}'), ('{p}', '{J7X_TENANT}'),
+                 ('{c}', '{J7X_TENANT}'), ('{d}', '{J7X_TENANT}');
+             UPDATE package SET parent_package_id = '{b}' WHERE id = '{a}';
+             UPDATE package SET parent_package_id = '{a}' WHERE id = '{b}';
+             UPDATE package SET parent_package_id = '{w}' WHERE id = '{p}';
+             UPDATE package SET parent_package_id = '{p}' WHERE id = '{c}';
+             UPDATE package SET parent_package_id = '{c}' WHERE id = '{d}';"
+        ))
+        .expect("a loop, and four in a chain");
+
+    let looped = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J79);
+    let deep = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J80);
+
+    client
+        .batch_execute(&format!(
+            "UPDATE package SET parent_package_id = NULL WHERE id IN ('{a}', '{b}', '{w}', '{p}', '{c}', '{d}');
+             DELETE FROM package WHERE id IN ('{a}', '{b}', '{w}', '{p}', '{c}', '{d}');"
+        ))
+        .expect("the test removes what it added");
+
+    let (_, _, found) = looped.expect("J79 runs");
+    let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|x| x.contains(a.as_str())), "J79 did not report the loop: {said:?}");
+    let (_, _, found) = deep.expect("J80 runs");
+    let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|x| x.contains(d.as_str())), "J80 did not report four deep: {said:?}");
+    assert!(!said.iter().any(|x| x.contains(c.as_str())), "three deep is the most, not too deep: {said:?}");
+}
+
+/// J81 can fail: a breakdown pallet booked, and a carton booked off a pallet
+/// that goes as one.
+#[test]
+fn j81_finds_what_is_booked_but_not_delivered() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    let ids: Vec<String> = (1..=4).map(|n| format!("7ac00000-0000-0000-0000-0000000081{n:02}")).collect();
+    let (breakdown, pallet, carton, consignment) = (&ids[0], &ids[1], &ids[2], &ids[3]);
+    client
+        .batch_execute(&format!(
+            "INSERT INTO package (id, tenant_id, breaks_down) VALUES
+                 ('{breakdown}', '{J7X_TENANT}', true), ('{pallet}', '{J7X_TENANT}', false),
+                 ('{carton}', '{J7X_TENANT}', false);
+             UPDATE package SET parent_package_id = '{pallet}' WHERE id = '{carton}';
+             INSERT INTO consignment (id, tenant_id) VALUES ('{consignment}', '{J7X_TENANT}');
+             INSERT INTO consignment_package (tenant_id, consignment_id, package_id) VALUES
+                 ('{J7X_TENANT}', '{consignment}', '{breakdown}'),
+                 ('{J7X_TENANT}', '{consignment}', '{carton}');"
+        ))
+        .expect("two bookings of what is not delivered");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J81);
+
+    client
+        .batch_execute(&format!(
+            "DELETE FROM consignment_package WHERE consignment_id = '{consignment}';
+             DELETE FROM consignment WHERE id = '{consignment}';
+             UPDATE package SET parent_package_id = NULL WHERE id = '{carton}';
+             DELETE FROM package WHERE id IN ('{breakdown}', '{pallet}', '{carton}');"
+        ))
+        .expect("the test removes what it added");
+
+    let (_, examined, found) = outcome.expect("J81 runs");
+    assert!(examined >= 2, "J81 examined {examined}");
+    let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|d| d.contains(breakdown.as_str()) && d.contains("broken down")), "{said:?}");
+    assert!(said.iter().any(|d| d.contains(carton.as_str()) && d.contains("carried")), "{said:?}");
 }
 
 /// J72 can fail, demonstrated rather than asserted.

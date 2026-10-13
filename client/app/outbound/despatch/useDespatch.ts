@@ -120,7 +120,7 @@ export function useDespatch(): DespatchBench {
 
     despatchCarton: (carton) =>
       press(`despatch:${carton.id}`, (act) =>
-        api.despatchCarton({ carton: carton.id, lines: carton.lines, act }),
+        api.despatchCarton({ carton: carton.id, lines: carton.lines, inside: carton.inside, act }),
       ),
 
     /**
@@ -137,7 +137,7 @@ export function useDespatch(): DespatchBench {
       press(`despatch-all:${packages.map((p) => p.id).join(",")}`, async (act) => {
         for (const carton of packages) {
           if (carton.despatched) continue;
-          await api.despatchCarton({ carton: carton.id, lines: carton.lines, act });
+          await api.despatchCarton({ carton: carton.id, lines: carton.lines, inside: carton.inside, act });
         }
       }),
   };

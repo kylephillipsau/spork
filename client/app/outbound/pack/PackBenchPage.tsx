@@ -20,7 +20,7 @@ import {
   Toolbar,
   type Column,
 } from "@ui/index";
-import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OwnCarton, PackedRow, Picture, StatedSize, Uuid } from "@domain/types";
+import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OnParent, OwnCarton, PackedRow, Picture, StatedSize, Uuid } from "@domain/types";
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { usePageTitle } from "@app/routing/title";
@@ -400,6 +400,8 @@ function Carton({
               {carton.own_carton_of} {carton.own_level === "each" ? "as it is" : carton.own_level === "inner" ? "inner pack" : "carton"}
             </Badge>
           )}
+          {carton.breaks_down && <Badge>Breakdown pallet</Badge>}
+          {carton.on && <Badge>On {onWhat(carton.on)}</Badge>}
           {carton.sealed ? (
             <Badge tone="success" dot>
               Sealed
@@ -507,6 +509,12 @@ function describeOwn(own: OwnCarton): string {
   if (own.listed_weight_g !== null) parts.push(`${kg(own.listed_weight_g)} listed`);
   if (own.source === "style" && own.style_code) parts.push(`the ${own.style_code} family's`);
   return parts.join(" · ");
+}
+
+/** "the breakdown pallet", "Carton 2 (PALLET)": what a carton is on (D246, D247). */
+function onWhat(on: OnParent): string {
+  if (on.breaks_down) return "the breakdown pallet";
+  return `${on.sequence ? `Carton ${on.sequence}` : "a package"}${on.name ? ` (${on.name})` : ""}`;
 }
 
 function sized(size: StatedSize): string {

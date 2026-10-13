@@ -16,3 +16,12 @@
   height: var(--ui-icon-lg);
   color: var(--ui-text-muted);
 }
+/* A pallet that goes as one, and what is on it (D247). */
+.onIt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.onIt > :last-child {
+  font-family: var(--ui-font);
+}

@@ -47,7 +47,13 @@ export function DespatchPage({ bench }: { bench: DespatchBench }) {
           <Waiting screen={st.screen} bench={bench} />
           {bench.booked && bench.booked.lines.length > 0 && <Manifest booked={bench.booked} />}
           {st.screen.booked.map((c) => (
-            <Booked key={c.consignment_id} consignment={c} bench={bench} />
+            <Booked
+              key={c.consignment_id}
+              consignment={c}
+              bench={bench}
+              // One primary action at a time: the first still to go.
+              first={c.consignment_id === st.screen.booked.find((b) => b.awaiting_despatch > 0)?.consignment_id}
+            />
           ))}
           <GoneToday gone={st.screen.gone_today} />
         </>
@@ -144,10 +150,27 @@ function Waiting({ screen, bench }: { screen: DespatchScreen; bench: DespatchBen
 
 /* ---- booked ---- */
 
-function Booked({ consignment: c, bench }: { consignment: BookedConsignment; bench: DespatchBench }) {
+function Booked({ consignment: c, bench, first }: { consignment: BookedConsignment; bench: DespatchBench; first: boolean }) {
   const gone = c.package_count - c.awaiting_despatch;
   const columns: Column<BookedCarton>[] = [
-    { key: "ref", header: "Carton", cell: (p) => p.reference, mono: true, grow: true },
+    {
+      key: "ref",
+      header: "Carton",
+      // A pallet that goes as one carries its cartons with it (D247).
+      cell: (p) =>
+        p.inside.length > 0 ? (
+          <span className={s.onIt}>
+            {p.reference}
+            <Badge>
+              Pallet · {p.inside.length} on it
+            </Badge>
+          </span>
+        ) : (
+          p.reference
+        ),
+      mono: true,
+      grow: true,
+    },
     { key: "seq", header: "Sequence", cell: (p) => p.sequence, align: "right", width: "100px" },
     {
       key: "state",
@@ -183,7 +206,7 @@ function Booked({ consignment: c, bench }: { consignment: BookedConsignment; ben
       }
       actions={
         c.awaiting_despatch > 0 ? (
-          <Button variant="primary" loading={bench.busy} onClick={() => void bench.despatchAll(c.packages)}>
+          <Button variant={first ? "primary" : "secondary"} loading={bench.busy} onClick={() => void bench.despatchAll(c.packages)}>
             Despatch {c.awaiting_despatch}
           </Button>
         ) : undefined

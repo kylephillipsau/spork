@@ -229,6 +229,28 @@ pub struct Preset {
     pub max_payload_g: Option<i64>,
     /// What it weighs empty, when the workspace says (D224).
     pub tare_weight_g: Option<i64>,
+    /// A pallet or skid's deck, the cartons it carries stand on (D246): its
+    /// length and width. Its height is the stack's, and its limit a carrier's
+    /// rule (D250). Absent for a box.
+    pub deck: Option<Footprint>,
+}
+
+/// A deck's length and width, in millimetres.
+#[derive(Serialize)]
+pub struct Footprint {
+    pub length_mm: i32,
+    pub width_mm: i32,
+}
+
+/// The package a carton is in or on now (D246), from its events.
+#[derive(Serialize)]
+pub struct OnParent {
+    pub id: Uuid,
+    /// Its preset's name: "PALLET", "medium box".
+    pub name: Option<String>,
+    pub sequence: Option<String>,
+    /// A breakdown pallet, carrying many orders (D247).
+    pub breaks_down: bool,
 }
 
 /// The preset's answer to how big a carton is, when it has one.
@@ -268,6 +290,13 @@ pub struct CartonSummary {
     /// never been on a scale.
     pub expected: Option<ExpectedWeight>,
     pub contents: Vec<PackedRow>,
+    /// `box`, `pallet` (a pallet or skid) or `as_is` (one of a product as it
+    /// is, D196).
+    pub kind: String,
+    /// A pallet broken down at the depot rather than delivered as one (D247).
+    pub breaks_down: bool,
+    /// What it is in or on now, when anything (D246).
+    pub on: Option<OnParent>,
 }
 
 /// What is physically in one carton, carried out of the read transaction so the
@@ -799,7 +828,8 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                                 dimensions_fixed AND coalesce(carrier_package_code, '')
                                     NOT IN ('PAL', 'SKI', 'SKD'),
                                 length_mm, width_mm, height_mm, suggested, max_payload_g,
-                                tare_weight_g
+                                tare_weight_g,
+                                coalesce(carrier_package_code, '') IN ('PAL', 'SKI', 'SKD')
                            FROM package_type
                           WHERE effective_from <= CURRENT_DATE
                           ORDER BY tenant_id IS NULL, name",
@@ -822,6 +852,12 @@ pub async fn presets(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<Pr
                         suggested: r.get(6),
                         max_payload_g: r.get(7),
                         tare_weight_g: r.get(8),
+                        deck: match (r.get::<_, bool>(9), r.get(3), r.get(4)) {
+                            (true, Some(length_mm), Some(width_mm)) => {
+                                Some(Footprint { length_mm, width_mm })
+                            }
+                            _ => None,
+                        },
                     })
                     .collect::<Vec<_>>())
             })
@@ -860,13 +896,22 @@ pub async fn cartons_on(
                                 w.kind = 'sealed', p.gross_weight_g, p.height_mm,
                                 pt.dimensions_fixed, pt.length_mm, pt.width_mm,
                                 pt.height_mm, pt.tare_weight_g, p.own_item_id, own_item.code,
-                                p.own_level::text
+                                p.own_level::text,
+                                CASE WHEN p.own_item_id IS NOT NULL THEN 'as_is'
+                                     WHEN coalesce(pt.carrier_package_code, '') IN ('PAL', 'SKI', 'SKD')
+                                         THEN 'pallet'
+                                     ELSE 'box' END,
+                                p.breaks_down,
+                                op.id, opt.name, op.sequence::text, op.breaks_down
                            FROM package p
                            LEFT JOIN package_type pt ON pt.id = p.package_type_id
                            LEFT JOIN item own_item ON own_item.id = p.own_item_id
                            -- Its status from its events (migration 138): putting a
                            -- sealed carton on a pallet leaves it sealed.
                            LEFT JOIN LATERAL (SELECT package_status_now(p.id) AS kind) w ON true
+                           -- What it is in or on now (D246).
+                           LEFT JOIN package op ON op.id = package_parent_now(p.id)
+                           LEFT JOIN package_type opt ON opt.id = op.package_type_id
                           WHERE p.fulfilment_id = $1
                             AND w.kind IS DISTINCT FROM 'voided'
                           ORDER BY p.sequence NULLS LAST, p.id",
@@ -975,6 +1020,14 @@ pub async fn cartons_on(
                         // Filled in below, once every item on the screen can be
                         // asked about together.
                         expected: None,
+                        kind: r.get(14),
+                        breaks_down: r.get(15),
+                        on: r.get::<_, Option<Uuid>>(16).map(|id| OnParent {
+                            id,
+                            name: r.get(17),
+                            sequence: r.get(18),
+                            breaks_down: r.get::<_, Option<bool>>(19).unwrap_or(false),
+                        }),
                         contents: contents
                             .iter()
                             .map(|c| {

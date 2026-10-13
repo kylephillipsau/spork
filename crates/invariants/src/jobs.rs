@@ -35,6 +35,7 @@ pub enum Id {
     J41, J42, J43, J44, J45, J46, J47, J48, J49, J50,
     J51, J52, J53, J54, J55, J56, J57, J58, J59, J60, J61, J62, J63, J64, J65, J66,
     J67, J68, J69, J70, J71, J72, J73, J74, J75, J76, J77, J78,
+    J79, J80, J81,
 }
 
 impl fmt::Display for Id {
@@ -52,7 +53,7 @@ pub const ALL: &[Id] = &[
     Id::J50, Id::J51, Id::J52, Id::J53, Id::J54, Id::J55, Id::J56, Id::J57,
     Id::J58, Id::J59, Id::J60, Id::J61, Id::J62, Id::J63, Id::J64, Id::J65, Id::J66,
     Id::J67, Id::J68, Id::J69, Id::J70, Id::J71, Id::J72, Id::J73, Id::J74, Id::J75,
-    Id::J76, Id::J77, Id::J78,
+    Id::J76, Id::J77, Id::J78, Id::J79, Id::J80, Id::J81,
 ];
 
 /// What a failing job-asserted invariant produces.
@@ -337,6 +338,15 @@ pub fn spec(id: Id) -> Invariant {
         J78 => Invariant { id, owners: "D173", asserts_absence: true,
             statement: "No place is inside itself, however far up its parents are followed. A loop has no position on the site, since a position is composed from the site down, and a breadcrumb through it never ends",
             check: Check::Run(checks::j78_no_place_is_inside_itself) },
+        J79 => Invariant { id, owners: "D24, D246", asserts_absence: true,
+            statement: "No package is inside itself, however far up the packages it is in or on are followed. The act refuses one from the events now; facts that arrive out of order can still fold into one, and a pallet in a loop has no place on the floor",
+            check: Check::Run(checks::j79_no_package_is_inside_itself) },
+        J80 => Invariant { id, owners: "D24, D246", asserts_absence: true,
+            statement: "No chain of packages is more than three deep: a wrap, a pallet and a carton (D24's nesting_too_deep). The act refuses a fourth level from the events now; this is the finding D24 asked for, for facts that arrive out of order",
+            check: Check::Run(checks::j80_three_deep_at_most) },
+        J81 => Invariant { id, owners: "D247", asserts_absence: true,
+            statement: "What is booked is what is delivered: no package on a consignment is in or on a pallet that goes as one, and no pallet broken down at the depot is on one. Each is either delivered itself or carried, never both",
+            check: Check::Run(checks::j81_what_is_booked_is_what_is_delivered) },
     }
 }
 
@@ -3431,6 +3441,102 @@ pub mod checks {
             .collect();
 
         let examined: i64 = c.query_one("SELECT count(*) FROM place", &[])?.get(0);
+        Ok((examined as usize, findings))
+    }
+
+    /// D246. Packages whose chain of parents comes back round, on the fold.
+    pub fn j79_no_package_is_inside_itself(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "WITH RECURSIVE up (id, parent, path, looped) AS (
+                     SELECT id, parent_package_id, ARRAY[id], false
+                       FROM package WHERE parent_package_id IS NOT NULL
+                     UNION ALL
+                     SELECT up.id, p.parent_package_id, up.path || p.id, p.id = ANY (up.path)
+                       FROM up JOIN package p ON p.id = up.parent
+                      WHERE NOT up.looped
+                 )
+                 SELECT DISTINCT id::text FROM up WHERE looped ORDER BY 1",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J79, "containment_conflict",
+                    format!("package {}: following what it is in or on leads back to it",
+                        r.get::<_, String>(0)))
+            })
+            .collect();
+        let examined: i64 = c
+            .query_one("SELECT count(*) FROM package WHERE parent_package_id IS NOT NULL", &[])?
+            .get(0);
+        Ok((examined as usize, findings))
+    }
+
+    /// D24, D246. Chains of packages four deep or more, on the fold.
+    pub fn j80_three_deep_at_most(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "WITH RECURSIVE up (id, parent, n, path) AS (
+                     SELECT id, parent_package_id, 1, ARRAY[id]
+                       FROM package WHERE parent_package_id IS NOT NULL
+                     UNION ALL
+                     SELECT up.id, p.parent_package_id, up.n + 1, up.path || p.id
+                       FROM up JOIN package p ON p.id = up.parent
+                      WHERE NOT p.id = ANY (up.path) AND up.n < 16
+                 )
+                 SELECT id::text, max(n) + 1 FROM up WHERE parent IS NOT NULL
+                  GROUP BY id HAVING max(n) + 1 > 3 ORDER BY 1",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J80, "nesting_too_deep",
+                    format!("package {} is {} deep; a wrap, a pallet and a carton is the most",
+                        r.get::<_, String>(0), r.get::<_, i32>(1)))
+            })
+            .collect();
+        let examined: i64 = c
+            .query_one("SELECT count(*) FROM package WHERE parent_package_id IS NOT NULL", &[])?
+            .get(0);
+        Ok((examined as usize, findings))
+    }
+
+    /// D247. Booked packages that are carried, or carry what is delivered.
+    pub fn j81_what_is_booked_is_what_is_delivered(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "WITH RECURSIVE up (id, parent, path) AS (
+                     SELECT p.id, p.parent_package_id, ARRAY[p.id]
+                       FROM consignment_package cp JOIN package p ON p.id = cp.package_id
+                     UNION ALL
+                     SELECT up.id, p.parent_package_id, up.path || p.id
+                       FROM up JOIN package p ON p.id = up.parent
+                      WHERE NOT p.id = ANY (up.path)
+                 )
+                 SELECT DISTINCT up.id::text, 'it is carried on a pallet that goes as one'
+                   FROM up JOIN package carrier ON carrier.id = up.parent
+                  WHERE NOT carrier.breaks_down
+                 UNION
+                 SELECT p.id::text, 'it is a pallet broken down at the depot'
+                   FROM consignment_package cp JOIN package p ON p.id = cp.package_id
+                  WHERE p.breaks_down
+                  ORDER BY 1",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J81, "containment_conflict",
+                    format!("package {} is booked and {}",
+                        r.get::<_, String>(0), r.get::<_, String>(1)))
+            })
+            .collect();
+        let examined: i64 = c.query_one("SELECT count(*) FROM consignment_package", &[])?.get(0);
         Ok((examined as usize, findings))
     }
 

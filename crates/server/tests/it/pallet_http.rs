@@ -178,4 +178,69 @@ async fn cartons_go_onto_pallets_three_deep_at_most() {
     let (status, open) = call(&app, contain(another, breakdown, None)).await;
     assert_eq!(status, 200, "{open}");
     assert!(open["warnings"].to_string().contains("seal and label it first"), "{open}");
+
+    // ── what is delivered is what is booked (D247) ───────────────────────
+    for (n, p) in [pallet, wrap].into_iter().enumerate() {
+        let (status, _) = call(
+            &app,
+            post(format!("/packages/{p}/seal"), json!({
+                "client_event_id": Uuid::now_v7(), "occurred_at": format!("2026-10-14T10:3{n}:00Z")
+            })),
+        )
+        .await;
+        assert_eq!(status, 200);
+    }
+    let book = |packages: Vec<Uuid>| post("/consignments".into(), json!({ "id": Uuid::now_v7(), "package_ids": packages }));
+    let (status, riding) = call(&app, book(vec![carton])).await;
+    assert_eq!(status, 400, "a carton on a pallet that goes as one: {riding}");
+    assert!(riding.to_string().contains("goes with the pallet"), "{riding}");
+    let (status, broken) = call(&app, book(vec![breakdown])).await;
+    assert_eq!(status, 400, "{broken}");
+    assert!(broken.to_string().contains("broken down"), "{broken}");
+    let (status, booked) = call(&app, book(vec![wrap])).await;
+    assert_eq!(status, 200, "the outermost, which goes as one: {booked}");
+
+    // ── despatched whole: the carton by its line, the rest by themselves ─
+    db.execute("SELECT projection_run_all(tenant_id) FROM fulfilment WHERE id = $1", &[&fulfilment])
+        .await
+        .expect("fold");
+    let (_, despatch) = call(
+        &app,
+        test::TestRequest::get().uri("/sites/a5170000-0000-0000-0000-000000000001/despatch").insert_header(auth.clone()),
+    )
+    .await;
+    let wrap_row = despatch["booked"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|c| c["packages"].as_array().unwrap().iter())
+        .find(|p| p["id"] == wrap.to_string())
+        .cloned()
+        .expect("the wrap is booked");
+    let on_it = wrap_row["inside"].as_array().unwrap();
+    assert_eq!(on_it.len(), 2, "the pallet and the carton on it: {wrap_row}");
+    let carton_row = on_it.iter().find(|p| p["id"] == carton.to_string()).expect("the carton");
+    assert_eq!(carton_row["lines"][0]["quantity"], 6, "{carton_row}");
+
+    let (status, line_gone) = call(
+        &app,
+        post(format!("/packages/{carton}/despatch"), json!({
+            "fulfilment_line_id": line, "quantity": 6,
+            "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T11:00:00Z"
+        })),
+    )
+    .await;
+    assert_eq!(status, 200, "{line_gone}");
+    for p in [pallet, wrap] {
+        let (status, gone) = call(
+            &app,
+            post(format!("/packages/{p}/despatch"), json!({
+                "client_event_id": Uuid::now_v7(), "occurred_at": "2026-10-14T11:00:01Z"
+            })),
+        )
+        .await;
+        assert_eq!(status, 200, "{gone}");
+        assert_eq!(gone["package_status_ledger"], "despatched", "{gone}");
+        assert_eq!(gone["warnings"].as_array().unwrap().len(), 0, "nothing of its own left behind: {gone}");
+    }
 }

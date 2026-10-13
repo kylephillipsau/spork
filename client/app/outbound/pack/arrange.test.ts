@@ -64,6 +64,7 @@ function box(name: string, [l, w, h]: Dims | [number, number, number], suggested
     suggested,
     max_payload_g,
     tare_weight_g: null,
+    deck: null,
   };
 }
 
@@ -229,7 +230,7 @@ test("a thing too big for every box is said, and nothing else is lost", () => {
 });
 
 test("a preset with no size is never suggested", () => {
-  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null }]);
+  const a = arrange([line("APR", 1, [each([280, 220, 30])])], [{ id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 } }]);
   assert.deepEqual(a.boxes, []);
   assert.deepEqual(a.oversize.map((o) => o.item_code), ["APR"]);
 });
