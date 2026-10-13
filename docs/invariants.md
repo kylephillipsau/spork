@@ -221,6 +221,9 @@ examined nothing.
 | J76 | No bin sits in a cell outside its place's grid. Which bin is in which cell is the **exact** half of the layout (D173): it comes from the labels on the racks, and a pick list is built from it. A grid shrunk under its bins would leave them in bays that are no longer drawn, so the writer moves or unplaces them first, and this is where a second writer that does not is caught | D173 | ● |
 | J77 | Once a site has a layout, every active bin there sits in a cell. Before the first place is drawn nothing is missing, because nothing was promised; after it, a bin with no cell is one the map cannot send anybody to. It is the Unplaced tray's population, and a finding rather than a refusal because the bin list arrives from another system and may name bins before anybody has put them anywhere | D173 | ● |
 | J78 | No place is inside itself, however far up its parents are followed. A position on the site is composed from the site down (D173), so a loop has none, and a breadcrumb through it never ends. The reads guard against a loop so it cannot hang a request; this is what says one exists | D173 | ● |
+| J79 | No package is inside itself, however far up the packages it is in or on are followed. The act that puts one package in or on another refuses a loop from the events as they stand; facts that arrive out of order, a phone that was offline and a second phone that was not, can still fold into one, and a pallet in a loop has no place on the floor and no parent to be despatched with | D24, D246 | ● |
+| J80 | No chain of packages is more than three deep: a wrap, a pallet and a carton. The act refuses a fourth level; this is the finding D24 named `nesting_too_deep`, for the facts that arrive out of order and fold into one anyway | D24, D246 | ● |
+| J81 | What is booked is what is delivered. No package on a consignment is in or on a pallet that goes as one, because the pallet carries it and booking both counts it twice; and no pallet broken down at the depot is on one, because its cartons go on with their own orders. The consignment refuses both from the events now; this catches a carton put on a pallet after it was booked | D247 | ● |
 
 ---
 
@@ -263,13 +266,13 @@ appears here as its current whole text.
 | | |
 |---|---|
 | Structural | 56 |
-| Job-asserted | 78 |
-| **Total** | **134** |
-| Marked for vacuity | 75 |
+| Job-asserted | 81 |
+| **Total** | **137** |
+| Marked for vacuity | 78 |
 | `specified` | 22 |
-| `implemented` | 112 |
+| `implemented` | 115 |
 
-Seventy-five of a hundred and thirty-four assert an absence and pass on an empty population.
+Seventy-eight of a hundred and thirty-seven assert an absence and pass on an empty population.
 That is the number worth watching, because those are the entries that will report
 success on the day they stop being checked.
 

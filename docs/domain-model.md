@@ -16191,7 +16191,8 @@ again from its card if it looks stretched.
 
 *Adopted 2026-10-12, with migration 136. D244 to D252 are one design for the
 pack bench, decided together; the order they are built in closes D252. This
-one is built; the rest were decided ahead of the build.*
+one is built, and its short became a finding with migration 140; the rest
+were decided ahead of the build.*
 
 **The finding.** The bench records what goes into a carton, and nothing on it
 asks the packer whether what reached the bench is what the order asked for. A
@@ -16215,6 +16216,10 @@ it can be sealed.
   it, here or in NetSuite (D172). Over, the extra goes back. A wrong item is
   taken out to its bin, as taking out works now. A check made against another
   count than the line now commits asks to be made again.
+- **A short is a finding** (`short_pick`, migration 140): the line's
+  shortfall goes to the findings queue, naming the check, the order and who
+  picked it, here or in NetSuite. A line counted short again while its
+  finding is open adds none.
 - **The weight is the second check.** A carton's typed weight (the scale is
   read by eye) is compared with what it should weigh: its contents' recorded
   weights and the box's empty weight (D224). Within the tolerance, it agrees.
@@ -16290,8 +16295,9 @@ if we want to".
 ### D246: Units move between cartons, and a carton goes onto a pallet
 
 *Adopted 2026-10-12, with migrations 138 and 139. Amends D24, D100 and J68.
-Built on the server 2026-10-14, but for the bench read's parent and kind and
-the pallet presets' sizes; the bench does not call it yet.*
+Built on the server 2026-10-14, the bench read's parent and kind, the pallet
+presets' sizes and repacks to and from the bench following in the plan's M1
+(`docs/packing-plan.md`); the bench does not call it yet.*
 
 **The finding.** Containment is there: `POST /packages/{id}/contain` writes a
 `contained` event and no movement (D166), and placing the package anywhere
@@ -16308,7 +16314,12 @@ bench's own code.
   to another package, keeping its lot, status and owner; the shape D99
   already counts as not picked again. Out of or into a sealed carton it is
   recorded with "open it first" (D5); into the carton it is in, or one
-  despatched or void, it is refused.
+  despatched or void, it is refused. Its lot, status and owner are what the
+  movements left in the carton, not the stock projection's.
+- **Taking out puts the units on the bench**: a repack from a package to the
+  site's pack location, and from there into a carton again, without a pick
+  (the plan's settled 2). Any other location is refused: a bin is reached by
+  taking out as it works now.
 - **What a package holds is said once** (`package_line_content`, migration
   138): what went into it of each line, less what has since gone from it into
   another holder, never below nought. Units despatched from it are still what
@@ -16326,7 +16337,10 @@ bench's own code.
   (`package_parent_now`, migration 139) rather than the lagging fold, as it
   refused a despatched or void one before. Onto a sealed pallet, an order's
   pallet with another order's carton, or an open carton onto a breakdown
-  pallet (D247), it is recorded and said (D5).
+  pallet (D247), it is recorded and said (D5). Facts that arrive out of
+  order can still make a loop or a fourth level, so two invariants find them:
+  J79, no package inside itself, and J80, three deep at most (D24's
+  `nesting_too_deep`).
 - **Where it went on**: the act can say the spot (`at`: from the front left
   corner of the pallet's deck, up from it, and turned a quarter round or not;
   `package_event.at_x_mm`, `at_y_mm`, `at_z_mm`, `turned`). Front is where
@@ -16348,8 +16362,9 @@ say what happened, not a take-out and a new pick.
 
 *Adopted 2026-10-12, with migration 139. Extends D6, D15 and D224. Built so
 far: `package.breaks_down`, said when the pallet is made (`POST /packages`
-refuses one that names an order), and the containment warnings D246 lists.
-Delivery, despatch, booking and the pallet sheet are still to build.*
+refuses one that names an order), the containment warnings D246 lists, and
+in the plan's M1 what is delivered, its consignment and its despatch. The
+booking line and the pallet sheet are still to build (M6).*
 
 **Decision.** A pallet or skid says whether it is **delivered as one** or
 **broken down** at the carrier's depot into the parcels on it, each delivered
@@ -16357,10 +16372,17 @@ on its own (`package.breaks_down`). That one fact decides:
 
 - **What is delivered**: the pallet, or each parcel on it. Labels must be
   seen on what is delivered (D250). A consignment carries what is delivered,
-  and nothing goes both as itself and inside something delivered as one (an
-  invariant).
+  and nothing goes both as itself and inside something delivered as one.
+  Booking refuses a breakdown pallet ("book its cartons, each with its
+  order"), a carton on a pallet that goes as one, and a pallet with something
+  on it already booked; J81 finds one that got through.
 - **Despatch**: despatching a pallet despatches everything on it, each line
-  in each package.
+  in each package, and then each package itself, the pallet last
+  (`POST /packages/{id}/despatch` with no line: a `despatched` event and no
+  movement), one act each. The despatch read lists what is on each pallet,
+  carton by carton with their lines. A breakdown pallet's cartons are each
+  consigned with their order; the pallet is despatched when it leaves (the
+  plan's settled 7).
 - **The booking** (D224): a pallet delivered as one is one line: its weight
   the parcels' and the pallet's own unless it is weighed, its height the
   plan's and the base's, confirmed by hand. A broken-down pallet adds nothing

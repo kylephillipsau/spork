@@ -116,7 +116,8 @@ booking (D224).
 Under Outbound, Packing, an order opens on the pack bench:
 - check what came to the bench, a line at a time: each says what should be
   there in the units on the box, Enter confirms it, and a number typed first
-  says what was seen; a short line is planned for what is there (D244);
+  says what was seen; a short line is planned for what is there, and goes
+  to the findings queue for whoever picked it (D244);
 - put each line into a carton, or ship whole cartons as they are (D196);
 - see the whole order planned in boxes, in 3D or as a list, every unit
   accounted for (D195, D202);
@@ -126,9 +127,10 @@ Under Outbound, Packing, an order opens on the pack bench:
 - seal it once what is in it is checked, and copy the parcels' sizes and
   weights for the booking (D224).
 
-Dragging an order onto boxes and pallets, breakdown pallets built through the
-day, and carriers' pallet rules as settings are decided and not yet built
-(D245 to D252).
+Despatch books a pallet that goes as one as itself, with the cartons on it,
+and despatches them together (D247). Dragging an order onto boxes and
+pallets, breakdown pallets built through the day, and carriers' pallet rules
+as settings are decided and not yet built (D245 to D252).
 
 ## Picking from the tickets
 

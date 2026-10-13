@@ -8,6 +8,15 @@ toolchain, tests and layout.
 
 ## State
 
+- 2026-10-14, M1 of [packing-plan.md](./packing-plan.md), the rest of D246
+  and D247 on the server (migration 140), on a fresh database (`spork_m1`):
+  - every migration builds and reverses, 140 of them;
+  - the server's unit tests pass (311), and its integration tests 161 of 162,
+    the one failure the trolley pick below again;
+  - the invariant suite passes but for `structural_invariants_hold`, S7 and
+    S10 as before; J79 to J81 are new and hold;
+  - the client's tests (239), contract and laws pass, and the render gate
+    passes over every fixture (142 fixtures, 460 renders).
 - 2026-10-14, the server side of D246 and the start of D247 (migrations 138
   and 139), on a fresh database (`spork_d246run`):
   - every migration builds and reverses, 139 of them;
@@ -20,8 +29,10 @@ toolchain, tests and layout.
 - Spork `main` is pushed through b435fef: checking at the bench (D244), the
   design for the rest of packing (D245 to D252), the brand, the theme, page
   titles, the round-wrap fixes to D240, and on 2026-10-13 orders by item and
-  who packed (D253, D254). The live database was at migration 137 after
-  that. Migrations 138 and 139 are not yet live.
+  who packed (D253, D254), and on 2026-10-14 D246's server side (a38be6f).
+  The live database is at migration 139 since 08:50 on 2026-10-14.
+- The build plan for the rest is [packing-plan.md](./packing-plan.md): seven
+  milestones, each with what done means. Feature complete is D244 to D252.
 - On 2026-10-12:
   - every migration builds and reverses, from empty and with both fixtures'
     rows (`verify-migrations.sh` against `spork_verify`, 136);
@@ -37,6 +48,35 @@ toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**Later on 2026-10-14: M1, the rest of D246 and D247 on the server**
+- Despatching a pallet: `POST /packages/{id}/despatch` without a line writes
+  the package's own `despatched` event (`despatch_itself` in `routes.rs`),
+  saying one already gone or still holding units of its own; a void one is
+  refused. The despatch screen sends each carton's lines first, then empty
+  pallets, then the pallet itself (`despatchCarton` with `inside`).
+- The despatch read lists what is on each pallet, carton by carton with
+  their lines (`BookedCarton.inside`), and leaves cartons on a pallet that
+  goes as one out of Waiting to consign. A booked pallet shows "Pallet · N on
+  it".
+- `POST /consignments` refuses a breakdown pallet, a carton on a pallet that
+  goes as one, and a pallet with something on it already booked.
+- Repacks to and from the bench: `POST /repacks` takes `from_package_id` or
+  `from_location_id`, and `to_package_id` or `to_location_id`; a location
+  must be the site's pack location. Lot, status and owner come from the
+  movements in the holder.
+- A short at the check is a `short_pick` finding naming the check
+  (`discrepancy.pack_check_id`, migration 140), one open finding a line.
+- The bench read: each parcel's `kind` (box, pallet or as it is),
+  `breaks_down` and `on` (its parent); pallet presets give their `deck`.
+  The bench shows "Breakdown pallet" and "On …".
+- Invariants J79 (no package inside itself), J80 (three deep at most,
+  `nesting_too_deep`) and J81 (what is booked is what is delivered).
+- The canvas gains the despatch screen with pallets and the pallet sheet.
+- Tests: `pallet_http.rs` (booking refused and allowed, `inside`, despatching
+  the carton, the pallet and the wrap), `repack_http.rs` (out onto the bench
+  and back in, a shelf refused), `pack_check_http.rs` (the finding), and
+  `job_asserted.rs` (a loop, a fourth level, a booked carton on a pallet).
 
 **On 2026-10-14: units between cartons, cartons onto pallets (D246; D247 begun)**
 - `POST /repacks` (`repacking.rs`): units of a line from a package-held cell
@@ -126,6 +166,7 @@ toolchain, tests and layout.
   https://claude.ai/artifact/9eMaJSZBNHoRe5KHjTq5TY. It has five boards: the
   board, checking, a breakdown pallet, Workspace › Boxes with heights and
   limits, and Workspace › Build rules. The user approved them on 2026-10-12.
+  On 2026-10-14 two more: despatch with pallets, and the pallet sheet (A4).
 
 **Round things (D240, amended in place)**
 - A lid and base are the largest outline that is an ellipse, straightened to
@@ -199,8 +240,6 @@ toolchain, tests and layout.
 - **What should be there is a guess.** Checking guesses it from the line's
   packs, largest first. Goods picked loose can arrive otherwise, and the
   count is one number per line, in the line's unit.
-- **A short is not raised as a finding.** It shows on the check card, in the
-  plan and in the tally only.
 - **A check belongs to the line, not to a carton.** A line split over two
   cartons is checked once.
 - **The weight explanation is narrow.** It names one thing miscounted, by up
@@ -208,12 +247,15 @@ toolchain, tests and layout.
   weight, so no verdict.
 - **Packing is still the form bench** with the client-side plan (D195 to
   D202). Nothing on the bench calls `POST /repacks` or
-  `POST /packages/{id}/contain` yet, and pallets are box types with no size
-  on the bench.
+  `POST /packages/{id}/contain` yet. The bench read gives a pallet preset's
+  deck, and the plan does not use it.
 - **Taking out after a repack undoes the repack.** Take out reverses the
   picks into a carton, newest first; in a carton units were repacked into,
   that is the repack, so they go back to the carton they came from rather
-  than to their bin.
+  than to their bin. The board (M3) takes out onto the bench with a repack
+  instead.
+- **The pallet sheet is a mock.** Booking a pallet that goes as one gives it
+  no line of its own yet (its weight and height); that is M6.
 - **Outstanding for the user:**
   - the board grade stamp on the box stock;
   - a floor test of each box's walls and lid;
@@ -233,9 +275,8 @@ toolchain, tests and layout.
 - **`scripts/verify-migrations.sh` drops the schema of whatever
   `DATABASE_URL` names, and its default is the working `spork` database.**
   Point it at `spork_verify`.
-- **The test database** `spork_fresh` is at migration 136. It has been
-  written to, so the two failures above are expected there. Build a fresh one
-  for a clean run.
+- **The test database** `spork_m1` is at migration 140. It has been written
+  to, so build a fresh one for a clean run.
 - **Deploying while the LAN server runs:**
   1. Rename the running `target\release\spork-server.exe` and
      `spork-scheduler.exe` to `*.running.exe`.
@@ -252,13 +293,10 @@ toolchain, tests and layout.
 
 ## Next
 
-1. Check real orders at the bench, and set the tolerance if 3% is wrong.
-2. **The rest of D246 and D247 on the server** (repacks, containment and
-   `breaks_down` landed 2026-10-14):
-   - despatching a pallet whole, and consignments of what is delivered;
-   - the invariants: no loops, depth, nothing consigned twice;
-   - the bench read gains each parcel's parent and kind, and pallet presets
-     give their footprint and build height.
+1. Check real orders at the bench, and set the tolerance if 3% is wrong. A
+   short now lands in the findings queue: see that it names the right picker.
+2. M1 is on the server, so a real order tries only the short finding and
+   despatch as it was; pallets are put together at the bench from M3.
 3. **D252:** `package_type.cut_from_id` and the heights in Workspace › Boxes,
    with the user's list loaded. Then box types photographed (the observable's
    package-type arm) and the bottom-anchored crop in 3D.
