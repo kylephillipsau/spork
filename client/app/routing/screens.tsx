@@ -39,6 +39,7 @@ import { AccountPage } from "@app/account/AccountPage";
 import { KeysPage } from "@app/account/KeysPage";
 import { useKeys } from "@app/account/useKeys";
 import { TokensPage } from "@app/admin/TokensPage";
+import { AdministrationPage } from "@app/admin/AdministrationPage";
 import { BackupPage } from "@app/admin/BackupPage";
 import { PeoplePage } from "@app/admin/PeoplePage";
 import { ImportPage } from "@app/admin/ImportPage";
@@ -46,6 +47,7 @@ import { useImport } from "@app/admin/useImport";
 import { WorkspacePage } from "@app/admin/WorkspacePage";
 import { useWorkspace } from "@app/admin/useWorkspace";
 import { useTokens } from "@app/admin/useTokens";
+import { useAdministration } from "@app/admin/useAdministration";
 import { useBackup } from "@app/admin/useBackup";
 import { usePeople } from "@app/admin/usePeople";
 import { usePassword } from "@app/account/usePassword";
@@ -267,6 +269,11 @@ function LiveBackup() {
   return <BackupPage bench={useBackup()} />;
 }
 
+/** How the work is going, person by person (D254): an administrator's. */
+function LiveAdministration() {
+  return <AdministrationPage bench={useAdministration()} />;
+}
+
 /**
  * Finding an order (D39, D44). The reference lives in the query string rather
  * than the path: a filter is not a place, and `?reference=` keeps `/orders`
@@ -388,6 +395,7 @@ const RENDER: Record<string, (params: Params) => ReactElement> = {
   tokens: () => <LiveTokens />,
   people: () => <LivePeople />,
   backup: () => <LiveBackup />,
+  administration: () => <LiveAdministration />,
   workspace: () => <LiveWorkspace />,
   import: () => <LiveImport />,
   keys: () => <LiveKeys />,

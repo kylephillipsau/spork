@@ -7120,6 +7120,55 @@ pub async fn import_open_orders(
     Ok(HttpResponse::Ok().json(OpenOrdersImportReport { survey, loaded, arrival: arrival.map(FileArrival::from), refused }))
 }
 
+#[derive(Serialize, Debug)]
+pub struct PackedImportReport {
+    pub loaded: crate::importing::packed::PackedLoaded,
+    pub arrival: Option<FileArrival>,
+}
+
+/// Load who packed what, as NetSuite says (D254), into `reported_packing`:
+/// the fulfilments it has packed lately, each with its Packed By. Kept once
+/// seen rather than replaced; see [`crate::importing::packed`].
+///
+/// **An empty load is an answer**, and changes nothing: nothing is removed by
+/// a load, so a search that failed costs nothing either.
+#[post("/import/packed")]
+pub async fn import_packed(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<ImportQuery>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let machine = machine(&state, &req).await?;
+    let Some(as_at) = query.as_at else {
+        return Err(ApiError::Rejected("as_at is required".into()));
+    };
+    let Some(source) = query.source.clone().filter(|s| !s.trim().is_empty()) else {
+        return Err(ApiError::Rejected("source is required".into()));
+    };
+    let rows = crate::importing::packed::read(body.as_ref()).map_err(ApiError::Rejected)?;
+
+    let mut scope = crate::tenancy::TenantScope::begin(&state.pool, machine.tenant_id).await?;
+    let tenant = scope.tenant();
+    let apply = query.apply;
+    let actor = crate::importing::received::Actor::Token(machine.token_id);
+    let filename = query.filename.clone();
+    let (loaded, arrival) = scope
+        .run(move |tx| {
+            Box::pin(async move {
+                let arrival = store(tx, tenant, actor, filename.as_deref(), &body, apply).await?;
+                let loaded = crate::importing::packed::load(tx, tenant, &rows, as_at, &source, apply)
+                    .await
+                    .map_err(ApiError::Rejected)?;
+                read_through(tx, arrival).await?;
+                Ok((loaded, arrival))
+            })
+        })
+        .await?;
+
+    Ok(HttpResponse::Ok().json(PackedImportReport { loaded, arrival: arrival.map(FileArrival::from) }))
+}
+
 /// Load the bin list, from the CSV the system of record exports.
 ///
 /// **The body is the file, unaltered.** Re-shaping it into JSON first would put
@@ -9730,6 +9779,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(import_stock)
         .service(import_item_details)
         .service(import_open_orders)
+        .service(import_packed)
+        .service(crate::packers::packed_by)
         .service(crate::to_pick::to_pick)
         .service(import_fulfilment)
         .service(void_package)

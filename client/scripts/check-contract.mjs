@@ -338,6 +338,8 @@ const PAIRS = [
   ["ReachSaid", ["ReachSaid"]],
   // The workspace's people (D205).
   ["WorkspacePerson", ["WorkspacePerson"]],
+  ["PackedByPerson", ["PackedByPerson"]],
+  ["PackerCounts", ["PackerCounts"]],
   ["PersonAdded", ["PersonAdded"]],
 ];
 

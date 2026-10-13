@@ -29,6 +29,18 @@ toolchain, tests and layout.
 
 ## What landed
 
+**Since, on 2026-10-13: orders by item, and who packed (D253, D254)**
+- The Orders search takes item codes when no order has the number typed:
+  the latest 50 orders at the site with every code, a column a code saying
+  how many (`OrderMatch.asked_for`). An item's page has "Orders with it".
+- Settings › Administration, for administrators: orders packed per person
+  today, this week and in 30 days (`GET /packed-by`, `packers.rs`), from
+  NetSuite's Packed By. Bridge 0.11.0 sends Packed or Shipped fulfilments of
+  the last five weeks every five minutes (`POST /import/packed`,
+  `importing/packed.rs`, `reported_packing`, migration 137). Rows are kept
+  once seen; when one was packed is when Spork first knew (D254).
+- Tests: `pack_walk_http.rs` (search by item) and `packed_http.rs`.
+
 **Checking at the bench (D244, migration 136)**
 - A card above To pack, "Check what came to the bench" (`Checks.tsx`). Each
   line says what should be there in the units on the box ("3 cartons of 10",

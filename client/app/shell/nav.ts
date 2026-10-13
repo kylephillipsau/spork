@@ -9,6 +9,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowDownToLine,
+  ChartBar,
   Boxes,
   DatabaseBackup,
   Users,
@@ -93,6 +94,7 @@ export const SETTINGS: NavGroup = {
     { id: "tokens", label: "Import tokens", path: "/tokens", icon: KeyRound },
     { id: "people", label: "People", path: "/people", icon: Users, administrators: true },
     { id: "backup", label: "Backup", path: "/backup", icon: DatabaseBackup, administrators: true },
+    { id: "administration", label: "Administration", path: "/administration", icon: ChartBar, administrators: true },
   ],
 };
 

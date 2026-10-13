@@ -28,6 +28,7 @@ import type {
   PackageTypeRow,
   PersonAdded,
   WorkspacePerson,
+  PackedByPerson,
   BackupSummary,
   SameAsSaid,
   ItemView,
@@ -1056,6 +1057,9 @@ export const api = {
 
   /** The workspace's people, current first (D205). An administrator's. */
   people: () => send<WorkspacePerson[]>("GET", "/workspace/people"),
+
+  /** How many orders each person packed today, this week and in 30 days (D254). An administrator's. */
+  packedBy: () => send<PackedByPerson>("GET", "/packed-by"),
 
   /** Add a person, or bring back one who left (D205). */
   addPerson: (input: { display_name: string; email: string; password: string; role: WorkspacePerson["role"] }) =>

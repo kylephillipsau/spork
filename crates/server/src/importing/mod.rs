@@ -27,6 +27,7 @@ pub mod bins;
 pub mod item_details;
 pub mod items;
 pub mod open_orders;
+pub mod packed;
 pub mod orders;
 pub mod picks;
 pub mod received;

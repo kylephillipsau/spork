@@ -16631,3 +16631,44 @@ one item: "Surely there could be a feature that we could use to find a recent
 order by the products that it contains? That would be super useful". One box
 that already finds orders is where the question goes. A second screen for it
 would be a second way to find an order.
+
+### D254: Who packed what, as NetSuite says, for administrators
+
+*Adopted 2026-10-13, with migration 137. Built. Extends D192, D212 and D231.*
+
+**The finding.** Orders are packed in NetSuite. The fast fulfilment script
+sets each item fulfilment's **Packed By** to the name the packer chose to pack
+as, with Picked By and the status, in the one save. Every save is made under
+one shared NetSuite login, so Packed By is the only record of who packed.
+Spork learns that a fulfilment it knows was packed, and not by whom. About
+one fulfilment in five never reaches Spork at all, because it went to Packed
+before Spork saw it Picked.
+
+**Decision.**
+
+- **The Bridge reports what NetSuite has packed** (0.11.0). Every five
+  minutes it reads each fulfilment at its location that is Packed or Shipped
+  and changed in the last five weeks, with its Packed By, and sends them to
+  `POST /import/packed`.
+- **Kept once seen, not replaced** (`reported_packing`). This is a record of
+  what happened, so a load adds and never removes, and only Packed By follows
+  NetSuite.
+- **When it was packed is Spork's**, because NetSuite keeps no time for it. It
+  is when Spork saw NetSuite close a fulfilment it knew, or else when a load
+  first reported it. That is within a sync of the packing, since nobody packs
+  without NetSuite open. The feed's first load reports weeks gone, so it dates
+  each row by the fulfilment's date, at the start of the site's day.
+- **Counted for administrators only** (D192), on a screen of their own,
+  Settings › Administration: orders packed per person today, this week (from
+  Monday) and in the last 30 days, by the site's clock, as bars. One read
+  answers all three (`GET /packed-by`). A fulfilment packed naming nobody is
+  counted as "Not recorded".
+- **Not on the dashboard.** A count per person measures people, not work
+  waiting (D112).
+
+**Why.** The user, 2026-10-13: "Is it also possible to get the details of
+the number of orders that have been packed by each member and graph them on
+the dashboard?", and then: "it probably might be better to put this in an
+administration dashboard instead of the main one". Counting from NetSuite's
+own record of packed fulfilments counts the one in five Spork never saw.
+Counting from Spork's closing of fulfilments would not.

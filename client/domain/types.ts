@@ -2111,6 +2111,26 @@ export interface WorkspacePerson {
   you: boolean;
 }
 
+/** `GET /packed-by`: how many orders each person packed, as NetSuite's
+ *  Packed By says (D254). An administrator's. */
+export interface PackedByPerson {
+  /** Everybody who packed in the last 30 days, most first. */
+  packers: PackerCounts[];
+  /** When NetSuite last said what it had packed; null before the Bridge has sent it. */
+  as_at: string | null;
+  /** The session names no site, so nothing was counted. */
+  no_site: boolean;
+}
+
+/** One packer's counts, by the site's own day and week. `packed_by` is null for
+ *  fulfilments NetSuite packed naming nobody. */
+export interface PackerCounts {
+  packed_by: string | null;
+  today: number;
+  this_week: number;
+  last_30_days: number;
+}
+
 /** `POST /workspace/people`. */
 export interface PersonAdded {
   person_id: Uuid;

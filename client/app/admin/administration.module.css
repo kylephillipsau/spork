@@ -1,0 +1,78 @@
+.body {
+  padding: var(--ui-space-4);
+}
+.total {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+.total strong {
+  color: var(--ui-text);
+  font-weight: 650;
+}
+
+/* One row a person: the name, then the bar from its baseline with the count
+   at its end. The whole row is the hover and focus target, not the bar. */
+.bars {
+  display: grid;
+  gap: var(--ui-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border-radius: var(--ui-radius);
+  outline-offset: 2px;
+}
+.row:hover,
+.row:focus-visible {
+  background: var(--ui-surface-hover);
+}
+.name,
+.nobody {
+  overflow: hidden;
+  font-size: var(--ui-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nobody {
+  color: var(--ui-text-muted);
+  font-style: italic;
+}
+.track {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-width: 0;
+}
+/* At most 16px thick, square at the baseline and rounded at the data end.
+   Its share is of the track less room for the count. */
+.bar,
+.barNobody {
+  flex: none;
+  width: calc((100% - 4rem) * var(--share));
+  min-width: 2px;
+  height: 16px;
+  border-radius: 0 4px 4px 0;
+  background: var(--ui-accent);
+}
+.barNobody {
+  background: var(--ui-border-strong);
+}
+.count {
+  font-size: var(--ui-text-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--ui-space-1);
+  }
+}

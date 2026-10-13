@@ -286,8 +286,8 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-Two hundred and fifty-three recorded decisions, a hundred and thirty-four rules the design must always
-satisfy, and a database that a hundred and thirty-six migrations build and reverse cleanly, both
+Two hundred and fifty-four recorded decisions, a hundred and thirty-four rules the design must always
+satisfy, and a database that a hundred and thirty-seven migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
@@ -310,7 +310,7 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of a hundred and twenty-eight endpoints and a
+policy resolver. Above it sits an API of a hundred and thirty endpoints and a
 projection scheduler. Above that is a React client of thirty-one screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, which checks each line and each carton's
@@ -332,6 +332,8 @@ addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - one search in the header for items, bins and orders (D189), and a page of
   everything it matches (D227);
 - the findings queue;
+- for administrators, how many orders each person packed today, this week
+  and in 30 days, as NetSuite's Packed By says (D254);
 - the administrative screens behind them.
 
 There is no separate handheld build. A phone gets the same client, laid out for
@@ -353,7 +355,7 @@ answer rather than a decision, and fourteen minor.
 
 ## Reading further
 
-- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D253
+- [domain-model.md](./domain-model.md), the domain decision record; the shared register runs D1 to D254
 - [invariants.md](./invariants.md), the rules the design must always satisfy
 - [open-questions.md](./open-questions.md), everything still open
 - [order-fulfilment-process.md](./order-fulfilment-process.md), the process being
