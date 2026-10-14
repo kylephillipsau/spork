@@ -223,6 +223,8 @@ pub async fn stream(
         .insert_header(("cache-control", "no-cache"))
         // nginx and its relatives hold a response back to buffer it otherwise.
         .insert_header(("x-accel-buffering", "no"))
+        // Nor compressed: an encoder holds small frames back the same way.
+        .insert_header(actix_web::http::header::ContentEncoding::Identity)
         .streaming(first.chain(rest)))
 }
 

@@ -121,6 +121,9 @@ async fn main() -> std::io::Result<()> {
 
     let server = HttpServer::new(move || {
         let app = App::new()
+            // Compressed for whoever asks (gzip, brotli): the client and the
+            // reads are text, and a handheld on poor wifi pays for every byte.
+            .wrap(actix_web::middleware::Compress::default())
             .app_data(state.clone())
             .app_data(live.clone())
             .configure(routes::mount);
