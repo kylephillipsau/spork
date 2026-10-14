@@ -1,13 +1,25 @@
 # Handoff: the pack bench, pallets, and the brand
 
-Written 2026-10-12. Read this first. The earlier handoff,
-[handoff-capture-and-search.md](./handoff-capture-and-search.md), still covers
-capture, crops, search, backups and picking, and its Next list still stands for
-those. [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md) covers the
-toolchain, tests and layout.
+Written 2026-10-12 and brought up to date on 2026-10-14. Read this first. The
+earlier handoff, [handoff-capture-and-search.md](./handoff-capture-and-search.md),
+still covers capture, crops, search, backups and picking, and its Next list
+still stands for those. [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md)
+covers the toolchain, tests and layout.
 
 ## State
 
+- **Live, end of 2026-10-14:**
+  - `main` is pushed through fb7c69b, then this handoff;
+  - the live database is at migration 142 since 12:56;
+  - the server and client running are D255's (e134a24), live since 14:00. A
+    paired iPhone works over HTTPS;
+  - the phone pass (fb7c69b) is not live yet. It is client only, so it goes
+    live by swapping the client without a restart (Deploying, below).
+- 2026-10-14, the phone pass and the hover fix (fb7c69b), client only:
+  - the client's tests (251), contract and laws pass;
+  - the render gate passes over every fixture (148 fixtures, 484 renders).
+    Its frame check now compares the header and sidebar with the desk's size
+    at that width, not with 34px.
 - 2026-10-14, M3 of the plan, the board (D245, migration 142), on a fresh
   database (`spork_m3run`):
   - every migration builds and reverses, 142 of them;
@@ -46,11 +58,6 @@ toolchain, tests and layout.
     2026-10-07, when another test has used the walk's fixture line first;
   - the invariant suite passes but for `structural_invariants_hold`, the
     S7 and S10 entries that predate this work.
-- Spork `main` is pushed through b435fef: checking at the bench (D244), the
-  design for the rest of packing (D245 to D252), the brand, the theme, page
-  titles, the round-wrap fixes to D240, and on 2026-10-13 orders by item and
-  who packed (D253, D254), and on 2026-10-14 D246's server side (a38be6f).
-  The live database is at migration 139 since 08:50 on 2026-10-14.
 - The build plan for the rest is [packing-plan.md](./packing-plan.md): seven
   milestones, each with what done means. Feature complete is D244 to D252.
 - On 2026-10-12:
@@ -69,15 +76,41 @@ toolchain, tests and layout.
 
 ## What landed
 
+**Last on 2026-10-14: desk screens on a phone, and a row lit whole (fb7c69b)**
+- Hover and selection light a table's whole row, not its cells one by one.
+  Stacked on a narrow screen, the cells sat apart in the row's padding and
+  left patches with gaps round them.
+- At 640px or under, or on a coarse pointer, desktop density keeps its text
+  and takes 40/44/48px controls (`ui/tokens.css`). On those screens:
+  - text boxes take 16px, so a phone does not zoom the page to them;
+  - tabs wrap rather than scroll out of sight;
+  - a worded ghost button keeps a faint ground;
+  - a drawer's close and an alert's Dismiss are tap-sized.
+- A scan's answer hangs across the screen under the header, not off its left
+  edge.
+- Figures (`StatGrid`) draw their lines between each other, never along the
+  card's edge. A stacked table value stays inside its column.
+- Screens, on a phone:
+  - the pack bench's check puts the item across the top of its row;
+  - the expected weight runs across the carton card;
+  - the bin map's legend sits under the site;
+  - Edit layout's plan is shorter, with place names that can be read;
+  - Items, Photos to crop, Despatch, To pick and Workspace › Boxes are laid out
+    for it.
+- The rule is in `interface-design.md`, under the kit's density.
+
 **Later on 2026-10-14: paired devices over HTTPS (D255), and choosing a box**
 - `identity.rs`: with `SPORK_IDENTITY=1` the server makes Spork's own
   authority (only `.local` names) and a certificate for the name this
-  computer announces by mDNS, renewed by itself, in `.localstateidentity`;
+  computer announces by mDNS, renewed by itself, in `.local\state\identity`;
   `/pair` offers the authority and its fingerprint.
 - `scripts/local.ps1`: `https` fetches Caddy 2.11.4 (checksum checked);
   `firewall` opens 443 too; `start -Lan` starts Caddy in front once the
   certificate is written. Tried end to end on spare ports: verified with the
-  authority, refused without it.
+  authority, refused without it. Live at 14:00, and an iPhone paired and
+  worked. Caddy's process is `$proxy` in the script (`$caddy` was `$Caddy`,
+  its path: PowerShell's names ignore case), and the server is stopped with
+  the script (b50aff2).
 - `client/public/sw.js` and the manifest: installable, the app kept on the
   device over HTTPS; `/api` and the server's documents left to the network.
 - The board: a thing nobody measured asks which box in Move to…, which now
@@ -341,6 +374,18 @@ toolchain, tests and layout.
   onto one.
 - **The pallet sheet is a mock.** Booking a pallet that goes as one gives it
   no line of its own yet (its weight and height); that is M6.
+- **Paired devices (D255):**
+  - passkeys are still bound to `localhost`, so a paired phone signs in with
+    a password;
+  - the bench's acts are not held on the device when the WiFi drops, as picks
+    are (D207);
+  - a server left running a year without a restart keeps a lapsed
+    certificate;
+  - whether the handhelds let an authority be installed is untried;
+  - `firewall` needs an administrator's shell.
+- **On a phone:** a finger on Edit layout's plan moves the plan, not the page;
+  the page scrolls from above and below it. A long placeholder is cut short
+  at 390px.
 - **Outstanding for the user:**
   - the board grade stamp on the box stock;
   - a floor test of each box's walls and lid;
@@ -360,8 +405,14 @@ toolchain, tests and layout.
 - **`scripts/verify-migrations.sh` drops the schema of whatever
   `DATABASE_URL` names, and its default is the working `spork` database.**
   Point it at `spork_verify`.
-- **The test database** `spork_m1` is at migration 140. It has been written
-  to, so build a fresh one for a clean run.
+- **The test database** `spork_m3run` is at migration 142. It has been
+  written to, so build a fresh one for a clean run.
+- **This computer serves the live app.** Run heavy builds, tests and renders
+  at below-normal priority, cargo with `-j 4`. Make a hotfix in a clean
+  worktree from `HEAD`, never from a tree with half a milestone in it.
+- **The render gate** (`npm run build:review && npm run render`) does not
+  clear `.render`; delete screenshots of fixtures that no longer exist.
+  `RENDER_ONLY=a,b` renders the fixtures whose path holds either.
 - **Deploying while the LAN server runs:**
   1. Rename the running `target\release\spork-server.exe` and
      `spork-scheduler.exe` to `*.running.exe`.
@@ -376,20 +427,39 @@ toolchain, tests and layout.
   A client built straight into `dist` goes live at once, ahead of a server
   that lacks its endpoints.
 
+  A change to the client alone needs steps 3 and 4 only, swapped at once,
+  with no restart. The previous client stays in `client/dist-prev` (not in
+  git) to swap back.
+
 ## Next
 
-1. Check real orders at the bench, and set the tolerance if 3% is wrong. A
-   short now lands in the findings queue: see that it names the right picker.
-2. **M2 live:** photograph the box types; pack an order that the board puts
-   in a cut box. The user's heights are loaded.
-3. **M3 live:** pack a real order on the board: drag lines into a carton,
-   Make a planned box, put cartons on a pallet, take something out and Undo,
-   and despatch the pallet.
-4. **Pair the handhelds** (D255): `scriptslocal.ps1 firewall` once as admin,
-   restart with `-Lan`, then on each device `http://<computer>.local:18080/pair`.
-   Next: the outbox for the bench's acts, and passkeys on the .local name.
-5. **D249, D250, D251:** `subject_load`, wall and lid limits, `build_rules`,
-   and the planner in a worker. It replaces `arrange.ts` once it is never
-   worse over a test set of real orders.
-6. **D247 and D248:** breakdown pallets through the day, the pallet sheet,
+To build, in the agreed order:
+
+1. **Put the phone pass live** when the user says so: the client swap above.
+2. **The bench's outbox:** hold the bench's acts on the device and send them
+   when the WiFi allows, as picks are (D207).
+3. **Passkeys on the `.local` name**, so a paired device can use one.
+4. **Optionally, the gaps left from M3:** drop the plan when its fulfilment
+   closes; let Undo take back Make and Ship; plan things that ship as they are
+   onto a pallet before they are made.
+5. **M4, D249 and D250:** `subject_load`, wall and lid limits, and
+   `build_rules` as settings a carrier points at.
+6. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
+   never worse over a test set of real orders.
+7. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,
    and the booking by delivered unit.
+8. **M7, the finish:** a day's orders packed on the board and a breakdown
+   pallet despatched, what that shows fixed, and the speed targets met.
+
+To try on the floor, with the user:
+
+- Check real orders at the bench, and set the tolerance if 3% is wrong. A
+  short lands in the findings queue: see that it names the right picker.
+- **M2:** photograph the box types; pack an order that the board puts in a
+  cut box. The user's heights are loaded.
+- **M3:** pack a real order on the board: drag lines into a carton, Make a
+  planned box, put cartons on a pallet, take something out and Undo, and
+  despatch the pallet.
+- **Pair the handhelds** (D255): `scripts\local.ps1 firewall` once as admin,
+  then on each device `http://<computer>.local:18080/pair` and
+  `https://<computer>.local`. The iPhone is paired.

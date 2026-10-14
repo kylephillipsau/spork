@@ -71,17 +71,17 @@ The address can move, so devices find this computer by the name it announces
 itself, `http://<computer>.local:18080` (mDNS), and trust it through Spork's own
 authority:
 
-1. `scriptslocal.ps1 https` fetches Caddy (pinned, checked against its
-   release's checksums) into `.localcaddy`.
-2. `scriptslocal.ps1 firewall` opens 443 as well as 18080.
-3. `scriptslocal.ps1 start -Lan` has the server make its authority and its
-   certificate (`.localstateidentity`) and starts Caddy in front on 443.
+1. `scripts\local.ps1 https` fetches Caddy (pinned, checked against its
+   release's checksums) into `.local\caddy`.
+2. `scripts\local.ps1 firewall` opens 443 as well as 18080.
+3. `scripts\local.ps1 start -Lan` has the server make its authority and its
+   certificate (`.local\state\identity`) and starts Caddy in front on 443.
 4. On each device, once: open `http://<computer>.local:18080/pair`, install the
    authority, check its fingerprint against the one the server logs at start,
    then open `https://<computer>.local` and install the app from the browser's
    menu.
 
-The authority can vouch only for `.local` names. Keep `.localstateidentity`
+The authority can vouch only for `.local` names. Keep `.local\state\identity`
 out of backups you share: its key is what devices trust.
 
 Until a device is paired, these limits apply on it:
