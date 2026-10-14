@@ -1,6 +1,6 @@
 # Handoff: the pack bench, pallets, and the brand
 
-Written 2026-10-12 and brought up to date on 2026-10-14. Read this first. The
+Written 2026-10-12 and brought up to date on 2026-10-15. Read this first. The
 earlier handoff, [handoff-capture-and-search.md](./handoff-capture-and-search.md),
 still covers capture, crops, search, backups and picking, and its Next list
 still stands for those. [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md)
@@ -8,13 +8,19 @@ covers the toolchain, tests and layout.
 
 ## State
 
-- **Live, end of 2026-10-14:**
-  - `main` is pushed through fb7c69b, then this handoff;
-  - the live database is at migration 142 since 12:56;
-  - the server and client running are D255's (e134a24), live since 14:00. A
-    paired iPhone works over HTTPS;
-  - the phone pass (fb7c69b) is not live yet. It is client only, so it goes
-    live by swapping the client without a restart (Deploying, below).
+- **Live, 2026-10-15:**
+  - `main` is pushed through 36b5f8e, then this handoff;
+  - the live database is at migration 142 since 12:56 on 2026-10-14;
+  - the server running is D255's (e134a24), live since 14:00 on 2026-10-14.
+    A paired iPhone works over HTTPS;
+  - the client running is the phone pass (fb7c69b), swapped in on the
+    morning of 2026-10-15. At the user's word the clients before it were
+    deleted, so there is no `dist-prev` to swap back to;
+  - the bench's outbox (D256, 36b5f8e) is built into `client/dist-next` and
+    not live. It is client only: swap it in (Deploying, below).
+- 2026-10-15, the bench's outbox (D256), client only:
+  - the client's tests (254), contract and laws pass;
+  - the render gate passes over every fixture (149 fixtures, 488 renders).
 - 2026-10-14, the phone pass and the hover fix (fb7c69b), client only:
   - the client's tests (251), contract and laws pass;
   - the render gate passes over every fixture (148 fixtures, 484 renders).
@@ -75,6 +81,29 @@ covers the toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**On 2026-10-15: the bench's presses kept on the device (D256)**
+- Every press at the bench is worked out into its writes first, against the
+  bench as read (`writes.ts`: `writer`, `writesOf`), then kept on the device
+  (`spork.outbox.bench`) and sent. Each write names its part of the press's
+  act, and the ids are kept as they are minted (`keptAct` in `acts.ts`), so a
+  press sent again, after a reload too, is the same act. `sendOn` carries on
+  from the write it got to.
+- With no answer the press stays kept. The bench says "Saved on this device:
+  …", with Send now, and the board is greyed and takes no new press until it
+  has gone (the user's choice). A kept press refused when it goes is shown
+  until dismissed; somebody else's waits for them.
+- One press counts the goods it has already used, so two cartons filled by
+  one press (Ship 3 own cartons) are not filled from the same units. Ship as
+  they are refuses up front when there aren't enough, rather than leaving a
+  carton open part way.
+- Picks and the bench share the outbox: `kept()` and `useOutbox()` in
+  `app/outbox.ts`, `Outbox.now()` for a press sent at once, and the notice
+  (`app/common/Kept.tsx`).
+- A bench read that fails once the bench is showing keeps the board as it
+  was, rather than replacing it with an error.
+- Tests: `writes.test.ts` (sent on after a reload as the same act; the goods
+  counted once), `outbox.test.ts` (`now`); fixture `pack/kept`.
 
 **Last on 2026-10-14: desk screens on a phone, and a row lit whole (fb7c69b)**
 - Hover and selection light a table's whole row, not its cells one by one.
@@ -377,12 +406,16 @@ covers the toolchain, tests and layout.
 - **Paired devices (D255):**
   - passkeys are still bound to `localhost`, so a paired phone signs in with
     a password;
-  - the bench's acts are not held on the device when the WiFi drops, as picks
-    are (D207);
   - a server left running a year without a restart keeps a lapsed
     certificate;
   - whether the handhelds let an authority be installed is untried;
   - `firewall` needs an administrator's shell.
+- **The bench's outbox (D256):**
+  - a kept press that lands later can't be undone with Undo;
+  - kept presses are sent from a bench screen. Left on the packing queue,
+    they wait until a bench is opened;
+  - a press is still worked out against the bench as last read. The board
+    waits for a kept press, so nothing new is worked out from a stale board.
 - **On a phone:** a finger on Edit layout's plan moves the plan, not the page;
   the page scrolls from above and below it. A long placeholder is cut short
   at 390px.
@@ -429,30 +462,32 @@ covers the toolchain, tests and layout.
 
   A change to the client alone needs steps 3 and 4 only, swapped at once,
   with no restart. The previous client stays in `client/dist-prev` (not in
-  git) to swap back.
+  git) to swap back, unless the user says to remove it, as on 2026-10-15.
 
 ## Next
 
 To build, in the agreed order:
 
-1. **Put the phone pass live** when the user says so: the client swap above.
-2. **The bench's outbox:** hold the bench's acts on the device and send them
-   when the WiFi allows, as picks are (D207).
-3. **Passkeys on the `.local` name**, so a paired device can use one.
-4. **Optionally, the gaps left from M3:** drop the plan when its fulfilment
+1. **Put the bench's outbox (D256) live** when the user says so: the client
+   swap above.
+2. **Passkeys on the `.local` name**, so a paired device can use one.
+3. **Optionally, the gaps left from M3:** drop the plan when its fulfilment
    closes; let Undo take back Make and Ship; plan things that ship as they are
    onto a pallet before they are made.
-5. **M4, D249 and D250:** `subject_load`, wall and lid limits, and
+4. **M4, D249 and D250:** `subject_load`, wall and lid limits, and
    `build_rules` as settings a carrier points at.
-6. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
+5. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
    never worse over a test set of real orders.
-7. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,
+6. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,
    and the booking by delivered unit.
-8. **M7, the finish:** a day's orders packed on the board and a breakdown
+7. **M7, the finish:** a day's orders packed on the board and a breakdown
    pallet despatched, what that shows fixed, and the speed targets met.
 
 To try on the floor, with the user:
 
+- **D256:** at the bench, turn the WiFi off and drag goods into a carton:
+  the bench says it is saved and the board waits. Reload the page, turn the
+  WiFi on, and see it go and the board come back.
 - Check real orders at the bench, and set the tolerance if 3% is wrong. A
   short lands in the findings queue: see that it names the right picker.
 - **M2:** photograph the box types; pack an order that the board puts in a

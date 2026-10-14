@@ -14684,9 +14684,10 @@ and try again. The walk lays kept picks over each read rather than folding
 them in once, so a fresh read can't put a row back that the picker has
 emptied.
 
-**Not decided.** Other acts (packing, receiving, counting) still live in
-memory. They join when their screens move onto handhelds in dead spots.
-Storage is the browser's own, falling back to memory where that is blocked.
+**Not decided.** Other acts (receiving, counting) still live in memory. They
+join when their screens move onto handhelds in dead spots. Storage is the
+browser's own, falling back to memory where that is blocked. *(Amended by
+D256: the pack bench's presses are kept too.)*
 
 ### D208: The bin map shows every bin in its cell, and search flies to one
 
@@ -16811,4 +16812,47 @@ internet to be found.
 
 **Not yet.** Passkeys stay bound to localhost; elsewhere a person signs in
 with a password. A server running a year without a restart keeps an expired
-certificate. The bench's acts are not yet held in the outbox.
+certificate. *(The bench's acts are kept on the device since D256.)*
+
+### D256: A press at the bench is kept on the device, and the board waits for it
+
+*Adopted 2026-10-15, with no migration. D207 for the pack bench.*
+
+**Decision.** Every press at the pack bench is worked out into the writes it
+makes, against the bench as last read, and written to the device's storage
+before it is sent. A drop on the board can be several writes: goods in from
+the bench, a bin and a handover, a pallet made and a carton put on it. The
+press keeps them in order, with every id they mint and the moment it was
+pressed, under the person, workspace and site whose session made it. What
+happens next depends on the answer:
+
+- **It lands.** The press leaves the device and the bench is read again.
+- **No answer.** The press stays. The bench says it is saved on this device
+  and will be sent when there is a connection, with Send now. **The board
+  waits:** it is greyed and takes no new press until the kept one has gone.
+  The packer can go on packing by hand. It is sent again as D207 sends a
+  pick: when the device is back online, when the live channel hears anything,
+  every fifteen seconds while it waits, and when a bench is opened.
+- **Part of it lands.** Each write is kept as it lands, so the press is sent
+  on from the write it stopped at, as the same act.
+- **The server refuses it.** At the bench, the press shows why, as before.
+  A kept press refused later is set aside with the reason until the packer
+  dismisses it, and the board stops waiting.
+
+A kept press is sent only under its owner's session; somebody else's is shown
+and waits for them. One press works its writes out against the goods it has
+already used, so two cartons filled by one press are never filled from the
+same units.
+
+**Why.** The user chose it, 2026-10-15, over letting the packer keep working
+on the board while a press waits. The board shows the server's answer, read
+again after every act; a press worked out from a board that the server hasn't
+caught up with would move goods that have already moved. Drawing the waiting
+presses over the board, as the walk does for picks, would make the client a
+second copy of the ledger's folds for packing, where one act touches several
+lines and holders. The bench is a desk, so a wait is usually short. What
+matters is that a reload or a dropped connection loses no record of what was
+done.
+
+**Not decided.** A press kept and landed later cannot be undone with Undo.
+Kept presses are sent from a bench screen, not from elsewhere in the app.
