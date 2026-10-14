@@ -342,6 +342,11 @@
 
 /* To pack, the parcels, and the one chosen: three across on a 1080p screen,
    the chosen one under the others narrower, and one column on a phone. */
+/* The board while a kept press waits (D207). */
+.waits {
+  opacity: 0.5;
+}
+
 .board {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

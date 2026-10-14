@@ -22,6 +22,7 @@ import { uuid } from "@domain/acts";
 import type { BenchScreen } from "@domain/types";
 import { usePageTitle } from "@app/routing/title";
 import { ItemDrawer } from "@app/items/ItemProperties";
+import { Kept, othersSaying } from "@app/common/Kept";
 
 import { boardOf, dropOn, labelOf, parcelKey, thingOf, type Board, type BoardParcel, type Outcome } from "./board";
 import { needsCheck, uncheckedIn } from "./check";
@@ -29,7 +30,7 @@ import { Checks } from "./Checks";
 import { Chosen, tally } from "./Chosen";
 import { DropSlot, ParcelCard, type ParcelActs } from "./Parcels";
 import { ToPack } from "./ToPack";
-import type { PackBench } from "./usePackBench";
+import type { KeptPress, PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
 
 /** A drop's id for a parcel it would make, while only saying what it would do. */
@@ -130,6 +131,7 @@ function Bench({
     },
   };
   const next = nextStep(board, screen, bench);
+  const waiting = bench.kept.waiting.length > 0;
 
   return (
     <Page>
@@ -148,6 +150,7 @@ function Bench({
           {bench.problem}
         </Alert>
       )}
+      <KeptPresses kept={bench.kept} order={screen.order_reference} />
       {/* Said before somebody tries, rather than as the refusal after. */}
       {screen.unready && (
         <Alert tone="warning">
@@ -170,16 +173,19 @@ function Bench({
         )}
       </div>
 
-      <DragZone
-        label={(keys) => labelOf(board, keys)}
-        onDrop={drop}
-        onMove={(keys) => setMoving({ keys, target: null })}
-        onRemove={(keys) => drop(keys, "bench", { one: false, ask: false })}
-        onUndo={() => void bench.undo()}
-        frozen={drag}
-      >
-        <BoardBody screen={screen} board={board} acts={acts} look={look} elsewhere={elsewhere} />
-      </DragZone>
+      {/* While a kept press waits, the board waits for it: nothing is worked out from a board the server hasn't caught up with. */}
+      <div className={waiting ? s.waits : undefined} inert={waiting}>
+        <DragZone
+          label={(keys) => labelOf(board, keys)}
+          onDrop={drop}
+          onMove={(keys) => setMoving({ keys, target: null })}
+          onRemove={(keys) => drop(keys, "bench", { one: false, ask: false })}
+          onUndo={() => void bench.undo()}
+          frozen={drag}
+        >
+          <BoardBody screen={screen} board={board} acts={acts} look={look} elsewhere={elsewhere} />
+        </DragZone>
+      </div>
 
       {moving && <MoveTo screen={screen} board={board} keys={moving.keys} target={moving.target} close={() => setMoving(null)} bench={bench} />}
 
@@ -192,6 +198,28 @@ function Bench({
         }}
       />
     </Page>
+  );
+}
+
+/**
+ * The bench's presses kept on this device (D207): what waits, and the board
+ * with it; what the server refused when it went; and anybody else's.
+ */
+function KeptPresses({ kept, order }: { kept: PackBench["kept"]; order: string }) {
+  const named = (k: KeptPress) => (k.order && k.order !== order ? `${k.label}, on order ${k.order}` : k.label);
+  const n = kept.waiting.length;
+  return (
+    <Kept
+      waiting={
+        n > 0
+          ? `Saved on this device: ${kept.waiting.map((k) => `${named(k)}.`).join(" ")} ${n === 1 ? "It" : "They"} will be sent when there's a connection, and the board waits until then.`
+          : null
+      }
+      send={kept.send}
+      refused={kept.refused.map((k) => ({ key: k.key, text: `Not recorded: ${named(k)}. ${k.reason}` }))}
+      dismiss={kept.dismiss}
+      others={othersSaying(kept.others, "press", "presses")}
+    />
   );
 }
 

@@ -9,9 +9,9 @@ import { useChanges } from "./changes";
 /**
  * THE REACT SIDE OF THE OUTBOX (D207).
  *
- * `domain/outbox.ts` keeps acts on the device and sends them; this is the one
- * outbox for picks, and the hook the walk reads it through. Picks only, for
- * now: they are the acts made where the wifi is worst.
+ * `domain/outbox.ts` keeps acts on the device and sends them; this is how an
+ * outbox is made and how a screen reads it. Two are kept: picks, made where
+ * the wifi is worst, and the pack bench's presses (`usePackBench.ts`).
  */
 
 /** A pick, as kept: enough to send it again as the same act. */
@@ -30,24 +30,18 @@ export interface HeldPick {
   where: string;
 }
 
-const NAME = "spork.outbox.picks";
-
-export const picks = new Outbox<HeldPick>(deviceStore(NAME));
-
-/**
- * Picks a press is sending right now. The outbox leaves them to it, so a
- * refused claim at the shelf stops the pick, as D207 says, rather than being
- * recorded anyway by a send from here at the same moment. In memory only: after
- * a reload nothing is being pressed, and a kept pick is sent as usual.
- */
-export const pressing = new Set<string>();
-
-// Another tab on this device sent or kept one.
-if (typeof window !== "undefined") {
-  window.addEventListener("storage", (e) => {
-    if (e.key === NAME) picks.changed();
-  });
+/** An outbox kept on this device under `name`, told when another tab on it sends or keeps one. */
+export function kept<T>(name: string): Outbox<T> {
+  const box = new Outbox<T>(deviceStore(name));
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (e) => {
+      if (e.key === name) box.changed();
+    });
+  }
+  return box;
 }
+
+export const picks = kept<HeldPick>("spork.outbox.picks");
 
 /** Send a kept pick as the act it was. */
 export function sendPick(body: HeldPick): Promise<RecordPickResponse> {
@@ -73,12 +67,12 @@ export function sendPick(body: HeldPick): Promise<RecordPickResponse> {
 /** How often to try while something waits, besides coming online and hearing a change. */
 const RETRY_EVERY = 15_000;
 
-export interface PickOutbox {
-  /** This person's picks waiting to be sent, oldest first. */
-  waiting: Held<HeldPick>[];
-  /** This person's picks the server refused when they were sent. */
-  refused: Held<HeldPick>[];
-  /** Picks somebody else made on this device, waiting for them to sign in here. */
+export interface KeptView<T> {
+  /** This person's acts waiting to be sent, oldest first. */
+  waiting: Held<T>[];
+  /** This person's acts the server refused when they were sent. */
+  refused: Held<T>[];
+  /** Acts somebody else made on this device, waiting for them to sign in here. */
   others: { name: string; count: number }[];
   /** Try now. */
   send: () => Promise<void>;
@@ -87,30 +81,27 @@ export interface PickOutbox {
 }
 
 /**
- * The outbox as `owner` sees it, sent whenever there is a chance it gets
+ * An outbox as `owner` sees it, sent whenever there is a chance it gets
  * through: on arrival, when the device comes back online, when the live
  * channel hears anything, and every so often while something waits. `sent`
- * hears each reply before its pick leaves the outbox.
+ * hears each reply before its act leaves the outbox.
  */
-export function usePickOutbox(
+export function useOutbox<T, R>(
+  box: Outbox<T>,
   owner: string | null,
-  sent: (entry: Held<HeldPick>, reply: RecordPickResponse) => void,
-): PickOutbox {
-  const [all, setAll] = useState(() => picks.list());
-  useEffect(() => picks.subscribe(() => setAll(picks.list())), []);
+  sendOne: (body: T, entry: Held<T>) => Promise<R>,
+  sent?: (entry: Held<T>, reply: R) => void,
+): KeptView<T> {
+  const [all, setAll] = useState(() => box.list());
+  useEffect(() => box.subscribe(() => setAll(box.list())), [box]);
 
   const latest = useRef(sent);
   latest.current = sent;
 
   const send = useCallback(async () => {
     if (!owner) return;
-    await picks.drain(
-      owner,
-      sendPick,
-      (entry, reply) => latest.current(entry, reply),
-      (key) => pressing.has(key),
-    );
-  }, [owner]);
+    await box.drain(owner, sendOne, (entry, reply) => latest.current?.(entry, reply));
+  }, [box, owner, sendOne]);
 
   const view = useMemo(() => {
     const mine = all.filter((e) => e.owner === owner);
@@ -139,5 +130,5 @@ export function usePickOutbox(
     return () => clearInterval(timer);
   }, [something, send]);
 
-  return { ...view, send, dismiss: (key) => picks.drop(key) };
+  return { ...view, send, dismiss: (key) => box.drop(key) };
 }

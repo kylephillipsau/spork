@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { ApiError, api, reason } from "@domain/api";
-import { transient } from "@domain/outbox";
 import type { PickLine, PickListScreen, RecordPickResponse, Uuid } from "@domain/types";
 import { useChanges } from "@app/changes";
-import { picks, pressing, usePickOutbox, type HeldPick } from "@app/outbox";
+import { picks, sendPick, useOutbox, type HeldPick } from "@app/outbox";
 import { claimFor, fold, merge, offered, overlay } from "./walk";
 import { useSession, useSite } from "@app/session/SessionContext";
 
@@ -113,11 +112,12 @@ export function usePicking(): PickBench {
   const session = useSession();
   const who = session.kind === "signed-in" && session.who.site_id ? session.who : null;
   const owner = who ? `${who.person_id}:${who.tenant_id}:${who.site_id}` : null;
-  const outbox = usePickOutbox(owner, (entry, reply) => {
-    // The row takes the server's figures before the kept pick stops counting,
-    // so it doesn't flash back to what it was.
-    if (live.current) setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: landed(s.screen, entry.body.line, reply) } : s));
-  });
+  // The row takes the server's figures before the kept pick stops counting,
+  // so it doesn't flash back to what it was.
+  const patch = (line: Uuid, reply: RecordPickResponse) => {
+    if (live.current) setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: landed(s.screen, line, reply) } : s));
+  };
+  const outbox = useOutbox(picks, owner, sendPick, (entry, reply) => patch(entry.body.line, reply));
 
   // **No re-read after a pick**, and this is the screen the rule was written
   // for: a pick changes what is left on the line it served, and refetching
@@ -318,36 +318,26 @@ export function usePicking(): PickBench {
           code: confirmed.item_code,
           where: destination.code,
         };
-        const key = body.ids.event;
-        if (owner && who) picks.put({ key, owner, ownerName: who.display_name, body });
-
-        let answer: RecordPickResponse;
-        pressing.add(key);
-        try {
-          answer = await api.pick({ ...body, act });
-        } catch (error) {
-          // No answer: it stays kept, the walk counts it, and it goes when
-          // the connection does. An answer is the server's, as before.
-          if (owner && transient(error)) {
-            if (!live.current) return;
-            setTook({ code: body.code, quantity: asked, warnings: [], held: true });
-            setConfirmed(null);
-            setQuantity("");
-            setScan((c) => ({ typed: "", refocus: c.refocus + 1 }));
-            return;
-          }
-          picks.drop(key);
-          throw error;
-        } finally {
-          pressing.delete(key);
-        }
-
         // **Patched, not re-read.** The response carries the live fold for the
         // line just served, so the row is corrected from what happened rather
         // than from a second query — and the walk keeps its order and its
         // position under somebody standing in an aisle.
-        if (live.current) setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: landed(s.screen, body.line, answer) } : s));
-        picks.drop(key);
+        const press = () => api.pick({ ...body, act });
+        const sent =
+          owner && who
+            ? await picks.now({ key: body.ids.event, owner, ownerName: who.display_name, body }, press, (reply) => patch(body.line, reply))
+            : await press().then((reply) => (patch(body.line, reply), { reply }));
+        // No answer: it stays kept, the walk counts it, and it goes when
+        // the connection does. An answer is the server's, as before.
+        if (!sent) {
+          if (!live.current) return;
+          setTook({ code: body.code, quantity: asked, warnings: [], held: true });
+          setConfirmed(null);
+          setQuantity("");
+          setScan((c) => ({ typed: "", refocus: c.refocus + 1 }));
+          return;
+        }
+        const answer = sent.reply;
         if (!live.current) return;
         setTook({ code: confirmed.item_code, quantity: asked, warnings: answer.warnings });
         setConfirmed(null);

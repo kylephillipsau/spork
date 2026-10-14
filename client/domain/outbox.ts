@@ -86,6 +86,8 @@ export class Outbox<T> {
   private readonly store: Store;
   private readonly listeners = new Set<() => void>();
   private sending = false;
+  /** Acts a press is sending right now (`now`). In memory: after a reload nothing is being pressed. */
+  private readonly pressed = new Set<string>();
 
   constructor(store: Store) {
     this.store = store;
@@ -107,6 +109,18 @@ export class Outbox<T> {
     const at = all.findIndex((e) => e.key === entry.key);
     if (at >= 0) all[at] = entry;
     else all.push(entry);
+    this.save(all);
+  }
+
+  /**
+   * Keep what a send has added to an act (an id it minted, how far it got),
+   * if it is still kept. One sent or dropped elsewhere meanwhile stays gone.
+   */
+  update(entry: Held<T>): void {
+    const all = this.list();
+    const at = all.findIndex((e) => e.key === entry.key);
+    if (at < 0) return;
+    all[at] = entry;
     this.save(all);
   }
 
@@ -138,28 +152,27 @@ export class Outbox<T> {
    * it won't be either. `sent` hears each reply before its act is dropped, so a
    * screen can show what the server recorded without a gap.
    *
-   * `busy` names acts a screen is sending itself right now. They are left to
-   * it, so its answer is the only one: a press shows the server's refusal,
-   * and the same act sent from here at the same moment must not record
-   * what the press was told was refused.
+   * Acts a press is sending itself (`now`) are left to it, so its answer is
+   * the only one: a press shows the server's refusal, and the same act sent
+   * from here at the same moment must not record what the press was told was
+   * refused.
    *
    * Returns how many of this owner's are still waiting.
    */
   async drain<R>(
     owner: string,
-    send: (body: T) => Promise<R>,
+    send: (body: T, entry: Held<T>) => Promise<R>,
     sent?: (entry: Held<T>, reply: R) => void,
-    busy?: (key: string) => boolean,
   ): Promise<number> {
     if (!this.sending) {
       this.sending = true;
       try {
         for (const entry of this.list()) {
-          if (entry.owner !== owner || entry.refused !== undefined || busy?.(entry.key)) continue;
+          if (entry.owner !== owner || entry.refused !== undefined || this.pressed.has(entry.key)) continue;
           // Sent or dropped elsewhere while this one was on its way.
           if (!this.list().some((e) => e.key === entry.key && e.refused === undefined)) continue;
           try {
-            const reply = await send(entry.body);
+            const reply = await send(entry.body, entry);
             sent?.(entry, reply);
             this.drop(entry.key);
           } catch (error) {
@@ -172,6 +185,35 @@ export class Outbox<T> {
       }
     }
     return this.list().filter((e) => e.owner === owner && e.refused === undefined).length;
+  }
+
+  /**
+   * Keep an act, then send it at once, as its press. The reply is heard
+   * before the act leaves, as in `drain`. No answer keeps it, to be sent
+   * later, and gives `null`; a refusal drops it and is thrown, for the press
+   * to show where it was made.
+   */
+  async now<R>(entry: Held<T>, send: (body: T, entry: Held<T>) => Promise<R>, sent?: (reply: R) => void): Promise<{ reply: R } | null> {
+    this.pressed.add(entry.key);
+    this.put(entry);
+    try {
+      const reply = await send(entry.body, entry);
+      sent?.(reply);
+      this.drop(entry.key);
+      return { reply };
+    } catch (error) {
+      if (transient(error)) return null;
+      this.drop(entry.key);
+      throw error;
+    } finally {
+      this.pressed.delete(entry.key);
+      this.tell();
+    }
+  }
+
+  /** Whether a press is sending this act itself right now (`now`). */
+  pressing(key: string): boolean {
+    return this.pressed.has(key);
   }
 
   private save(all: Held<T>[]): void {

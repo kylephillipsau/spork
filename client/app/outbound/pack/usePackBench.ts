@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLive, useWriting } from "@app/acting";
 import { useChanges } from "@app/changes";
-import { partOf, uuid, type Act } from "@domain/acts";
+import { kept, useOutbox } from "@app/outbox";
+import { useSession } from "@app/session/SessionContext";
+import { keptAct, partOf, uuid, type Act } from "@domain/acts";
 import { ApiError, api, reason } from "@domain/api";
+import type { Held } from "@domain/outbox";
 import type { BenchScreen, PlannedParcel, Uuid } from "@domain/types";
 
-import { boardOf, sourcesFor, suggest as suggested, type BoardAct, type Outcome } from "./board";
+import { boardOf, sourcesFor, suggest as suggested, type Outcome } from "./board";
+import { Unwritable, sendOn, unset, writer, writesOf, type BenchWrite, type HeldPress } from "./writes";
 
 /**
  * The pack bench, as logic.
@@ -77,12 +81,80 @@ export interface PackBench {
   suggest: () => Promise<void>;
   /** Open a sealed carton again, to change what is in it. */
   open: (carton: Uuid) => Promise<void>;
+
+  /**
+   * Presses kept on this device until the server has them (D207). While one
+   * of this person's waits, `busy` holds and the board waits for it.
+   */
+  kept: {
+    waiting: KeptPress[];
+    refused: (KeptPress & { reason: string })[];
+    /** Somebody else's, waiting for them to sign in on this device. */
+    others: { name: string; count: number }[];
+    send: () => void;
+    dismiss: (key: string) => void;
+  };
+}
+
+/** A kept press, as the bench says it. */
+export interface KeptPress {
+  key: string;
+  label: string;
+  /** The order's number, for one made on another order's bench. */
+  order: string;
 }
 
 /** A change done, and how to undo it. */
 interface Done {
   label: string;
   undo: NonNullable<Outcome["undo"]>;
+}
+
+/** The bench's presses, kept on this device until the server has them (D207). */
+export const presses = kept<HeldPress>("spork.outbox.bench");
+
+/** One kept write, sent as its part of the press. */
+function sendWrite(w: BenchWrite, act: Act): Promise<unknown> {
+  switch (w.kind) {
+    case "plan":
+      return api.savePlan(w.fulfilment, w.plan);
+    case "repack":
+      return api.repack({ ...w, act });
+    case "pickInto":
+      return api.pickInto({ ...w, act });
+    case "handOver":
+      return api.handOver({ ...w, act });
+    case "takeOut":
+      return api.takeOut({ ...w, act });
+    case "startCarton":
+      return api.startCarton({ ...w, act });
+    case "startAsIs":
+      return api.startAsIs({ ...w, act });
+    case "checkLine":
+      return api.checkLine({ ...w, act });
+    case "measure":
+      return api.measure({ ...w, act });
+    case "contain":
+      return api.contain(w.carton, w.pallet, w.at, act);
+    case "place":
+      return api.placePackage(w.carton, w.location, act);
+    case "seal":
+      return api.seal(w.carton, act);
+    case "open":
+      return api.open(w.carton, act);
+    case "discard":
+      return api.discard(w.carton, act);
+  }
+}
+
+/** A kept press sent on, each id and each landing kept in the outbox as it goes. */
+const sendPress = (body: HeldPress, entry: Held<HeldPress>, mint?: (name: string) => Uuid) =>
+  sendOn(body, sendWrite, () => presses.update(entry), mint);
+
+/** What a press writes, and what to say once it is sent. */
+interface Worked {
+  writes: BenchWrite[];
+  notes?: string[];
 }
 
 export function usePackBench(fulfilment: Uuid): PackBench {
@@ -99,7 +171,9 @@ export function usePackBench(fulfilment: Uuid): PackBench {
       if (live.current) setStatus({ kind: "ready", screen });
     } catch (error) {
       const message = reason(error, "Could not load the pack bench.");
-      if (live.current) setStatus({ kind: "failed", message });
+      // Read again with no connection, the board stays as last read: a press
+      // that couldn't go is kept, and the board waits for it.
+      if (live.current) setStatus((s) => (s.kind === "ready" ? s : { kind: "failed", message }));
     }
   }, [fulfilment]);
 
@@ -114,25 +188,19 @@ export function usePackBench(fulfilment: Uuid): PackBench {
   useChanges(() => void reload());
 
   /**
-   * The acts this screen has begun and not yet landed.
+   * One act at a time, and the bench is re-read afterwards whatever happened.
    *
    * **The key is (what is being done, to what), and it is held only between a
-   * failure and its retry.** A press that succeeds releases its key, so
-   * starting a second carton of the same preset, or picking the same line
-   * twice on purpose, is a new act — while pressing again after a lost
-   * response is the same one. See `domain/acts.ts`.
-   */
-  /**
-   * One act at a time, and the bench is re-read afterwards whatever happened.
+   * refusal and pressing again.** A press that lands releases its key, so
+   * starting a second carton of the same preset is a new act, while pressing
+   * again after a refusal is the same one. See `domain/acts.ts`. A press with
+   * no answer is not pressed again: it is kept on the device and sent on as
+   * the same act (D207, `send` below).
    *
    * **Re-reading after a failure is deliberate.** A write can fail having
    * partly landed — `pickInto` claims and then picks, and the claim may hold
    * while the pick does not. Leaving the screen showing what it hoped happened
    * is how a bench starts disagreeing with the ledger it is meant to describe.
-   *
-   * And that partial landing is exactly why the identity has to survive the
-   * failure: the retry has to arrive as the same act, or the claim that held
-   * becomes a second claim.
    */
   const { busy, problem, dismiss, press } = useWriting(reload);
 
@@ -146,168 +214,180 @@ export function usePackBench(fulfilment: Uuid): PackBench {
     setUndoable(done.current[done.current.length - 1]?.label ?? null);
   };
 
+  // Whose presses these are: a kept press is sent only as the person,
+  // workspace and site that made it, as a kept pick is (D207).
+  const session = useSession();
+  const who = session.kind === "signed-in" && session.who.site_id ? session.who : null;
+  const owner = who ? `${who.person_id}:${who.tenant_id}:${who.site_id}` : null;
+  const outbox = useOutbox(presses, owner, sendPress);
+  // A press on its way is the press, and `busy` says so; kept, it waits.
+  const held = outbox.waiting.filter((e) => !presses.pressing(e.key));
+  const waiting = held.length > 0;
+  // Once nothing waits, read the bench again: what was kept has landed, or
+  // was refused part way, having moved what it moved.
+  const wasWaiting = useRef(waiting);
+  useEffect(() => {
+    if (wasWaiting.current && !waiting) void reload();
+    wasWaiting.current = waiting;
+  }, [waiting, reload]);
+
   /**
-   * The plan kept, shown at once: the board answers a drop before the
-   * server does, and the read after puts right anything it disagrees with.
+   * The plan, shown at once: the board answers a drop before the server
+   * does, and the read after puts right anything it disagrees with.
    */
-  const keepPlan = async (plan: PlannedParcel[]) => {
+  const showPlan = (plan: PlannedParcel[]) => {
     if (live.current) setStatus((s) => (s.kind === "ready" ? { kind: "ready", screen: { ...s.screen, plan } } : s));
-    await api.savePlan(fulfilment, plan);
+  };
+  const planWrite = (plan: PlannedParcel[]): BenchWrite => ({ part: "plan", kind: "plan", fulfilment, plan });
+
+  /** What a board change writes: its plan kept first, then its acts. */
+  const planned = (change: Pick<Outcome, "plan" | "acts">, at: BenchScreen): Worked => {
+    const { writes, notes } = writesOf(change.acts, at, fulfilment);
+    return { writes: change.plan ? [planWrite(change.plan), ...writes] : writes, notes };
   };
 
-  const unset = () => new ApiError("This site doesn't say where it packs yet. Set it in Workspace.", 409);
-
-  /** One board act, against the screen as it was read. */
-  const run = async (step: BoardAct, act: Act, at: BenchScreen): Promise<void> => {
-    const bench = at.staging_id;
-    switch (step.kind) {
-      case "put": {
-        const line = at.lines.find((l) => l.line_id === step.line);
-        if (!line) throw new ApiError("That line is not on this order any more.", 409);
-        const { sources, short } = sourcesFor(line, step.units);
-        if (sources.length === 0) throw new ApiError(`No ${line.item_code} is here to put in.`, 409);
-        for (const [i, src] of sources.entries()) {
-          const part = partOf(act, `${i}:${src.kind}`);
-          if (src.kind === "bench") {
-            if (!bench) throw unset();
-            await api.repack({ line: line.line_id, from: { location: bench }, to: { package: step.carton }, quantity: src.units, act: part });
-          } else if (src.kind === "cell") {
-            await api.pickInto({ line: line.line_id, stock: src.stock, carton: step.carton, quantity: src.units, act: part });
-          } else {
-            await api.handOver({ line: line.line_id, quantity: src.units, carton: step.carton, act: part });
-          }
-        }
-        if (short > 0) throw new ApiError(`${step.units - short} of ${step.units} ${line.item_code} went in: the rest is not here.`, 409);
-        return;
-      }
-      case "unput": {
-        const picks = (at.cartons.find((c) => c.id === step.carton)?.contents ?? []).filter((r) => r.line_id === step.line).flatMap((r) => r.picks);
-        const reason = at.wrong_box_reason_id;
-        if (!reason) throw new ApiError("No 'wrong location' reason is configured.", 409);
-        await api.takeOut({ picks, quantity: step.units, reason, act });
-        return;
-      }
-      case "repack": {
-        if (!step.to && !bench) throw unset();
-        await api.repack({
-          line: step.line,
-          from: { package: step.from },
-          to: step.to ? { package: step.to } : { location: bench! },
-          quantity: step.units,
-          act,
-        });
-        return;
-      }
-      case "make": {
-        const pp = at.plan.find((p) => p.id === step.parcel);
-        // Made already, by a retry that landed.
-        if (!pp) return;
-        if (!at.dock_id) throw unset();
-        // On a planned pallet: the pallet first, so there is something to put it on.
-        if (pp.on_parcel_id) await run({ kind: "make", parcel: pp.on_parcel_id }, partOf(act, "pallet"), at);
-        await api.startCarton({ fulfilment, preset: pp.package_type_id, dock: at.dock_id, act: partOf(act, "carton"), id: pp.id });
-        const pallet = pp.on_parcel_id ?? pp.on_package_id;
-        if (pallet) await api.contain(pp.id, pallet, pp.at, partOf(act, "on"));
-        for (const l of pp.lines) {
-          await run({ kind: "put", line: l.line_id, units: l.quantity, carton: pp.id }, partOf(act, `put:${l.line_id}`), at);
-        }
-        return;
-      }
-      case "contain":
-        await api.contain(step.carton, step.pallet, null, act);
-        return;
-      case "takeOff":
-        if (!bench) throw unset();
-        await api.placePackage(step.carton, bench, act);
-        return;
+  /**
+   * Keep a press on the device, then send it (D207).
+   *
+   * Its writes are worked out first, against the screen as read, and kept
+   * with every id they mint. With no answer it stays kept, and the board
+   * waits until it has gone; a refusal is shown, as before. What the writes
+   * leave to say is said once they are sent. True once it has landed.
+   *
+   * Its ids are minted through the press's own act, so pressing again after
+   * a refusal is the same act, as `acts.ts` requires.
+   */
+  const send = async (act: Act, at: BenchScreen, label: string, work: (act: Act) => Worked): Promise<boolean> => {
+    const ids: Record<string, Uuid> = {};
+    let worked: Worked;
+    try {
+      worked = work(keptAct(ids, act.at, undefined, act.id));
+    } catch (error) {
+      throw error instanceof Unwritable ? new ApiError(error.message, 409) : error;
     }
+    if (worked.writes.length > 0) {
+      const body: HeldPress = { label, order: at.order_reference, at: act.at, ids, writes: worked.writes, done: 0 };
+      const entry: Held<HeldPress> = { key: uuid(), owner: owner ?? "", ownerName: who?.display_name ?? "", body };
+      const now = (b: HeldPress, e: Held<HeldPress>) => sendPress(b, e, act.id);
+      // Nobody to send it as later: sent now or not at all, as before.
+      if (!owner) await now(body, entry);
+      else if (!(await presses.now(entry, now))) return false;
+    }
+    const notes = worked.notes ?? [];
+    if (notes.length > 0) throw new ApiError(notes.join(" "), 409);
+    return true;
   };
 
-  const applying = async (outcome: Pick<Outcome, "plan" | "acts">, act: Act, at: BenchScreen) => {
-    if (outcome.plan) await keepPlan(outcome.plan);
-    for (const [i, step] of outcome.acts.entries()) await run(step, partOf(act, `${i}:${step.kind}`), at);
-  };
+  /** A press, unless a kept one is waiting: then the board waits for it, and this does nothing. */
+  const hold = (key: string, run: (act: Act, at: BenchScreen) => Promise<unknown>): Promise<void> =>
+    waiting || !screen
+      ? Promise.resolve()
+      : press(key, async (act) => {
+          await run(act, screen);
+        });
+
+  /** A press of one write to a carton. */
+  const toCarton = (kind: "seal" | "open" | "discard", verb: string) => (carton: Uuid) =>
+    hold(`${kind}:${carton}`, (act, at) => send(act, at, `${verb} ${titleOf(at, carton)}`, () => ({ writes: [{ part: "", kind, carton }] })));
 
   return {
     status,
-    busy,
+    busy: busy || waiting,
     problem,
     dismiss,
     refresh: () => void reload(),
 
     shipAsIs: ({ line, item, level, config, units, count }) =>
-      press(`own:${line}:${level}:${count}`, async (act) => {
-        const dock = screen?.dock_id;
-        if (!dock) throw new ApiError("This site doesn't say where it packs yet. Set it in Workspace.", 409);
-        if (!(count > 0) || !(units > 0)) throw new ApiError("How many?", 400);
-        // One at a time, whole: made, filled, sealed. A failure part way
-        // leaves the ones before it complete and this one open, and a retry
-        // replays every part already done as the same write.
-        for (let n = 1; n <= count; n++) {
-          const make = partOf(act, `carton-${n}:make`);
-          await api.startAsIs({ fulfilment, item, level, config: level === "each" ? null : config, dock, act: make });
-          const carton = make.id("package");
-          if (screen) await run({ kind: "put", line, units, carton }, partOf(act, `carton-${n}:fill`), screen);
-          await api.seal(carton, partOf(act, `carton-${n}:seal`));
-        }
-      }),
+      hold(`own:${line}:${level}:${count}`, (act, at) =>
+        send(act, at, `Ship ${count} × ${codeOf(at, line)} as ${count === 1 ? "it is" : "they are"}`, (kept) => {
+          const dock = at.dock_id;
+          if (!dock) throw unset();
+          if (!(count > 0) || !(units > 0)) throw new Unwritable("How many?");
+          const l = at.lines.find((x) => x.line_id === line);
+          const { short } = l ? sourcesFor(l, units * count) : { short: units * count };
+          if (short > 0) throw new Unwritable(`Only ${units * count - short} of ${units * count} ${codeOf(at, line)} are here.`);
+          // One at a time, whole: made, filled, sealed. Stopped part way, the
+          // ones before are complete and this one open, and sent on it
+          // carries on from the write it stopped at.
+          const w = writer(at, fulfilment);
+          for (let n = 1; n <= count; n++) {
+            w.push({ part: `carton-${n}:make`, kind: "startAsIs", fulfilment, item, level, config: level === "each" ? null : config, dock });
+            const carton = partOf(kept, `carton-${n}:make`).id("package");
+            w.add({ kind: "put", line, units, carton }, `carton-${n}:fill`);
+            w.push({ part: `carton-${n}:seal`, kind: "seal", carton });
+          }
+          return w;
+        }),
+      ),
 
     check: ({ line, expected, seen }) =>
-      press(`check:${line}:${expected}:${seen}`, async (act) => {
-        if (!(seen >= 0)) throw new ApiError("How many do you see?", 400);
-        await api.checkLine({ line, expected, seen, act });
-      }),
+      hold(`check:${line}:${expected}:${seen}`, (act, at) =>
+        send(act, at, `Check ${codeOf(at, line)}: ${seen}`, () => {
+          if (!(seen >= 0)) throw new Unwritable("How many do you see?");
+          return { writes: [{ part: "", kind: "checkLine", line, expected, seen }] };
+        }),
+      ),
 
     measure: ({ carton, weightKg, heightMm }) =>
-      press(`measure:${carton}`, async (act) => {
-        if (!weightKg && !heightMm) throw new ApiError("Enter a weight.", 400);
-        await api.measure({
-          carton,
-          ...(weightKg ? { weightKg } : {}),
-          ...(heightMm ? { heightMm } : {}),
-          act,
-        });
-      }),
+      hold(`measure:${carton}`, (act, at) =>
+        send(act, at, `Weigh ${titleOf(at, carton)}`, () => {
+          if (!weightKg && !heightMm) throw new Unwritable("Enter a weight.");
+          return { writes: [{ part: "", kind: "measure", carton, ...(weightKg ? { weightKg } : {}), ...(heightMm ? { heightMm } : {}) }] };
+        }),
+      ),
 
-    seal: (carton) =>
-      press(`seal:${carton}`, (act) => api.seal(carton, act).then(() => undefined)),
-    open: (carton) =>
-      press(`open:${carton}`, (act) => api.open(carton, act).then(() => undefined)),
+    seal: toCarton("seal", "Seal"),
+    open: toCarton("open", "Open"),
+    discard: toCarton("discard", "Discard"),
 
     apply: (outcome, label) =>
-      press(`apply:${label}:${JSON.stringify(outcome.acts)}`, async (act) => {
-        if (!screen) return;
-        await applying(outcome, act, screen);
+      hold(`apply:${label}:${JSON.stringify(outcome.acts)}`, async (act, at) => {
+        if (outcome.plan) showPlan(outcome.plan);
+        const landed = await send(act, at, label, () => planned(outcome, at));
+        // Undone only once it has landed: a kept press may yet be refused.
         const undo = outcome.undo;
-        remember(undo && (undo.plan || undo.acts.length > 0) ? { label, undo } : null);
+        if (landed) remember(undo && (undo.plan || undo.acts.length > 0) ? { label, undo } : null);
       }),
 
     undoable,
     undo: () => {
       const last = done.current[done.current.length - 1];
       if (!last) return Promise.resolve();
-      return press(`undo:${done.current.length}:${last.label}`, async (act) => {
-        if (!screen) return;
-        await applying(last.undo, act, screen);
+      return hold(`undo:${done.current.length}:${last.label}`, async (act, at) => {
+        if (last.undo.plan) showPlan(last.undo.plan);
+        await send(act, at, `Undo: ${last.label}`, () => planned(last.undo, at));
+        // Landed or kept, it is not there to undo again.
         done.current.pop();
         remember(null);
       });
     },
 
-    make: (parcel) =>
-      press(`make:${parcel}`, async (act) => {
-        if (!screen) return;
-        await run({ kind: "make", parcel }, act, screen);
-      }),
+    make: (parcel) => hold(`make:${parcel}`, (act, at) => send(act, at, `Make ${titleOf(at, parcel)}`, () => writesOf([{ kind: "make", parcel }], at, fulfilment))),
 
     suggest: () =>
-      press(`suggest:${screen?.plan.map((p) => p.id).join(",") ?? ""}`, async () => {
-        if (!screen) return;
-        const before = screen.plan;
-        await keepPlan(suggested(screen, boardOf(screen), uuid));
-        remember({ label: "Suggest", undo: { plan: before, acts: [] } });
+      hold(`suggest:${screen?.plan.map((p) => p.id).join(",") ?? ""}`, async (act, at) => {
+        const before = at.plan;
+        const plan = suggested(at, boardOf(at), uuid);
+        showPlan(plan);
+        if (await send(act, at, "Suggest", () => ({ writes: [planWrite(plan)] }))) remember({ label: "Suggest", undo: { plan: before, acts: [] } });
       }),
-    discard: (carton) =>
-      press(`discard:${carton}`, (act) => api.discard(carton, act).then(() => undefined)),
+
+    kept: {
+      waiting: held.map((e) => ({ key: e.key, label: e.body.label, order: e.body.order })),
+      refused: outbox.refused.map((e) => ({ key: e.key, label: e.body.label, order: e.body.order, reason: e.refused ?? "" })),
+      others: outbox.others,
+      send: () => void outbox.send(),
+      dismiss: outbox.dismiss,
+    },
   };
+}
+
+/** A line's item code, to say what a press did. */
+function codeOf(at: BenchScreen, line: Uuid): string {
+  return at.lines.find((l) => l.line_id === line)?.item_code ?? "it";
+}
+
+/** A parcel's name on the board, to say what a press did. */
+function titleOf(at: BenchScreen, parcel: Uuid): string {
+  return boardOf(at).parcels.find((p) => p.id === parcel)?.title ?? "the carton";
 }

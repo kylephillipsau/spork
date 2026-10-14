@@ -87,14 +87,25 @@ test("somebody else's acts wait for them", async () => {
   assert.deepEqual(box.list().map((e) => e.key), ["p1"], "Priya's is still kept");
 });
 
-test("an act a screen is sending itself is left to it, and still waits", async () => {
+test("an act a press is sending itself is left to it, and still waits", async () => {
   const box = new Outbox<{ n: number }>(memory());
-  box.put(held("p1"));
   box.put(held("p2"));
+  let answer: () => void = () => {};
+  const pressed = box.now(held("p1"), () => new Promise<number>((resolve) => (answer = () => resolve(1))));
   const sent: number[] = [];
-  const left = await box.drain(SAM, async (body) => sent.push(body.n), undefined, (key) => key === "p1");
+  const left = await box.drain(SAM, async (body) => sent.push(body.n));
   assert.deepEqual(sent, [2], "only the one nobody else is sending");
   assert.equal(left, 1, "p1 is still waiting, for the press to settle");
+  answer();
+  assert.deepEqual(await pressed, { reply: 1 });
+  assert.deepEqual(box.list(), [], "landed, it leaves");
+});
+
+test("a press with no answer is kept; a press refused is not", async () => {
+  const box = new Outbox<{ n: number }>(memory());
+  assert.equal(await box.now(held("p1"), async () => { throw unreachable(); }), null);
+  await assert.rejects(box.now(held("p2"), async () => { throw answered(409, "Sealed."); }), /Sealed/);
+  assert.deepEqual(box.list().map((e) => e.key), ["p1"]);
 });
 
 test("a lapsed session or a server error is worth trying again; a refusal is not", () => {

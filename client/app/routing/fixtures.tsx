@@ -392,6 +392,22 @@ export const FIXTURES: readonly Screen[] = [
   app("f-pack-undo", "/fixtures/pack/undo", "Pack order — Undo ready", "bench", { screen: "pack-one" }, () => (
     <PackBenchPage bench={fixtureBench(PACK_FILLING, { undoable: "4 APR-PE-CLR-L into Carton 2" })} />
   )),
+  // No connection (D207): a press kept on the device and the board waiting for
+  // it, one the server refused when it went, and a colleague's left behind.
+  app("f-pack-kept", "/fixtures/pack/kept", "Pack order — no connection", "bench", { screen: "pack-one" }, () => (
+    <PackBenchPage
+      bench={fixtureBench(PACK_FILLING, {
+        busy: true,
+        kept: {
+          waiting: [{ key: "k1", label: "4 APR-PE-CLR-L into Carton 2", order: PACK_FILLING.order_reference }],
+          refused: [{ key: "k2", label: "Seal Carton 1", order: "S260049", reason: "That carton was despatched." }],
+          others: [{ name: "Sam Rivera", count: 2 }],
+          send: () => {},
+          dismiss: () => {},
+        },
+      })}
+    />
+  )),
   // A box cut down to a set height, chosen and said before it is started (D252).
   app("f-pack-cut", "/fixtures/pack/cut", "Pack order — a box cut down", "bench", { screen: "pack-one" }, () => packBench(PACK_CUT)),
   // Cartons as they came and loose things not measured: what the loose things weigh (D224).

@@ -132,6 +132,30 @@ export function anAct(mintId: () => Uuid = uuid, clock: () => string = now): Act
 }
 
 /**
+ * An act kept on the device (D207): its ids in a plain record saved with it.
+ *
+ * A name asked for the first time is minted into the record, and `minted` is
+ * told before the id is handed out, so the device has it before any request
+ * carries it. Sent again after a reload, it is the same act in every name,
+ * including names a half-sent press had not reached yet. `mintId` is told the
+ * name, so a press can mint through its own act and stay the same act when
+ * pressed again.
+ */
+export function keptAct(ids: Record<string, Uuid>, at: string, minted: () => void = () => {}, mintId: (name: string) => Uuid = uuid): Act {
+  return {
+    id: (name) => {
+      const found = ids[name];
+      if (found !== undefined) return found;
+      const fresh = mintId(name);
+      ids[name] = fresh;
+      minted();
+      return fresh;
+    },
+    at,
+  };
+}
+
+/**
  * One part of an act that is several writes, each needing names of its own.
  *
  * Shipping three cartons as they came is one press and nine writes: make,
@@ -150,9 +174,9 @@ export function partOf(act: Act, part: string): Act {
  *
  * Held per screen rather than globally, which is the honest boundary: an
  * operator who navigates away is not retrying that press. **A reload loses
- * them**, except a pick's: picks are kept on the device before they are sent,
- * and sent again until the server has them (`outbox.ts`, D207). Other acts
- * still live only here.
+ * them**, except a pick's and the pack bench's: those are kept on the device
+ * before they are sent, and sent again until the server has them (`outbox.ts`,
+ * D207). Other acts still live only here.
  */
 export function pressing(mint: () => Act = () => anAct()): Pressing {
   const held = new Map<string, Act>();

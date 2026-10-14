@@ -496,6 +496,7 @@ export function fixtureBench(screen: BenchScreen, over: Partial<PackBench> = {})
     make: noop,
     suggest: noop,
     open: noop,
+    kept: { waiting: [], refused: [], others: [], send: () => {}, dismiss: () => {} },
     ...over,
   };
 }
