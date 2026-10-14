@@ -74,6 +74,20 @@ test("a made carton onto a planned pallet makes the pallet first; goods out of a
   assert.deepEqual(out.acts, [{ kind: "repack", line: APRONS, units: 2, from: OPEN, to: null }]);
 });
 
+test("a thing nobody measured asks which box, and goes into the box chosen", () => {
+  const NETS = "f11e0000-0000-0000-0000-000000000002";
+  const screen = withPlan([]);
+  const board = boardOf(screen);
+  const asked = dropOn(screen, board, [goodsKey(NETS)], "new-box", { one: false }, newId);
+  assert.equal(asked.ok, false);
+  assert.equal(asked.chooseBox, true, "nothing to choose a box by");
+  const chosen = dropOn(screen, board, [goodsKey(NETS)], `new-box:${SMALL_BOX}`, { one: false }, newId);
+  assert.ok(chosen.ok, chosen.verdict);
+  assert.deepEqual(chosen.plan?.[0]?.lines, [{ line_id: NETS, quantity: 3 }]);
+  assert.equal(chosen.plan?.[0]?.package_type_id, SMALL_BOX);
+  assert.match(chosen.verdict, /not measured, so check it fits/);
+});
+
 test("Suggest plans again round what the packer placed, and keeps it", () => {
   const screen = withPlan([planned("mine", SMALL_BOX, [[APRONS, 1]]), planned("its", SMALL_BOX, [[APRONS, 3]], false)]);
   const plan = suggest(screen, boardOf(screen), newId);

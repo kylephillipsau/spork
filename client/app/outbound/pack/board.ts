@@ -15,10 +15,11 @@ import { LEVEL_WORDS, account, boxNote, cartonDetail, cartonWeight, dimsOf, look
  * that ship as they are (D196) are parcels of their own, worked out from what
  * is left, and made by Ship.
  *
- * Things are named by key, as the kit's drag names them: \`goods:<line>\` is a
- * line's units still to place, \`goods:<line>@<parcel>\` its units in or planned
- * into a parcel, \`parcel:<id>\` a parcel. A drop lands on \`parcel:<id>\`,
- * \`new-box\`, \`new-pallet\` or \`bench\` (To pack).
+ * Things are named by key, as the kit's drag names them: `goods:<line>` is a
+ * line's units still to place, `goods:<line>@<parcel>` its units in or planned
+ * into a parcel, `parcel:<id>` a parcel. A drop lands on `parcel:<id>`,
+ * `new-box` (the smallest that takes it), `new-box:<preset>` (that box),
+ * `new-pallet` or `bench` (To pack).
  *
  * No React here, so a test runner can read it.
  */
@@ -276,7 +277,7 @@ export type BoardAct =
    * take out puts them on the bench instead.
    */
   | { kind: "unput"; line: Uuid; units: number; carton: Uuid }
-  /** From one made carton to another, or to the bench when \`to\` is null (settled 2). */
+  /** From one made carton to another, or to the bench when `to` is null (settled 2). */
   | { kind: "repack"; line: Uuid; units: number; from: Uuid; to: Uuid | null }
   /** A planned parcel made into a carton, and its goods put in. */
   | { kind: "make"; parcel: Uuid }
@@ -295,9 +296,14 @@ export interface Outcome {
   undo: { plan: PlannedParcel[] | null; acts: BoardAct[] } | null;
   /** The parcel it lands in, arranged with it, to draw. */
   shown: { parcel: Uuid; arranged: BoxPlan } | null;
+  /** Nothing about it says which box: ask the packer, then drop on `new-box:<preset>`. */
+  chooseBox: boolean;
 }
 
-const refused = (verdict: string): Outcome => ({ ok: false, verdict, plan: null, acts: [], undo: null, shown: null });
+const refused = (verdict: string, chooseBox = false): Outcome => ({ ok: false, verdict, plan: null, acts: [], undo: null, shown: null, chooseBox });
+
+/** Whether a line has no size at any level: a box for it is the packer's to choose, and its fit theirs to judge. */
+const unmeasured = (line: BenchLine) => !line.packs.some((p) => p.size);
 
 /** How many: as many as there are, one with Shift, or the count asked for with Alt (settled 5). */
 export interface HowMany {
@@ -323,7 +329,7 @@ function withLine(pp: PlannedParcel, line: Uuid, by: number): PlannedParcel {
 }
 
 /**
- * What dropping these things on \`target\` does (D245, settled 5). Goods go in
+ * What dropping these things on `target` does (D245, settled 5). Goods go in
  * as many as fit and the rest stay; a carton goes on a pallet; dropped on To
  * pack, goods come out (onto the bench, settled 2) and a carton comes off its
  * pallet. Into a planned parcel it changes the plan only; into a made, open
@@ -392,19 +398,22 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
 
       let into: BoardParcel | null = null;
       let box: Box | null = null;
-      if (target === "new-box") {
-        // The smallest box that takes them, as the suggestion would choose it.
-        const chosen = arrange([{ ...line, remaining: want }], screen.presets).boxes[0];
+      if (target === "new-box" || target.startsWith("new-box:")) {
+        // The box named, or the smallest that takes them, as the suggestion
+        // would choose it. Nothing measured, there is nothing to choose by.
+        const named = target.startsWith("new-box:") ? screen.presets.find((p) => p.id === target.slice(8)) : undefined;
+        const chosen: Box | undefined = named && sized(named) ? named : arrange([{ ...line, remaining: want }], screen.presets).boxes[0]?.preset;
         if (!chosen) {
+          if (unmeasured(line)) return refused(`${line.item_code} isn't measured, so choose its box`, true);
           said.push(`No box takes ${line.item_code}`);
           continue;
         }
-        if (!fresh || fresh.package_type_id !== chosen.preset.id) {
-          fresh = { id: newId(), package_type_id: chosen.preset.id, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
+        if (!fresh || fresh.package_type_id !== chosen.id) {
+          fresh = { id: newId(), package_type_id: chosen.id, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
           plan = [...plan, fresh];
           changed = true;
         }
-        box = chosen.preset;
+        box = chosen;
       } else {
         const t = thingOf(target);
         into = t?.kind === "parcel" ? parcel(t.id) : null;
@@ -448,9 +457,11 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
       }
       const name = into?.title ?? `a new ${box.name}`;
       said.push(
-        fit.fits < want
-          ? `${fit.fits} of ${want} ${line.item_code} fit ${name} · ${want - fit.fits} stay`
-          : `${want} ${line.item_code} into ${name} · ${percent(fit.plan.fill)} full`,
+        unmeasured(line)
+          ? `${want} ${line.item_code} into ${name} · not measured, so check it fits`
+          : fit.fits < want
+            ? `${fit.fits} of ${want} ${line.item_code} fit ${name} · ${want - fit.fits} stay`
+            : `${want} ${line.item_code} into ${name} · ${percent(fit.plan.fill)} full`,
       );
       continue;
     }
@@ -511,6 +522,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
     acts,
     undo: { plan: changed ? before : null, acts: undo },
     shown,
+    chooseBox: false,
   };
 }
 

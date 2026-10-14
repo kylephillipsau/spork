@@ -99,6 +99,9 @@ function Bench({
   const drop = (keys: string[], target: string, how: { one: boolean; ask: boolean }) => {
     if (how.ask) return setMoving({ keys, target });
     const out = dropOn(screen, board, keys, target, { one: how.one }, uuid);
+    // Nothing to choose a box by: ask which, in Move to….
+    const box = screen.presets.find((p) => p.size && !p.deck && p.suggested);
+    if (out.chooseBox && box) return setMoving({ keys, target: `new-box:${box.id}` });
     if (!out.ok) return toast({ title: out.verdict, tone: "danger" });
     void bench.apply(out, out.verdict);
   };
@@ -285,7 +288,12 @@ function MoveTo({
     ...board.parcels
       .filter((p) => p.kind !== "as_is" && p.state !== "sealed" && (goods ? p.kind === "box" : p.kind === "pallet"))
       .map((p) => ({ value: parcelKey(p.id), label: `${p.title}${p.made ? "" : " (planned)"}` })),
-    goods ? { value: "new-box", label: "A new box" } : { value: "new-pallet", label: "A new pallet" },
+    ...(goods
+      ? [
+          { value: "new-box", label: "A new box, the smallest that takes it" },
+          ...screen.presets.filter((p) => p.size && !p.deck).map((p) => ({ value: `new-box:${p.id}`, label: `A new ${p.name}` })),
+        ]
+      : [{ value: "new-pallet", label: "A new pallet" }]),
     { value: "bench", label: goods ? "Out onto the bench" : "Off its pallet" },
   ];
   const [target, setTarget] = useState(first ?? options[0]?.value ?? "bench");
