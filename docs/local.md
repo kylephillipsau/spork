@@ -65,7 +65,26 @@ The rule only applies on networks Windows treats as **Private**, and only accept
 connections from the local subnet. If the warehouse WiFi is set to Public, the
 command tells you.
 
-Two limits apply until the site has a certificate:
+### Paired devices, over HTTPS (D255)
+
+The address can move, so devices find this computer by the name it announces
+itself, `http://<computer>.local:18080` (mDNS), and trust it through Spork's own
+authority:
+
+1. `scriptslocal.ps1 https` fetches Caddy (pinned, checked against its
+   release's checksums) into `.localcaddy`.
+2. `scriptslocal.ps1 firewall` opens 443 as well as 18080.
+3. `scriptslocal.ps1 start -Lan` has the server make its authority and its
+   certificate (`.localstateidentity`) and starts Caddy in front on 443.
+4. On each device, once: open `http://<computer>.local:18080/pair`, install the
+   authority, check its fingerprint against the one the server logs at start,
+   then open `https://<computer>.local` and install the app from the browser's
+   menu.
+
+The authority can vouch only for `.local` names. Keep `.localstateidentity`
+out of backups you share: its key is what devices trust.
+
+Until a device is paired, these limits apply on it:
 
 - **Sign in with a password on other devices.** Passkeys only work at
   `localhost`, because browsers require HTTPS for them anywhere else.

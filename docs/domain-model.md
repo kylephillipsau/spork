@@ -16763,3 +16763,52 @@ the dashboard?", and then: "it probably might be better to put this in an
 administration dashboard instead of the main one". Counting from NetSuite's
 own record of packed fulfilments counts the one in five Spork never saw.
 Counting from Spork's closing of fulfilments would not.
+
+### D255: A host is known by its own authority, and found by its own name
+
+*Adopted 2026-10-14. Built.*
+
+**The finding.** Devices reached the host by its address, over plain HTTP. The
+address comes from DHCP and may move; nobody here may reserve it or touch the
+router, whose DNS answers every name with its own address. Plain HTTP also
+rules out an installable application and a service worker, so a handheld on
+poor wifi starts from nothing each time, and a password crosses the wifi in
+the clear.
+
+**Decision.**
+
+- **Found by its own name.** A host is reached by the name the computer
+  announces on the network itself, `<computer>.local` (mDNS), which follows it
+  wherever its address goes. No DNS server is involved.
+- **Trusted through Spork's own authority.** The server makes an authority on
+  its first start with `SPORK_IDENTITY=1`, and a certificate for its name
+  signed by it, kept in the state directory (`identity.rs`). The authority may
+  sign only `.local` names: a critical name constraint, so a copy of its key
+  could not stand in for any other site. It lasts ten years; a host's
+  certificate a year, made again by the server when it starts within thirty
+  days of the end, or when the name changes.
+- **Paired once.** `/pair`, served over plain HTTP too, offers the authority
+  to install and its fingerprint to check against the desk's. A paired device
+  then opens `https://<computer>.local` and trusts it, wherever the host has
+  moved; another machine at that address cannot pass for it.
+- **HTTPS in front.** Caddy, pinned and checked against its release's
+  checksums, serves the certificate on 443 and passes everything to the
+  server (`scripts/local.ps1`). The plain address stays, for devices not yet
+  paired.
+- **Kept on the device.** Over HTTPS, a service worker keeps the application:
+  its document from the network first and the copy when the network fails,
+  its hashed assets from the device. `/api` is the network's alone; writes
+  wait in the outbox (D207). The manifest asks to be installed as an app.
+
+**Why.** The user, 2026-10-14: "I can only use what I have been given", and
+"cryptographically we could establish an identity of hosts, and then
+validate them, so that if they move on the network, the connections to them
+can be re-established". A browser decides whom it trusts before any page
+runs, so the identity is one the browser checks: a certificate from an
+authority the device was given. A public name was weighed and set aside: the
+router's DNS cannot be relied on to resolve it, and it would need the
+internet to be found.
+
+**Not yet.** Passkeys stay bound to localhost; elsewhere a person signs in
+with a password. A server running a year without a restart keeps an expired
+certificate. The bench's acts are not yet held in the outbox.

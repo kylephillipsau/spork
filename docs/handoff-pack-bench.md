@@ -69,6 +69,21 @@ toolchain, tests and layout.
 
 ## What landed
 
+**Later on 2026-10-14: paired devices over HTTPS (D255), and choosing a box**
+- `identity.rs`: with `SPORK_IDENTITY=1` the server makes Spork's own
+  authority (only `.local` names) and a certificate for the name this
+  computer announces by mDNS, renewed by itself, in `.localstateidentity`;
+  `/pair` offers the authority and its fingerprint.
+- `scripts/local.ps1`: `https` fetches Caddy 2.11.4 (checksum checked);
+  `firewall` opens 443 too; `start -Lan` starts Caddy in front once the
+  certificate is written. Tried end to end on spare ports: verified with the
+  authority, refused without it.
+- `client/public/sw.js` and the manifest: installable, the app kept on the
+  device over HTTPS; `/api` and the server's documents left to the network.
+- The board: a thing nobody measured asks which box in Move to…, which now
+  offers every box by name; its fit is said to be by eye.
+- Compression (648ca8e) is live.
+
 **Later on 2026-10-14: M3, the board (D245, settled 2, 4 and 5)**
 - Migration 142: `pack_plan_parcel` and `pack_plan_line`, the board's plan
   kept per fulfilment; `PUT /fulfilments/{id}/pack-plan` (`pack_plan.rs`)
@@ -370,9 +385,9 @@ toolchain, tests and layout.
 3. **M3 live:** pack a real order on the board: drag lines into a carton,
    Make a planned box, put cartons on a pallet, take something out and Undo,
    and despatch the pallet.
-4. **HTTPS and an installable app** (after M3, the user's choice): a name for
-   the server and a certificate, a service worker, and the outbox for the
-   bench's acts (`https-and-pwa` in the session notes).
+4. **Pair the handhelds** (D255): `scriptslocal.ps1 firewall` once as admin,
+   restart with `-Lan`, then on each device `http://<computer>.local:18080/pair`.
+   Next: the outbox for the bench's acts, and passkeys on the .local name.
 5. **D249, D250, D251:** `subject_load`, wall and lid limits, `build_rules`,
    and the planner in a worker. It replaces `arrange.ts` once it is never
    worse over a test set of real orders.
