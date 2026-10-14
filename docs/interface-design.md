@@ -1880,6 +1880,12 @@ and checks rather than conventions:
   ground — declares `data-density="desktop"` on itself, so a handheld
   screen's touch density sizes its content and nothing around it. It was
   once a property of `<body>`, and the sidebar changed size between views.
+- *A desk's screen on a phone is under a finger.* At 640px or narrower, or on
+  a coarse pointer, desktop density keeps a desk's text but takes 40/44/48px
+  controls. Text boxes take 16px there (smaller, a phone zooms the page to
+  them), tabs wrap rather than scroll out of sight, and a worded ghost button
+  keeps a faint ground, since no hover shows it is one. The render gate
+  holds the frame to the desk's size at that width, never the handheld's.
 - *Patterns have one owner.* Page rhythm (`Page`), card strips (`Toolbar`,
   top or bottom), `Section`, `Alert`, `StatGrid`/`Stat`, `Facts`/`Fact`,
   `Card` with a count, `DataTable` with a growing column: a screen composes

@@ -6,10 +6,17 @@
 .select {
   width: 220px;
 }
+@media (max-width: 640px) {
+  .select {
+    width: 100%;
+  }
+}
+/* The carrier, and under it on a narrow card the service it books. */
 .consignmentTitle {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--ui-space-2);
+  gap: var(--ui-space-1) var(--ui-space-2);
 }
 .consignmentTitle svg {
   width: var(--ui-icon-lg);

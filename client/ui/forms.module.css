@@ -286,3 +286,25 @@
 .scan .leading {
   color: var(--ui-accent);
 }
+
+/* A desk's screen on a phone, or under a finger.
+   - Its text boxes take the size below which a phone zooms the page to show
+     what is typed, and leaves it zoomed.
+   - A tick box's whole line is the thing to tap, not the box alone.
+   - Tabs that do not fit wrap onto a second line: scrolled out of sight with
+     no bar to say so, they were tabs nobody knew were there. */
+@media (max-width: 640px), (pointer: coarse) {
+  [data-density="desktop"] .input {
+    font-size: var(--ui-text-lg);
+  }
+  .checkRow {
+    min-height: var(--ui-control-sm);
+  }
+  .selectItem {
+    height: var(--ui-control-sm);
+  }
+  .tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}

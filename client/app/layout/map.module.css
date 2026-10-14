@@ -160,6 +160,27 @@
   box-shadow: var(--ui-shadow-sm);
 }
 
+/* A phone: the legend below the site, not over its near end, and the site
+   the height the legend leaves it. */
+@media (max-width: 640px) {
+  .stage {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    height: auto;
+  }
+  .stage > .canvas,
+  .stage > .note {
+    position: relative;
+    inset: auto;
+    height: clamp(22rem, 60vh, 40rem);
+  }
+  .legend {
+    position: static;
+    max-width: none;
+  }
+}
+
 .keys {
   display: flex;
   flex-wrap: wrap;

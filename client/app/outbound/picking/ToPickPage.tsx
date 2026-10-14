@@ -145,7 +145,7 @@ export function ToPickPage({ desk }: { desk: ToPickDesk }) {
             value={desk.pasted}
             onChange={(e) => desk.paste(e.target.value)}
           />
-          <Toolbar>
+          <div className={s.pasteActions}>
             {/* One primary at a time: once there is something to print, printing is it. */}
             <Button type="submit" variant={batch?.plan && waitingCount > 0 ? "secondary" : "primary"} disabled={!desk.pasted.trim()}>
               Look up
@@ -158,7 +158,7 @@ export function ToPickPage({ desk }: { desk: ToPickDesk }) {
                 {batch.balance_as_at && ` · bins counted ${ago(batch.balance_as_at)} ago`}
               </Faint>
             )}
-          </Toolbar>
+          </div>
         </form>
       </Card>
 

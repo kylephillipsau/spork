@@ -89,6 +89,13 @@
   background: var(--ui-surface-hover);
   color: var(--ui-text);
 }
+/* Under a finger no hover shows that a worded ghost is a button, and it read
+   as loose text: it keeps a faint ground. */
+@media (max-width: 640px), (pointer: coarse) {
+  .ghost:not(.iconOnly) {
+    background: var(--ui-surface-sunken);
+  }
+}
 
 .danger {
   background: var(--ui-danger-solid);

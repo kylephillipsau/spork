@@ -321,7 +321,8 @@ function PlanCanvas({ desk }: { desk: PlanDesk }) {
           .filter((sh) => sh.nesting > 0)
           .map((sh) => {
             const [cx, cy] = middle(sh.corners);
-            const size = Math.min(1, Math.max(0.35, shortSide(sh.corners) * 0.6));
+            // Its place's size, but never smaller on screen than can be read.
+            const size = Math.max(Math.min(1, Math.max(0.35, shortSide(sh.corners) * 0.6)), 10 * px);
             return (
               <text
                 key={`n-${sh.place_id}`}
@@ -365,7 +366,7 @@ function Front({ shape, d: place, px }: { shape: PlanShape; d: Draft; px: number
   const label = (p: Point, q: Point, normal: Point, text: string) => {
     const m: Point = [(p[0] + q[0]) / 2 + normal[0] * 14 * px, (p[1] + q[1]) / 2 + normal[1] * 14 * px];
     return (
-      <text x={m[0]} y={-m[1]} fontSize={11 * px} className={s.side} textAnchor="middle" dominantBaseline="central">
+      <text x={m[0]} y={-m[1]} fontSize={11 * px} strokeWidth={3 * px} className={s.side} textAnchor="middle" dominantBaseline="central">
         {text}
       </text>
     );

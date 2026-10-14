@@ -74,10 +74,13 @@ tbody tr:last-child .td {
 .clickable {
   cursor: pointer;
 }
-.clickable:hover .td {
+/* The row is lit, never its cells one by one: stacked on a narrow screen,
+   the cells sit apart inside the row's padding, and lit separately they
+   left patches behind the text with gaps round them. */
+.clickable:hover {
   background: var(--ui-surface-hover);
 }
-.selected .td {
+.selected {
   background: var(--ui-accent-soft);
 }
 
@@ -150,6 +153,11 @@ tbody tr:last-child .td {
     border: 0;
     white-space: normal;
     text-align: left;
+  }
+  /* Its own width, but never past the value column: a line that will not
+     wrap is cut with its ellipsis, not run into the card's edge. */
+  .td > * {
+    max-width: 100%;
   }
   .td::before {
     content: attr(data-label);

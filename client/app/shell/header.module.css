@@ -244,8 +244,30 @@
 }
 /* A phone: a magnifier in the header, opening the search over the whole
    screen with its results below it (D189). The box stays in the page, hidden,
-   so the magnifier can focus it in the same tap and raise the keyboard. */
+   so the magnifier can focus it in the same tap and raise the keyboard.
+   What a scan said, with the search closed, hangs below the header across the
+   screen: hung from the magnifier it ran off the screen's left edge. */
 @media (max-width: 640px) {
+  .search:not(.open) .results {
+    position: fixed;
+    top: calc(var(--ui-header-height) + var(--ui-space-1));
+    right: var(--ui-space-3);
+    left: var(--ui-space-3);
+    width: auto;
+  }
+  .resultsClose {
+    align-items: center;
+    justify-content: center;
+    min-width: var(--ui-control-sm);
+    min-height: var(--ui-control-sm);
+  }
+  .searchInput {
+    font-size: var(--ui-text-lg);
+  }
+  .site,
+  .user {
+    height: var(--ui-control);
+  }
   .searchToggle {
     display: inline-flex;
     align-items: center;
@@ -285,7 +307,6 @@
   .open .searchBox {
     width: auto;
     height: var(--ui-control-lg);
-    font-size: var(--ui-text-md);
   }
   .open .searchCancel {
     display: inline-flex;
@@ -306,7 +327,7 @@
     border: 0;
     box-shadow: none;
   }
-  .open .resultsOption {
-    min-height: 44px;
+  .resultsOption {
+    min-height: var(--ui-control);
   }
 }

@@ -108,6 +108,19 @@
   --ui-nav-item: 44px;
 }
 
+/* A desk's screen on a phone, or under a finger: its controls grow to a
+   fingertip and its text stays a desk's. The handheld screens are already
+   this size. */
+@media (max-width: 640px), (pointer: coarse) {
+  :root,
+  [data-density="desktop"] {
+    --ui-control-sm: 40px;
+    --ui-control: 44px;
+    --ui-control-lg: 48px;
+    --ui-nav-item: 44px;
+  }
+}
+
 /* ---- 3. semantic colour ------------------------------------------------- */
 :root {
   color-scheme: light;

@@ -266,7 +266,7 @@ function CartonFoot({ carton, lines, bench }: { carton: CartonSummary; lines: Be
           </div>
         </div>
         {carton.expected && (
-          <Facts>
+          <Facts columns={1}>
             <ExpectedFact expected={carton.expected} contents={carton.contents} />
           </Facts>
         )}

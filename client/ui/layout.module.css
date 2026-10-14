@@ -94,9 +94,14 @@
 }
 
 /* ---- stats ---- */
+/* Each figure draws the line on its right and below, outside itself, and the
+   grid clips what falls past its edge: so the lines run between figures
+   however many wrap to a row, and never along the card's own border. The
+   last figure closes nothing off on its right. */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  overflow: hidden;
 }
 /* A divider below only when something follows: alone in a card, the card's
    own border is the edge. */
@@ -108,10 +113,12 @@
   flex-direction: column;
   gap: var(--ui-space-0-5);
   padding: var(--ui-space-3) var(--ui-space-4);
-  box-shadow: inset -1px 0 0 var(--ui-border);
+  box-shadow:
+    1px 0 0 var(--ui-border),
+    0 1px 0 var(--ui-border);
 }
 .stat:last-child {
-  box-shadow: none;
+  box-shadow: 0 1px 0 var(--ui-border);
 }
 .statLabel {
   color: var(--ui-text-muted);
@@ -177,4 +184,11 @@
 .mono {
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-base);
+}
+
+/* Under a finger, an alert's Dismiss is as tall as a button. */
+@media (max-width: 640px), (pointer: coarse) {
+  .alertDismiss {
+    min-height: var(--ui-control-sm);
+  }
 }

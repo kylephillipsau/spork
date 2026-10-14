@@ -41,8 +41,8 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--ui-control-sm);
+  height: var(--ui-control-sm);
   padding: 0;
   border: 0;
   border-radius: var(--ui-radius);

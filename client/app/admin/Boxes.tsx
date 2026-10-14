@@ -52,6 +52,7 @@ export function Boxes({ boxes, bench, open: first = null }: { boxes: PackageType
     {
       key: "name",
       header: "Box",
+      grow: true,
       // The name opens the box to its heights and photographs.
       cell: (b) =>
         fits(b) && sizeOf(b) ? (
@@ -73,12 +74,15 @@ export function Boxes({ boxes, bench, open: first = null }: { boxes: PackageType
     {
       key: "size",
       header: "Inside (L × W × H)",
+      label: "Inside",
       cell: (b) => (sizeOf(b) ? `${b.length_mm} × ${b.width_mm} × ${b.height_mm} mm` : <Faint>No fixed size</Faint>),
       sort: (b) => (b.length_mm ?? 0) * (b.width_mm ?? 0) * (b.height_mm ?? 0),
     },
     {
       key: "heights",
       header: "Heights, cm",
+      // Room for a box and three cuts on one line, beside a growing name.
+      width: "160px",
       cell: (b) =>
         fits(b) && b.height_mm ? (
           <span className={s.heights}>

@@ -83,6 +83,12 @@
   gap: var(--ui-space-1);
   font-size: var(--ui-text-sm);
 }
+/* Under a finger, the link is as tall as a button. */
+@media (max-width: 640px), (pointer: coarse) {
+  .viewAll {
+    min-height: var(--ui-control-sm);
+  }
+}
 .viewAll svg {
   width: 14px;
   height: 14px;

@@ -18,7 +18,8 @@
  *    frame), and the widest element is named when it does;
  *  - density: a handheld screen's content is at touch density and every
  *    control on it is a touch target, while the frame (sidebar, header) stays
- *    at desktop density on every screen;
+ *    at desktop density on every screen (a desk's controls, which on a phone
+ *    are a fingertip's size; never the handheld's);
  *  - at most one primary action is visible at a time, the screen's or the
  *    dock's;
  *  - one scan field at most, and never the header's and the screen's together
@@ -196,6 +197,7 @@ for (const { route, scheme, viewport, as } of VISITS) {
     return {
       overflow,
       widest,
+      deskControl: px(document.documentElement, "--ui-control"),
       contentControl: px(main, "--ui-control"),
       headerControl: px(header, "--ui-control"),
       sidebarControl: px(aside, "--ui-control"),
@@ -218,13 +220,13 @@ for (const { route, scheme, viewport, as } of VISITS) {
   if (route.frame === "app" && !seen.title) note(where, "no page title (h1)");
 
   const touch = route.floor;
-  const wantContent = touch ? "48px" : "34px";
+  const wantContent = touch ? "48px" : seen.deskControl;
   if (seen.contentControl !== wantContent) {
     note(where, `content at --ui-control ${seen.contentControl || "(unset)"}, expected ${wantContent}`);
   }
   if (route.frame === "app") {
-    if (seen.headerControl !== "34px") note(where, `the header is at --ui-control ${seen.headerControl}, expected desktop 34px`);
-    if (seen.sidebarControl !== "34px") note(where, `the sidebar is at --ui-control ${seen.sidebarControl}, expected desktop 34px`);
+    if (seen.headerControl !== seen.deskControl) note(where, `the header is at --ui-control ${seen.headerControl}, expected the desk's ${seen.deskControl}`);
+    if (seen.sidebarControl !== seen.deskControl) note(where, `the sidebar is at --ui-control ${seen.sidebarControl}, expected the desk's ${seen.deskControl}`);
     // Account and passkeys live in the user menu, so they mark nothing; every
     // other screen marks exactly its own item. `nav.test.ts` holds which is which.
     if (seen.current > 1) note(where, `${seen.current} sidebar items marked current, expected at most 1`);

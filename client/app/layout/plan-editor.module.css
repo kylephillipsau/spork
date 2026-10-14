@@ -44,6 +44,13 @@
 .plan:active {
   cursor: grabbing;
 }
+/* A phone: room above and below the plan to scroll the page by, since a
+   finger on the plan moves the plan. */
+@media (max-width: 640px) {
+  .plan {
+    height: clamp(18rem, 50vh, 28rem);
+  }
+}
 .plan:focus-visible {
   box-shadow: inset 0 0 0 2px var(--ui-accent);
 }
@@ -104,6 +111,8 @@
 .side {
   fill: var(--ui-warning);
   font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--ui-surface);
   pointer-events: none;
   user-select: none;
 }
