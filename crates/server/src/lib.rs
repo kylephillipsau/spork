@@ -48,6 +48,7 @@ pub mod observing;
 pub mod orders;
 pub mod prepack;
 pub mod packages;
+pub mod pack_plan;
 pub mod packaging;
 pub mod pdf_metrics;
 pub mod people;

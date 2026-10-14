@@ -30,7 +30,7 @@ import { Dashboard } from "@app/home/Dashboard";
 import { DASHBOARD, DASHBOARD_NO_SITE, DASHBOARD_QUIET } from "@app/home/dashboard-fixture";
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
-import { PACK_CUT, PACK_FILLING, PACK_FIXTURE, PACK_LOOSE } from "@app/outbound/pack/fixture";
+import { PACK_CUT, PACK_DRAG, PACK_FILLING, PACK_FIXTURE, PACK_LOOSE, PACK_PALLET, PACK_WONT, fixtureBench } from "@app/outbound/pack/fixture";
 import { SearchPage } from "@app/scan/SearchPage";
 import { SEARCH_FAMILY } from "@app/scan/fixture";
 import { PackQueuePage } from "@app/outbound/pack/PackQueuePage";
@@ -281,27 +281,7 @@ const noop = async () => {};
 /* ---- states that need more than one line --------------------------------- */
 
 function packBench(screen: BenchScreen = PACK_FIXTURE) {
-  return (
-    <PackBenchPage
-      bench={{
-        status: { kind: "ready", screen },
-        openCarton: screen.cartons.find((c) => !c.sealed)?.id ?? null,
-        busy: false,
-        problem: null,
-        dismiss: () => {},
-        refresh: () => {},
-        startCarton: noop,
-        addToCarton: noop,
-        handOver: noop,
-        shipAsIs: noop,
-        check: noop,
-        measure: noop,
-        takeOut: noop,
-        seal: noop,
-        discard: noop,
-      }}
-    />
-  );
+  return <PackBenchPage bench={fixtureBench(screen)} />;
 }
 
 function despatch() {
@@ -400,6 +380,18 @@ export const FIXTURES: readonly Screen[] = [
   app("f-pack-filling", "/fixtures/pack/filling", "Pack order — filling a carton", "bench", { screen: "pack-one" }, () =>
     packBench(PACK_FILLING),
   ),
+  // The board (D245): a drag held over the open carton, which takes the aprons;
+  // held over a sealed one, which won't; an order pallet; and Undo ready.
+  app("f-pack-drag", "/fixtures/pack/drag", "Pack order — dragging onto a carton", "bench", { screen: "pack-one" }, () => (
+    <PackBenchPage bench={fixtureBench(PACK_DRAG.screen)} drag={PACK_DRAG.drag} />
+  )),
+  app("f-pack-wont", "/fixtures/pack/wont", "Pack order — a carton that won't take it", "bench", { screen: "pack-one" }, () => (
+    <PackBenchPage bench={fixtureBench(PACK_WONT.screen)} drag={PACK_WONT.drag} />
+  )),
+  app("f-pack-pallet", "/fixtures/pack/pallet", "Pack order — onto a pallet", "bench", { screen: "pack-one" }, () => packBench(PACK_PALLET)),
+  app("f-pack-undo", "/fixtures/pack/undo", "Pack order — Undo ready", "bench", { screen: "pack-one" }, () => (
+    <PackBenchPage bench={fixtureBench(PACK_FILLING, { undoable: "4 APR-PE-CLR-L into Carton 2" })} />
+  )),
   // A box cut down to a set height, chosen and said before it is started (D252).
   app("f-pack-cut", "/fixtures/pack/cut", "Pack order — a box cut down", "bench", { screen: "pack-one" }, () => packBench(PACK_CUT)),
   // Cartons as they came and loose things not measured: what the loose things weigh (D224).

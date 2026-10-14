@@ -1802,6 +1802,15 @@ pub async fn create_package(
                 )
                 .await?;
 
+                // Made from the board's plan (D245): the planned parcel is this
+                // carton now. What was planned onto it goes on it as made.
+                tx.execute(
+                    "UPDATE pack_plan_parcel SET on_package_id = $1, on_parcel_id = NULL WHERE on_parcel_id = $1",
+                    &[&package_id],
+                )
+                .await?;
+                tx.execute("DELETE FROM pack_plan_parcel WHERE id = $1", &[&package_id]).await?;
+
                 let event_id: Uuid = tx
                     .query_one(
                         "INSERT INTO package_event (
@@ -2026,7 +2035,7 @@ pub struct ContainPackageRequest {
 
 /// A spot on a pallet: from the front left corner of its deck, front being
 /// where the forks go in; `turned` a quarter round.
-#[derive(Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Spot {
     pub x_mm: i32,
     pub y_mm: i32,
@@ -9919,6 +9928,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::shipping::box_empty_weight)
         .service(crate::boxes::add_height)
         .service(crate::boxes::remove_height)
+        .service(crate::pack_plan::save_plan)
         .service(crate::checking::check_line)
         .service(crate::repacking::repack)
         .service(crate::backup::backup_summary)

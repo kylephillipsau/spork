@@ -1,55 +1,50 @@
-import { useState } from "react";
-import { Boxes, FileText, PackageOpen, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Sparkles, Undo2 } from "lucide-react";
 
 import {
   Alert,
   Badge,
   Button,
   Card,
-  DataTable,
-  EmptyState,
-  Fact,
-  Facts,
+  Dialog,
+  DragZone,
   Link,
   Page,
   PageHeader,
   Select,
   Skeleton,
-  Spacer,
   TextField,
-  Toolbar,
-  type Column,
+  useChosen,
+  useDragNow,
+  useToast,
 } from "@ui/index";
-import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OnParent, OwnCarton, PackedRow, Picture, StatedSize, Uuid } from "@domain/types";
-import { agreement, provenance } from "@app/measurement/baseline";
-import { href } from "@app/routing/location";
+import { uuid } from "@domain/acts";
+import type { BenchScreen } from "@domain/types";
 import { usePageTitle } from "@app/routing/title";
-import { Faint } from "@app/common/cells";
-import { kg } from "@app/common/format";
-import { cutSaying } from "@app/items/box";
-import { ItemDrawer, ItemLine } from "@app/items/ItemProperties";
+import { ItemDrawer } from "@app/items/ItemProperties";
 
-import { piecesOf, type AsIs } from "./arrange";
-import { explain, needsCheck, offBy, onTheBench, uncheckedIn } from "./check";
+import { boardOf, dropOn, labelOf, parcelKey, thingOf, type Board, type BoardParcel, type Outcome } from "./board";
+import { needsCheck, uncheckedIn } from "./check";
 import { Checks } from "./Checks";
-import { Suggestion, shipLabel } from "./Suggestion";
+import { Chosen, tally } from "./Chosen";
+import { DropSlot, ParcelCard, type ParcelActs } from "./Parcels";
+import { ToPack } from "./ToPack";
 import type { PackBench } from "./usePackBench";
 import s from "./pack-bench.module.css";
 
-/** What the packer has chosen on one line: the bin, and how many. */
-interface Draft {
-  cell: string;
-  qty: string;
-}
+/** A drop's id for a parcel it would make, while only saying what it would do. */
+const SAYING = () => "preview";
 
 /**
- * The pack bench for one fulfilment (D171): what is left to pack on the left,
- * the cartons on the right. Add puts units from a bin into the open carton;
- * Seal closes it. One primary action at a time: Start carton when none is
- * open, otherwise Seal on the open one.
+ * The pack bench for one fulfilment: the order on one board (D245), laid out
+ * for a 1080p screen, a mouse and a keyboard. To pack and its check on the
+ * left, the parcels in the middle, pallets holding their cartons, and the
+ * chosen parcel in 3D on the right. Above, the tally, Undo, Suggest and the
+ * next thing to do, the one primary press.
+ *
+ * `drag` holds a drag still, for a screen drawn from a fixture.
  */
-export function PackBenchPage({ bench }: { bench: PackBench }) {
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+export function PackBenchPage({ bench, drag = null }: { bench: PackBench; drag?: { keys: string[]; over: string | null } | null }) {
   // The item whose size, weight and photos are open beside the bench (D174).
   const [looking, setLooking] = useState<string | null>(null);
   const st = bench.status;
@@ -70,176 +65,68 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
       </Page>
     );
   }
+  return <Bench screen={st.screen} bench={bench} drag={drag} looking={looking} look={setLooking} />;
+}
 
-  const screen = st.screen;
-  // Every item in a carton came from one of these lines.
-  const pictures = new Map(screen.lines.map((l) => [l.item_id, l.picture]));
-  const left = screen.lines.reduce((t, l) => t + Math.max(0, l.remaining), 0);
-  const draft = (l: BenchLine): Draft => drafts[l.line_id] ?? { cell: l.cells[0]?.stock_id ?? "", qty: String(l.remaining) };
-  const change = (l: BenchLine, next: Partial<Draft>) => setDrafts((d) => ({ ...d, [l.line_id]: { ...draft(l), ...next } }));
-  const canAdd = (l: BenchLine) => l.remaining > 0 && l.cells.length > 0 && !!bench.openCarton && !bench.busy;
-  // Picked elsewhere and not yet here: the goods are handed over rather than
-  // taken from a bin (D172). Into the open carton, or else to staging.
-  // Where the picking happened, when it was not here: one document for the
-  // whole fulfilment, so it is said once rather than on every line.
-  const elsewhere = screen.lines.find((l) => l.elsewhere)?.elsewhere ?? null;
-  const handing = (l: BenchLine) => !!l.elsewhere && l.cells.length === 0 && l.remaining > 0;
-  const canHand = (l: BenchLine) => handing(l) && (!!bench.openCarton || !!screen.staging_id) && !bench.busy;
-  const hand = (l: BenchLine) => {
-    const n = Number.parseInt(draft(l).qty, 10);
-    if (canHand(l) && n > 0) void bench.handOver({ line: l.line_id, quantity: n });
-  };
-  // What of a line ships as it is (migration 98, D196): whole cartons, and
-  // inner packs or eaches somebody said travel on their own. The same reading
-  // the suggestion makes, so the line and the suggestion offer the same thing.
-  // From the bin chosen when this site holds the stock, else handed over.
-  const asIs = piecesOf(onTheBench(screen.lines)).asIs;
-  // Sealed as it is made, so its line is checked first (D244).
-  const canShip = (l: BenchLine) => !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere) && !needsCheck(l);
-  const ship = (a: AsIs) => {
-    const l = screen.lines.find((x) => x.line_id === a.line);
-    if (!l || !canShip(l)) return;
-    const stock = l.cells.length > 0 ? draft(l).cell : undefined;
-    void bench.shipAsIs({
-      line: l.line_id,
-      item: l.item_id,
-      level: a.level,
-      config: l.own_carton?.item_packing_config_id ?? null,
-      units: a.per,
-      count: a.count,
-      ...(stock ? { stock } : {}),
-    });
-  };
-  const add = (l: BenchLine) => {
-    const d = draft(l);
-    const n = Number.parseInt(d.qty, 10);
-    if (canAdd(l) && n > 0) void bench.addToCarton({ line: l.line_id, stock: d.cell, quantity: n });
+function Bench({
+  screen,
+  bench,
+  drag,
+  looking,
+  look,
+}: {
+  screen: BenchScreen;
+  bench: PackBench;
+  drag: { keys: string[]; over: string | null } | null;
+  looking: string | null;
+  look: (item: string | null) => void;
+}) {
+  const board = useMemo(() => boardOf(screen), [screen]);
+  const toast = useToast();
+  // A drop with Alt, or M: where to, and how many.
+  const [moving, setMoving] = useState<{ keys: string[]; target: string | null } | null>(null);
+
+  // An order opened with nothing planned is planned at once, as the bench
+  // always suggested; after that, only Suggest plans again.
+  const suggested = useRef(false);
+  const left = board.lines.reduce((t, b) => t + b.left, 0);
+  useEffect(() => {
+    if (suggested.current || screen.plan.length > 0 || left === 0) return;
+    suggested.current = true;
+    void bench.suggest();
+  }, [screen.plan.length, left]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const drop = (keys: string[], target: string, how: { one: boolean; ask: boolean }) => {
+    if (how.ask) return setMoving({ keys, target });
+    const out = dropOn(screen, board, keys, target, { one: how.one }, uuid);
+    if (!out.ok) return toast({ title: out.verdict, tone: "danger" });
+    void bench.apply(out, out.verdict);
   };
 
-  const lineColumns: Column<BenchLine>[] = [
-    {
-      key: "item",
-      header: "Item",
-      cell: (l) => (
-        <ItemLine
-          code={l.item_code}
-          description={l.description ?? undefined}
-          tags={l.tags}
-          picture={l.picture}
-          onOpen={() => setLooking(l.item_id)}
-          note={l.kit ? `Part of ${l.kit.item_code} × ${l.kit.ordered}` : undefined}
-          done={l.remaining === 0}
-        />
-      ),
-      grow: true,
+  // Picked elsewhere and not yet here: where the picking happened is said once.
+  const elsewhere = screen.lines.find((l) => l.elsewhere)?.elsewhere?.provenance ?? null;
+  const acts: ParcelActs = {
+    bench,
+    takeOut: (line, carton) => drop([`goods:${line}@${carton}`], "bench", { one: false, ask: false }),
+    canShip: (p) => {
+      const l = p.goods[0]?.line;
+      return !!l && !!screen.dock_id && !bench.busy && (l.cells.length > 0 || !!l.elsewhere) && !needsCheck(l);
     },
-    {
-      key: "from",
-      header: "From",
-      cell: (l) =>
-        l.cells.length === 0 ? (
-          l.elsewhere ? (
-            // Where it was picked is said once, above the table; the line says
-            // only how much of it is here.
-            <Faint>
-              {l.elsewhere.handed} of {l.elsewhere.reported} handed over
-            </Faint>
-          ) : (
-            <Faint>No stock at this site</Faint>
-          )
-        ) : (
-          <Select
-            aria-label={`Pick ${l.item_code} from`}
-            value={draft(l).cell}
-            onValueChange={(cell) => change(l, { cell })}
-            size="sm"
-            options={l.cells.map((c) => ({
-              value: c.stock_id,
-              label: `${c.location} · ${c.available} free${c.lot ? ` · lot ${c.lot}` : ""}`,
-            }))}
-          />
-        ),
-      width: "200px",
+    ship: (p) => {
+      const a = p.asIs;
+      const l = p.goods[0]?.line;
+      if (!a || !l) return;
+      void bench.shipAsIs({
+        line: l.line_id,
+        item: l.item_id,
+        level: a.level,
+        config: l.own_carton?.item_packing_config_id ?? null,
+        units: a.per,
+        count: a.count,
+      });
     },
-    { key: "left", header: "Left", cell: (l) => (l.remaining > 0 ? <strong>{l.remaining}</strong> : <Faint>0</Faint>), align: "right", width: "64px" },
-    {
-      key: "add",
-      header: "Add",
-      cell: (l) => (
-        <div className={s.actions}>
-          {addForm(l)}
-          {asIs
-            .filter((a) => a.line === l.line_id)
-            .map((a) => (
-              <Button
-                key={a.level}
-                size="sm"
-                icon={<Boxes />}
-                disabled={!canShip(l)}
-                onClick={() => ship(a)}
-                title={
-                  needsCheck(l)
-                    ? "Check it first: it is sealed as it is made"
-                    : a.level === "carton" && l.own_carton
-                      ? describeOwn(l.own_carton)
-                      : a.size
-                        ? `${a.size.join(" × ")} mm`
-                        : "size not recorded"
-                }
-              >
-                {shipLabel(a)}
-              </Button>
-            ))}
-        </div>
-      ),
-      align: "right",
-      width: "190px",
-    },
-  ];
-
-  function addForm(l: BenchLine) {
-    return l.cells.length > 0 && l.remaining > 0 ? (
-          <form
-            className={s.add}
-            onSubmit={(e) => {
-              e.preventDefault();
-              add(l);
-            }}
-          >
-            <TextField
-              aria-label={`Quantity of ${l.item_code}`}
-              inputMode="numeric"
-              className={s.qty}
-              value={draft(l).qty}
-              onChange={(e) => change(l, { qty: e.target.value })}
-              disabled={!canAdd(l)}
-            />
-            <Button type="submit" size="sm" icon={<Plus />} disabled={!canAdd(l)}>
-              Add
-            </Button>
-          </form>
-        ) : handing(l) ? (
-          <form
-            className={s.add}
-            onSubmit={(e) => {
-              e.preventDefault();
-              hand(l);
-            }}
-          >
-            <TextField
-              aria-label={`Quantity of ${l.item_code} handed over`}
-              inputMode="numeric"
-              className={s.qty}
-              value={draft(l).qty}
-              onChange={(e) => change(l, { qty: e.target.value })}
-              disabled={!canHand(l)}
-            />
-            <Button type="submit" size="sm" icon={<Plus />} disabled={!canHand(l)}>
-              {bench.openCarton ? "Into carton" : "To staging"}
-            </Button>
-          </form>
-        ) : null;
-  }
+  };
+  const next = nextStep(board, screen, bench);
 
   return (
     <Page>
@@ -250,7 +137,7 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
           </>
         }
         description={`${screen.customer} · Order ${screen.order_reference}`}
-        actions={<Badge tone={left ? "accent" : "success"}>{left ? `${left} ${left === 1 ? "unit" : "units"} to pack` : "Everything packed"}</Badge>}
+        actions={<Badge tone={left ? "accent" : "success"}>{left ? `${left} ${left === 1 ? "unit" : "units"} to place` : "Everything placed"}</Badge>}
       />
 
       {bench.problem && (
@@ -265,45 +152,39 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
         </Alert>
       )}
 
-      <div className={s.split}>
-        <div className={s.stack}>
-          <Checks lines={screen.lines} bench={bench} look={setLooking} />
-          <Card
-            title="To pack"
-            description={[
-              elsewhere?.provenance,
-              bench.openCarton ? "Items are added to the open carton." : "Start a carton to add items.",
-            ]
-              .filter(Boolean)
-              .join(". ")}
-            padded={false}
-          >
-            <DataTable
-              aria-label="Lines to pack"
-              columns={lineColumns}
-              rows={screen.lines}
-              rowKey={(l) => l.line_id}
-              empty={<EmptyState title="Nothing committed" />}
-            />
-          </Card>
-        </div>
-
-        <div className={s.stack}>
-          <Suggestion screen={screen} bench={bench} look={setLooking} ship={ship} canShip={(line) => {
-            const l = screen.lines.find((x) => x.line_id === line);
-            return !!l && canShip(l);
-          }} />
-          <NewCarton screen={screen} bench={bench} />
-          {screen.cartons.map((c) => (
-            <Carton key={c.id} carton={c} bench={bench} look={setLooking} pictures={pictures} lines={screen.lines} />
-          ))}
-        </div>
+      <div className={s.boardTop}>
+        <span className={s.boardTally}>{tally(board.view)}</span>
+        <Button icon={<Undo2 />} disabled={bench.busy || !bench.undoable} onClick={() => void bench.undo()} aria-keyshortcuts="Z">
+          {bench.undoable ? `Undo: ${bench.undoable}` : "Undo"}
+        </Button>
+        <Button icon={<Sparkles />} disabled={bench.busy} onClick={() => void bench.suggest()}>
+          Suggest
+        </Button>
+        {next && (
+          <Button variant="primary" disabled={bench.busy || !next.can} onClick={next.press}>
+            {next.label}
+          </Button>
+        )}
       </div>
-      {/* Read again on closing: a size recorded in it changes the suggestion. */}
+
+      <DragZone
+        label={(keys) => labelOf(board, keys)}
+        onDrop={drop}
+        onMove={(keys) => setMoving({ keys, target: null })}
+        onRemove={(keys) => drop(keys, "bench", { one: false, ask: false })}
+        onUndo={() => void bench.undo()}
+        frozen={drag}
+      >
+        <BoardBody screen={screen} board={board} acts={acts} look={look} elsewhere={elsewhere} />
+      </DragZone>
+
+      {moving && <MoveTo screen={screen} board={board} keys={moving.keys} target={moving.target} close={() => setMoving(null)} bench={bench} />}
+
+      {/* Read again on closing: a size recorded in it changes what fits. */}
       <ItemDrawer
         itemId={looking}
         onClose={() => {
-          setLooking(null);
+          look(null);
           bench.refresh();
         }}
       />
@@ -311,247 +192,139 @@ export function PackBenchPage({ bench }: { bench: PackBench }) {
   );
 }
 
-function NewCarton({ screen, bench }: { screen: BenchScreen; bench: PackBench }) {
-  const [preset, setPreset] = useState(screen.presets[0]?.id ?? "");
-  return (
-    <Card>
-      <form
-        className={s.newCarton}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (preset) void bench.startCarton(preset);
-        }}
-      >
-        <div className={s.preset}>
-          <Select
-            label="New carton"
-            value={preset || undefined}
-            onValueChange={setPreset}
-            options={screen.presets.map((p) => ({ value: p.id, label: p.name }))}
-            placeholder="No presets"
-          />
-        </div>
-        <Button
-          type="submit"
-          variant={bench.openCarton ? "secondary" : "primary"}
-          icon={<PackageOpen />}
-          disabled={bench.busy || !preset || !screen.dock_id}
-        >
-          Start carton
-        </Button>
-      </form>
-    </Card>
-  );
-}
-
-function Carton({
-  carton,
-  bench,
+/** The three columns, inside the drag so they can see it. */
+function BoardBody({
+  screen,
+  board,
+  acts,
   look,
-  pictures,
-  lines,
+  elsewhere,
 }: {
-  carton: CartonSummary;
-  bench: PackBench;
-  look: (itemId: string) => void;
-  pictures: Map<Uuid, Picture | null>;
-  lines: BenchLine[];
+  screen: BenchScreen;
+  board: Board;
+  acts: ParcelActs;
+  look: (item: string) => void;
+  elsewhere: string | null;
 }) {
-  // Sealing waits for what is in it to be checked (D244).
-  const unchecked = uncheckedIn(carton, lines);
-  const stated = carton.stated_size?.height_mm ?? null;
-  const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : (carton.gross_weight_g / 1000).toFixed(3));
-  const [height, setHeight] = useState(String(carton.height_mm ?? stated ?? ""));
-  const cut = height.trim() !== "" && height.trim() !== String(stated ?? "");
-  const open = carton.id === bench.openCarton;
-  const footprint = carton.stated_size ? `${carton.stated_size.length_mm} × ${carton.stated_size.width_mm} mm` : null;
-
-  const contentColumns: Column<PackedRow>[] = [
-    {
-      key: "item",
-      header: "Item",
-      cell: (r) => <ItemLine code={r.item_code} picture={pictures.get(r.item_id) ?? null} onOpen={() => look(r.item_id)} />,
-      grow: true,
-    },
-    { key: "lot", header: "Lot", cell: (r) => r.lot_code ?? <Faint>—</Faint>, mono: true, width: "110px" },
-    { key: "units", header: "Units", cell: (r) => r.quantity, align: "right", width: "70px" },
-  ];
-  if (!carton.sealed) {
-    contentColumns.push({
-      key: "out",
-      header: "",
-      cell: (r) => (
-        <Button size="sm" variant="ghost" disabled={bench.busy} onClick={() => void bench.takeOut({ picks: r.picks, quantity: r.quantity })}>
-          Take out
-        </Button>
-      ),
-      align: "right",
-      width: "100px",
-    });
-  }
+  const now = useDragNow();
+  const chosen = useChosen();
+  // What the drop under the pointer would do, said as it moves.
+  const live = useMemo(() => {
+    if (!now?.over) return null;
+    return { target: now.over, outcome: dropOn(screen, board, now.keys, now.over, { one: false }, SAYING) };
+  }, [screen, board, now?.keys, now?.over]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pictures = useMemo(() => new Map(screen.lines.map((l) => [l.item_id, l.picture])), [screen.lines]);
+  const shown = chosenParcel(board, chosen);
+  const top = board.parcels.filter((p) => p.on === null || !board.parcels.some((q) => q.id === p.on));
 
   return (
-    <Card
-      title={
-        <span className={s.cartonTitle}>
-          Carton {carton.sequence}
-          {carton.package_type && <Badge>{carton.package_type}</Badge>}
-          {carton.own_carton_of && (
-            <Badge>
-              {carton.own_carton_of} {carton.own_level === "each" ? "as it is" : carton.own_level === "inner" ? "inner pack" : "carton"}
-            </Badge>
-          )}
-          {carton.breaks_down && <Badge>Breakdown pallet</Badge>}
-          {carton.on && <Badge>On {onWhat(carton.on)}</Badge>}
-          {carton.sealed ? (
-            <Badge tone="success" dot>
-              Sealed
-            </Badge>
-          ) : open ? (
-            <Badge tone="accent" dot>
-              Open
-            </Badge>
-          ) : null}
-        </span>
-      }
-      // Until it is sealed, what to cut its box down to (D252).
-      description={carton.sealed ? undefined : (cutSaying(carton.cut, carton.stated_size) ?? undefined)}
-      actions={
-        carton.sealed ? (
-          <Link variant="plain" href={href(`/print/packing-list/${carton.id}`)} className={s.print}>
-            <FileText aria-hidden /> Packing list
-          </Link>
-        ) : undefined
-      }
-      padded={false}
-    >
-      <DataTable
-        aria-label={`Carton ${carton.sequence} contents`}
-        columns={contentColumns}
-        rows={carton.contents}
-        rowKey={(r) => `${r.item_code}-${r.lot_code ?? ""}`}
-        empty={<p className={s.empty}>Empty.</p>}
-      />
-
-      {carton.sealed ? (
-        <div className={s.body}>
-          <Facts columns={4}>
-            <Fact label="Gross">
-              <span className={s.big}>{kg(carton.gross_weight_g)}</span>
-            </Fact>
-            {carton.expected && <ExpectedFact expected={carton.expected} contents={carton.contents} />}
-            {carton.listed_weight_g !== null && (
-              <Fact label="Listed">
-                <span>
-                  {kg(carton.listed_weight_g)}
-                  <span className={s.note}>by the record, not weighed</span>
-                </span>
-              </Fact>
-            )}
-            <Fact label="Height">{carton.height_mm !== null ? `${carton.height_mm} mm` : null}</Fact>
-            {carton.own_carton_of && carton.stated_size ? (
-              <Fact label="Size">{sized(carton.stated_size)}</Fact>
-            ) : (
-              <Fact label="Footprint">{footprint}</Fact>
-            )}
-          </Facts>
+    <div className={s.board}>
+      <div className={s.boardColumn}>
+        <Checks lines={screen.lines} bench={acts.bench} look={look} />
+        <ToPack board={board} look={look} elsewhere={elsewhere} />
+      </div>
+      <div className={s.boardColumn} aria-label="Parcels">
+        {top.map((p) => (
+          <ParcelCard key={p.id} parcel={p} board={board} lines={screen.lines} acts={acts} live={live} />
+        ))}
+        <div className={s.dropSlots}>
+          <DropSlot target="new-box" label="Drop here for a new box" />
+          <DropSlot target="new-pallet" label="Drop a carton here for a new pallet" />
         </div>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void bench.measure({
-              carton: carton.id,
-              ...(weight.trim() ? { weightKg: weight.trim() } : {}),
-              ...(cut ? { heightMm: height.trim() } : {}),
-            });
-          }}
-        >
-          <div className={s.body}>
-            <div className={s.measure}>
-              <div className={s.measureField}>
-                <TextField label="Weight" inputMode="decimal" trailing="kg" value={weight} onChange={(e) => setWeight(e.target.value)} />
-              </div>
-              <div className={s.measureField}>
-                <TextField label="Height" inputMode="numeric" trailing="mm" value={height} onChange={(e) => setHeight(e.target.value)} />
-              </div>
-            </div>
-            <Facts>
-              {carton.expected && <ExpectedFact expected={carton.expected} contents={carton.contents} />}
-              <Fact label="Footprint">{footprint}</Fact>
-            </Facts>
-          </div>
-          <Toolbar placement="bottom">
-            {carton.contents.length === 0 && (
-              <Button variant="ghost" icon={<Trash2 />} disabled={bench.busy} onClick={() => void bench.discard(carton.id)}>
-                Discard
-              </Button>
-            )}
-            {unchecked.length > 0 && <span className={s.note}>Check {unchecked.join(", ")} to seal it</span>}
-            <Spacer />
-            <Button type="submit" disabled={bench.busy}>
-              Record
-            </Button>
-            <Button
-              variant={open ? "primary" : "secondary"}
-              disabled={bench.busy || unchecked.length > 0}
-              onClick={() => void bench.seal(carton.id)}
-            >
-              Seal
-            </Button>
-          </Toolbar>
-        </form>
-      )}
-    </Card>
+      </div>
+      <div className={s.boardColumn}>
+        <Chosen board={board} parcel={shown} outcome={live?.outcome ?? null} pictures={pictures} />
+      </div>
+    </div>
   );
 }
 
-/** What one of its cartons measures and weighs by the record, and whose figures. */
-function describeOwn(own: OwnCarton): string {
-  const parts = [own.size ? sized(own.size) : "size not recorded"];
-  if (own.listed_weight_g !== null) parts.push(`${kg(own.listed_weight_g)} listed`);
-  if (own.source === "style" && own.style_code) parts.push(`the ${own.style_code} family's`);
-  return parts.join(" · ");
-}
-
-/** "the breakdown pallet", "Carton 2 (PALLET)": what a carton is on (D246, D247). */
-function onWhat(on: OnParent): string {
-  if (on.breaks_down) return "the breakdown pallet";
-  return `${on.sequence ? `Carton ${on.sequence}` : "a package"}${on.name ? ` (${on.name})` : ""}`;
-}
-
-function sized(size: StatedSize): string {
-  return `${size.length_mm} × ${size.width_mm} × ${size.height_mm} mm`;
+/** The parcel chosen last, or the one whose goods were: what the right shows. */
+function chosenParcel(board: Board, chosen: string[]): BoardParcel | null {
+  for (const key of [...chosen].reverse()) {
+    const t = thingOf(key);
+    const id = t?.kind === "parcel" ? t.id : t?.parcel;
+    const p = id ? board.parcels.find((x) => x.id === id) : undefined;
+    if (p) return p;
+  }
+  return null;
 }
 
 /**
- * What this carton should weigh, and on what basis; once weighed, whether the
- * scale agrees within the site's tolerance, and if not what would explain it
- * (D244).
+ * The one primary press (D171): seal the carton that is ready, else make the
+ * next planned box. Each card has its own as well, quieter.
  */
-function ExpectedFact({ expected, contents }: { expected: ExpectedWeight; contents: PackedRow[] }) {
-  // Said once: by the verdict when it is off, else beside where it came from.
-  const gap = expected.agrees === false ? null : agreement(expected);
-  const why = explain(expected, contents);
+function nextStep(board: Board, screen: BenchScreen, bench: PackBench): { label: string; can: boolean; press: () => void } | null {
+  const ready = board.parcels.find(
+    (p) => p.made && p.state === "open" && p.kind === "box" && p.goods.length > 0 && !!p.carton && uncheckedIn(p.carton, screen.lines).length === 0,
+  );
+  if (ready) return { label: `Seal ${ready.title}`, can: true, press: () => void bench.seal(ready.id) };
+  const planned = board.parcels.find((p) => !p.made && p.kind === "box" && p.goods.length > 0);
+  if (planned) return { label: `Make ${planned.title}`, can: !!screen.dock_id, press: () => void bench.make(planned.id) };
+  return null;
+}
+
+/** Move to… (settled 5): where, and how many, said before it is done. */
+function MoveTo({
+  screen,
+  board,
+  keys,
+  target: first,
+  close,
+  bench,
+}: {
+  screen: BenchScreen;
+  board: Board;
+  keys: string[];
+  target: string | null;
+  close: () => void;
+  bench: PackBench;
+}) {
+  const goods = keys.some((k) => thingOf(k)?.kind === "goods");
+  const options = [
+    ...board.parcels
+      .filter((p) => p.kind !== "as_is" && p.state !== "sealed" && (goods ? p.kind === "box" : p.kind === "pallet"))
+      .map((p) => ({ value: parcelKey(p.id), label: `${p.title}${p.made ? "" : " (planned)"}` })),
+    goods ? { value: "new-box", label: "A new box" } : { value: "new-pallet", label: "A new pallet" },
+    { value: "bench", label: goods ? "Out onto the bench" : "Off its pallet" },
+  ];
+  const [target, setTarget] = useState(first ?? options[0]?.value ?? "bench");
+  const [count, setCount] = useState("");
+  const n = Number.parseInt(count, 10);
+  const how = { one: false, count: n > 0 ? n : undefined };
+  const preview: Outcome = useMemo(() => dropOn(screen, board, keys, target, how, SAYING), [screen, board, keys, target, count]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <Fact label="Expected">
-      <span>
-        <span className={s.verdict}>
-          {kg(expected.grams)}
-          {expected.agrees !== null && (
-            <Badge tone={expected.agrees ? "success" : "warning"}>{expected.agrees ? "Agrees" : offBy(expected)}</Badge>
-          )}
-        </span>
-        <span className={s.note}>
-          {provenance(expected)}
-          {gap ? ` · ${gap}` : ""}
-        </span>
-        {why.map((m) => (
-          <span key={m.code} className={s.why}>
-            {Math.abs(m.by)} {m.by > 0 ? "more" : "fewer"} of <span className={s.whole}>{m.code}</span> at {kg(m.each_g)}?
-          </span>
-        ))}
-      </span>
-    </Fact>
+    <Dialog
+      open
+      onOpenChange={(open) => !open && close()}
+      title={`Move ${labelOf(board, keys)}`}
+      description="Where to, and how many: as many as fit when it says nothing."
+      footer={
+        <>
+          <Button onClick={close}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!preview.ok || bench.busy}
+            onClick={() => {
+              const out = dropOn(screen, board, keys, target, how, uuid);
+              close();
+              if (out.ok) void bench.apply(out, out.verdict);
+            }}
+          >
+            Move
+          </Button>
+        </>
+      }
+    >
+      <div className={s.moveTo}>
+        <Select label="To" value={target} onValueChange={setTarget} options={options} />
+        {goods && <TextField label="How many" inputMode="numeric" placeholder="All that fit" value={count} onChange={(e) => setCount(e.target.value)} />}
+        <p className={s.dropVerdict} data-ok={preview.ok || undefined} role="status">
+          {preview.verdict}
+        </p>
+      </div>
+    </Dialog>
   );
 }
+

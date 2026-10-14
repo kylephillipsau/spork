@@ -211,9 +211,12 @@ async fn goods_picked_elsewhere_arrive_where_they_are_put() {
     assert_eq!(bl["elsewhere"]["reported"], json!(4), "{bench}");
     assert_eq!(bl["elsewhere"]["handed"], json!(5), "{bench}");
     assert_eq!(bl["elsewhere"]["document"], json!("IF-HO"), "{bench}");
+    // On the bench, the line's own: packed from there by a repack, not picked
+    // again from a cell (D246, settled 2).
+    assert_eq!(bl["on_bench"], json!(5), "the goods handed over wait on the bench: {bench}");
     assert!(
-        bl["cells"].as_array().unwrap().iter().any(|c| c["location"] == json!("PACK-1")),
-        "the goods handed over are a cell at the staging spot to box from: {bench}"
+        !bl["cells"].as_array().unwrap().iter().any(|c| c["location"] == json!("PACK-1")),
+        "the bench is not a bin to pick from: {bench}"
     );
 
     // ── straight into a carton: on the bench ─────────────────────────────

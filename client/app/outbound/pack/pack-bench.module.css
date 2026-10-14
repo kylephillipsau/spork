@@ -2,27 +2,6 @@
   font-family: var(--ui-font-mono);
 }
 
-.split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--ui-space-5);
-  align-items: start;
-}
-/* Two thirds for the lines, which carry the bench's acts; a third for the
-   cartons, which read down. At 7:5 the lines' act column was cut off at 1440. */
-@media (min-width: 1200px) {
-  .split {
-    grid-template-columns: minmax(0, 1fr) clamp(360px, 33%, 32rem);
-  }
-}
-/* Each side of the bench: cards, one under the other. */
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-4);
-  min-width: 0;
-}
-
 /* ---- checking the order (D244) ---- */
 .checks {
   margin: 0;
@@ -85,20 +64,6 @@
   height: var(--ui-control-sm);
 }
 
-/* ---- cartons ---- */
-.newCarton {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--ui-space-3);
-}
-.preset {
-  flex: 1;
-}
-.cartonTitle {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-}
 .print {
   display: inline-flex;
   align-items: center;
@@ -110,11 +75,6 @@
 .print svg {
   width: var(--ui-icon-sm);
   height: var(--ui-icon-sm);
-}
-.empty {
-  padding: var(--ui-space-3) var(--ui-space-4);
-  color: var(--ui-text-muted);
-  font-size: var(--ui-text-sm);
 }
 .body {
   display: flex;
@@ -156,23 +116,11 @@
   color: var(--ui-text-faint);
   font-size: var(--ui-text-xs);
 }
-/* The line's acts, stacked: add a count, or ship whole cartons as they came. */
-.actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--ui-space-1-5);
-}
-
 .code {
   font-family: var(--ui-font-mono);
   font-size: var(--ui-text-sm);
 }
 
-/* ---- the suggested packing (D195) ---- */
-.suggestTabs {
-  padding: var(--ui-space-3) var(--ui-space-4) 0;
-}
 .suggestBody {
   display: flex;
   flex-direction: column;
@@ -293,13 +241,6 @@
   color: var(--ui-text-muted);
   font-size: var(--ui-text-sm);
 }
-.asides {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-2);
-  padding: var(--ui-space-3) var(--ui-space-4);
-  box-shadow: inset 0 1px 0 var(--ui-border);
-}
 /* The order's parcels as a booking takes them (D224). */
 .booking {
   display: flex;
@@ -339,26 +280,6 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.asideList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.asideRow {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-3);
-}
-.asideWhat {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
 /* Filling the open carton (D198): what is in already is done, and faint. */
 .planThing[data-packed] {
   opacity: 0.45;
@@ -368,54 +289,6 @@
   text-decoration: line-through;
 }
 
-/* ---- the whole order, checked off (D202) ---- */
-.order {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-3);
-}
-.orderLines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.orderLine {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-3);
-  padding: var(--ui-space-1-5) var(--ui-space-2);
-  border-radius: var(--ui-radius);
-}
-.orderLine[data-done] {
-  background: var(--ui-success-soft);
-}
-.orderLine[data-trouble] {
-  background: var(--ui-warning-soft);
-}
-.orderMark {
-  display: inline-flex;
-  flex: none;
-  color: var(--ui-text-faint);
-}
-.orderMark svg {
-  width: var(--ui-icon);
-  height: var(--ui-icon);
-}
-.orderLine[data-done] .orderMark {
-  color: var(--ui-success);
-}
-.orderLine[data-trouble] .orderMark {
-  color: var(--ui-warning);
-}
-.orderCount {
-  flex: none;
-  font-family: var(--ui-font-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
 .parcelIcon {
   display: inline-flex;
   flex: none;
@@ -433,15 +306,255 @@
   height: var(--ui-icon);
 }
 
-/* A parcel: its icon, what it is and holds, its state; its press beneath. */
-.parcelRow {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+
+/* ---- the board (D245) ---- */
+/* The tally, and Undo, Suggest and the next thing to do, on one row where there is room. */
+.boardTop {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  column-gap: var(--ui-space-3);
-  row-gap: var(--ui-space-1-5);
+  gap: var(--ui-space-2) var(--ui-space-3);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
 }
-.parcelAct {
-  grid-column: 2 / -1;
-  justify-self: start;
+.boardTally {
+  flex: 1 1 320px;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-text-sm);
+}
+
+/* To pack, the parcels, and the one chosen: three across on a 1080p screen,
+   the chosen one under the others narrower, and one column on a phone. */
+.board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ui-space-5);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .board {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+  .board > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1700px) {
+  .board {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+  .board > :last-child {
+    grid-column: auto;
+    position: sticky;
+    top: var(--ui-space-4);
+  }
+}
+.boardColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+  min-width: 0;
+}
+
+/* Something to drag: chosen, it is lit; carried, it is faint where it was. */
+.boardLine,
+.goodsRow,
+.parcelHead {
+  cursor: grab;
+}
+.boardLine[data-chosen],
+.goodsRow[data-chosen],
+.parcelHead[data-chosen] {
+  background: var(--ui-accent-soft);
+  box-shadow: inset 3px 0 0 var(--ui-lit-line);
+}
+.boardLine[data-dragged],
+.goodsRow[data-dragged],
+.parcelHead[data-dragged] {
+  opacity: 0.5;
+}
+.boardLine:focus-visible,
+.goodsRow:focus-visible,
+.parcelHead:focus-visible {
+  outline: 2px solid var(--ui-ring);
+  outline-offset: -2px;
+}
+
+.toPack {
+  display: flex;
+  flex-direction: column;
+}
+.boardLines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.boardLine {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.boardLine > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.boardLine[data-done] {
+  cursor: default;
+}
+.lineSide {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--ui-space-1);
+}
+.lineLeft {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dropHere {
+  margin: 0;
+  padding: var(--ui-space-3) var(--ui-space-4);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-sm);
+  text-align: center;
+}
+.dropHere[data-over] {
+  color: var(--ui-text);
+  background: var(--ui-accent-soft);
+}
+
+/* A parcel: planned, outlined dashed; made, solid; sealed, shut. */
+.parcel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+.parcel[data-made] {
+  border-style: solid;
+  border-color: var(--ui-border);
+  box-shadow: var(--ui-shadow-sm);
+}
+.parcel[data-state="sealed"] {
+  background: var(--ui-surface-sunken);
+}
+.parcel[data-over] {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 2px var(--ui-accent-soft);
+}
+.parcelHead {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0;
+}
+.parcelName {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.parcelTitle {
+  font-weight: 600;
+}
+.parcelBadges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--ui-space-1-5);
+}
+/* What a drop would do: said in green when it will, in red when it won't. */
+.dropVerdict {
+  margin: 0;
+  padding: var(--ui-space-2) var(--ui-space-4);
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
+.dropVerdict[data-ok] {
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+}
+.fillBar {
+  height: 6px;
+  margin: 0 var(--ui-space-4) var(--ui-space-1);
+  overflow: hidden;
+  border-radius: var(--ui-radius-full);
+  background: var(--ui-surface-sunken);
+}
+.fillBar span {
+  display: block;
+  height: 100%;
+  background: var(--ui-accent);
+}
+.goods {
+  margin: 0;
+  padding: var(--ui-space-1) 0;
+  list-style: none;
+}
+.goodsRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-1-5) var(--ui-space-4);
+}
+.goodsRow > :first-child {
+  flex: 1 1 auto;
+}
+.goodsUnits {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.onPallet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  padding: 0 var(--ui-space-3) var(--ui-space-3);
+}
+.parcelFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2-5) var(--ui-space-4);
+  box-shadow: inset 0 1px 0 var(--ui-border);
+}
+.parcelFoot > :first-child {
+  margin-right: auto;
+}
+.dropSlots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--ui-space-3);
+}
+.dropSlot {
+  display: grid;
+  place-items: center;
+  min-height: 64px;
+  padding: var(--ui-space-3);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-lg);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-text-sm);
+  text-align: center;
+}
+.dropSlot[data-over] {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  color: var(--ui-text);
+}
+.moveTo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
 }

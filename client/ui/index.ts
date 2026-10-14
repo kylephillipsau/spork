@@ -28,5 +28,7 @@ export { Dialog, Drawer, Menu, MenuItem, MenuLabel, MenuSeparator, MenuRadioGrou
 export { Page, Toolbar, Spacer, Section, Alert, StatGrid, Stat, Facts, Fact, type AlertTone } from "./Layout";
 export { Tooltip } from "./Tooltip";
 export { useToast } from "./Toast";
+export { DragZone, useDraggable, useDropTarget, useDragNow, useChosen, type DragNow } from "./Drag";
+export { type DropHow } from "./choosing";
 export { cx } from "./cx";
 export { default as materials } from "./materials.module.css";

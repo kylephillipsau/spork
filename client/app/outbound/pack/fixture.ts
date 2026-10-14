@@ -1,4 +1,5 @@
 import type { BenchScreen, ItemUnit, LineCheck, Preset } from "@domain/types";
+import type { PackBench } from "./usePackBench";
 
 /** Counted in eaches, NetSuite saying nothing of it. */
 const EACH: ItemUnit = { level: "each", said: false, netsuite_unit: null, netsuite_level: null, singles: 1 };
@@ -52,6 +53,7 @@ export const PACK_FIXTURE: BenchScreen = {
       tags: { art_no: null, shown: [], warnings: [] },
       remaining: 0,
       committed: 8,
+      on_bench: 0,
       elsewhere: null,
       own_carton: null,
       picture: null,
@@ -76,6 +78,7 @@ export const PACK_FIXTURE: BenchScreen = {
       tags: { art_no: null, shown: [], warnings: [] },
       remaining: 0,
       committed: 3,
+      on_bench: 0,
       elsewhere: null,
       own_carton: null,
       picture: null,
@@ -100,6 +103,7 @@ export const PACK_FIXTURE: BenchScreen = {
       tags: { art_no: null, shown: [], warnings: [] },
       remaining: 6,
       committed: 6,
+      on_bench: 0,
       elsewhere: null,
       own_carton: null,
       picture: null,
@@ -150,6 +154,7 @@ export const PACK_FIXTURE: BenchScreen = {
       tags: { art_no: null, shown: [], warnings: [] },
       remaining: 20,
       committed: 30,
+      on_bench: 0,
       cells: [],
       picture: null,
       // Ten to a carton, and a carton ships as it is unless somebody says not (D196).
@@ -229,6 +234,7 @@ export const PACK_FIXTURE: BenchScreen = {
       },
       contents: [
         {
+          line_id: "f11e0000-0000-0000-0000-000000000001",
           item_id: "01990000-0000-7000-8000-00000000a001",
           item_code: "GLV-NIT-BLU-M",
           description: "Nitrile glove, blue, medium",
@@ -273,6 +279,7 @@ export const PACK_FIXTURE: BenchScreen = {
       },
       contents: [
         {
+          line_id: "f11e0000-0000-0000-0000-000000000002",
           item_id: "01990000-0000-7000-8000-00000000a002",
           item_code: "HRN-DSP-WHT",
           description: "Hair net, disposable, white",
@@ -334,6 +341,7 @@ export const PACK_FIXTURE: BenchScreen = {
       expected: null,
       contents: [
         {
+          line_id: "f11e0000-0000-0000-0000-000000000004",
           item_id: "01990000-0000-7000-8000-00000000a004",
           item_code: "SLV-PE-BLU",
           description: "Oversleeve, polythene, blue",
@@ -351,6 +359,18 @@ export const PACK_FIXTURE: BenchScreen = {
     { id: "9a7e0000-0000-0000-0000-0000000000c1", name: "PALLET", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 }, cut: null, faces: {} },
     { id: "9a7e0000-0000-0000-0000-0000000000c2", name: "SKID", size: null, suggested: true, max_payload_g: null, tare_weight_g: null, deck: { length_mm: 1165, width_mm: 1165 }, cut: null, faces: {} },
   ],
+  // The aprons planned into a small box, as Suggest planned them (D245).
+  plan: [
+    {
+      id: "01a20000-0000-7000-8000-00000000b001",
+      package_type_id: "9a7e0000-0000-0000-0000-0000000000b1",
+      on_parcel_id: null,
+      on_package_id: null,
+      at: null,
+      placed_by_hand: false,
+      lines: [{ line_id: "f11e0000-0000-0000-0000-000000000003", quantity: 6 }],
+    },
+  ],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };
 
@@ -364,6 +384,8 @@ export const PACK_FIXTURE: BenchScreen = {
  */
 export const PACK_FILLING: BenchScreen = {
   ...PACK_FIXTURE,
+  // Nothing planned: the four aprons left are to place.
+  plan: [],
   lines: PACK_FIXTURE.lines.map((l) => (l.item_code === "APR-PE-CLR-L" ? { ...l, remaining: 4 } : l)),
   cartons: [
     PACK_FIXTURE.cartons[0]!,
@@ -395,6 +417,7 @@ export const PACK_FILLING: BenchScreen = {
       },
       contents: [
         {
+          line_id: "f11e0000-0000-0000-0000-000000000003",
           item_id: "01990000-0000-7000-8000-00000000a003",
           item_code: "APR-PE-CLR-L",
           description: "Apron, polythene, clear, large",
@@ -448,6 +471,71 @@ export const PACK_CUT: BenchScreen = {
       name: "small box, cut to 10",
       size: { length_mm: 400, width_mm: 300, height_mm: 100 },
       cut: { from_id: SMALL_BOX.id, from_name: "small box", full_height_mm: 190 },
+    },
+  ],
+};
+
+const noop = async () => {};
+
+/** A bench drawn from a screen, every act doing nothing: for fixtures and screenshots. */
+export function fixtureBench(screen: BenchScreen, over: Partial<PackBench> = {}): PackBench {
+  return {
+    status: { kind: "ready", screen },
+    busy: false,
+    problem: null,
+    dismiss: () => {},
+    refresh: () => {},
+    shipAsIs: noop,
+    check: noop,
+    measure: noop,
+    seal: noop,
+    discard: noop,
+    apply: noop,
+    undoable: null,
+    undo: noop,
+    make: noop,
+    suggest: noop,
+    open: noop,
+    ...over,
+  };
+}
+
+const APRONS = "f11e0000-0000-0000-0000-000000000003";
+
+/**
+ * The board mid-drag (D245): the four aprons left held over the open carton,
+ * which takes them, and says so before they are let go.
+ */
+export const PACK_DRAG = { screen: PACK_FILLING, drag: { keys: [`goods:${APRONS}`], over: "parcel:ca470000-0000-0000-0000-000000000005" } };
+
+/** Held over a sealed carton, which takes nothing and says why. */
+export const PACK_WONT = { screen: PACK_FILLING, drag: { keys: [`goods:${APRONS}`], over: "parcel:ca470000-0000-0000-0000-000000000001" } };
+
+/**
+ * The whole order onto a pallet (D245, D246): a pallet planned by hand, a
+ * small box of aprons planned onto it, and the sealed carton of gloves put on
+ * the made pallet already.
+ */
+export const PACK_PALLET: BenchScreen = {
+  ...PACK_FIXTURE,
+  plan: [
+    {
+      id: "01a20000-0000-7000-8000-00000000c001",
+      package_type_id: "9a7e0000-0000-0000-0000-0000000000c1",
+      on_parcel_id: null,
+      on_package_id: null,
+      at: null,
+      placed_by_hand: true,
+      lines: [],
+    },
+    {
+      id: "01a20000-0000-7000-8000-00000000c002",
+      package_type_id: "9a7e0000-0000-0000-0000-0000000000b1",
+      on_parcel_id: "01a20000-0000-7000-8000-00000000c001",
+      on_package_id: null,
+      at: null,
+      placed_by_hand: true,
+      lines: [{ line_id: APRONS, quantity: 6 }],
     },
   ],
 };

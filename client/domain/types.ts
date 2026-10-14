@@ -34,6 +34,8 @@ export interface BenchLine {
   /** What the line commits, all of it: what the whole order counts against (D202). */
   committed: number;
   cells: Cell[];
+  /** Its units on the bench, in no carton: taken out or handed over there (D246). Packed again by a repack. */
+  on_bench: number;
   /** Present when another system says this line was picked there (D172). */
   elsewhere: PickedElsewhere | null;
   /** Present when a carton of this item has a known count, so whole cartons can
@@ -232,6 +234,8 @@ export interface StatedSize {
 }
 
 export interface PackedRow {
+  /** The line the units are on: a repack names it (D246). */
+  line_id: Uuid;
   item_id: Uuid;
   item_code: string;
   description: string | null;
@@ -318,7 +322,36 @@ export interface BenchScreen {
   lines: BenchLine[];
   cartons: CartonSummary[];
   presets: Preset[];
+  /** The board's plan (D245): parcels planned and not yet made. */
+  plan: PlannedParcel[];
   wrong_box_reason_id: Uuid | null;
+}
+
+/** A spot on a pallet (D246): from the front left corner of its deck, front where the forks go in; `turned` a quarter round. */
+export interface Spot {
+  x_mm: number;
+  y_mm: number;
+  z_mm: number;
+  turned: boolean;
+}
+
+/** A parcel planned on the board and not yet made (D245): the id its carton will be made with. */
+export interface PlannedParcel {
+  id: Uuid;
+  package_type_id: Uuid;
+  /** The planned pallet it goes on, or one already made. */
+  on_parcel_id: Uuid | null;
+  on_package_id: Uuid | null;
+  at: Spot | null;
+  /** The packer placed it, rather than Suggest: Suggest plans round it. */
+  placed_by_hand: boolean;
+  lines: PlannedLine[];
+}
+
+/** So many of a line's units planned into a parcel. */
+export interface PlannedLine {
+  line_id: Uuid;
+  quantity: number;
 }
 
 // ── despatch ──────────────────────────────────────────────────────────────

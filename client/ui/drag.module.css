@@ -1,0 +1,20 @@
+/* While something is dragged, nothing in the zone is selected as text. */
+.dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* What is carried, under the pointer: never in the way of what is under it. */
+.ghost {
+  position: fixed;
+  z-index: var(--ui-z-popover);
+  pointer-events: none;
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-lg);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}

@@ -42,6 +42,8 @@ pub struct BenchScreen {
     pub bench: Bench,
     pub cartons: Vec<CartonSummary>,
     pub presets: Vec<Preset>,
+    /// The board's plan (D245): parcels planned and not yet made.
+    pub plan: Vec<crate::pack_plan::PlannedParcel>,
     /// The reason a correction carries when units went in the wrong box. Sent
     /// with the screen because the alternative is the client holding a code
     /// string and looking it up at the moment somebody is trying to undo
@@ -87,6 +89,10 @@ pub struct BenchLine {
     /// every unit against, packed or not (D202).
     pub committed: i64,
     pub cells: Vec<Cell>,
+    /// Its units on the bench: at the pack location and in no carton, taken
+    /// out or handed over there (D246, settled 2). Packed again from there
+    /// by a repack, never picked a second time.
+    pub on_bench: i64,
     /// Present when another system says this line was picked there (D172).
     pub elsewhere: Option<PickedElsewhere>,
     /// Present when a carton of this item has a known count, so whole cartons
@@ -344,6 +350,8 @@ pub struct ExpectedWeight {
 
 #[derive(Serialize)]
 pub struct PackedRow {
+    /// The line the units are on: a repack names it (D246).
+    pub line_id: Uuid,
     pub item_id: Uuid,
     pub item_code: String,
     pub description: Option<String>,
@@ -369,6 +377,7 @@ pub async fn screen(
         bench: bench_view(state, who, fulfilment_id).await?,
         cartons: cartons_on(state, who, fulfilment_id).await?,
         presets: presets(state, who).await?,
+        plan: plan(state, who, fulfilment_id).await?,
         wrong_box_reason_id: reason_id(state, who, "wrong_location").await?,
     })
 }
@@ -460,7 +469,8 @@ pub async fn bench_view(
                 for l in &lines {
                     let item_id: Uuid = l.get(3);
                     // Location-held only: a cell already inside a carton is not
-                    // somewhere to pick from.
+                    // somewhere to pick from. Nor is the bench itself: what is
+                    // on it is a line's own, packed again by a repack (D246).
                     let cells = tx
                         .query(
                             "SELECT st.id, loc.code, lot.code, st.available_quantity
@@ -469,13 +479,29 @@ pub async fn bench_view(
                                LEFT JOIN lot ON lot.id = st.lot_id
                               WHERE st.item_id = $1
                                 AND st.holder_location_id IS NOT NULL
+                                AND st.holder_location_id IS DISTINCT FROM $3
                                 AND st.available_quantity > 0
                                 AND ($2::uuid IS NULL OR st.site_id = $2)
                               ORDER BY st.available_quantity DESC
                               LIMIT 8",
-                            &[&item_id, &site_id],
+                            &[&item_id, &site_id, &pack_at],
                         )
                         .await?;
+                    // The line's units on the bench: into the pack location
+                    // and not out again (settled 2).
+                    let on_bench: i64 = tx
+                        .query_one(
+                            "SELECT greatest(coalesce(sum(CASE WHEN m.to_location_id = $2 THEN v.effective_quantity
+                                                              ELSE -v.effective_quantity END), 0), 0)::bigint
+                               FROM stock_movement m
+                               JOIN stock_movement_effective v
+                                 ON v.movement_id = m.id AND v.tenant_id = m.tenant_id
+                              WHERE m.fulfilment_line_id = $1
+                                AND $2 IN (m.to_location_id, m.from_location_id)",
+                            &[&l.get::<_, Uuid>(0), &pack_at],
+                        )
+                        .await?
+                        .get(0);
                     // Picked elsewhere: the level live from the reports (the
                     // column may lag the scheduler), the newest report's
                     // document and picker, and what is handed over already.
@@ -537,6 +563,7 @@ pub async fn bench_view(
                         tags: Default::default(),
                         remaining: l.get(4),
                         committed: l.get(5),
+                        on_bench,
                         kit: l.get::<_, Option<String>>(6).map(|item_code| KitOf {
                             item_code,
                             description: l.get(7),
@@ -805,6 +832,18 @@ fn size_of(m: &crate::routes::ItemMeasurements) -> Option<StatedSize> {
 }
 
 /// An `adjustment_reason` by code, for the acts that require one.
+/// The board's plan for a fulfilment (D245).
+async fn plan(
+    state: &web::Data<AppState>,
+    who: &Caller,
+    fulfilment: Uuid,
+) -> Result<Vec<crate::pack_plan::PlannedParcel>, ApiError> {
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope
+        .run(move |tx| Box::pin(async move { crate::pack_plan::plan_of(tx, fulfilment).await }))
+        .await
+}
+
 pub async fn reason_id(
     state: &web::Data<AppState>,
     who: &Caller,
@@ -962,7 +1001,8 @@ pub async fn cartons_on(
                     let contents = tx
                         .query(
                             "SELECT i.code, i.description, l.code, c.quantity, c.item_id,
-                                    coalesce(pk.ids, '{}'::uuid[]), coalesce(pk.left, '{}'::bigint[])
+                                    coalesce(pk.ids, '{}'::uuid[]), coalesce(pk.left, '{}'::bigint[]),
+                                    c.fulfilment_line_id
                                FROM package_line_content c
                                JOIN item i ON i.id = c.item_id
                                LEFT JOIN lot l ON l.id = c.lot_id
@@ -1054,6 +1094,7 @@ pub async fn cartons_on(
                                 let ids: Vec<Uuid> = c.get(5);
                                 let left: Vec<i64> = c.get(6);
                                 PackedRow {
+                                    line_id: c.get(7),
                                     item_id: c.get(4),
                                     item_code: c.get(0),
                                     description: c.get(1),

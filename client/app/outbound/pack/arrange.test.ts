@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { MOST_PIECES, arrange, boxFreight, contentsOf, pack, piecesOf, type Dims, type Kind, type OpenCarton, type Placement } from "./arrange.ts";
+import { MOST_PIECES, arrange, boxFreight, contentsOf, fitInto, pack, piecesOf, type Dims, type Kind, type OpenCarton, type Placement } from "./arrange.ts";
 import { OBJECTIVES } from "./freight.ts";
 import type { BenchLine, PackUnit, Preset } from "@domain/types";
 
@@ -45,6 +45,7 @@ function line(code: string, remaining: number, packs: PackUnit[], over: Partial<
     remaining,
     committed: remaining,
     cells: [],
+    on_bench: 0,
     elsewhere: null,
     own_carton: null,
     picture: null,
@@ -110,6 +111,15 @@ test("a box cut down is chosen when it is the lowest that takes everything (D252
   assert.equal(a.boxes[0]!.preset.name, "small, cut to 10", "three aprons, 90 high, in the box cut to 10");
   const b = arrange([line("APR", 4, [each([280, 220, 30])])], [MEDIUM, SMALL, cutTo10]);
   assert.equal(b.boxes[0]!.preset.name, "small", "a fourth is too tall for the cut");
+});
+
+test("dropped into a box, as many as fit go in beside what is there, and the rest stay (D245)", () => {
+  const aprons = line("APR", 8, [each([280, 220, 30])]);
+  const four = fitInto(SMALL as Parameters<typeof fitInto>[0], [{ line: aprons, units: 4 }], { line: aprons, units: 4 });
+  assert.equal(four.fits, 2, "six lie flat in it, and four are in");
+  assert.equal(four.plan.layers.length, 6);
+  const none = fitInto(SMALL as Parameters<typeof fitInto>[0], [{ line: aprons, units: 6 }], { line: aprons, units: 1 });
+  assert.equal(none.fits, 0, "full: none go in");
 });
 
 test("what does not fit the small box goes in the next one up", () => {

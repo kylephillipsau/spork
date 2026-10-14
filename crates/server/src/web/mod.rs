@@ -278,7 +278,7 @@ async fn carton_view(
                     .query(
                         "SELECT i.code, i.description, l.code,
                                 sum(c.quantity)::bigint,
-                                o.confirmation_number, i.id
+                                o.confirmation_number, i.id, fl.id
                            FROM package_line_content c
                            JOIN item i ON i.id = c.item_id
                            JOIN fulfilment_line fl ON fl.id = c.fulfilment_line_id
@@ -286,7 +286,7 @@ async fn carton_view(
                            JOIN \"order\" o ON o.id = ol.order_id
                            LEFT JOIN lot l ON l.id = c.lot_id
                           WHERE c.package_id = $1
-                          GROUP BY i.id, i.code, i.description, l.code, o.confirmation_number
+                          GROUP BY fl.id, i.id, i.code, i.description, l.code, o.confirmation_number
                          HAVING sum(c.quantity) <> 0
                           ORDER BY i.code, l.code NULLS FIRST",
                         &[&package_id],
@@ -305,6 +305,7 @@ async fn carton_view(
                 let lines: Vec<PackedRow> = rows
                     .iter()
                     .map(|r| PackedRow {
+                        line_id: r.get(6),
                         item_id: r.get(5),
                         item_code: r.get(0),
                         description: r.get(1),

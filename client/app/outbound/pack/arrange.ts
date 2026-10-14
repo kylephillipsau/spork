@@ -429,6 +429,45 @@ function plan(preset: Preset & { size: StatedSize }, layers: Layer[]): BoxPlan {
   };
 }
 
+/** So many of a line's units: what a drag carries, or what a parcel holds of a line (D245). */
+export interface Goods {
+  line: BenchLine;
+  units: number;
+}
+
+/**
+ * How a box takes goods (D245): what is in it already, and as many of
+ * `adding` as go in beside it, found by halving. Units go in as `split` makes
+ * them in a box; a thing with no size goes in round the rest and never stops
+ * a box taking it. A box already too full takes none.
+ */
+export function fitInto(box: Preset & { size: StatedSize }, inside: readonly Goods[], adding: Goods | null = null): { fits: number; plan: BoxPlan } {
+  const kindOf = kinds();
+  const attempt = (n: number) => {
+    const units = new Map<Uuid, number>();
+    const lines: BenchLine[] = [];
+    for (const g of n > 0 && adding ? [...inside, { line: adding.line, units: n }] : inside) {
+      if (!units.has(g.line.line_id)) lines.push(g.line);
+      units.set(g.line.line_id, (units.get(g.line.line_id) ?? 0) + g.units);
+    }
+    const { pieces } = split(lines, (l) => units.get(l.line_id) ?? 0, true, kindOf);
+    return pack(dims(box.size), pieces, box.max_payload_g);
+  };
+  const want = adding?.units ?? 0;
+  const all = attempt(want);
+  if (all.left.length === 0) return { fits: want, plan: plan(box, all.layers) };
+  let fitted = attempt(0);
+  if (fitted.left.length > 0) return { fits: 0, plan: plan(box, fitted.layers) };
+  let [lo, hi] = [0, want];
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    const tried = attempt(mid);
+    if (tried.left.length === 0) [lo, fitted] = [mid, tried];
+    else hi = mid;
+  }
+  return { fits: lo, plan: plan(box, fitted.layers) };
+}
+
 /** A box as a carrier sees it (D224): its size, and its goods and itself by the record. */
 export function boxFreight(b: BoxPlan): Freight {
   return { count: 1, size: dims(b.preset.size), weight_g: b.weight_g + (b.tare_g ?? 0) };

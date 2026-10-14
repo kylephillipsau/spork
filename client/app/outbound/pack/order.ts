@@ -104,7 +104,7 @@ export interface OrderView {
   missing: number;
 }
 
-const LEVEL_WORDS = { each: "as it is", inner: "inner pack", carton: "carton" } as const;
+export const LEVEL_WORDS = { each: "as it is", inner: "inner pack", carton: "carton" } as const;
 
 /**
  * A carton that is one of a product as it is (D196) looks like the product at
@@ -112,7 +112,7 @@ const LEVEL_WORDS = { each: "as it is", inner: "inner pack", carton: "carton" } 
  * box type looks like its photographs, and a cut one like the bottom of its
  * full box's (D252).
  */
-function lookOf(screen: BenchScreen, c: CartonSummary): Pick<Parcel, "faces" | "round" | "keep"> {
+export function lookOf(screen: BenchScreen, c: CartonSummary): Pick<Parcel, "faces" | "round" | "keep"> {
   if (!c.own_carton_of) return { faces: c.faces, round: null, keep: keepOf(c.cut, c.stated_size) };
   const line = screen.lines.find((l) => l.item_code === c.own_carton_of);
   const unit = line?.packs.find((p) => p.level === (c.own_level ?? "carton"));
@@ -120,7 +120,7 @@ function lookOf(screen: BenchScreen, c: CartonSummary): Pick<Parcel, "faces" | "
 }
 
 /** What a box's weight by the record leaves out: pieces nobody weighed, and the box itself. */
-function boxNote(b: BoxPlan): string | null {
+export function boxNote(b: BoxPlan): string | null {
   const parts = [];
   if (b.unweighed > 0) parts.push(`${b.unweighed} not weighed`);
   if (b.tare_g === null) parts.push("box not weighed");
@@ -128,19 +128,19 @@ function boxNote(b: BoxPlan): string | null {
 }
 
 /** A carton's weight: on the scale, else what it is filling up to, else what its record expects. */
-function cartonWeight(c: CartonSummary, filling: BoxPlan | null): Pick<Parcel, "weight_g" | "weighed" | "weightNote"> {
+export function cartonWeight(c: CartonSummary, filling: BoxPlan | null): Pick<Parcel, "weight_g" | "weighed" | "weightNote"> {
   if (c.gross_weight_g !== null) return { weight_g: c.gross_weight_g, weighed: true, weightNote: null };
   if (filling) return { weight_g: boxFreight(filling).weight_g, weighed: false, weightNote: boxNote(filling) };
   const recorded = c.listed_weight_g ?? c.expected?.grams ?? null;
   return { weight_g: recorded, weighed: false, weightNote: recorded === null ? "not weighed" : null };
 }
 
-function cartonDetail(c: CartonSummary): string | null {
+export function cartonDetail(c: CartonSummary): string | null {
   if (c.own_carton_of) return `${c.own_carton_of} ${LEVEL_WORDS[c.own_level ?? "carton"]}`;
   return c.package_type;
 }
 
-function dimsOf(s: { length_mm: number; width_mm: number; height_mm: number } | null): Dims | null {
+export function dimsOf(s: { length_mm: number; width_mm: number; height_mm: number } | null): Dims | null {
   return s ? [s.length_mm, s.width_mm, s.height_mm] : null;
 }
 
@@ -242,12 +242,25 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
     });
   }
 
-  // ── every line, accounted for ──────────────────────────────────────────
+  return account(screen, parcels, { unplaced: [...plan.unmeasured, ...plan.oversize, ...plan.loose], placedLoose: plan.placedLoose, tooMany: plan.tooMany });
+}
+
+/**
+ * Every line accounted for (D202) across these parcels: what is in them, what
+ * is planned into them, and what nothing places yet. The suggestion's view
+ * and the board's (D245) count the same way.
+ */
+export function account(
+  screen: BenchScreen,
+  parcels: Parcel[],
+  aside: { unplaced: Aside[]; placedLoose: Aside[]; tooMany: boolean },
+  /** What the carrier is handed, when not every parcel: a carton on a pallet goes with it (D247). */
+  delivered: Parcel[] = parcels,
+): OrderView {
   const unplacedOf = new Map<Uuid, number>();
-  const listed = [...plan.unmeasured, ...plan.oversize, ...plan.loose];
-  for (const a of listed) unplacedOf.set(a.line, (unplacedOf.get(a.line) ?? 0) + a.units);
+  for (const a of aside.unplaced) unplacedOf.set(a.line, (unplacedOf.get(a.line) ?? 0) + a.units);
   const looseOf = new Map<Uuid, number>();
-  for (const a of plan.placedLoose) looseOf.set(a.line, (looseOf.get(a.line) ?? 0) + a.units);
+  for (const a of aside.placedLoose) looseOf.set(a.line, (looseOf.get(a.line) ?? 0) + a.units);
 
   const lines: OrderLine[] = screen.lines.map((l) => {
     const where: OrderLine["where"] = [];
@@ -269,11 +282,12 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
       }
     }
     // Everything still to pack, when it was too much to arrange piece by piece.
-    const unplaced = plan.tooMany ? Math.max(0, l.remaining) : (unplacedOf.get(l.line_id) ?? 0);
-    if (plan.tooMany) planned = 0;
+    const unplaced = aside.tooMany ? Math.max(0, l.remaining) : (unplacedOf.get(l.line_id) ?? 0);
+    if (aside.tooMany) planned = 0;
     // Picked or handed over and in no carton: what the bench counts as done
-    // that no carton holds.
-    const notBoxed = Math.max(0, l.committed - l.remaining - packed);
+    // that no carton holds, and nothing else accounts for (units taken out to
+    // the bench are to place, not this).
+    const notBoxed = Math.max(0, Math.min(l.committed - l.remaining - packed, l.committed - packed - planned - unplaced));
     const short = Math.min(shortOf(l), Math.max(0, l.committed - packed - planned - unplaced - notBoxed));
     const missing = Math.max(0, l.committed - packed - planned - unplaced - notBoxed - short);
     return {
@@ -297,7 +311,7 @@ export function wholeOrder(screen: BenchScreen, plan: Arrangement): OrderView {
   const sum = (f: (l: OrderLine) => number) => lines.reduce((t, l) => t + f(l), 0);
   return {
     parcels,
-    freight: parcels.map((p) => ({ count: p.count, size: p.size, weight_g: p.weight_g })),
+    freight: delivered.map((p) => ({ count: p.count, size: p.size, weight_g: p.weight_g })),
     lines,
     committed: sum((l) => l.committed),
     packed: sum((l) => l.packed),

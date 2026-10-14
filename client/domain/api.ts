@@ -2,6 +2,8 @@ import type { Act } from "./acts";
 import type { AuthenticationOptions, RegistrationOptions } from "./webauthn";
 import type {
   AddedHeight,
+  PlannedParcel,
+  Spot,
   ApiToken,
   BookedCarton,
   BinFlagged,
@@ -344,12 +346,12 @@ export const api = {
 
   /** A carton comes into existence somewhere. D97: `created` asserts placement,
    *  which is why the dock is part of the act rather than a later move. */
-  startCarton: (input: { fulfilment: Uuid; preset: Uuid; dock: Uuid; act: Act }) =>
+  startCarton: (input: { fulfilment: Uuid; preset: Uuid; dock: Uuid; act: Act; /** A planned parcel's, when it is made from the plan (D245). */ id?: Uuid }) =>
     send<unknown>("POST", "/packages", {
       // Two client-minted ids and both are retry keys: the package's own, and
       // the event's. A second press that minted either afresh would be a
-      // second carton.
-      id: input.act.id("package"),
+      // second carton. A planned parcel's id is as stable.
+      id: input.id ?? input.act.id("package"),
       fulfilment_id: input.fulfilment,
       package_type_id: input.preset,
       location_id: input.dock,
@@ -1623,6 +1625,47 @@ export const api = {
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),
+
+  /** Open a sealed carton again, to change what is in it (D245). */
+  open: (carton: Uuid, act: Act) =>
+    send<unknown>("POST", `/packages/${carton}/open`, {
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
+  /** Put a carton on a pallet, at a spot when known (D246). */
+  contain: (carton: Uuid, pallet: Uuid, at: Spot | null, act: Act) =>
+    send<unknown>("POST", `/packages/${carton}/contain`, {
+      parent_package_id: pallet,
+      at,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
+  /** Put a carton down somewhere: taken off a pallet, it goes back on the bench (D246). */
+  placePackage: (carton: Uuid, location: Uuid, act: Act) =>
+    send<unknown>("POST", `/packages/${carton}/place`, {
+      location_id: location,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
+  /**
+   * Move a line's units from one holder to another: carton to carton, or to
+   * and from the bench (D246, settled 2). One movement, not picked again.
+   */
+  repack: (input: { line: Uuid; from: { package: Uuid } | { location: Uuid }; to: { package: Uuid } | { location: Uuid }; quantity: number; act: Act }) =>
+    send<unknown>("POST", "/repacks", {
+      fulfilment_line_id: input.line,
+      ...("package" in input.from ? { from_package_id: input.from.package } : { from_location_id: input.from.location }),
+      ...("package" in input.to ? { to_package_id: input.to.package } : { to_location_id: input.to.location }),
+      quantity: input.quantity,
+      client_event_id: input.act.id("event"),
+      occurred_at: input.act.at,
+    }),
+
+  /** Keep the board's plan: the whole of it, replacing the last (D245). */
+  savePlan: (fulfilment: Uuid, parcels: PlannedParcel[]) => send<void>("PUT", `/fulfilments/${fulfilment}/pack-plan`, { parcels }),
 
   discard: (carton: Uuid, act: Act) =>
     send<unknown>("POST", `/packages/${carton}/void`, {
