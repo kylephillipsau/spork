@@ -178,7 +178,8 @@ function Start-Spork {
 
     $scheduler = Start-Process (Join-Path $bin 'spork-scheduler.exe') -NoNewWindow -PassThru
     $https = $Lan -and (Test-Path $Caddy)
-    $caddy = $null
+    $proxy = $null   # not $caddy: PowerShell names ignore case, and $Caddy is the path
+    $server = $null
     try {
         Write-Host ""
         Write-Host "Spork: http://localhost:$Port  (Ctrl+C to stop)"
@@ -199,13 +200,16 @@ function Start-Spork {
             # The server makes this host's certificate as it starts; HTTPS waits for it.
             $chain = Join-Path $env:SPORK_STATE_DIR 'identity\host-chain.crt'
             for ($i = 0; $i -lt 60 -and -not (Test-Path $chain) -and -not $server.HasExited; $i++) { Start-Sleep -Milliseconds 500 }
-            if (Test-Path $chain) { $caddy = Start-Caddy }
+            if (Test-Path $chain) { $proxy = Start-Caddy }
             $server.WaitForExit()
         } else {
             & (Join-Path $bin 'spork-server.exe')
         }
     } finally {
-        if ($caddy -and -not $caddy.HasExited) { Stop-Process -Id $caddy.Id -Force }
+        if ($proxy -and -not $proxy.HasExited) { Stop-Process -Id $proxy.Id -Force }
+        # Started in the background for HTTPS, the server is not stopped by
+        # Ctrl+C with the script: a few seconds to finish its requests, then it is.
+        if ($server -and -not $server.HasExited -and -not $server.WaitForExit(5000)) { Stop-Process -Id $server.Id -Force }
         if (-not $scheduler.HasExited) { Stop-Process -Id $scheduler.Id -Force }
     }
 }
