@@ -16242,8 +16242,8 @@ efficient".
 
 ### D245: The order is packed by dragging, on one board
 
-*Adopted 2026-10-12. Decided ahead of the build. Replaces the bench's forms;
-extends D198 and D202.*
+*Adopted 2026-10-12. Built 2026-10-14 with migration 142, the plan's M3.
+Replaces the bench's forms; extends D198 and D202.*
 
 **The finding.** The bench is a set of forms: a count typed against a line,
 Add to the open carton (always the first one unsealed), Seal. Nothing moves
@@ -16286,6 +16286,34 @@ the same parcel.
 
 **One drag for the app.** The kit gains a pointer drag with its keyboard way
 and choosing several, written here; no library.
+
+**As built.**
+
+- **The plan** is `pack_plan_parcel` and `pack_plan_line` (migration 142),
+  replaced whole by `PUT /fulfilments/{id}/pack-plan` and read with the
+  bench. Suggest's parcels are kept too, marked as not placed by hand, so
+  every planned parcel has its id; touched, a parcel is the packer's.
+  `POST /packages` with a planned parcel's id uses its row up, and what was
+  planned onto it goes onto it as made. An order opened with nothing planned
+  is suggested at once.
+- **What a drop does** is worked out in one place (`board.ts`), the same
+  function saying it while the pointer is over a parcel and doing it when it
+  is let go. As many as fit go in (`fitInto`, by halving); a drop onto a
+  pallet, a sealed carton or a thing that ships as it is says why not.
+- **Goods put into a made carton** come from the bench first (`on_bench`, a
+  repack), then a bin (a pick), then handed over. A take out is a repack
+  onto the bench (settled 2), and the bench is no longer offered as a bin to
+  pick from. **Undo straight after a put** reverses what went in, newest
+  first, so units picked go back to their bin: a correction, as settled 2
+  says. Other undos are the opposite act, or the plan as it was.
+- **A made carton dropped on a planned pallet** makes the pallet first, then
+  puts the carton on it; a made carton goes on a made pallet only.
+- **The kit's drag** is `ui/Drag.tsx`: a pointer drag with a few pixels'
+  slop before it starts, choosing with Shift or Ctrl, the innermost source
+  answering, and the keys of settled 5 (the arrows, Space, M, Delete, Z,
+  Escape). Move to… asks where and how many and says what it would do.
+- **The booking** is what the carrier is handed: a carton on a pallet that
+  goes as one goes with it.
 
 **Why.** The user, 2026-10-12: "it should be possible to drag and drop the
 items from cartons and arrange the items into boxes, skids or pallets. We

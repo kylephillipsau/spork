@@ -39,7 +39,7 @@ weights (D224). These are not part of this plan:
 | D244 checking at the bench | yes | live 2026-10-12 |
 | D246 moving units between cartons, cartons onto pallets | yes | server done in M1, 2026-10-14; the bench doesn't use it yet |
 | D247 a pallet goes as one or is broken down | yes | server done in M1: what is delivered, booked and despatched; the sheet and booking line in M6 |
-| D245 the board | yes, mocked | no |
+| D245 the board | yes, mocked | built in M3, 2026-10-14 |
 | D248 a breakdown pallet through the day | yes, mocked | no |
 | D249 what a box carries | yes, with research | no |
 | D250 carrier rules as settings | yes, mocked | no |
@@ -176,6 +176,9 @@ is live.*
   up, never squashed.
 
 **M3: the board (D245)**
+
+*Built 2026-10-14 (migration 142). Settled 2, 4 and 5 are built with it.*
+
 - The kit's pointer drag, with its keyboard way and choosing several.
 - The board replaces the forms:
   - check and To pack on the left;

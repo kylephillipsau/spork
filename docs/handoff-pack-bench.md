@@ -8,6 +8,15 @@ toolchain, tests and layout.
 
 ## State
 
+- 2026-10-14, M3 of the plan, the board (D245, migration 142), on a fresh
+  database (`spork_m3run`):
+  - every migration builds and reverses, 142 of them;
+  - the server's unit tests pass (316), and its integration tests 164 of 164;
+    the two setup tests call `sh`, so they pass run from Git Bash and not
+    from a cargo started by PowerShell;
+  - the invariant suite passes but for S7 and S10, as before;
+  - the client's tests (250), contract and laws pass, and the render gate
+    passes over every fixture (148 fixtures, 484 renders).
 - 2026-10-14, M2 of the plan, boxes cut to set heights and box photos
   (D252, migration 141), on a fresh database (`spork_m2run`):
   - every migration builds and reverses, 141 of them;
@@ -59,6 +68,30 @@ toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**Later on 2026-10-14: M3, the board (D245, settled 2, 4 and 5)**
+- Migration 142: `pack_plan_parcel` and `pack_plan_line`, the board's plan
+  kept per fulfilment; `PUT /fulfilments/{id}/pack-plan` (`pack_plan.rs`)
+  replaces it, the bench read carries it, and `POST /packages` with a planned
+  parcel's id uses it up.
+- The bench read: each line's `on_bench` (its units at the pack location, in
+  no carton), each carton row's `line_id`, and the pack location no longer
+  offered as a bin.
+- The kit's drag (`ui/Drag.tsx`, `ui/choosing.ts`): pointer, choosing
+  several, the keyboard, a ghost, and a drag held still for fixtures.
+- The board (`PackBenchPage.tsx`, `ToPack.tsx`, `Parcels.tsx`,
+  `Chosen.tsx`), worked out in `board.ts`: To pack and the check on the
+  left, parcels in the middle with pallets holding cartons, the chosen
+  parcel in 3D or layer by layer on the right with the booking; Undo,
+  Suggest and the next step above. `fitInto` in `arrange.ts` says how many
+  fit. `Suggestion.tsx` and the forms are gone.
+- Acts: goods into a made carton from the bench, a bin or handed over; take
+  out onto the bench; Make; Open; onto and off a pallet; Undo straight after
+  a put as a correction.
+- Server responses are compressed (648ca8e), live since the restart that day.
+- Tests: `pack_plan_http.rs`, `pack_plan.rs` unit tests, `board.test.ts`,
+  `choosing.test.ts`, `arrange.test.ts` (`fitInto`); fixtures `pack/drag`,
+  `pack/wont`, `pack/pallet` and `pack/undo`.
 
 **Later on 2026-10-14: M2, boxes cut to set heights and box photos (D252)**
 - Migration 141: `package_type.cut_from_id`, its footprint held by the
@@ -281,15 +314,16 @@ toolchain, tests and layout.
 - **The weight explanation is narrow.** It names one thing miscounted, by up
   to 12. An item that has never been weighed gives the carton no expected
   weight, so no verdict.
-- **Packing is still the form bench** with the client-side plan (D195 to
-  D202). Nothing on the bench calls `POST /repacks` or
-  `POST /packages/{id}/contain` yet. The bench read gives a pallet preset's
-  deck, and the plan does not use it.
-- **Taking out after a repack undoes the repack.** Take out reverses the
-  picks into a carton, newest first; in a carton units were repacked into,
-  that is the repack, so they go back to the carton they came from rather
-  than to their bin. The board (M3) takes out onto the bench with a repack
-  instead.
+- **The board plans boxes with `arrange.ts`.** Spots on a pallet, load
+  limits and carriers' rules wait for the planner (M4, M5). A pallet's deck
+  is read, and nothing fits cartons against it yet.
+- **The plan is not dropped when the fulfilment closes.** Making a parcel
+  uses its row up, and a new plan replaces the last; an order despatched
+  with parcels still planned keeps them, unseen.
+- **Make is not undone by Undo**, nor is Ship. Take the goods out and
+  discard the carton instead.
+- **Things that ship as they are go onto a pallet once made**, not planned
+  onto one.
 - **The pallet sheet is a mock.** Booking a pallet that goes as one gives it
   no line of its own yet (its weight and height); that is M6.
 - **Outstanding for the user:**
@@ -331,12 +365,14 @@ toolchain, tests and layout.
 
 1. Check real orders at the bench, and set the tolerance if 3% is wrong. A
    short now lands in the findings queue: see that it names the right picker.
-2. M1 is on the server, so a real order tries only the short finding and
-   despatch as it was; pallets are put together at the bench from M3.
-3. **M2 live:** load the user's heights (Workspace › Boxes, or the endpoint),
-   with the half box linked by its name; photograph the box types; pack an
-   order that the suggestion puts in a cut box.
-4. **D245:** the kit's pointer drag, then the board on real cartons.
+2. **M2 live:** photograph the box types; pack an order that the board puts
+   in a cut box. The user's heights are loaded.
+3. **M3 live:** pack a real order on the board: drag lines into a carton,
+   Make a planned box, put cartons on a pallet, take something out and Undo,
+   and despatch the pallet.
+4. **HTTPS and an installable app** (after M3, the user's choice): a name for
+   the server and a certificate, a service worker, and the outbox for the
+   bench's acts (`https-and-pwa` in the session notes).
 5. **D249, D250, D251:** `subject_load`, wall and lid limits, `build_rules`,
    and the planner in a worker. It replaces `arrange.ts` once it is never
    worse over a test set of real orders.

@@ -113,16 +113,20 @@ booking (D224).
 
 ## Packing at the bench
 
-Under Outbound, Packing, an order opens on the pack bench:
+Under Outbound, Packing, an order opens on the pack bench, one board for
+the whole order (D245):
 - check what came to the bench, a line at a time: each says what should be
   there in the units on the box, Enter confirms it, and a number typed first
   says what was seen; a short line is planned for what is there, and goes
   to the findings queue for whoever picked it (D244);
-- put each line into a carton, or ship whole cartons as they are (D196);
-- start the box the plan chose, cut down to the height it says when that is
-  the lowest that takes everything (D252);
-- see the whole order planned in boxes, in 3D or as a list, every unit
-  accounted for (D195, D202);
+- drag lines onto parcels, planned or made, and cartons onto pallets: as many
+  as fit go in, and the board says what a drop will do before it is let go;
+  every drag has a keyboard way (M to move, Delete to take out, Z to undo);
+- the plan is kept, Suggest plans what was not placed by hand, and Make turns
+  a planned box into a carton with its goods in, cut down to the height it
+  says when that is the lowest that takes everything (D252);
+- ship whole cartons as they are (D196), and see the chosen parcel, or the
+  whole order, in 3D or layer by layer (D195, D202);
 - weigh each carton: the bench says whether the weight agrees with what it
   should weigh, within the site's tolerance (Workspace, Packing), and what
   would explain it when it doesn't (D244);
@@ -134,9 +138,9 @@ to and take from, and its photographs: a carton is drawn with them, and a cut
 one with the bottom of its full box's (D252).
 
 Despatch books a pallet that goes as one as itself, with the cartons on it,
-and despatches them together (D247). Dragging an order onto boxes and
-pallets, breakdown pallets built through the day, and carriers' pallet rules
-as settings are decided and not yet built (D245 to D251).
+and despatches them together (D247). Breakdown pallets built through the
+day, what a box can carry, carriers' pallet rules as settings and one
+planner for boxes and pallets are decided and not yet built (D247 to D251).
 
 ## Picking from the tickets
 
