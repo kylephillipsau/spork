@@ -50,6 +50,7 @@ rand = "0.8"
 # The token is stored as a SHA-256 digest, never in the clear -- a stolen
 # database backup must not hand over live sessions.
 sha2 = "0.10"
+openssl = "0.10"
 
 # Server-rendered pages. Markup is Rust macros checked at compile time, so a
 # mistyped tag or a missing variable is a build error rather than a blank screen

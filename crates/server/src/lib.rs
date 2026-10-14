@@ -34,6 +34,7 @@ pub mod handover;
 pub mod error;
 pub mod export;
 pub mod health;
+pub mod identity;
 pub mod images;
 pub mod importing;
 pub mod items;

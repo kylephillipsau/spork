@@ -57,6 +57,13 @@ async function boot(): Promise<void> {
     routes.push(...FIXTURES, ...REVIEW_ONLY);
   }
 
+  // **Kept on the device** (D255): the application opens from it, so a
+  // handheld on poor wifi starts at once. Where a browser offers it, HTTPS or
+  // localhost; not in the review build, whose fixtures are not the app.
+  if (import.meta.env.MODE === "production" && "serviceWorker" in navigator && window.isSecureContext) {
+    void navigator.serviceWorker.register("/sw.js");
+  }
+
   const host = document.getElementById("root");
   if (!host) throw new Error("no #root to mount into");
 

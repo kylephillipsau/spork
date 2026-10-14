@@ -119,6 +119,20 @@ async fn main() -> std::io::Result<()> {
     let bind = std::env::var("BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
     tracing::info!(%bind, "spork server listening");
 
+    // **This host's identity** (D255), when `SPORK_IDENTITY` asks for it: its
+    // own authority made on first start, its certificate for the name it
+    // announces renewed by itself, and a page to pair a device with. The
+    // HTTPS in front (Caddy, `scripts/local.ps1`) serves the certificate
+    // this writes.
+    let identity = match std::env::var("SPORK_IDENTITY").as_deref() {
+        Ok("1") => Some(spork_server::identity::ensure(&spork_server::identity::host_name())?),
+        _ => None,
+    };
+    if let Some(id) = &identity {
+        tracing::info!(name = %id.name, fingerprint = %id.fingerprint, "this host's identity; /pair to pair a device");
+    }
+    let pairing = identity.as_ref().map(|id| std::sync::Arc::new(spork_server::identity::Pairing::from(id)));
+
     let server = HttpServer::new(move || {
         let app = App::new()
             // Compressed for whoever asks (gzip, brotli): the client and the
@@ -127,6 +141,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(state.clone())
             .app_data(live.clone())
             .configure(routes::mount);
+        let app = match pairing.clone() {
+            Some(p) => app.configure(move |cfg| spork_server::identity::configure(cfg, p)),
+            None => app,
+        };
         // Registered here rather than in `routes::mount` so the suite is
         // untouched: `test::init_service` builds its `App` from `configure`,
         // and a static mount pointed at a directory no test has would be a

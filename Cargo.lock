@@ -2443,6 +2443,7 @@ dependencies = [
  "futures-util",
  "image",
  "maud",
+ "openssl",
  "rand 0.8.7",
  "rust_xlsxwriter",
  "serde",
