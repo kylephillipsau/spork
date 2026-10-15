@@ -8,7 +8,7 @@ import { ApiError, api, reason } from "@domain/api";
 import type { Held } from "@domain/outbox";
 import type { BenchScreen, PlannedParcel, Uuid } from "@domain/types";
 
-import { boardOf, sourcesFor, suggest as suggested, type Outcome } from "./board";
+import { boardOf, making, sourcesFor, suggest as suggested, type Outcome } from "./board";
 import { Unwritable, sendOn, unset, writer, writesOf, type BenchWrite, type HeldPress } from "./writes";
 
 /**
@@ -240,9 +240,13 @@ export function usePackBench(fulfilment: Uuid): PackBench {
   };
   const planWrite = (plan: PlannedParcel[]): BenchWrite => ({ part: "plan", kind: "plan", fulfilment, plan });
 
-  /** What a board change writes: its plan kept first, then its acts. */
+  /**
+   * What a board change writes: its plan kept first, then its acts, worked
+   * out against the plan as it will be, so a pallet planned by the same drop
+   * can be made.
+   */
   const planned = (change: Pick<Outcome, "plan" | "acts">, at: BenchScreen): Worked => {
-    const { writes, notes } = writesOf(change.acts, at, fulfilment);
+    const { writes, notes } = writesOf(change.acts, change.plan ? { ...at, plan: change.plan } : at, fulfilment);
     return { writes: change.plan ? [planWrite(change.plan), ...writes] : writes, notes };
   };
 
@@ -298,8 +302,11 @@ export function usePackBench(fulfilment: Uuid): PackBench {
     refresh: () => void reload(),
 
     shipAsIs: ({ line, item, level, config, units, count }) =>
-      hold(`own:${line}:${level}:${count}`, (act, at) =>
-        send(act, at, `Ship ${count} × ${codeOf(at, line)} as ${count === 1 ? "it is" : "they are"}`, (kept) => {
+      hold(`own:${line}:${level}:${count}`, async (act, at) => {
+        const label = `Ship ${count} × ${codeOf(at, line)} as ${count === 1 ? "it is" : "they are"}`;
+        // Undone newest first, each taken apart.
+        const cartons: Uuid[] = [];
+        const landed = await send(act, at, label, (kept) => {
           const dock = at.dock_id;
           if (!dock) throw unset();
           if (!(count > 0) || !(units > 0)) throw new Unwritable("How many?");
@@ -313,12 +320,14 @@ export function usePackBench(fulfilment: Uuid): PackBench {
           for (let n = 1; n <= count; n++) {
             w.push({ part: `carton-${n}:make`, kind: "startAsIs", fulfilment, item, level, config: level === "each" ? null : config, dock });
             const carton = partOf(kept, `carton-${n}:make`).id("package");
+            cartons.unshift(carton);
             w.add({ kind: "put", line, units, carton }, `carton-${n}:fill`);
             w.push({ part: `carton-${n}:seal`, kind: "seal", carton });
           }
           return w;
-        }),
-      ),
+        });
+        if (landed) remember({ label, undo: { plan: null, acts: cartons.map((carton) => ({ kind: "unmake", carton, pallet: null })) } });
+      }),
 
     check: ({ line, expected, seen }) =>
       hold(`check:${line}:${expected}:${seen}`, (act, at) =>
@@ -362,7 +371,12 @@ export function usePackBench(fulfilment: Uuid): PackBench {
       });
     },
 
-    make: (parcel) => hold(`make:${parcel}`, (act, at) => send(act, at, `Make ${titleOf(at, parcel)}`, () => writesOf([{ kind: "make", parcel }], at, fulfilment))),
+    make: (parcel) =>
+      hold(`make:${parcel}`, async (act, at) => {
+        const label = `Make ${titleOf(at, parcel)}`;
+        const made = making(at, parcel, uuid);
+        if (await send(act, at, label, () => planned(made, at))) remember(made.undo && { label, undo: made.undo });
+      }),
 
     suggest: () =>
       hold(`suggest:${screen?.plan.map((p) => p.id).join(",") ?? ""}`, async (act, at) => {

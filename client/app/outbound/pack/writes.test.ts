@@ -21,6 +21,27 @@ test("two cartons filled by one press are not filled from the same units", () =>
   assert.deepEqual(w.notes, []);
 });
 
+test("a made carton is taken apart: opened, emptied, off its pallet, discarded, then the pallet", () => {
+  // Carton 1: sealed, eight gloves in it, on pallet 2.
+  const [carton, pallet] = ["ca470000-0000-0000-0000-000000000001", "ca470000-0000-0000-0000-000000000002"];
+  const { writes } = writesOf([{ kind: "unmake", carton, pallet }], PACK_FIXTURE, ORDER);
+  assert.deepEqual(
+    writes.map((w) => (w.kind === "takeOut" ? `takeOut ${w.quantity}` : `${w.kind} ${"carton" in w ? w.carton.slice(-1) : ""}`)),
+    ["open 1", "takeOut 8", "place 1", "discard 1", "discard 2"],
+  );
+});
+
+test("a thing as it is, planned onto a pallet, is made as Ship makes one, onto its pallet", () => {
+  const [OWN, PALLET] = ["01a20000-0000-7000-8000-00000000a001", "ca470000-0000-0000-0000-000000000003"];
+  const as_is = { item_id: "01990000-0000-7000-8000-00000000a004", level: "carton" as const, config_id: "9ac40000-0000-0000-0000-00000000000b" };
+  const plan = [{ id: OWN, package_type_id: null, as_is, on_parcel_id: null, on_package_id: PALLET, at: null, placed_by_hand: true, lines: [{ line_id: "f11e0000-0000-0000-0000-000000000004", quantity: 10 }] }];
+  const { writes } = writesOf([{ kind: "make", parcel: OWN }], { ...PACK_FIXTURE, plan }, ORDER);
+  const [first, second] = writes;
+  assert.ok(first?.kind === "startAsIs" && first.id === OWN && first.level === "carton", "made with the plan's id");
+  assert.ok(second?.kind === "contain" && second.pallet === PALLET, "onto its pallet");
+  assert.equal(writes.at(-1)?.kind, "seal", "sealed as it is made");
+});
+
 test("a press stopped part way is sent on from where it stopped, as the same act", async () => {
   const { writes } = writesOf([{ kind: "make", parcel: PLANNED }], PACK_FIXTURE, ORDER);
   assert.deepEqual(writes.map((x) => x.kind), ["startCarton", "pickInto"]);

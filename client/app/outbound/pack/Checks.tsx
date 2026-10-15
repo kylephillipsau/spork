@@ -60,44 +60,39 @@ export function Checks({ lines, bench, look }: { lines: BenchLine[]; bench: Pack
                 onOpen={() => look(l.item_id)}
                 note={state.kind === "stale" ? "The order changed since it was checked" : undefined}
               />
-              <span className={s.checkExpect}>
-                <span className={s.expect}>{phrase}</span>
+              <span className={s.lineSide}>
+                <span className={s.lineCount}>{phrase}</span>
                 {phrase.includes(" of ") && <span className={s.note}>{l.committed} in all</span>}
-              </span>
-              {open ? (
-                <form
-                  className={s.add}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    confirm(l);
-                  }}
-                >
-                  <TextField
-                    aria-label={`How many of ${l.item_code} you see`}
-                    inputMode="numeric"
-                    className={s.qty}
-                    placeholder={String(l.committed)}
-                    value={typed[l.line_id] ?? ""}
-                    onChange={(e) => setTyped((t) => ({ ...t, [l.line_id]: e.target.value }))}
-                  />
-                  <Button type="submit" size="sm" icon={<Check />} disabled={bench.busy}>
-                    Confirm
-                  </Button>
-                </form>
-              ) : (
-                <span className={s.checked}>
-                  <CheckBadge state={state} />
-                  <span className={s.note}>{whoAndWhen(state)}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<RotateCcw />}
-                    onClick={() => setAgain((a) => new Set([...a, l.line_id]))}
+                {open ? (
+                  <form
+                    className={s.add}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      confirm(l);
+                    }}
                   >
-                    Count again
-                  </Button>
-                </span>
-              )}
+                    <TextField
+                      aria-label={`How many of ${l.item_code} you see`}
+                      inputMode="numeric"
+                      className={s.qty}
+                      placeholder={String(l.committed)}
+                      value={typed[l.line_id] ?? ""}
+                      onChange={(e) => setTyped((t) => ({ ...t, [l.line_id]: e.target.value }))}
+                    />
+                    <Button type="submit" size="sm" icon={<Check />} disabled={bench.busy}>
+                      Confirm
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    <CheckBadge state={state} />
+                    <span className={s.note}>{whoAndWhen(state)}</span>
+                    <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => setAgain((a) => new Set([...a, l.line_id]))}>
+                      Count again
+                    </Button>
+                  </>
+                )}
+              </span>
             </li>
           );
         })}

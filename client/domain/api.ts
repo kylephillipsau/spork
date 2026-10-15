@@ -365,9 +365,18 @@ export const api = {
    * packs, like any carton. The case pack goes with an inner or a carton,
    * which is where the count in it comes from; an each has none.
    */
-  startAsIs: (input: { fulfilment: Uuid; item: Uuid; level: "each" | "inner" | "carton"; config: Uuid | null; dock: Uuid; act: Act }) =>
+  startAsIs: (input: {
+    fulfilment: Uuid;
+    item: Uuid;
+    level: "each" | "inner" | "carton";
+    config: Uuid | null;
+    dock: Uuid;
+    act: Act;
+    /** A planned parcel's, when it is made from the plan (migration 144). */
+    id?: Uuid;
+  }) =>
     send<unknown>("POST", "/packages", {
-      id: input.act.id("package"),
+      id: input.id ?? input.act.id("package"),
       fulfilment_id: input.fulfilment,
       own_item_id: input.item,
       own_level: input.level,

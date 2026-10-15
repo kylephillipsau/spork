@@ -83,7 +83,7 @@ export function ParcelCard({
         </span>
         <span className={s.parcelBadges}>
           {parcel.carton?.breaks_down && <Badge>Breakdown pallet</Badge>}
-          {!parcel.made && parcel.kind !== "as_is" && <Badge>{parcel.byHand ? "Placed" : "Suggested"}</Badge>}
+          {!parcel.made && (parcel.kind !== "as_is" || parcel.planned) && <Badge>{parcel.byHand ? "Placed" : "Suggested"}</Badge>}
           <Badge tone={state.tone} dot={parcel.made}>
             {state.word}
           </Badge>
@@ -143,7 +143,13 @@ export function ParcelCard({
       {parcel.kind === "as_is" && !parcel.made && parcel.asIs && (
         <footer className={s.parcelFoot}>
           <span className={s.note}>{needsCheck(parcel.goods[0]!.line) ? "Check it first: it is sealed as it is made" : "Made, filled and sealed as it is"}</span>
-          <Button size="sm" icon={<Boxes />} disabled={busy || !acts.canShip(parcel)} onClick={() => acts.ship(parcel)}>
+          {/* Planned onto a pallet, it is made from the plan, and goes on as made. */}
+          <Button
+            size="sm"
+            icon={<Boxes />}
+            disabled={busy || !acts.canShip(parcel)}
+            onClick={() => (parcel.planned ? void acts.bench.make(parcel.id) : acts.ship(parcel))}
+          >
             Ship {shipLabel(parcel.asIs)}
           </Button>
         </footer>

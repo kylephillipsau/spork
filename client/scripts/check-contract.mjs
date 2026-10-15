@@ -159,6 +159,7 @@ const PAIRS = [
   ["Spot", ["Spot"]],
   ["PlannedParcel", ["PlannedParcel"]],
   ["PlannedLine", ["PlannedLine"]],
+  ["PlannedAsIs", ["PlannedAsIs"]],
   ["StatedSize", ["StatedSize"]],
   ["PackedRow", ["PackedRow"]],
   ["CartonSummary", ["CartonSummary"]],

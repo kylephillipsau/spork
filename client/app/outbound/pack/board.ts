@@ -1,7 +1,7 @@
-import type { BenchLine, BenchScreen, CartonSummary, Footprint, PlannedParcel, Preset, StatedSize, Uuid } from "@domain/types";
+import type { BenchLine, BenchScreen, CartonSummary, Footprint, PlannedAsIs, PlannedParcel, Preset, StatedSize, Uuid } from "@domain/types";
 
 import { keepOf } from "../../items/box.ts";
-import { arrange, boxFreight, fitInto, piecesOf, type Aside, type BoxPlan, type Goods, type Layer } from "./arrange.ts";
+import { arrange, boxFreight, fitInto, piecesOf, type AsIs, type Aside, type BoxPlan, type Goods, type Layer } from "./arrange.ts";
 import { shortOf } from "./check.ts";
 import { LEVEL_WORDS, account, boxNote, cartonDetail, cartonWeight, dimsOf, lookOf, type OrderView, type Parcel, type ParcelLine } from "./order.ts";
 
@@ -88,7 +88,7 @@ export function presetOf(screen: BenchScreen, c: CartonSummary): Preset | null {
 const sized = (p: Preset | null | undefined): p is Box => !!p && p.size !== null;
 
 /** Units of each line, summed. */
-function byLine(goods: Iterable<{ line: Uuid; units: number }>): Map<Uuid, number> {
+export function byLine(goods: Iterable<{ line: Uuid; units: number }>): Map<Uuid, number> {
   const out = new Map<Uuid, number>();
   for (const g of goods) out.set(g.line, (out.get(g.line) ?? 0) + g.units);
   return out;
@@ -126,6 +126,43 @@ export function boardOf(screen: BenchScreen): Board {
   const lineOf = new Map(screen.lines.map((l) => [l.line_id, l]));
   const goodsOf = (rows: { line: Uuid; units: number }[]): Goods[] =>
     [...byLine(rows)].flatMap(([id, units]) => (lineOf.has(id) && units > 0 ? [{ line: lineOf.get(id)!, units }] : []));
+
+  /** One of a line's item as it is (D196): to ship, or planned onto a pallet first (migration 144). */
+  const asIsParcel = (id: Uuid, a: AsIs, pp: PlannedParcel | null): BoardParcel => {
+    const line = lineOf.get(a.line)!;
+    return {
+      key: parcelKey(id),
+      id,
+      made: false,
+      kind: "as_is",
+      title: `${a.item_code} ${LEVEL_WORDS[a.level]}`,
+      detail: null,
+      state: pp ? "planned" : "as-is",
+      size: a.size,
+      box: null,
+      asIs: a,
+      count: a.count,
+      lines: [{ line: a.line, item_id: a.item_id, item_code: a.item_code, units: a.units, state: "planned" }],
+      loose: [],
+      layers: null,
+      index: a.index,
+      faces: a.faces,
+      round: a.round,
+      keep: 1,
+      weight_g: a.weight_g === null ? null : a.weight_g / a.count,
+      weighed: false,
+      weightNote: a.weight_g === null ? "not weighed" : null,
+      preset: null,
+      deck: null,
+      on: pp ? (pp.on_parcel_id ?? pp.on_package_id) : null,
+      byHand: pp?.placed_by_hand ?? false,
+      goods: [{ line, units: a.units }],
+      arranged: null,
+      limit_g: null,
+      carton: null,
+      planned: pp,
+    };
+  };
 
   // ── made ───────────────────────────────────────────────────────────────
   const made: BoardParcel[] = screen.cartons.map((c) => {
@@ -167,6 +204,8 @@ export function boardOf(screen: BenchScreen): Board {
 
   // ── planned ────────────────────────────────────────────────────────────
   const planned: BoardParcel[] = screen.plan.map((pp) => {
+    // A thing as it is, unless its line has gone: then it shows as nothing on file.
+    if (pp.as_is && lineOf.has(pp.lines[0]?.line_id ?? "")) return asIsParcel(pp.id, plannedAsIs(pp, pp.as_is, lineOf), pp);
     const preset = screen.presets.find((p) => p.id === pp.package_type_id) ?? null;
     const goods = goodsOf(pp.lines.map((l) => ({ line: l.line_id, units: l.quantity })));
     const box = sized(preset) ? preset : null;
@@ -211,42 +250,7 @@ export function boardOf(screen: BenchScreen): Board {
   const unplanned = screen.lines.map((l) => ({ ...l, remaining: Math.max(0, toPack(l) - (plannedIn.get(l.line_id) ?? 0)) }));
   const { asIs } = piecesOf(unplanned);
   const asIsOf = byLine(asIs.map((a) => ({ line: a.line, units: a.units })));
-  const shipping: BoardParcel[] = asIs.map((a) => {
-    const id = `as-is:${a.line}:${a.level}`;
-    const line = lineOf.get(a.line)!;
-    return {
-      key: parcelKey(id),
-      id,
-      made: false,
-      kind: "as_is",
-      title: `${a.item_code} ${LEVEL_WORDS[a.level]}`,
-      detail: null,
-      state: "as-is",
-      size: a.size,
-      box: null,
-      asIs: a,
-      count: a.count,
-      lines: [{ line: a.line, item_id: a.item_id, item_code: a.item_code, units: a.units, state: "planned" }],
-      loose: [],
-      layers: null,
-      index: a.index,
-      faces: a.faces,
-      round: a.round,
-      keep: 1,
-      weight_g: a.weight_g === null ? null : a.weight_g / a.count,
-      weighed: false,
-      weightNote: a.weight_g === null ? "not weighed" : null,
-      preset: null,
-      deck: null,
-      on: null,
-      byHand: false,
-      goods: [{ line, units: a.units }],
-      arranged: null,
-      limit_g: null,
-      carton: null,
-      planned: null,
-    };
-  });
+  const shipping: BoardParcel[] = asIs.map((a) => asIsParcel(`as-is:${a.line}:${a.level}`, a, null));
 
   const lines: BoardLine[] = screen.lines.map((l) => {
     const pack = toPack(l);
@@ -283,7 +287,13 @@ export type BoardAct =
   | { kind: "make"; parcel: Uuid }
   | { kind: "contain"; carton: Uuid; pallet: Uuid }
   /** Off its pallet, back on the bench. */
-  | { kind: "takeOff"; carton: Uuid };
+  | { kind: "takeOff"; carton: Uuid }
+  /**
+   * A carton made by the step before, taken apart to undo it (settled 5):
+   * opened, its puts undone, off its pallet and discarded, with the pallet
+   * that step made for it. Worked out against the bench as it is when undone.
+   */
+  | { kind: "unmake"; carton: Uuid; pallet: Uuid | null };
 
 /** What a drop does, or would, and how to go back. */
 export interface Outcome {
@@ -312,6 +322,41 @@ export interface HowMany {
 }
 
 const percent = (n: number) => `${Math.round(n * 100)}%`;
+
+/**
+ * The plan from before parcels were made, to plan them again: under new ids,
+ * since the old ones are cartons now, discarded but on record.
+ */
+function afresh(plan: readonly PlannedParcel[], made: readonly Uuid[], newId: () => Uuid): PlannedParcel[] {
+  const ids = new Map(made.map((id) => [id, newId()]));
+  return plan.map((pp) => ({ ...pp, id: ids.get(pp.id) ?? pp.id, on_parcel_id: pp.on_parcel_id && (ids.get(pp.on_parcel_id) ?? pp.on_parcel_id) }));
+}
+
+/**
+ * Make a planned parcel (D245), and how to go back: taken apart, and planned
+ * again as it was. A planned pallet it goes on is made with it, and undone
+ * with it.
+ */
+export function making(screen: BenchScreen, parcel: Uuid, newId: () => Uuid): Pick<Outcome, "plan" | "acts" | "undo"> {
+  const pp = screen.plan.find((p) => p.id === parcel);
+  const pallet = pp?.on_parcel_id ?? null;
+  return {
+    // Making uses the plan's row up on the server; nothing to write to it here.
+    plan: null,
+    acts: [{ kind: "make", parcel }],
+    undo: pp ? { plan: afresh(screen.plan, pallet ? [parcel, pallet] : [parcel], newId), acts: [{ kind: "unmake", carton: parcel, pallet }] } : null,
+  };
+}
+
+/** A thing as it is, planned: the piece its units make, as Ship would make it. Its line is on the screen. */
+function plannedAsIs(pp: PlannedParcel, as: PlannedAsIs, lineOf: Map<Uuid, BenchLine>): AsIs {
+  const { line_id, quantity: units } = pp.lines[0]!;
+  const line = lineOf.get(line_id)!;
+  const piece = piecesOf([{ ...line, remaining: units }]).asIs.find((a) => a.level === as.level);
+  if (piece) return piece;
+  // Its item no longer ships as it is at that level: shown unsized.
+  return { line: line_id, item_id: as.item_id, item_code: line.item_code, units, weight_g: null, level: as.level, count: 1, per: units, size: null, faces: {}, round: null, index: 0 };
+}
 
 /** The plan as the server keeps it, from the board's planned parcels. */
 function planOf(board: Board): PlannedParcel[] {
@@ -344,6 +389,8 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
   const said: string[] = [];
   let shown: Outcome["shown"] = null;
   let changed = false;
+  // Planned pallets this drop makes: made once, and undone by taking them apart.
+  const made: Uuid[] = [];
   const parcel = (id: Uuid) => board.parcels.find((p) => p.id === id) ?? null;
   const lineOf = (id: Uuid) => screen.lines.find((l) => l.line_id === id) ?? null;
   // What is in or planned into a parcel now, with the drops so far.
@@ -355,7 +402,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
   const newPallet = (): PlannedParcel | null => {
     const pallet = screen.presets.find((p) => p.deck && p.name.toUpperCase() === "PALLET") ?? screen.presets.find((p) => p.deck);
     if (!pallet) return null;
-    const pp: PlannedParcel = { id: newId(), package_type_id: pallet.id, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
+    const pp: PlannedParcel = { id: newId(), package_type_id: pallet.id, as_is: null, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
     plan = [...plan, pp];
     changed = true;
     return pp;
@@ -409,7 +456,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
           continue;
         }
         if (!fresh || fresh.package_type_id !== chosen.id) {
-          fresh = { id: newId(), package_type_id: chosen.id, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
+          fresh = { id: newId(), package_type_id: chosen.id, as_is: null, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
           plan = [...plan, fresh];
           changed = true;
         }
@@ -470,7 +517,6 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
     const moving = parcel(thing.id);
     if (!moving) continue;
     if (moving.kind === "pallet") return refused(`A pallet goes on nothing; drop cartons on it`);
-    if (moving.kind === "as_is" && !moving.made) return refused(`Ship ${moving.title} first, then put it on a pallet`);
     if (target === "bench") {
       if (!moving.on) {
         said.push(`${moving.title} is on no pallet`);
@@ -500,15 +546,39 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
     }
     if (moving.made) {
       // A made carton goes on a made pallet: one only planned is made first.
-      if (!pallet.made) acts.push({ kind: "make", parcel: pallet.id });
+      if (!pallet.made && !made.includes(pallet.id)) {
+        acts.push({ kind: "make", parcel: pallet.id });
+        made.push(pallet.id);
+        undo.unshift({ kind: "unmake", carton: pallet.id, pallet: null });
+      }
       acts.push({ kind: "contain", carton: moving.id, pallet: pallet.id });
       undo.unshift(moving.on ? { kind: "contain", carton: moving.id, pallet: moving.on } : { kind: "takeOff", carton: moving.id });
-    } else {
+    } else if (moving.planned) {
       plan = plan.map((pp) =>
         pp.id === moving.id
           ? { ...pp, on_parcel_id: pallet!.made ? null : pallet!.id, on_package_id: pallet!.made ? pallet!.id : null, at: null, placed_by_hand: true }
           : pp,
       );
+      changed = true;
+    } else if (moving.asIs) {
+      // Things as they are, planned onto it one parcel each, as Ship would make them.
+      const a = moving.asIs;
+      const config = a.level === "each" ? null : (moving.goods[0]?.line.own_carton?.item_packing_config_id ?? null);
+      for (let i = 0; i < Math.min(a.count, how.count ?? (how.one ? 1 : a.count)); i++) {
+        plan = [
+          ...plan,
+          {
+            id: newId(),
+            package_type_id: null,
+            as_is: { item_id: a.item_id, level: a.level, config_id: config },
+            on_parcel_id: pallet.made ? null : pallet.id,
+            on_package_id: pallet.made ? pallet.id : null,
+            at: null,
+            placed_by_hand: true,
+            lines: [{ line_id: a.line, quantity: a.per }],
+          },
+        ];
+      }
       changed = true;
     }
     said.push(`${moving.title} onto ${pallet.title}`);
@@ -520,7 +590,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
     verdict: said.join(" · "),
     plan: changed ? plan : null,
     acts,
-    undo: { plan: changed ? before : null, acts: undo },
+    undo: { plan: changed || made.length > 0 ? afresh(before, made, newId) : null, acts: undo },
     shown,
     chooseBox: false,
   };
@@ -541,6 +611,7 @@ export function suggest(screen: BenchScreen, board: Board, newId: () => Uuid): P
     return {
       id: newId(),
       package_type_id: b.preset.id,
+      as_is: null,
       on_parcel_id: null,
       on_package_id: null,
       at: null,

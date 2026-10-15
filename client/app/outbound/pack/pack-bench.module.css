@@ -2,70 +2,45 @@
   font-family: var(--ui-font-mono);
 }
 
-/* ---- checking the order (D244) ---- */
-.checks {
+/* ---- the check (D244) and To pack: one line, one way ---- */
+.checks,
+.boardLines {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-/* What it is, what should be there, and the check: on one row where there is
-   room, what should be there over the check where there is not, and on a
-   phone the thing across the top with the rest under it. */
-.checkRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+/* The thing, taking the room, and what there is to say of it in a column at
+   the end: the same in the check and in To pack. Where the column leaves the
+   thing too little room, it wraps under it, still at the end. */
+.checkRow,
+.boardLine {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--ui-space-1) var(--ui-space-4);
-  padding: var(--ui-space-2-5) var(--ui-space-4);
+  gap: var(--ui-space-2) var(--ui-space-3);
+  padding: var(--ui-space-2) var(--ui-space-4);
   box-shadow: inset 0 1px 0 var(--ui-border);
 }
-.checkRow > :first-child {
-  grid-row: span 2;
-}
-.checkRow > :last-child {
-  justify-self: end;
-}
-@media (min-width: 1500px) {
-  .checkRow {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-  .checkRow > :first-child {
-    grid-row: auto;
-  }
-}
-@media (max-width: 640px) {
-  .checkRow {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .checkRow > :first-child {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
-  .checkRow > .checkExpect {
-    align-items: flex-start;
-    text-align: left;
-    white-space: nowrap;
-  }
+.checkRow > :first-child,
+.boardLine > :first-child {
+  flex: 1 1 11rem;
+  min-width: 0;
 }
 .checkRow[data-state="open"] {
   background: var(--ui-accent-soft);
 }
-.checkExpect {
+.lineSide {
   display: flex;
+  flex: none;
+  margin-left: auto;
   flex-direction: column;
   align-items: flex-end;
+  gap: var(--ui-space-1);
   text-align: right;
 }
-.expect {
-  font-size: var(--ui-text-md);
+.lineCount {
   font-weight: 600;
-}
-.checked {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--ui-space-2);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- lines ---- */
@@ -406,35 +381,8 @@
   display: flex;
   flex-direction: column;
 }
-.boardLines {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.boardLine {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-3);
-  padding: var(--ui-space-2) var(--ui-space-4);
-  box-shadow: inset 0 1px 0 var(--ui-border);
-}
-.boardLine > :first-child {
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .boardLine[data-done] {
   cursor: default;
-}
-.lineSide {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--ui-space-1);
-}
-.lineLeft {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 .dropHere {
   margin: 0;

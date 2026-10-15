@@ -123,5 +123,14 @@ async fn drain_once(pool: &deadpool_postgres::Pool) -> Result<i64, Box<dyn std::
         .query_one("SELECT projection_run_dirty()", &[])
         .await?
         .get(0);
+    // An order's plan goes when its fulfilment closes (migration 143), once
+    // the fold has counted what was despatched.
+    let dropped: i64 = conn
+        .query_one("SELECT pack_plan_drop_closed()", &[])
+        .await?
+        .get(0);
+    if dropped > 0 {
+        tracing::info!(parcels = dropped, "dropped the plans of closed fulfilments");
+    }
     Ok(n)
 }

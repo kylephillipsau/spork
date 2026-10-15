@@ -364,6 +364,7 @@ export const PACK_FIXTURE: BenchScreen = {
     {
       id: "01a20000-0000-7000-8000-00000000b001",
       package_type_id: "9a7e0000-0000-0000-0000-0000000000b1",
+      as_is: null,
       on_parcel_id: null,
       on_package_id: null,
       at: null,
@@ -523,6 +524,7 @@ export const PACK_PALLET: BenchScreen = {
     {
       id: "01a20000-0000-7000-8000-00000000c001",
       package_type_id: "9a7e0000-0000-0000-0000-0000000000c1",
+      as_is: null,
       on_parcel_id: null,
       on_package_id: null,
       at: null,
@@ -532,11 +534,33 @@ export const PACK_PALLET: BenchScreen = {
     {
       id: "01a20000-0000-7000-8000-00000000c002",
       package_type_id: "9a7e0000-0000-0000-0000-0000000000b1",
+      as_is: null,
       on_parcel_id: "01a20000-0000-7000-8000-00000000c001",
       on_package_id: null,
       at: null,
       placed_by_hand: true,
       lines: [{ line_id: APRONS, quantity: 6 }],
     },
+  ],
+};
+
+/**
+ * Things as they are planned onto the pallet before they are made (migration
+ * 144): the oversleeves' two own cartons, beside the aprons' box.
+ */
+export const PACK_AS_IS_PLANNED: BenchScreen = {
+  ...PACK_PALLET,
+  plan: [
+    ...PACK_PALLET.plan,
+    ...[3, 4].map((n) => ({
+      id: `01a20000-0000-7000-8000-00000000c00${n}`,
+      package_type_id: null,
+      as_is: { item_id: "01990000-0000-7000-8000-00000000a004", level: "carton" as const, config_id: "9ac40000-0000-0000-0000-00000000000b" },
+      on_parcel_id: "01a20000-0000-7000-8000-00000000c001",
+      on_package_id: null,
+      at: null,
+      placed_by_hand: true,
+      lines: [{ line_id: "f11e0000-0000-0000-0000-000000000004", quantity: 10 }],
+    })),
   ],
 };

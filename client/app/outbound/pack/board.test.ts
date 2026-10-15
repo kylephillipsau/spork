@@ -2,8 +2,8 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import type { BenchScreen, PlannedParcel } from "@domain/types";
-import { boardOf, dropOn, goodsKey, parcelKey, sourcesFor, suggest } from "./board.ts";
-import { PACK_FILLING } from "./fixture.ts";
+import { boardOf, dropOn, goodsKey, making, parcelKey, sourcesFor, suggest } from "./board.ts";
+import { PACK_FILLING, PACK_FIXTURE } from "./fixture.ts";
 
 /** The board (D245): what is where, and what a drop does. */
 
@@ -18,6 +18,7 @@ const newId = () => `01a20000-0000-7000-8000-${String(++n).padStart(12, "0")}`;
 const planned = (id: string, type: string, lines: [string, number][], byHand = true): PlannedParcel => ({
   id,
   package_type_id: type,
+  as_is: null,
   on_parcel_id: null,
   on_package_id: null,
   at: null,
@@ -72,6 +73,30 @@ test("a made carton onto a planned pallet makes the pallet first; goods out of a
   ]);
   const out = dropOn(screen, board, [goodsKey(APRONS, OPEN)], "bench", { one: false }, newId);
   assert.deepEqual(out.acts, [{ kind: "repack", line: APRONS, units: 2, from: OPEN, to: null }]);
+});
+
+test("Make is undone by taking the carton apart, its pallet with it, and planning both again under new ids", () => {
+  const plan = [planned("pl", PALLET, []), { ...planned("bx", SMALL_BOX, [[APRONS, 4]]), on_parcel_id: "pl" }];
+  const made = making(withPlan(plan), "bx", newId);
+  assert.deepEqual(made.acts, [{ kind: "make", parcel: "bx" }]);
+  assert.deepEqual(made.undo?.acts, [{ kind: "unmake", carton: "bx", pallet: "pl" }]);
+  const [pallet, box] = made.undo?.plan ?? [];
+  assert.ok(pallet && box && pallet.id !== "pl" && box.id !== "bx", "new ids: the old ones are cartons now");
+  assert.equal(box.on_parcel_id, pallet.id, "on the pallet planned again");
+  assert.deepEqual(box.lines, [{ line_id: APRONS, quantity: 4 }]);
+});
+
+test("things as they are go onto a pallet planned, one parcel each, before they are made", () => {
+  const [SLEEVES, EMPTY_PALLET] = ["f11e0000-0000-0000-0000-000000000004", "ca470000-0000-0000-0000-000000000003"];
+  const out = dropOn(PACK_FIXTURE, boardOf(PACK_FIXTURE), [parcelKey(`as-is:${SLEEVES}:carton`)], parcelKey(EMPTY_PALLET), { one: false }, newId);
+  assert.equal(out.ok, true, out.verdict);
+  const own = (out.plan ?? []).filter((pp) => pp.as_is);
+  assert.equal(own.length, 2, "two own cartons of ten");
+  assert.deepEqual(own[0]?.as_is, { item_id: "01990000-0000-7000-8000-00000000a004", level: "carton", config_id: "9ac40000-0000-0000-0000-00000000000b" });
+  assert.deepEqual(own[0]?.lines, [{ line_id: SLEEVES, quantity: 10 }]);
+  const board = boardOf({ ...PACK_FIXTURE, plan: out.plan ?? [] });
+  assert.equal(board.parcels.filter((p) => p.kind === "as_is" && p.on === EMPTY_PALLET).length, 2, "shown on the pallet");
+  assert.equal(board.parcels.some((p) => p.id.startsWith("as-is:")), false, "and no longer to ship on their own");
 });
 
 test("a thing nobody measured asks which box, and goes into the box chosen", () => {

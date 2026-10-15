@@ -1,8 +1,8 @@
 //! The board's plan, kept as a draft. D245, docs/packing-plan.md (settled 4).
 //!
 //! What the packer planned for a fulfilment, and what Suggest planned round
-//! it: parcels of a box type, which lines' units go in each, and the pallet
-//! each goes on (migration 142). Not a fact: the board sends the whole plan
+//! it: parcels of a box type, or things as they are (migration 144), which
+//! lines' units go in each, and the pallet each goes on (migration 142). Not a fact: the board sends the whole plan
 //! each time it changes and it replaces the last. A planned parcel holds the
 //! id its carton will be made with, and `POST /packages` with that id uses the
 //! row up, so the carton made from it is the same parcel.
@@ -23,7 +23,10 @@ use crate::AppState;
 pub struct PlannedParcel {
     /// The id its carton will be made with.
     pub id: Uuid,
-    pub package_type_id: Uuid,
+    /// The box type it is a box of; none for a thing as it is.
+    pub package_type_id: Option<Uuid>,
+    /// One of an item as it is (D196): what Ship makes, planned.
+    pub as_is: Option<PlannedAsIs>,
     /// The planned pallet it goes on, or one already made; neither for none.
     pub on_parcel_id: Option<Uuid>,
     pub on_package_id: Option<Uuid>,
@@ -32,6 +35,16 @@ pub struct PlannedParcel {
     /// The packer placed it, rather than Suggest: Suggest plans round it.
     pub placed_by_hand: bool,
     pub lines: Vec<PlannedLine>,
+}
+
+/// One of an item at a level, as it is, as `package` says one (migration 113).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PlannedAsIs {
+    pub item_id: Uuid,
+    /// `each`, `inner` or `carton`.
+    pub level: String,
+    /// Which of its cases, for an inner or a carton.
+    pub config_id: Option<Uuid>,
 }
 
 /// So many of a line's units planned into a parcel, in the units it counts.
@@ -58,6 +71,18 @@ pub fn check_plan(parcels: &[PlannedParcel]) -> Result<(), String> {
     }
     let on: HashMap<Uuid, Uuid> = parcels.iter().filter_map(|p| Some((p.id, p.on_parcel_id?))).collect();
     for p in parcels {
+        match (&p.package_type_id, &p.as_is) {
+            (Some(_), None) => {}
+            (None, Some(a)) => {
+                if !matches!(a.level.as_str(), "each" | "inner" | "carton") {
+                    return Err(format!("a thing as it is is an each, an inner or a carton, not {}", a.level));
+                }
+                if a.config_id.is_some() && a.level == "each" {
+                    return Err("an each has no case to name".into());
+                }
+            }
+            _ => return Err("a planned parcel is a box or a thing as it is".into()),
+        }
         if p.on_parcel_id.is_some() && p.on_package_id.is_some() {
             return Err("a parcel goes on one pallet".into());
         }
@@ -127,6 +152,22 @@ pub async fn save_plan(
                 if theirs > 0 {
                     return Err(ApiError::Rejected("a planned line is another order's".into()));
                 }
+                // A thing as it is holds its own item and nothing else.
+                for p in &parcels {
+                    let Some(a) = &p.as_is else { continue };
+                    let ids: Vec<Uuid> = p.lines.iter().map(|l| l.line_id).collect();
+                    let other: i64 = tx
+                        .query_one(
+                            "SELECT count(*) FROM fulfilment_line fl JOIN order_line ol ON ol.id = fl.order_line_id
+                              WHERE fl.id = ANY($1) AND ol.item_id <> $2",
+                            &[&ids, &a.item_id],
+                        )
+                        .await?
+                        .get(0);
+                    if other > 0 {
+                        return Err(ApiError::Rejected("a thing as it is holds only its own item".into()));
+                    }
+                }
                 tx.execute("DELETE FROM pack_plan_parcel WHERE fulfilment_id = $1", &[&fulfilment])
                     .await?;
                 for (position, p) in parcels.iter().enumerate() {
@@ -134,8 +175,10 @@ pub async fn save_plan(
                     tx.execute(
                         "INSERT INTO pack_plan_parcel
                              (id, tenant_id, fulfilment_id, package_type_id, on_parcel_id, on_package_id,
-                              at_x_mm, at_y_mm, at_z_mm, turned, placed_by_hand, position)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                              at_x_mm, at_y_mm, at_z_mm, turned, placed_by_hand, position,
+                              own_item_id, own_level, item_packing_config_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                                 $13, $14::text::packaging_level, $15)",
                         &[
                             &p.id,
                             &who.tenant_id,
@@ -149,6 +192,9 @@ pub async fn save_plan(
                             &at.is_some_and(|s| s.turned),
                             &p.placed_by_hand,
                             &(position as i32),
+                            &p.as_is.as_ref().map(|a| a.item_id),
+                            &p.as_is.as_ref().map(|a| a.level.clone()),
+                            &p.as_is.as_ref().and_then(|a| a.config_id),
                         ],
                     )
                     .await?;
@@ -186,7 +232,8 @@ pub async fn plan_of(tx: &tokio_postgres::Transaction<'_>, fulfilment: Uuid) -> 
     Ok(tx
         .query(
             "SELECT id, package_type_id, on_parcel_id, on_package_id,
-                    at_x_mm, at_y_mm, at_z_mm, turned, placed_by_hand
+                    at_x_mm, at_y_mm, at_z_mm, turned, placed_by_hand,
+                    own_item_id, own_level::text, item_packing_config_id
                FROM pack_plan_parcel WHERE fulfilment_id = $1
               ORDER BY position, id",
             &[&fulfilment],
@@ -198,6 +245,9 @@ pub async fn plan_of(tx: &tokio_postgres::Transaction<'_>, fulfilment: Uuid) -> 
             PlannedParcel {
                 id,
                 package_type_id: r.get(1),
+                as_is: r
+                    .get::<_, Option<Uuid>>(9)
+                    .map(|item_id| PlannedAsIs { item_id, level: r.get(10), config_id: r.get(11) }),
                 on_parcel_id: r.get(2),
                 on_package_id: r.get(3),
                 at: match (r.get::<_, Option<i32>>(4), r.get::<_, Option<i32>>(5), r.get::<_, Option<i32>>(6)) {
@@ -218,7 +268,8 @@ mod tests {
     fn parcel(id: u128, on: Option<u128>) -> PlannedParcel {
         PlannedParcel {
             id: Uuid::from_u128(id),
-            package_type_id: Uuid::from_u128(99),
+            package_type_id: Some(Uuid::from_u128(99)),
+            as_is: None,
             on_parcel_id: on.map(Uuid::from_u128),
             on_package_id: None,
             at: None,
@@ -243,5 +294,21 @@ mod tests {
         let mut spot = parcel(1, None);
         spot.at = Some(Spot { x_mm: 0, y_mm: 0, z_mm: 0, turned: false });
         assert!(check_plan(&[spot]).unwrap_err().contains("on none"));
+    }
+
+    /// **A thing as it is is planned too** (migration 144): a box or a thing
+    /// as it is, never both or neither, and a level that is one.
+    #[test]
+    fn a_planned_parcel_is_a_box_or_a_thing_as_it_is() {
+        let as_is = |level: &str| PlannedAsIs { item_id: Uuid::from_u128(7), level: level.into(), config_id: None };
+        let mut own = parcel(2, Some(1));
+        own.package_type_id = None;
+        own.as_is = Some(as_is("carton"));
+        assert!(check_plan(&[parcel(1, None), own.clone()]).is_ok());
+        let mut both = own.clone();
+        both.package_type_id = Some(Uuid::from_u128(99));
+        assert!(check_plan(&[parcel(1, None), both]).unwrap_err().contains("a box or"));
+        own.as_is = Some(as_is("pallet"));
+        assert!(check_plan(&[parcel(1, None), own]).unwrap_err().contains("not pallet"));
     }
 }

@@ -338,7 +338,10 @@ export interface Spot {
 /** A parcel planned on the board and not yet made (D245): the id its carton will be made with. */
 export interface PlannedParcel {
   id: Uuid;
-  package_type_id: Uuid;
+  /** The box type it is a box of; none for a thing as it is. */
+  package_type_id: Uuid | null;
+  /** One of an item as it is (D196), planned: made as Ship makes one (migration 144). */
+  as_is: PlannedAsIs | null;
   /** The planned pallet it goes on, or one already made. */
   on_parcel_id: Uuid | null;
   on_package_id: Uuid | null;
@@ -346,6 +349,14 @@ export interface PlannedParcel {
   /** The packer placed it, rather than Suggest: Suggest plans round it. */
   placed_by_hand: boolean;
   lines: PlannedLine[];
+}
+
+/** One of an item at a level, as it is. */
+export interface PlannedAsIs {
+  item_id: Uuid;
+  level: "each" | "inner" | "carton";
+  /** Which of its cases, for an inner or a carton. */
+  config_id: Uuid | null;
 }
 
 /** So many of a line's units planned into a parcel. */

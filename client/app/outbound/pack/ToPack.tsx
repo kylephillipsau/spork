@@ -57,7 +57,7 @@ function Row({ b, order, look }: { b: BoardLine; order: OrderLine | null; look: 
         done={b.left === 0}
       />
       <span className={s.lineSide}>
-        <span className={s.lineLeft}>{b.left > 0 ? `${b.left} left` : "Placed"}</span>
+        <span className={s.lineCount}>{b.left > 0 ? `${b.left} left` : "Placed"}</span>
         {needsCheck(l) ? <Badge tone="warning">Not checked</Badge> : <Badge tone="success">Checked</Badge>}
         {unmeasured && (
           <Button size="sm" variant="ghost" icon={<Ruler />} onClick={() => look(l.item_id)}>

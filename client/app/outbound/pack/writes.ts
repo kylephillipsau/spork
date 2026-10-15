@@ -2,7 +2,7 @@ import type { api } from "@domain/api";
 import type { BenchLine, BenchScreen, PlannedParcel, Spot, Uuid } from "@domain/types";
 
 import { keptAct, partOf, type Act } from "../../../domain/acts.ts";
-import { sourcesFor, type BoardAct } from "./board.ts";
+import { byLine, sourcesFor, type BoardAct } from "./board.ts";
 
 /**
  * A press at the pack bench as the writes it makes (D207, for the bench).
@@ -137,10 +137,18 @@ export function writer(screen: BenchScreen, fulfilment: Uuid): Writer {
         if (!screen.dock_id) throw unset();
         // On a planned pallet: the pallet first, so there is something to put it on.
         if (pp.on_parcel_id) add({ kind: "make", parcel: pp.on_parcel_id }, under(part, "pallet"));
-        writes.push({ part: under(part, "carton"), kind: "startCarton", fulfilment, preset: pp.package_type_id, dock: screen.dock_id, id: pp.id });
+        const dock = screen.dock_id;
+        if (pp.as_is) {
+          const { item_id: item, level, config_id: config } = pp.as_is;
+          writes.push({ part: under(part, "carton"), kind: "startAsIs", fulfilment, item, level, config, dock, id: pp.id });
+        } else if (pp.package_type_id) {
+          writes.push({ part: under(part, "carton"), kind: "startCarton", fulfilment, preset: pp.package_type_id, dock, id: pp.id });
+        }
         const pallet = pp.on_parcel_id ?? pp.on_package_id;
         if (pallet) writes.push({ part: under(part, "on"), kind: "contain", carton: pp.id, pallet, at: pp.at });
         for (const l of pp.lines) add({ kind: "put", line: l.line_id, units: l.quantity, carton: pp.id }, under(part, `put:${l.line_id}`));
+        // A thing as it is is sealed as it is made, as Ship does.
+        if (pp.as_is) writes.push({ part: under(part, "seal"), kind: "seal", carton: pp.id });
         return;
       }
       case "contain":
@@ -149,6 +157,21 @@ export function writer(screen: BenchScreen, fulfilment: Uuid): Writer {
       case "takeOff":
         writes.push({ part, kind: "place", carton: step.carton, location: bench() });
         return;
+      case "unmake": {
+        // Gone already, by an undo that landed: nothing to take apart.
+        const c = screen.cartons.find((x) => x.id === step.carton);
+        if (c) {
+          if (c.sealed) writes.push({ part: under(part, "open"), kind: "open", carton: c.id });
+          for (const [line, units] of byLine(c.contents.map((r) => ({ line: r.line_id, units: r.quantity }))))
+            add({ kind: "unput", line, units, carton: c.id }, under(part, `out:${line}`));
+          // Off its pallet first: a pallet with anything on it can't be discarded.
+          if (c.on) writes.push({ part: under(part, "off"), kind: "place", carton: c.id, location: bench() });
+          writes.push({ part: under(part, "discard"), kind: "discard", carton: c.id });
+        }
+        if (step.pallet && screen.cartons.some((x) => x.id === step.pallet))
+          writes.push({ part: under(part, "pallet"), kind: "discard", carton: step.pallet });
+        return;
+      }
     }
   };
 
