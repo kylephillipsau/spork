@@ -9,15 +9,23 @@ covers the toolchain, tests and layout.
 ## State
 
 - **Live, 2026-10-15:**
-  - `main` is pushed through 36b5f8e, then this handoff;
+  - `main` is pushed through cde5e10 (the gaps left from M3), then this
+    handoff;
   - the live database is at migration 142 since 12:56 on 2026-10-14;
-  - the server running is D255's (e134a24), live since 14:00 on 2026-10-14.
-    A paired iPhone works over HTTPS;
-  - the client running is the bench's outbox (D256, 36b5f8e), swapped in
-    at about 13:30 on 2026-10-15. The phone pass before it is kept in
+  - the server and client running are D257's (acfb9e0), live since the
+    user's restart at 14:39. Asked from the `.local` name, a passkey
+    ceremony names `<computer>.local`; the bench's outbox (D256) is kept in
     `client/dist-prev`;
-  - passkeys at the `.local` name (D257) are not live: they need the server
-    built and restarted (Deploying, below).
+  - the gaps left from M3 and the check's layout (cde5e10) are built and
+    not live. They need migrations 143 and 144, the server and the client
+    (Deploying, below).
+- 2026-10-15, the gaps left from M3 (migrations 143 and 144) and the check's
+  layout, on a fresh database (`spork_gaps`):
+  - every migration builds and reverses, 144 of them;
+  - the server's unit tests pass (321), and its integration tests 166 of 166;
+  - the invariant suite passes but for S7 and S10, as before;
+  - the client's tests (258), contract and laws pass, and the render gate
+    passes over every fixture (150 fixtures, 492 renders).
 - 2026-10-15, passkeys at the `.local` name (D257), no migration:
   - the server's unit tests pass (320), and the passkey integration tests
     (8) on `spork_m3run`;
@@ -88,6 +96,40 @@ covers the toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**Later on 2026-10-15: the gaps left from M3, and the check laid out as To
+pack is**
+- **A closed order's plan goes** (settled 4, migration 143). After each fold
+  the scheduler calls `pack_plan_drop_closed()`, which drops the plan of
+  every fulfilment that is cancelled, closed in the other system, or
+  despatched in full. It is a definer owned by `spork_projection_owner`,
+  which may read only `fulfilment`'s id, state and `closed_elsewhere`.
+- **Undo takes back Make and Ship.** A new board step, `unmake`, is worked out
+  at undo time against the bench as read (`writes.ts`). It opens the carton
+  if sealed, undoes its puts, takes it off its pallet, discards it, and
+  discards the pallet if the same press made it. `making()` in `board.ts`
+  plans the parcel again under a new id (`afresh`). A made carton dropped on
+  a planned pallet undoes the same way, and a pallet made once per drop.
+  A board change's acts are now worked out against the plan as it will be,
+  so a made carton dropped for a new pallet makes that pallet.
+- **Things that ship as they are can be planned onto a pallet** (migration
+  144). A planned parcel is a box type or `as_is` (an item, a level, a
+  case). Dragged onto a pallet, they are planned one parcel each; on the
+  board they show on the pallet with Ship, which makes them from the plan:
+  started with the plan's id, put on the pallet, filled, sealed.
+- **The check card is laid out as To pack is**, at every width. One line rule
+  (`.checkRow, .boardLine`) is a flex row that wraps. The item has a basis
+  of 11rem and the side column (`.lineSide`) sits at the end, so on a phone
+  only a row with the count box drops it underneath. The check's own grid,
+  with its three breakpoints, is gone.
+- Tests:
+  - `pack_plan_http`: a closed order's plan is dropped; a thing as it is is
+    planned onto a pallet and made from the plan;
+  - `pack_plan`: a planned parcel is a box or a thing as it is;
+  - `board.test.ts`: Make undone; things as they are planned onto a pallet;
+  - `writes.test.ts`: a carton taken apart; a planned thing made as Ship
+    makes it.
+  - Fixture: `pack/as-is-planned`.
 
 **On 2026-10-15: a paired device's own passkeys (D257)**
 - Each address is a relying party (`Parties` in `passkeys.rs`): the
@@ -410,13 +452,9 @@ covers the toolchain, tests and layout.
 - **The board plans boxes with `arrange.ts`.** Spots on a pallet, load
   limits and carriers' rules wait for the planner (M4, M5). A pallet's deck
   is read, and nothing fits cartons against it yet.
-- **The plan is not dropped when the fulfilment closes.** Making a parcel
-  uses its row up, and a new plan replaces the last; an order despatched
-  with parcels still planned keeps them, unseen.
-- **Make is not undone by Undo**, nor is Ship. Take the goods out and
-  discard the carton instead.
-- **Things that ship as they are go onto a pallet once made**, not planned
-  onto one.
+- **Undo is in memory.** Leaving the bench forgets it, as before. Undoing a
+  Make uses the bench as last read, so a carton changed since by someone
+  else is taken apart as it is now.
 - **The pallet sheet is a mock.** Booking a pallet that goes as one gives it
   no line of its own yet (its weight and height); that is M6.
 - **Paired devices (D255):**
@@ -484,15 +522,17 @@ covers the toolchain, tests and layout.
 
 To build, in the agreed order:
 
-1. **Put D257 live** when the user says so: the server built and restarted
-   (Deploying, above). Then, on a paired phone at `https://<computer>.local`:
-   sign in with the password, add a passkey under the name menu › Passkeys,
-   sign out, and sign in with it.
-2. **Optionally, the gaps left from M3:** drop the plan when its fulfilment
-   closes; let Undo take back Make and Ship; plan things that ship as they are
-   onto a pallet before they are made.
-3. **M4, D249 and D250:** `subject_load`, wall and lid limits, and
-   `build_rules` as settings a carrier points at.
+1. **Put the M3 gaps live** when the user says so: migrations 143 and 144,
+   the server and the client (Deploying, above). Then pack an order on the
+   board using all three, as [packing-plan.md](./packing-plan.md) says.
+2. **Try D257 on the iPhone** at `https://<computer>.local`: sign in with the
+   password, add a passkey under the name menu › Passkeys, sign out, and sign
+   in with it.
+3. **M4, D249 and D250**, as shaped on 2026-10-15 (settled 9 and 10 in the
+   plan): `subject_load`, wall and lid limits, the warehouse's conditions,
+   solid or hollow at sealing, Workspace › Carriers with a usual carrier,
+   `build_rules`, and the checks that need no positions (heavy, loose, a
+   pallet's weight).
 4. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
    never worse over a test set of real orders.
 5. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,

@@ -46,6 +46,18 @@ placed by hand.
 On Windows without Docker, `scripts\local.ps1` does all of this natively. See
 [docs/local.md](docs/local.md).
 
+## Phones and handhelds
+
+`scripts\local.ps1 start -Lan` serves Spork to the warehouse's network under
+the name the computer announces, `<computer>.local`. It serves HTTPS through
+an authority of Spork's own, which can vouch only for `.local` names (D255).
+Each device is paired once at `http://<computer>.local:18080/pair`. After
+that it opens `https://<computer>.local` wherever the host's address moves,
+and can install Spork as an app. A passkey works at the address it was added
+at, so each paired device adds its own under Passkeys (D257). A pick, or a
+press at the bench, made with no connection is kept on the device and sent
+when there is one (D207, D256).
+
 ## Testing
 
 `DATABASE_URL` is required and its absence is silent: every database-backed test
@@ -121,12 +133,17 @@ the whole order (D245):
   to the findings queue for whoever picked it (D244);
 - drag lines onto parcels, planned or made, and cartons onto pallets: as many
   as fit go in, and the board says what a drop will do before it is let go;
-  every drag has a keyboard way (M to move, Delete to take out, Z to undo);
-- the plan is kept, Suggest plans what was not placed by hand, and Make turns
-  a planned box into a carton with its goods in, cut down to the height it
-  says when that is the lowest that takes everything (D252);
-- ship whole cartons as they are (D196), and see the chosen parcel, or the
-  whole order, in 3D or layer by layer (D195, D202);
+  every drag has a keyboard way (M to move, Delete to take out, Z to undo).
+  Undo takes back Make and Ship too;
+- the plan is kept until the order closes. Suggest plans whatever wasn't
+  placed by hand. Make turns a planned box into a carton with its goods in,
+  cut down to the height it says when that is the lowest that takes
+  everything (D252);
+- ship whole cartons as they are (D196), or plan them onto a pallet first
+  and ship them from there (D245). See the chosen parcel, or the whole
+  order, in 3D or layer by layer (D195, D202);
+- with no connection, a press is kept on the device and the board waits
+  until it has gone (D256);
 - weigh each carton: the bench says whether the weight agrees with what it
   should weigh, within the site's tolerance (Workspace, Packing), and what
   would explain it when it doesn't (D244);

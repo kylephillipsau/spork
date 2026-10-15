@@ -14,8 +14,9 @@ agreed order, seven milestones:
 
 1. **M1:** the rest of the server under D246 and D247.
 2. **M2:** boxes cut to their heights, and box photos (D252).
-3. **M3:** the drag-and-drop board (D245).
-4. **M4:** load limits and carrier build rules (D249, D250).
+3. **M3:** the drag-and-drop board (D245), and then the three gaps it left.
+4. **M4:** load limits and carrier build rules (D249, D250), with the checks
+   that need no positions.
 5. **M5:** the planner (D251).
 6. **M6:** breakdown pallets through the day (D247, D248).
 7. **M7:** the finish.
@@ -39,7 +40,7 @@ weights (D224). These are not part of this plan:
 | D244 checking at the bench | yes | live 2026-10-12 |
 | D246 moving units between cartons, cartons onto pallets | yes | server done in M1, 2026-10-14; the bench doesn't use it yet |
 | D247 a pallet goes as one or is broken down | yes | server done in M1: what is delivered, booked and despatched; the sheet and booking line in M6 |
-| D245 the board | yes, mocked | built in M3, 2026-10-14 |
+| D245 the board | yes, mocked | built in M3, 2026-10-14; its gaps 2026-10-15 |
 | D248 a breakdown pallet through the day | yes, mocked | no |
 | D249 what a box carries | yes, with research | no |
 | D250 carrier rules as settings | yes, mocked | no |
@@ -114,6 +115,17 @@ recorded when it is built.
 8. **The data a trial needs.** The trial orders must have their items
    measured. Before each trial, the packing worklist (D197) is worked down for
    the orders chosen.
+9. **Which carrier a pallet is built for** (the user, 2026-10-15). Carriers
+   and their services are kept in Workspace › Carriers, and one is the
+   workspace's usual carrier. A pallet is started under the usual carrier
+   unless the board is told another, and keeps that carrier's rule set as it
+   stood then (D250). Spork still does not read an order's carrier from
+   NetSuite.
+10. **M4 checks only what needs no positions** (the user, 2026-10-15). The
+    board does not record where on a pallet each carton sits; the planner
+    places them, in M5. So M4 checks a parcel's weight against the heavy and
+    loose limits and a pallet's weight against its limit. Overhang, labels,
+    support, columns and the load through the stack are checked from M5.
 
 ## How each milestone is known to be done
 
@@ -155,7 +167,8 @@ try at the bench is the short finding; the rest waits for M3's board.*
   - each parcel's parent;
   - each parcel's kind: a box, a pallet or skid, or one of a product as it is;
   - whether it breaks down;
-  - pallet presets give their footprint and build height.
+  - pallet presets give their footprint. How high a pallet may be built is
+    a carrier's rule (D250), from M4.
 - Taking out moves units onto the bench (settled 2).
 - A short at the check is a finding (settled 3).
 - The despatch screen with pallets, and the pallet sheet, mocked.
@@ -195,23 +208,57 @@ is live.*
   - an order pallet;
   - undo.
 
+**Left from M3, done before M4** (the user, 2026-10-15)
+
+*Built 2026-10-15 (migrations 143 and 144).*
+
+- **The plan is dropped when its fulfilment closes** (settled 4). Today an
+  order despatched with parcels still planned keeps them, unseen.
+- **Undo takes back Make and Ship**, by their opposite acts: the goods taken
+  out to the bench and the carton discarded, as a packer would by hand.
+- **Things that ship as they are can be planned onto a pallet** before they
+  are made, as a planned carton can.
+- Done means: each has its test and fixture, and an order is packed on the
+  board using all three.
+
 **M4: load limits and carrier build rules (D249, D250)**
-- `subject_load` on items, said and inherited as "this way up" is, on the
-  item page.
-- A box type's wall and lid limits:
-  - its grade, and the estimate from size and grade;
-  - set from a test;
-  - the warehouse's conditions, in Workspace.
-- A carton is solid or hollow, said at sealing, as the plan proposes.
-- `build_rules`:
-  - the fixed list of rules, each must or prefer, with a weight;
-  - Workspace › Build rules;
-  - a carrier, or one of its services, naming its rule sets;
-  - a pallet keeping the set it was started under.
-- The two carriers' rule sets are entered from what the user said.
+
+*Shaped 2026-10-15: the settings, and the checks that need no positions
+(settled 9 and 10).*
+
+- **What a thing carries:** `subject_load` on items, said and inherited as
+  "this way up" is (D200): takes weight, which is the default; takes up to so
+  many kilograms; or takes nothing. On the item page.
+- **A box type's limits**, in Workspace › Boxes:
+  - its grade, single-wall 32 ECT unless it says another;
+  - on its walls, estimated from its size and grade, or set from a test;
+  - on its lid, 10 kg to start.
+- **The warehouse's conditions** (humidity, time under load, stacking, gaps
+  in the deck, handling): one setting for the workspace. Nothing is set for a
+  whole workspace yet, so M4 gives such settings their home.
+- **A carton is solid or hollow**, said at sealing. The bench proposes it from
+  how full the box is and whether what fills it takes weight.
+- **Carriers** (settled 9): Workspace › Carriers lists carriers and their
+  services. Each names its rule set for breakdown pallets and for pallets
+  that go as one, and one carrier is the usual one. A carrier's services
+  become its workspace's, as carriers are; today any workspace could change
+  them.
+- **Build rules** (`build_rules`): Workspace › Build rules, the fixed list in
+  D250, each a must or a preference with a weight. The two carriers' sets are
+  entered from what the user said.
+- **A pallet** is started under a carrier and keeps its rule set as it stood.
+  How high it may be built comes from the rules.
+- **The checks that need no positions** (settled 10), on the board as a
+  parcel is made or put on a pallet:
+  - a parcel over the heavy limit is marked heavy, and the bench says so;
+  - a parcel over the loose limit is said to need a pallet;
+  - a pallet heavier than its limit, with what is on it, is refused, as a
+    drop that won't fit is today.
 
 **M5: the planner (D251)**
 - One engine in a worker, for goods into boxes and boxes onto pallets.
+- The checks that need positions start here: overhang, labels, support,
+  columns, and the load through the stack against each box's limits.
 - **Inputs:** the container, the rules, the things to place, and the spots
   already fixed.
 - **Musts:** footprint, overhang, height, weight, upright, support, load, and
@@ -278,6 +325,9 @@ is live.*
   build.
 
 ## Still open, none blocking
+
+The user doesn't know these yet (2026-10-15), so each is a setting, changed
+when it is known:
 
 - The grade stamped on the box stock, and a floor test of each box's walls
   and lid. Until then the estimates and the 10 kg lid stand (D249).

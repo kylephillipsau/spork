@@ -16244,6 +16244,7 @@ efficient".
 ### D245: The order is packed by dragging, on one board
 
 *Adopted 2026-10-12. Built 2026-10-14 with migration 142, the plan's M3.
+The gaps it left closed 2026-10-15, with migrations 143 and 144.
 Replaces the bench's forms; extends D198 and D202.*
 
 **The finding.** The bench is a set of forms: a count typed against a line,
@@ -16315,6 +16316,20 @@ and choosing several, written here; no library.
   Escape). Move to… asks where and how many and says what it would do.
 - **The booking** is what the carrier is handed: a carton on a pallet that
   goes as one goes with it.
+- **The gaps it left, closed on 2026-10-15** (the user chose them before M4):
+  - **A closed order's plan goes**, as settled 4 says. After each fold the
+    scheduler drops the plan of every fulfilment that is cancelled, closed
+    in the other system, or despatched in full (`pack_plan_drop_closed`,
+    migration 143). The fold is what knows a fulfilment is despatched, so
+    the drop follows it, not each act that might close one.
+  - **Undo takes back Make and Ship.** The carton is taken apart: opened,
+    its puts undone, taken off its pallet and discarded, with the pallet
+    that press made for it. The parcel is planned again under a new id,
+    because the old id is a discarded carton, still on record.
+  - **A thing that ships as it is can be planned onto a pallet** before it is
+    made. A planned parcel is a box type, or one of an item at a level as it
+    is (migration 144). It is made from the plan as Ship makes one: started,
+    filled and sealed, then put on its pallet.
 
 **Why.** The user, 2026-10-12: "it should be possible to drag and drop the
 items from cartons and arrange the items into boxes, skids or pallets. We
