@@ -13,11 +13,18 @@ covers the toolchain, tests and layout.
   - the live database is at migration 142 since 12:56 on 2026-10-14;
   - the server running is D255's (e134a24), live since 14:00 on 2026-10-14.
     A paired iPhone works over HTTPS;
-  - the client running is the phone pass (fb7c69b), swapped in on the
-    morning of 2026-10-15. At the user's word the clients before it were
-    deleted, so there is no `dist-prev` to swap back to;
-  - the bench's outbox (D256, 36b5f8e) is built into `client/dist-next` and
-    not live. It is client only: swap it in (Deploying, below).
+  - the client running is the bench's outbox (D256, 36b5f8e), swapped in
+    at about 13:30 on 2026-10-15. The phone pass before it is kept in
+    `client/dist-prev`;
+  - passkeys at the `.local` name (D257) are not live: they need the server
+    built and restarted (Deploying, below).
+- 2026-10-15, passkeys at the `.local` name (D257), no migration:
+  - the server's unit tests pass (320), and the passkey integration tests
+    (8) on `spork_m3run`;
+  - the client's tests (254), contract and laws pass, and the render gate
+    passes over every fixture (149 fixtures, 488 renders);
+  - not tried on a phone yet: no test here holds a real authenticator at the
+    `.local` name.
 - 2026-10-15, the bench's outbox (D256), client only:
   - the client's tests (254), contract and laws pass;
   - the render gate passes over every fixture (149 fixtures, 488 renders).
@@ -81,6 +88,15 @@ covers the toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**On 2026-10-15: a paired device's own passkeys (D257)**
+- Each address is a relying party (`Parties` in `passkeys.rs`): the
+  configured one, and with `SPORK_IDENTITY` the host's name over HTTPS. Each
+  ceremony half takes the one whose origin asked (`relying_for` in
+  `routes.rs`), and anything else gets the configured one, as before.
+- A passkey works where it was added, so a paired device adds its own. The
+  pairing page, the Passkeys screen, `start -Lan` and `docs/local.md` say so.
+- Test: `the_origin_that_asked_picks_its_relying_party`.
 
 **On 2026-10-15: the bench's presses kept on the device (D256)**
 - Every press at the bench is worked out into its writes first, against the
@@ -404,8 +420,8 @@ covers the toolchain, tests and layout.
 - **The pallet sheet is a mock.** Booking a pallet that goes as one gives it
   no line of its own yet (its weight and height); that is M6.
 - **Paired devices (D255):**
-  - passkeys are still bound to `localhost`, so a paired phone signs in with
-    a password;
+  - where each passkey was added is not recorded, so the list of keys does
+    not say which address each is for;
   - a server left running a year without a restart keeps a lapsed
     certificate;
   - whether the handhelds let an authority be installed is untried;
@@ -468,19 +484,20 @@ covers the toolchain, tests and layout.
 
 To build, in the agreed order:
 
-1. **Put the bench's outbox (D256) live** when the user says so: the client
-   swap above.
-2. **Passkeys on the `.local` name**, so a paired device can use one.
-3. **Optionally, the gaps left from M3:** drop the plan when its fulfilment
+1. **Put D257 live** when the user says so: the server built and restarted
+   (Deploying, above). Then, on a paired phone at `https://<computer>.local`:
+   sign in with the password, add a passkey under the name menu › Passkeys,
+   sign out, and sign in with it.
+2. **Optionally, the gaps left from M3:** drop the plan when its fulfilment
    closes; let Undo take back Make and Ship; plan things that ship as they are
    onto a pallet before they are made.
-4. **M4, D249 and D250:** `subject_load`, wall and lid limits, and
+3. **M4, D249 and D250:** `subject_load`, wall and lid limits, and
    `build_rules` as settings a carrier points at.
-5. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
+4. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
    never worse over a test set of real orders.
-6. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,
+5. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,
    and the booking by delivered unit.
-7. **M7, the finish:** a day's orders packed on the board and a breakdown
+6. **M7, the finish:** a day's orders packed on the board and a breakdown
    pallet despatched, what that shows fixed, and the speed targets met.
 
 To try on the floor, with the user:

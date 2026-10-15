@@ -16810,9 +16810,9 @@ authority the device was given. A public name was weighed and set aside: the
 router's DNS cannot be relied on to resolve it, and it would need the
 internet to be found.
 
-**Not yet.** Passkeys stay bound to localhost; elsewhere a person signs in
-with a password. A server running a year without a restart keeps an expired
-certificate. *(The bench's acts are kept on the device since D256.)*
+**Not yet.** A server running a year without a restart keeps an expired
+certificate. *(The bench's acts are kept on the device since D256. A paired
+device has passkeys of its own since D257.)*
 
 ### D256: A press at the bench is kept on the device, and the board waits for it
 
@@ -16856,3 +16856,38 @@ done.
 
 **Not decided.** A press kept and landed later cannot be undone with Undo.
 Kept presses are sent from a bench screen, not from elsewhere in the app.
+
+### D257: A passkey belongs to the address it was added at
+
+*Adopted 2026-10-15, with no migration. Extends D255.*
+
+**The finding.** A credential belongs to one relying party, named by a domain,
+and the browser offers it only at an origin on that domain. Since D255 a host
+is reached at two names: the desk at `localhost`, and a paired device at
+`https://<computer>.local`. Neither is a suffix of the other, so the one
+relying party the server had, `localhost`, could not serve a paired device.
+Its passkey button offered a ceremony the browser refused.
+
+**Decision.**
+
+- **Each address is a relying party.** The configured one (`SPORK_RP_ID`,
+  `SPORK_RP_ORIGIN`) and, when the host keeps its own identity, its own name
+  over HTTPS on the standard port, as `/pair` sends a device there.
+- **The origin that asked runs the ceremony.** Each of the four ceremony
+  halves takes the relying party whose origin the browser's `Origin` header
+  names. No origin, or one the server was not given, gets the configured one,
+  as before.
+- **A passkey works where it was added.** A person adds one on each device.
+  Their keys are listed together, wherever each was added; a key offered at
+  the wrong address is one the browser does not find. Pairing's page and the
+  Passkeys screen say so.
+
+**Why.** The handoff's next step after D255, so that a paired handheld signs
+in with a fingerprint rather than a password typed in front of whoever is
+standing there. Moving the desk to the `.local` name too would give one
+relying party, at the cost of the desk's passkeys and of pairing the desk
+itself. Two relying parties cost a choice per request, and nothing already
+made is lost.
+
+**Not decided.** Where each key was added is not recorded, so the list does
+not say which address a key is for; its name does, when the person gives one.
