@@ -56,6 +56,8 @@ const subject = (over: Partial<CaptureSubject>): CaptureSubject => ({
   ships_as_is_source: "default",
   upright: false,
   upright_source: "default",
+  on_top_g: null,
+  on_top_source: "default",
   box_shaped: true,
   round: false,
   wrap: null,

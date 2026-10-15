@@ -23,7 +23,7 @@ fn every_id_has_a_spec_and_they_are_unique() {
         assert_eq!(inv.id, id, "spec({id}) returned metadata for {}", inv.id);
         assert!(!inv.statement.is_empty(), "{id} has no statement");
     }
-    assert_eq!(seen.len(), 82, "the register holds 82 job-asserted invariants");
+    assert_eq!(seen.len(), 84, "the register holds 84 job-asserted invariants");
 }
 
 #[test]
@@ -1086,6 +1086,72 @@ fn j82_finds_a_cut_no_lower_than_its_full_box() {
     assert!(examined >= 1, "J82 examined {examined}");
     let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
     assert!(said.iter().any(|d| d.contains("J82 cut") && d.contains("no lower")), "{said:?}");
+}
+
+/// J83 can fail: a carton built for a carrier, written straight into the
+/// table, since the act refuses a carrier for anything but a pallet.
+#[test]
+fn j83_finds_a_carton_built_for_a_carrier() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    let (carrier, carton) = ("7ac00000-0000-0000-0000-000000008301", "7ac00000-0000-0000-0000-000000008302");
+    client
+        .batch_execute(&format!(
+            "INSERT INTO carrier (id, tenant_id, name, code) VALUES ('{carrier}', '{J7X_TENANT}', 'J83 carrier', 'J83');
+             INSERT INTO package (id, tenant_id, package_type_id, carrier_id)
+                 VALUES ('{carton}', '{J7X_TENANT}', '9a7e0000-0000-0000-0000-0000000000b1', '{carrier}');"
+        ))
+        .expect("a carton built for a carrier");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J83);
+
+    client
+        .batch_execute(&format!("DELETE FROM package WHERE id = '{carton}'; DELETE FROM carrier WHERE id = '{carrier}';"))
+        .expect("the test removes what it added");
+
+    let (_, examined, found) = outcome.expect("J83 runs");
+    assert!(examined >= 1, "J83 examined {examined}");
+    let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|d| d.contains(carton) && d.contains("not a pallet")), "{said:?}");
+}
+
+/// J84 can fail: a version of a set holding one rule, written straight into
+/// the tables, since the act writes every rule of the list.
+#[test]
+fn j84_finds_a_version_missing_rules() {
+    let Some(url) = database_url() else {
+        eprintln!("DATABASE_URL unset: skipping");
+        return;
+    };
+    let mut client = spork_invariants::connect_exclusive(&url);
+    let (set, version) = ("7ac00000-0000-0000-0000-000000008401", "7ac00000-0000-0000-0000-000000008402");
+    client
+        .batch_execute(&format!(
+            "INSERT INTO build_rules (id, tenant_id, name) VALUES ('{set}', '{J7X_TENANT}', 'J84 rules');
+             INSERT INTO build_rules_version (id, tenant_id, build_rules_id, saved_by_id)
+                 SELECT '{version}', '{J7X_TENANT}', '{set}', id FROM person LIMIT 1;
+             INSERT INTO build_rule (tenant_id, version_id, kind, strength, amount)
+                 VALUES ('{J7X_TENANT}', '{version}', 'heavy', 'must', 20000);"
+        ))
+        .expect("a version with one rule");
+
+    let outcome = spork_invariants::jobs::run(&mut client, spork_invariants::jobs::Id::J84);
+
+    client
+        .batch_execute(&format!(
+            "DELETE FROM build_rule WHERE version_id = '{version}';
+             DELETE FROM build_rules_version WHERE id = '{version}';
+             DELETE FROM build_rules WHERE id = '{set}';"
+        ))
+        .expect("the test removes what it added");
+
+    let (_, examined, found) = outcome.expect("J84 runs");
+    assert!(examined >= 1, "J84 examined {examined}");
+    let said: Vec<&str> = found.iter().map(|f| f.detail.as_str()).collect();
+    assert!(said.iter().any(|d| d.contains("J84 rules") && d.contains("holds 1 of the list")), "{said:?}");
 }
 
 /// J72 can fail, demonstrated rather than asserted.

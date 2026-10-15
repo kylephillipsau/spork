@@ -18,6 +18,8 @@ pub mod bins;
 pub mod boxes;
 pub mod allocating;
 pub mod capture;
+pub mod carriers;
+pub mod carrying;
 pub mod backup;
 pub mod cartons;
 pub mod checking;

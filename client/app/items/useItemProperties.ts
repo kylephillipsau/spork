@@ -189,6 +189,8 @@ export interface PropertiesDesk {
   shipAsIs: (subject: CaptureSubject, asItIs: boolean) => Promise<void>;
   /** Say whether it must stay the way up it stands (D200). */
   keepUpright: (subject: CaptureSubject, upright: boolean) => Promise<void>;
+  /** Say the most it takes on top, in grams: 0 for nothing, null for no limit (D249). */
+  sayOnTop: (subject: CaptureSubject, grams: number | null) => Promise<void>;
   /** Say whether a thing wrapped in something with no shape of its own is box-shaped (D239). */
   sayShape: (subject: CaptureSubject, boxShaped: boolean) => Promise<void>;
   /**
@@ -740,6 +742,13 @@ export function useItemProperties(itemId: string | null): PropertiesDesk {
     keepUpright: (subject, upright) =>
       press(`upright:${subjectKey(subject)}:${upright}`, async (act) => {
         await api.sayUpright(subject, upright, act);
+        if (!live.current) return;
+        await reload();
+      }),
+
+    sayOnTop: (subject, grams) =>
+      press(`load:${subjectKey(subject)}:${grams}`, async (act) => {
+        await api.sayLoad(subject, grams, act);
         if (!live.current) return;
         await reload();
       }),

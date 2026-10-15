@@ -12,7 +12,8 @@
 //! Whether it must stay the way up it stands is said the same way (D200,
 //! `keeps_upright`, migration 114); unsaid, any way up will do. So is whether
 //! a thing wrapped, shrink-wrapped or banded is box-shaped (D239, `is_box`,
-//! migration 133); unsaid, it is not.
+//! migration 133); unsaid, it is not. And so is what it takes on top (D249,
+//! `takes_on_top`, migration 145); unsaid, it takes weight.
 
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
@@ -102,11 +103,38 @@ pub async fn say_shape(
     say(&state, &req, b.subject, Said::BoxShaped(b.box_shaped), b.client_event_id, b.occurred_at).await
 }
 
-/// A yes or no said of a subject, and the table its sayings are kept in.
+#[derive(Deserialize, Debug)]
+pub struct SayLoadRequest {
+    #[serde(flatten)]
+    pub subject: SubjectArms,
+    /// The most it takes on top, in grams: nought for nothing, and none for
+    /// no limit, which is to say it takes weight (D249).
+    pub most_on_top_g: Option<i64>,
+    pub client_event_id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Say what a subject takes on top (D249): up to so much, nothing, or weight
+/// with no limit. Saying it again is the same act.
+#[post("/load")]
+pub async fn say_load(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<SayLoadRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let b = body.into_inner();
+    if b.most_on_top_g.is_some_and(|g| g < 0) {
+        return Err(ApiError::Rejected("a thing takes nothing on top or more".into()));
+    }
+    say(&state, &req, b.subject, Said::Load(b.most_on_top_g), b.client_event_id, b.occurred_at).await
+}
+
+/// What is said of a subject, and the table its sayings are kept in.
 enum Said {
     ShipsAsIs(bool),
     Upright(bool),
     BoxShaped(bool),
+    Load(Option<i64>),
 }
 
 /// A subject named rightly: one arm of four, and a level with an item or a
@@ -158,10 +186,11 @@ async fn say(
         recorded_by_id: who.person_id,
         submitted_at: occurred_at,
     };
-    let (table, column, value) = match said {
-        Said::ShipsAsIs(v) => ("subject_shipping", "as_it_is", v),
-        Said::Upright(v) => ("subject_upright", "upright", v),
-        Said::BoxShaped(v) => ("subject_shape", "box_shaped", v),
+    let (table, column, value): (&str, &str, Box<dyn tokio_postgres::types::ToSql + Sync + Send>) = match said {
+        Said::ShipsAsIs(v) => ("subject_shipping", "as_it_is", Box::new(v)),
+        Said::Upright(v) => ("subject_upright", "upright", Box::new(v)),
+        Said::BoxShaped(v) => ("subject_shape", "box_shaped", Box::new(v)),
+        Said::Load(v) => ("subject_load", "most_on_top_g", Box::new(v)),
     };
     let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
     scope
@@ -187,7 +216,7 @@ async fn say(
                         &subject.lot_id,
                         &subject.item_part_id,
                         &subject.packaging_level,
-                        &value,
+                        &*value,
                         &ev.client_event_id,
                         &ev.recorded_by_id,
                     ],

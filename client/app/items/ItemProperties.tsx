@@ -29,8 +29,9 @@ import { imageUrl } from "@domain/api";
 import { usePageTitle } from "@app/routing/title";
 import type { CaptureSubject, FamilyMember, ItemTags, ItemView, PackagingType, Picture, RecordedCard, SubjectPhoto } from "@domain/types";
 import { Thumb } from "@app/common/Thumb";
+import { Kilograms } from "@app/common/Kilograms";
 import { Faint, dateTime, sentence, shortDate } from "@app/common/cells";
-import { centimetres, kg } from "@app/common/format";
+import { centimetres, kg, kgLimit } from "@app/common/format";
 
 import { BOX_FACES, boxSize, faceName, facesToAsk, isBox, isRound, measuredAspect, type BoxFace } from "./box";
 import { roundSize } from "./round";
@@ -1027,6 +1028,7 @@ function Subject({
           </Fact>
           {subject.packaging_level && <Ships subject={subject} desk={desk} />}
           {subject.packaging_level && <WayUp subject={subject} desk={desk} />}
+          {subject.packaging_level && <OnTop subject={subject} desk={desk} />}
           {pack && (
             <Fact label="Holds" always>
               {packHolds(item) ?? <Faint>Not said yet</Faint>}
@@ -1780,6 +1782,49 @@ function WayUp({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDes
         <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.keepUpright(subject, !subject.upright)}>
           {subject.upright ? "Any way up" : "Keep this way up"}
         </Button>
+      </span>
+    </Fact>
+  );
+}
+
+/** What it takes on top (D249), in words, faint where it is not its own saying. */
+export function onTopWords(subject: CaptureSubject): ReactNode {
+  const g = subject.on_top_g;
+  const words = g === null ? "Takes weight" : g === 0 ? "Nothing on top" : `Up to ${kgLimit(g)} on top`;
+  return subject.on_top_source === "own" ? words : <Faint>{`${words}${whose(subject.on_top_source)}`}</Faint>;
+}
+
+/**
+ * What it takes on top (D249): a thing takes weight unless somebody says it
+ * isn't solid or sits awkwardly, so takes so much or nothing. The planner
+ * keeps a heavier box off it.
+ */
+function OnTop({ subject, desk }: { subject: CaptureSubject; desk: PropertiesDesk }) {
+  const own = subject.on_top_source === "own" ? subject.on_top_g : null;
+  return (
+    <Fact label="On top" always>
+      <span className={s.onTop}>
+        {onTopWords(subject)}
+        {subject.on_top_g !== null && (
+          <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.sayOnTop(subject, null)}>
+            Takes weight
+          </Button>
+        )}
+        {subject.on_top_g !== 0 && (
+          <Button size="sm" variant="ghost" disabled={desk.busy} onClick={() => void desk.sayOnTop(subject, 0)}>
+            Nothing on top
+          </Button>
+        )}
+        <span className={s.onTopLimit}>
+          <Kilograms
+            key={String(own)}
+            label={`The most ${subject.code} takes on top`}
+            grams={own !== null && own > 0 ? own : null}
+            placeholder="Up to…"
+            disabled={desk.busy}
+            save={(g) => g !== null && void desk.sayOnTop(subject, g)}
+          />
+        </span>
       </span>
     </Fact>
   );

@@ -10,6 +10,8 @@ import { faceAspect } from "@app/items/box";
 import { FaceCrop } from "@app/items/FaceCrop";
 import { FilePress } from "@app/items/ItemProperties";
 
+import { BoxCarries, lidWords, wallsWords } from "./Carrying";
+import { Kilograms } from "@app/common/Kilograms";
 import type { WorkspaceBench } from "./useWorkspace";
 import s from "./settings.module.css";
 
@@ -120,6 +122,15 @@ export function Boxes({ boxes, bench, open: first = null }: { boxes: PackageType
       align: "right",
     },
     {
+      key: "carries",
+      header: "On top",
+      label: "On top, walls · lid",
+      // Its walls estimated from its size and board unless a test says, and its lid when hollow (D249).
+      cell: (b) => (b.carries ? `${wallsWords(b.carries)} · ${lidWords(b.carries)}` : <Faint>—</Faint>),
+      sort: (b) => b.carries?.walls_g ?? null,
+      align: "right",
+    },
+    {
       key: "suggest",
       header: "Suggested",
       cell: (b) =>
@@ -142,7 +153,7 @@ export function Boxes({ boxes, bench, open: first = null }: { boxes: PackageType
       <Card
         title="Boxes"
         count={full.length}
-        description="The boxes you pack into, each with the heights it is cut down to: open one to add a height, weigh it or photograph it. The pack bench suggests ticked boxes, the lowest that takes everything and no heavier than its max weight; any box can still be chosen by hand."
+        description="The boxes you pack into, each with the heights it is cut down to and what it carries on top, on its walls and on its lid: open one to add a height, weigh it, say its board or photograph it. ≈ is an estimate from its size and board under the conditions below. The pack bench suggests ticked boxes, the lowest that takes everything and no heavier than its max weight; any box can still be chosen by hand."
         padded={false}
       >
         <DataTable
@@ -295,6 +306,8 @@ function BoxCard({ box, cuts, bench, close }: { box: PackageTypeRow; cuts: Packa
           </Button>
         </form>
 
+        <BoxCarries box={box} bench={bench} />
+
         <div className={s.boxGrid}>
           <div className={s.boxLook}>
             <Suspense fallback={<div className={s.boxStage} />}>
@@ -348,48 +361,5 @@ function BoxCard({ box, cuts, bench, close }: { box: PackageTypeRow; cuts: Packa
         </div>
       </div>
     </Card>
-  );
-}
-
-/** A weight in kilograms as typed, saved when it changes and makes sense. */
-function Kilograms({
-  label,
-  grams,
-  placeholder,
-  disabled,
-  save,
-}: {
-  label: string;
-  grams: number | null;
-  placeholder: string;
-  disabled: boolean;
-  save: (grams: number | null) => void;
-}) {
-  const said = grams === null ? "" : String(grams / 1000);
-  const [typed, setTyped] = useState(said);
-  const commit = () => {
-    const t = typed.trim();
-    if (t === said) return;
-    const kg = Number(t);
-    if (t !== "" && !(kg > 0)) {
-      setTyped(said);
-      return;
-    }
-    save(t === "" ? null : Math.round(kg * 1000));
-  };
-  return (
-    <TextField
-      aria-label={label}
-      inputMode="decimal"
-      placeholder={placeholder}
-      trailing="kg"
-      value={typed}
-      disabled={disabled}
-      onChange={(e) => setTyped(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") commit();
-      }}
-    />
   );
 }

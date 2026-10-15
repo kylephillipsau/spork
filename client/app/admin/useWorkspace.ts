@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLive } from "@app/acting";
 import { anAct } from "@domain/acts";
 import { api, reason } from "@domain/api";
-import type { PackageTypeRow, ReportedField, Side, Workspace } from "@domain/types";
+import type { BoxBoard, BuildRule, CarrierRow, Conditions, PackageTypeRow, ReportedField, RuleSetRow, Side, Uuid, Workspace } from "@domain/types";
 import { handheld } from "@app/items/crop";
 import type { Pixels, Point } from "@app/items/cut";
 import type { CropOpen } from "@app/items/FaceCrop";
@@ -56,6 +56,24 @@ export interface WorkspaceBench {
   cut: (corners: number[], make: () => Promise<Blob>) => Promise<void>;
   /** Where the face is in a photograph (D177), as the item page finds it. */
   findFace: (key: string, pixels: Pixels, at?: Point) => Promise<number[] | null>;
+  /** Say a box's board and what it carries, all of it at once (D249). */
+  setCarries: (boxId: string, said: { board: BoxBoard | null; wall_load_g: number | null; lid_load_g: number | null }) => Promise<void>;
+  /** Say the warehouse's conditions (D249). */
+  setConditions: (conditions: Conditions) => Promise<void>;
+  /** The carriers and the rules each points at (D250); null until read. */
+  carriers: CarrierRow[] | null;
+  /** Add a carrier by name. True when it was added. */
+  addCarrier: (name: string) => Promise<boolean>;
+  saveCarrier: (carrier: CarrierRow, change: Partial<Pick<CarrierRow, "name" | "breakdown_rules_id" | "as_one_rules_id">>) => Promise<void>;
+  /** Add a service to a carrier. True when it was added. */
+  addService: (carrier: Uuid, name: string) => Promise<boolean>;
+  setUsualCarrier: (carrier: Uuid | null) => Promise<void>;
+  /** The sets of build rules as they are now (D250); null until read. */
+  rules: RuleSetRow[] | null;
+  /** Start a set, from another or the rules to start: its id, or null. */
+  newRuleSet: (name: string, from: Uuid | null) => Promise<Uuid | null>;
+  /** Save a set's name and rules. True when it was saved. */
+  saveRuleSet: (id: Uuid, name: string, rules: BuildRule[]) => Promise<boolean>;
   /** NetSuite's fields, and what each is read as (D238); null until read. */
   fields: ReportedField[] | null;
   /** Say what one of them means. */
@@ -72,14 +90,24 @@ export function useWorkspace(): WorkspaceBench {
   const [boxes, setBoxes] = useState<PackageTypeRow[] | null>(null);
   const [cropping, setCropping] = useState<CropOpen | null>(null);
   const [fields, setFields] = useState<ReportedField[] | null>(null);
+  const [carriers, setCarriers] = useState<CarrierRow[] | null>(null);
+  const [rules, setRules] = useState<RuleSetRow[] | null>(null);
 
   const read = useCallback(async () => {
     try {
-      const [workspace, presets, said] = await Promise.all([api.workspace(), api.packageTypes(), api.netsuiteFields()]);
+      const [workspace, presets, said, sending, sets] = await Promise.all([
+        api.workspace(),
+        api.packageTypes(),
+        api.netsuiteFields(),
+        api.carriers(),
+        api.buildRules(),
+      ]);
       if (live.current) {
         setState({ kind: "ready", workspace });
         setBoxes(presets);
         setFields(said);
+        setCarriers(sending);
+        setRules(sets);
       }
     } catch (error) {
       const message = reason(error, "The server could not be reached.");
@@ -188,6 +216,73 @@ export function useWorkspace(): WorkspaceBench {
     [change, cropping, live],
   );
 
+  const setCarries = useCallback(
+    (boxId: string, said: { board: BoxBoard | null; wall_load_g: number | null; lid_load_g: number | null }) =>
+      change(() => api.setCarries(boxId, said), "Could not change what that box carries."),
+    [change],
+  );
+
+  const setConditions = useCallback(
+    (conditions: Conditions) => change(() => api.setConditions(conditions), "Could not change the warehouse's conditions."),
+    [change],
+  );
+
+  /** A change that says whether it landed. */
+  const landed = useCallback(
+    async (act: () => Promise<unknown>, failure: string) => {
+      let ok = false;
+      await change(async () => {
+        await act();
+        ok = true;
+      }, failure);
+      return ok;
+    },
+    [change],
+  );
+
+  const addCarrier = useCallback((name: string) => landed(() => api.addCarrier(name), "Could not add that carrier."), [landed]);
+
+  const saveCarrier = useCallback(
+    (c: CarrierRow, to: Partial<Pick<CarrierRow, "name" | "breakdown_rules_id" | "as_one_rules_id">>) =>
+      change(
+        () =>
+          api.saveCarrier(c.id, {
+            name: to.name ?? c.name,
+            code: c.code,
+            breakdown_rules_id: to.breakdown_rules_id === undefined ? c.breakdown_rules_id : to.breakdown_rules_id,
+            as_one_rules_id: to.as_one_rules_id === undefined ? c.as_one_rules_id : to.as_one_rules_id,
+          }),
+        `Could not change ${c.name}.`,
+      ),
+    [change],
+  );
+
+  const addService = useCallback(
+    (carrier: Uuid, name: string) => landed(() => api.addService(carrier, name), "Could not add that service."),
+    [landed],
+  );
+
+  const setUsualCarrier = useCallback(
+    (carrier: Uuid | null) => change(() => api.setUsualCarrier(carrier), "Could not change the usual carrier."),
+    [change],
+  );
+
+  const newRuleSet = useCallback(
+    async (name: string, from: Uuid | null) => {
+      let id: Uuid | null = null;
+      await change(async () => {
+        id = (await api.newRuleSet(name, from)).id;
+      }, "Could not start that set of rules.");
+      return id;
+    },
+    [change],
+  );
+
+  const saveRuleSet = useCallback(
+    (id: Uuid, name: string, list: BuildRule[]) => landed(() => api.saveRuleSet(id, name, list), "Could not save those rules."),
+    [landed],
+  );
+
   const sayField = useCallback(
     (field: ReportedField, meaning: { role: string; unit: string | null; unit_field: string | null; level: string | null }) =>
       change(
@@ -217,6 +312,16 @@ export function useWorkspace(): WorkspaceBench {
     uncrop: () => setCropping(null),
     cut,
     findFace: (key, pixels, at) => model().then((m) => m.findFace(key, pixels, at)),
+    setCarries,
+    setConditions,
+    carriers,
+    addCarrier,
+    saveCarrier,
+    addService,
+    setUsualCarrier,
+    rules,
+    newRuleSet,
+    saveRuleSet,
     fields,
     sayField,
   };

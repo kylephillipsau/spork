@@ -62,7 +62,8 @@ export interface PackBench {
   /** A line checked (D244): what was shown, and what the packer saw. */
   check: (input: { line: Uuid; expected: number; seen: number }) => Promise<void>;
   measure: (input: { carton: Uuid; weightKg?: string; heightMm?: string }) => Promise<void>;
-  seal: (carton: Uuid) => Promise<void>;
+  /** Seal a carton, hollow or solid as the packer says (D249). */
+  seal: (carton: Uuid, hollow: boolean) => Promise<void>;
   discard: (carton: Uuid) => Promise<void>;
 
   /**
@@ -139,7 +140,7 @@ function sendWrite(w: BenchWrite, act: Act): Promise<unknown> {
     case "place":
       return api.placePackage(w.carton, w.location, act);
     case "seal":
-      return api.seal(w.carton, act);
+      return api.seal(w.carton, act, w.hollow);
     case "open":
       return api.open(w.carton, act);
     case "discard":
@@ -291,7 +292,7 @@ export function usePackBench(fulfilment: Uuid): PackBench {
         });
 
   /** A press of one write to a carton. */
-  const toCarton = (kind: "seal" | "open" | "discard", verb: string) => (carton: Uuid) =>
+  const toCarton = (kind: "open" | "discard", verb: string) => (carton: Uuid) =>
     hold(`${kind}:${carton}`, (act, at) => send(act, at, `${verb} ${titleOf(at, carton)}`, () => ({ writes: [{ part: "", kind, carton }] })));
 
   return {
@@ -322,7 +323,7 @@ export function usePackBench(fulfilment: Uuid): PackBench {
             const carton = partOf(kept, `carton-${n}:make`).id("package");
             cartons.unshift(carton);
             w.add({ kind: "put", line, units, carton }, `carton-${n}:fill`);
-            w.push({ part: `carton-${n}:seal`, kind: "seal", carton });
+            w.push({ part: `carton-${n}:seal`, kind: "seal", carton, hollow: null });
           }
           return w;
         });
@@ -345,7 +346,10 @@ export function usePackBench(fulfilment: Uuid): PackBench {
         }),
       ),
 
-    seal: toCarton("seal", "Seal"),
+    seal: (carton, hollow) =>
+      hold(`seal:${carton}`, (act, at) =>
+        send(act, at, `Seal ${titleOf(at, carton)}`, () => ({ writes: [{ part: "", kind: "seal", carton, hollow }] })),
+      ),
     open: toCarton("open", "Open"),
     discard: toCarton("discard", "Discard"),
 

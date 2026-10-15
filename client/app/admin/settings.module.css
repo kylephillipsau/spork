@@ -156,3 +156,96 @@
   align-items: center;
   gap: var(--ui-space-1);
 }
+
+/* A carrier's name, with Usual beside it (settled 9). */
+.carrierName {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+/* Build rules (D250): the sets beside the one open, stacked on a phone. */
+.rulesGrid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ui-space-5);
+}
+
+.sets {
+  flex: 1 1 14rem;
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+}
+
+.set {
+  height: auto;
+  padding-block: var(--ui-space-2);
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+
+.set > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ui-space-1);
+}
+
+.setName {
+  font-weight: 600;
+}
+
+.ruleSet {
+  flex: 3 1 32rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+}
+
+.rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One rule: its name, its figure, must, prefer or off, and its weight. Wraps rather than squeezes. */
+.ruleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2) var(--ui-space-3);
+  padding-block: var(--ui-space-2);
+  border-top: 1px solid var(--ui-border);
+}
+
+.ruleName {
+  flex: 0 1 11rem;
+  font-weight: 500;
+}
+
+.ruleSetting {
+  flex: 1 1 16rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+.strength {
+  display: inline-flex;
+  gap: var(--ui-space-1);
+}
+
+.ruleWeight {
+  flex: 0 0 7.5rem;
+}
+
+.amount {
+  flex: 0 0 7.5rem;
+}

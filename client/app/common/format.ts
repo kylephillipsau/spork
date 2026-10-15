@@ -27,3 +27,8 @@ export function heightCm(value: number): string {
 export function kg(value: number | null): string {
   return value === null ? "—" : `${grams(value)} kg`;
 }
+
+/** Grams as a limit is said, to a tenth at most: 20000 -> "20 kg", 1000000 -> "1,000 kg" (D249, D250). */
+export function kgLimit(value: number | null): string {
+  return value === null ? "—" : `${(value / 1000).toLocaleString("en-AU", { maximumFractionDigits: 1 })} kg`;
+}

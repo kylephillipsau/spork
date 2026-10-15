@@ -30,6 +30,11 @@ import type {
   CaptureSubject,
   PackagingType,
   PackageTypeRow,
+  BoxBoard,
+  BuildRule,
+  CarrierRow,
+  Conditions,
+  RuleSetRow,
   PersonAdded,
   WorkspacePerson,
   PackedByPerson,
@@ -1057,6 +1062,23 @@ export const api = {
       occurred_at: act.at,
     }),
 
+  /** Say the most a subject takes on top, in grams: 0 for nothing, null for no limit (D249). */
+  sayLoad: (
+    subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
+    grams: number | null,
+    act: Act,
+  ) =>
+    send<void>("POST", "/load", {
+      item_id: subject.item_id,
+      item_style_id: subject.item_style_id,
+      lot_id: subject.lot_id,
+      item_part_id: subject.item_part_id,
+      packaging_level: subject.item_id || subject.item_style_id ? subject.packaging_level : null,
+      most_on_top_g: grams,
+      client_event_id: act.id("event"),
+      occurred_at: act.at,
+    }),
+
   /** Say whether a subject must stay the way up it stands (D200). */
   sayUpright: (
     subject: Pick<CaptureSubject, "item_id" | "item_style_id" | "lot_id" | "item_part_id" | "packaging_level">,
@@ -1131,6 +1153,31 @@ export const api = {
 
   /** Take a height away: only a cut nothing was packed in (D252). */
   removeHeight: (id: Uuid) => send<void>("DELETE", `/package-types/${encodeURIComponent(id)}`),
+
+  /** Say a box's board and what it carries on its walls and lid, all at once; null for unsaid (D249). */
+  setCarries: (id: Uuid, said: { board: BoxBoard | null; wall_load_g: number | null; lid_load_g: number | null }) =>
+    send<void>("POST", `/package-types/${encodeURIComponent(id)}/carries`, said),
+
+  /** Say the warehouse's conditions, which every box's wall estimate allows for (D249). */
+  setConditions: (conditions: Conditions) => send<void>("POST", "/workspace/conditions", conditions),
+
+  /** The carriers, their services and the rules each points at (D250). */
+  carriers: () => send<CarrierRow[]>("GET", "/carriers"),
+  addCarrier: (name: string) => send<{ id: Uuid }>("POST", "/carriers", { name }),
+  /** A carrier's name and the rules its pallets are built to (D250). */
+  saveCarrier: (id: Uuid, said: { name: string; code: string; breakdown_rules_id: Uuid | null; as_one_rules_id: Uuid | null }) =>
+    send<void>("POST", `/carriers/${encodeURIComponent(id)}`, said),
+  addService: (carrier: Uuid, name: string) => send<{ id: Uuid }>("POST", `/carriers/${encodeURIComponent(carrier)}/services`, { name }),
+  /** The carrier a pallet is started under unless the board is told another (settled 9). */
+  setUsualCarrier: (carrier: Uuid | null) => send<void>("POST", "/workspace/usual-carrier", { carrier_id: carrier }),
+
+  /** The sets of build rules, each as it is now (D250). */
+  buildRules: () => send<RuleSetRow[]>("GET", "/build-rules"),
+  /** Start a set, from another as it is now or from the rules to start. */
+  newRuleSet: (name: string, from: Uuid | null) => send<{ id: Uuid }>("POST", "/build-rules", { name, from }),
+  /** Save a set: its name, and its rules as a new version when they changed. */
+  saveRuleSet: (id: Uuid, name: string, rules: BuildRule[]) =>
+    send<void>("PUT", `/build-rules/${encodeURIComponent(id)}`, { name, rules }),
 
   /** Bins, items and orders matching what was typed, best first (D189). */
   search: (q: string, limit?: number) =>
@@ -1629,8 +1676,10 @@ export const api = {
       occurred_at: input.act.at,
     }),
 
-  seal: (carton: Uuid, act: Act) =>
+  /** Seal a carton, saying whether it is hollow or solid (D249); null leaves it unsaid. */
+  seal: (carton: Uuid, act: Act, hollow: boolean | null = null) =>
     send<unknown>("POST", `/packages/${carton}/seal`, {
+      hollow,
       client_event_id: act.id("event"),
       occurred_at: act.at,
     }),

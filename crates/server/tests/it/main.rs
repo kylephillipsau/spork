@@ -16,6 +16,7 @@ mod boxes_http;
 mod backup_http;
 mod capture_walk;
 mod capture_worklist;
+mod carriers_http;
 mod cartons_and_lists_http;
 mod change_password;
 mod consignments;

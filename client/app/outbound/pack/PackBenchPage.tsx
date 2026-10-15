@@ -24,7 +24,8 @@ import { usePageTitle } from "@app/routing/title";
 import { ItemDrawer } from "@app/items/ItemProperties";
 import { Kept, othersSaying } from "@app/common/Kept";
 
-import { boardOf, dropOn, labelOf, parcelKey, thingOf, type Board, type BoardParcel, type Outcome } from "./board";
+import { boardOf, buildFor, dropOn, labelOf, parcelKey, thingOf, type Board, type BoardParcel, type Outcome } from "./board";
+import { proposedHollow } from "./carrying";
 import { needsCheck, uncheckedIn } from "./check";
 import { Checks } from "./Checks";
 import { Chosen, tally } from "./Chosen";
@@ -86,6 +87,9 @@ function Bench({
   const toast = useToast();
   // A drop with Alt, or M: where to, and how many.
   const [moving, setMoving] = useState<{ keys: string[]; target: string | null } | null>(null);
+  // Solid or hollow, as the packer said it before sealing; else as proposed (D249).
+  const [hollowSaid, setHollowSaid] = useState<Record<string, boolean>>({});
+  const hollowOf = (p: BoardParcel) => hollowSaid[p.id] ?? proposedHollow(p);
 
   // An order opened with nothing planned is planned at once, as the bench
   // always suggested; after that, only Suggest plans again.
@@ -111,6 +115,13 @@ function Bench({
   const elsewhere = screen.lines.find((l) => l.elsewhere)?.elsewhere?.provenance ?? null;
   const acts: ParcelActs = {
     bench,
+    screen,
+    hollowOf,
+    sayHollow: (id, hollow) => setHollowSaid((said) => ({ ...said, [id]: hollow })),
+    buildFor: (p, carrier) => {
+      const out = buildFor(board, p.id, carrier);
+      void bench.apply(out, out.verdict);
+    },
     takeOut: (line, carton) => drop([`goods:${line}@${carton}`], "bench", { one: false, ask: false }),
     canShip: (p) => {
       const l = p.goods[0]?.line;
@@ -130,7 +141,7 @@ function Bench({
       });
     },
   };
-  const next = nextStep(board, screen, bench);
+  const next = nextStep(board, screen, bench, hollowOf);
   const waiting = bench.kept.waiting.length > 0;
 
   return (
@@ -285,11 +296,16 @@ function chosenParcel(board: Board, chosen: string[]): BoardParcel | null {
  * The one primary press (D171): seal the carton that is ready, else make the
  * next planned box. Each card has its own as well, quieter.
  */
-function nextStep(board: Board, screen: BenchScreen, bench: PackBench): { label: string; can: boolean; press: () => void } | null {
+function nextStep(
+  board: Board,
+  screen: BenchScreen,
+  bench: PackBench,
+  hollowOf: (p: BoardParcel) => boolean,
+): { label: string; can: boolean; press: () => void } | null {
   const ready = board.parcels.find(
     (p) => p.made && p.state === "open" && p.kind === "box" && p.goods.length > 0 && !!p.carton && uncheckedIn(p.carton, screen.lines).length === 0,
   );
-  if (ready) return { label: `Seal ${ready.title}`, can: true, press: () => void bench.seal(ready.id) };
+  if (ready) return { label: `Seal ${ready.title}`, can: true, press: () => void bench.seal(ready.id, hollowOf(ready)) };
   const planned = board.parcels.find((p) => !p.made && p.kind === "box" && p.goods.length > 0);
   if (planned) return { label: `Make ${planned.title}`, can: !!screen.dock_id, press: () => void bench.make(planned.id) };
   return null;

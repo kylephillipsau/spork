@@ -44,6 +44,9 @@ pub struct BenchScreen {
     pub presets: Vec<Preset>,
     /// The board's plan (D245): parcels planned and not yet made.
     pub plan: Vec<crate::pack_plan::PlannedParcel>,
+    /// The carriers, each with the rules its pallets are built to now (D250):
+    /// what the board checks a parcel and a pallet not yet made against.
+    pub carriers: Vec<crate::carriers::BenchCarrier>,
     /// The reason a correction carries when units went in the wrong box. Sent
     /// with the screen because the alternative is the client holding a code
     /// string and looking it up at the moment somebody is trying to undo
@@ -145,6 +148,9 @@ pub struct PackUnit {
     /// It stays the way up it stands (D200): the arrangement turns it round,
     /// never onto its side.
     pub upright: bool,
+    /// The most it takes on top, in grams (D249): nought for nothing, absent
+    /// for no limit. A carton of things that all take weight, full, is solid.
+    pub on_top_g: Option<i64>,
     /// All three lengths, or nothing.
     pub size: Option<StatedSize>,
     /// Somebody said it has no size to measure (D138): a soft thing that goes
@@ -314,6 +320,12 @@ pub struct CartonSummary {
     /// Its box type's sides as photographed and cut, the full box's for a cut
     /// (D252). Empty for one of a product as it is: that wears the product's.
     pub faces: BTreeMap<String, String>,
+    /// Hollow or solid, as its newest seal said (D249); absent when unsaid.
+    pub hollow: Option<bool>,
+    /// The carrier a pallet is built for (D250, settled 9).
+    pub carrier_id: Option<Uuid>,
+    /// The rules a pallet is built to, as they stood when it was made (D250).
+    pub rules: Option<crate::carriers::RuleSet>,
 }
 
 /// What is physically in one carton, carried out of the read transaction so the
@@ -378,8 +390,15 @@ pub async fn screen(
         cartons: cartons_on(state, who, fulfilment_id).await?,
         presets: presets(state, who).await?,
         plan: plan(state, who, fulfilment_id).await?,
+        carriers: carriers(state, who).await?,
         wrong_box_reason_id: reason_id(state, who, "wrong_location").await?,
     })
+}
+
+/// The carriers and their rules now, for the board (D250).
+async fn carriers(state: &web::Data<AppState>, who: &Caller) -> Result<Vec<crate::carriers::BenchCarrier>, ApiError> {
+    let mut scope = TenantScope::begin(&state.pool, who.tenant_id).await?;
+    scope.run(|tx| Box::pin(async move { crate::carriers::bench_carriers(tx).await })).await
 }
 
 pub async fn bench_view(
@@ -702,6 +721,7 @@ fn packs_of(case: Option<&CasePack>, measured: &[crate::routes::ItemMeasurements
                 units,
                 ships_as_is: level == "carton",
                 upright: false,
+                on_top_g: None,
                 size: m.and_then(size_of),
                 no_size: false,
                 gross_weight_g: m.and_then(|m| m.gross_weight_g),
@@ -769,19 +789,20 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
         .iter()
         .map(|r| (r.get(0), r.get(1)))
         .collect();
-    // Whether each level ships as it is (D196) and stays the way up it stands
-    // (D200): said, inherited or the default. And whether it is round (D213),
-    // its widths, and its wrapping (D240).
+    // Whether each level ships as it is (D196), stays the way up it stands
+    // (D200) and takes weight on top (D249): said, inherited or the default.
+    // And whether it is round (D213), its widths, and its wrapping (D240).
     let handling: HashMap<(Uuid, String), tokio_postgres::Row> = tx
         .query(
             "SELECT i.id, l.level, s.as_it_is, u.upright,
                     coalesce(t.round, false) AND NOT is_box(i.id, NULL, NULL, NULL, l.level::packaging_level),
                     mm.diameter, mm.base_diameter, mm.top_height,
-                    w.side, w.lid, w.base, w.inside, w.floor, w.made_from
+                    w.side, w.lid, w.base, w.inside, w.floor, w.made_from, tl.most_on_top_g
                FROM unnest($1::uuid[]) AS i(id)
               CROSS JOIN unnest(ARRAY['each', 'inner', 'carton']) AS l(level)
               CROSS JOIN LATERAL ships_as_is(i.id, NULL, NULL, NULL, l.level::packaging_level) s
               CROSS JOIN LATERAL keeps_upright(i.id, NULL, NULL, NULL, l.level::packaging_level) u
+              CROSS JOIN LATERAL takes_on_top(i.id, NULL, NULL, NULL, l.level::packaging_level) tl
                LEFT JOIN LATERAL packed_in(i.id, NULL, NULL, NULL, l.level::packaging_level) pk ON true
                LEFT JOIN packaging_type t ON t.code = pk.packaging_type
                LEFT JOIN LATERAL (
@@ -813,6 +834,7 @@ async fn looks(tx: &tokio_postgres::Transaction<'_>, lines: &mut [BenchLine]) ->
                 p.base_diameter_mm = r.get(6);
                 p.top_height_mm = r.get(7);
                 p.wrap = crate::capture::Wrap::read(r, 8);
+                p.on_top_g = r.get(14);
             }
             p.faces = faces.remove(&key).unwrap_or_default();
             p.no_size = p.size.is_none() && sizeless.contains(&key);
@@ -956,7 +978,13 @@ pub async fn cartons_on(
                                      ELSE 'box' END,
                                 p.breaks_down,
                                 op.id, opt.name, op.sequence::text, op.breaks_down,
-                                pt.cut_from_id, pt.cut_from_name, pt.full_height_mm, pt.pictured_as
+                                pt.cut_from_id, pt.cut_from_name, pt.full_height_mm, pt.pictured_as,
+                                p.carrier_id, p.build_rules_version_id,
+                                -- Solid or hollow, as its newest seal said (D249).
+                                (SELECT e.hollow FROM package_event e
+                                  WHERE e.package_id = p.id AND e.kind = 'sealed'
+                                  ORDER BY e.occurred_at DESC, e.recorded_at DESC, e.id DESC
+                                  LIMIT 1)
                            FROM package p
                            -- A cut's empty weight is its full box's unless it
                            -- says its own (D252).
@@ -1088,6 +1116,10 @@ pub async fn cartons_on(
                         cut: BoxCut::of(r.get(20), r.get(21), r.get(22)),
                         // Filled in below, for every box type at once.
                         faces: BTreeMap::new(),
+                        hollow: r.get(26),
+                        carrier_id: r.get(24),
+                        // Filled in below, for every pallet at once.
+                        rules: None,
                         contents: contents
                             .iter()
                             .map(|c| {
@@ -1122,6 +1154,13 @@ pub async fn cartons_on(
                     if let (None, Some(sides)) = (&carton.own_carton_of, of.and_then(|id| faces.get(&id))) {
                         carton.faces = sides.clone();
                     }
+                }
+                // The rules each pallet keeps, as they stood when it was made (D250).
+                let kept: Vec<Option<Uuid>> = rows.iter().map(|r| r.get(25)).collect();
+                let versions: Vec<Uuid> = kept.iter().flatten().copied().collect();
+                let sets = crate::carriers::rule_sets(tx, &versions).await?;
+                for (carton, version) in out.iter_mut().zip(&kept) {
+                    carton.rules = version.and_then(|v| sets.get(&v).cloned());
                 }
                 Ok((out, packed, tolerance))
             })

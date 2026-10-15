@@ -197,6 +197,11 @@ pub struct CaptureSubject {
     pub upright: bool,
     /// Whose saying that is, in the same words.
     pub upright_source: String,
+    /// The most it takes on top, in grams (D249): nought for nothing, absent
+    /// for no limit, which is the default: a thing takes weight.
+    pub on_top_g: Option<i64>,
+    /// Whose saying that is, in the same words.
+    pub on_top_source: String,
     /// Photographed side by side, cut to its faces and drawn as a box: a
     /// six-sided type, or nothing said, or a wrapping said to be box-shaped
     /// (D239, `is_box`); and not declared without a size.
@@ -568,6 +573,8 @@ async fn classified_subjects(
                 ships_as_is_source: "default".into(),
                 upright: false,
                 upright_source: "default".into(),
+                on_top_g: None,
+                on_top_source: "default".into(),
                 packed_in_name: None,
                 wrap: None,
                 box_shaped: !dimensions_absent,
@@ -931,13 +938,15 @@ async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubjec
             "SELECT k.n, p.packaging_type, p.source,
                     is_box(k.item, k.style, k.lot, k.part, k.level::packaging_level), t.round,
                     sa.as_it_is, sa.source, ku.upright, ku.source,
-                    t.name, w.side, w.lid, w.base, w.inside, w.floor, w.made_from
+                    t.name, w.side, w.lid, w.base, w.inside, w.floor, w.made_from,
+                    tl.most_on_top_g, tl.source
                FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::uuid[], $5::text[])
                     WITH ORDINALITY AS k(item, style, lot, part, level, n)
                LEFT JOIN LATERAL packed_in(k.item, k.style, k.lot, k.part, k.level::packaging_level) p ON true
                LEFT JOIN packaging_type t ON t.code = p.packaging_type
               CROSS JOIN LATERAL ships_as_is(k.item, k.style, k.lot, k.part, k.level::packaging_level) sa
               CROSS JOIN LATERAL keeps_upright(k.item, k.style, k.lot, k.part, k.level::packaging_level) ku
+              CROSS JOIN LATERAL takes_on_top(k.item, k.style, k.lot, k.part, k.level::packaging_level) tl
                LEFT JOIN LATERAL wrap_of(k.item, k.style, k.lot, k.part, k.level::packaging_level) w ON true",
             &[&items, &styles, &lots, &parts, &levels],
         )
@@ -958,6 +967,8 @@ async fn packed(tx: &tokio_postgres::Transaction<'_>, found: &mut [CaptureSubjec
         s.ships_as_is_source = r.get(6);
         s.upright = r.get(7);
         s.upright_source = r.get(8);
+        s.on_top_g = r.get(16);
+        s.on_top_source = r.get(17);
     }
     Ok(())
 }
@@ -1098,6 +1109,8 @@ fn own_subject(r: &tokio_postgres::Row, at: usize) -> CaptureSubject {
         ships_as_is_source: "default".into(),
         upright: false,
         upright_source: "default".into(),
+                on_top_g: None,
+                on_top_source: "default".into(),
         packed_in_name: None,
         wrap: None,
         box_shaped: !dimensions_absent,
@@ -1151,6 +1164,8 @@ fn offered(each: &CaptureSubject, level: &str) -> CaptureSubject {
         ships_as_is_source: "default".into(),
         upright: false,
         upright_source: "default".into(),
+                on_top_g: None,
+                on_top_source: "default".into(),
         packed_in_name: None,
         wrap: None,
         box_shaped: true,

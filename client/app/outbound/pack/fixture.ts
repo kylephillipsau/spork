@@ -1,4 +1,4 @@
-import type { BenchScreen, ItemUnit, LineCheck, Preset } from "@domain/types";
+import type { BenchScreen, ItemUnit, LineCheck, Preset, RuleSet } from "@domain/types";
 import type { PackBench } from "./usePackBench";
 
 /** Counted in eaches, NetSuite saying nothing of it. */
@@ -119,6 +119,7 @@ export const PACK_FIXTURE: BenchScreen = {
           size: { length_mm: 280, width_mm: 220, height_mm: 30 },
           ships_as_is: false,
           upright: false,
+          on_top_g: null,
           no_size: false,
           gross_weight_g: 180,
           source: "own",
@@ -167,6 +168,7 @@ export const PACK_FIXTURE: BenchScreen = {
           units: 10,
           ships_as_is: true,
           upright: false,
+          on_top_g: null,
           size: { length_mm: 420, width_mm: 310, height_mm: 260 },
           no_size: false,
           gross_weight_g: 3600,
@@ -212,6 +214,9 @@ export const PACK_FIXTURE: BenchScreen = {
       on: { id: "ca470000-0000-0000-0000-000000000002", name: "PALLET", sequence: "2", breaks_down: false },
       cut: null,
       faces: SMALL_BOX_FACES,
+      hollow: null,
+      carrier_id: null,
+      rules: null,
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -254,6 +259,9 @@ export const PACK_FIXTURE: BenchScreen = {
       on: null,
       cut: null,
       faces: {},
+      hollow: null,
+      carrier_id: null,
+      rules: null,
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -307,6 +315,9 @@ export const PACK_FIXTURE: BenchScreen = {
       on: null,
       cut: null,
       faces: {},
+      hollow: null,
+      carrier_id: null,
+      rules: null,
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -331,6 +342,9 @@ export const PACK_FIXTURE: BenchScreen = {
       on: null,
       cut: null,
       faces: {},
+      hollow: null,
+      carrier_id: null,
+      rules: null,
       own_carton_of: "SLV-PE-BLU",
       own_level: "carton",
       listed_weight_g: 3600,
@@ -369,9 +383,11 @@ export const PACK_FIXTURE: BenchScreen = {
       on_package_id: null,
       at: null,
       placed_by_hand: false,
+      carrier_id: null,
       lines: [{ line_id: "f11e0000-0000-0000-0000-000000000003", quantity: 6 }],
     },
   ],
+  carriers: [],
   wrong_box_reason_id: "4ea50000-0000-0000-0000-000000000001",
 };
 
@@ -399,6 +415,9 @@ export const PACK_FILLING: BenchScreen = {
       on: null,
       cut: null,
       faces: {},
+      hollow: null,
+      carrier_id: null,
+      rules: null,
       own_carton_of: null,
       own_level: null,
       listed_weight_g: null,
@@ -529,6 +548,7 @@ export const PACK_PALLET: BenchScreen = {
       on_package_id: null,
       at: null,
       placed_by_hand: true,
+      carrier_id: null,
       lines: [],
     },
     {
@@ -539,6 +559,7 @@ export const PACK_PALLET: BenchScreen = {
       on_package_id: null,
       at: null,
       placed_by_hand: true,
+      carrier_id: null,
       lines: [{ line_id: APRONS, quantity: 6 }],
     },
   ],
@@ -560,7 +581,42 @@ export const PACK_AS_IS_PLANNED: BenchScreen = {
       on_package_id: null,
       at: null,
       placed_by_hand: true,
+      carrier_id: null,
       lines: [{ line_id: "f11e0000-0000-0000-0000-000000000004", quantity: 10 }],
     })),
   ],
+};
+
+/** A set of build rules as the bench reads one (D250): the canvas's figures, a pallet's weight up to a tonne. */
+const ruleSet = (id: string, name: string): RuleSet => ({
+  id: `b0e10000-0000-0000-0000-00000000000${id}`,
+  version_id: `b0e1a000-0000-0000-0000-00000000000${id}`,
+  name,
+  rules: [
+    { kind: "height", strength: "must", weight: null, amount: 1800, with_base: true, top_counts: null },
+    { kind: "weight", strength: "must", weight: null, amount: 1000000, with_base: null, top_counts: null },
+    { kind: "heavy", strength: "must", weight: null, amount: 20000, with_base: null, top_counts: null },
+    { kind: "loose", strength: "must", weight: null, amount: 30000, with_base: null, top_counts: null },
+  ],
+});
+
+/**
+ * Carriers' rules on the board (D250, settled 10): the oversleeves' own carton
+ * on no pallet, at 32.4 kg, is heavy and needs a pallet; Pallet 2, weighed at
+ * 1,060 kg, is over the tonne its rules allow; and the pallet not yet made can
+ * be built for the second carrier.
+ */
+export const PACK_RULES: BenchScreen = {
+  ...PACK_AS_IS_PLANNED,
+  carriers: [
+    { id: "ca220000-0000-0000-0000-000000000001", name: "Road Freight", usual: true, breakdown: ruleSet("3", "Usual carrier, breakdown"), as_one: ruleSet("1", "Order pallet") },
+    { id: "ca220000-0000-0000-0000-000000000002", name: "Second Freight", usual: false, breakdown: ruleSet("2", "Second carrier, breakdown"), as_one: ruleSet("1", "Order pallet") },
+  ],
+  cartons: PACK_AS_IS_PLANNED.cartons.map((c) =>
+    c.kind === "as_is"
+      ? { ...c, gross_weight_g: 32400 }
+      : c.sequence === "2"
+        ? { ...c, gross_weight_g: 1060000, carrier_id: "ca220000-0000-0000-0000-000000000001", rules: ruleSet("1", "Order pallet") }
+        : c,
+  ),
 };

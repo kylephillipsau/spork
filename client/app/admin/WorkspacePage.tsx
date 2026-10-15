@@ -22,6 +22,8 @@ import { NETSUITE_ROLES } from "@app/items/ItemProperties";
 import { Faint, Progress, shortDate } from "@app/common/cells";
 
 import { Boxes } from "./Boxes";
+import { BuildRulesCard, CarriersCard } from "./Carriers";
+import { ConditionsCard } from "./Carrying";
 import type { WorkspaceBench } from "./useWorkspace";
 import s from "./settings.module.css";
 
@@ -58,6 +60,9 @@ export function WorkspacePage({ bench, openBox = null }: { bench: WorkspaceBench
 
       {ws && here && <Packing site={here} organisation={ws.organisation} bench={bench} />}
       {ws && bench.boxes && <Boxes boxes={bench.boxes} bench={bench} open={openBox} />}
+      {ws && <ConditionsCard key={JSON.stringify(ws.conditions)} conditions={ws.conditions} share={ws.conditions_share} bench={bench} />}
+      {ws && bench.carriers && bench.rules && <CarriersCard carriers={bench.carriers} rules={bench.rules} bench={bench} />}
+      {ws && bench.rules && <BuildRulesCard rules={bench.rules} bench={bench} />}
       {ws && bench.fields && <NetSuiteFields fields={bench.fields} bench={bench} />}
 
       <Card title="Warehouses" padded={false}>

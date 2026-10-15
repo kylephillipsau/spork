@@ -1,9 +1,14 @@
-import type { BoxPhoto, PackageTypeRow, Workspace, ReportedField, Side } from "@domain/types";
+import type { BoxPhoto, BuildRule, CarrierRow, Carries, Conditions, PackageTypeRow, RuleSetRow, Workspace, ReportedField, Side } from "@domain/types";
 import type { WorkspaceBench, WorkspaceState } from "./useWorkspace";
 
 /** The workspace as a deployment looks after a bin import. */
 
+/** The conditions to start (D249): about an eighth of a box's strength empty is left. */
+const CONDITIONS: Conditions = { humidity_pct: 70, days_under_load: 1, stacking: "interlocked", deck_gaps: true, handling: "some_rough", road_factor: 3 };
+
 const WORKSPACE: Workspace = {
+  conditions: CONDITIONS,
+  conditions_share: 0.1224,
   organisation: {
     id: "01920000-0000-7000-8000-000000000001",
     name: "Harbourline",
@@ -33,7 +38,7 @@ const WORKSPACE: Workspace = {
 export const READY: WorkspaceState = { kind: "ready", workspace: WORKSPACE };
 export const EMPTY: WorkspaceState = {
   kind: "ready",
-  workspace: { organisation: WORKSPACE.organisation, sites: [] },
+  workspace: { ...WORKSPACE, sites: [] },
 };
 export const FAILED: WorkspaceState = {
   kind: "failed",
@@ -59,7 +64,14 @@ const box = (name: string, code: string | null, size: [number, number, number] |
   cut: null,
   packed: 0,
   photos: [],
+  carries: size && code !== "PAL" ? estimated(size) : null,
 });
+
+/** What a box carries by the estimate, single-wall 32 ECT under the conditions to start, as the server works it out (D249). */
+function estimated([l, w]: [number, number, number]): Carries {
+  const crush_g = Math.round(((5.87 * ((32 * 4.448222) / 25.4) * Math.sqrt(4 * 2 * (l + w))) / 9.80665) * 1000);
+  return { walls_g: Math.round((crush_g * 0.1224) / 100) * 100, walls_estimated: true, crush_g, lid_g: 10000, lid_said: false, board: { walls: 1, ect: 32 }, board_said: false };
+}
 
 const MEDIUM = box("Medium Box", "CTN", [450, 340, 410]);
 
@@ -92,7 +104,12 @@ export const BOXES: PackageTypeRow[] = [
   cut(MEDIUM, 1, 345, 3),
   cut(MEDIUM, 2, 280, 12),
   cut(MEDIUM, 3, 210),
-  { ...box("Large Box", "CTN", [660, 440, 460]), max_payload_g: 25000 },
+  // Its walls from a test on the floor, its board read off the stamp, and a lid said to take less.
+  {
+    ...box("Large Box", "CTN", [660, 440, 460]),
+    max_payload_g: 25000,
+    carries: { walls_g: 40000, walls_estimated: false, crush_g: null, lid_g: 5000, lid_said: true, board: { walls: 2, ect: 48 }, board_said: true },
+  },
   box("Shovel Box", "CTN", [1400, 340, 400], false),
   box("Satchel", null, null),
   box("Pallet", "PAL", [1200, 1200, 1300]),
@@ -121,6 +138,16 @@ export function fixtureWorkspace(state: WorkspaceState): WorkspaceBench {
     findFace: async () => null,
     fields: state.kind === "ready" ? FIELDS : null,
     sayField: noop,
+    setCarries: noop,
+    setConditions: noop,
+    carriers: state.kind === "ready" ? CARRIERS : null,
+    addCarrier: async () => false,
+    saveCarrier: noop,
+    addService: async () => false,
+    setUsualCarrier: noop,
+    rules: state.kind === "ready" ? RULES : null,
+    newRuleSet: async () => null,
+    saveRuleSet: async () => false,
   };
 }
 
@@ -135,4 +162,86 @@ export const FIELDS: ReportedField[] = [
   { source: "netsuite-item-details", field: "Length (cm)", items: 1480, example: "37", role: "length", unit: "cm", unit_field: null, level: null, said: false },
   { source: "netsuite-item-details", field: "Melbourne WH Bin", items: 240, example: "C-01-2", role: "note", unit: null, unit_field: null, level: null, said: true },
   { source: "netsuite-item-details", field: "Weight Unit", items: 2290, example: "kg", role: "kept", unit: null, unit_field: null, level: null, said: false },
+];
+
+/** A set's rules, the canvas's to start, changed where a carrier asks otherwise (D250). */
+function rulesWith(over: Partial<Record<BuildRule["kind"], Partial<BuildRule>>>): BuildRule[] {
+  const start: BuildRule[] = [
+    { kind: "height", strength: "must", weight: null, amount: 1800, with_base: true, top_counts: null },
+    { kind: "weight", strength: "must", weight: null, amount: 1000000, with_base: null, top_counts: null },
+    { kind: "overhang_sides", strength: "prefer", weight: 2, amount: 0, with_base: null, top_counts: null },
+    { kind: "overhang_ends", strength: "prefer", weight: 2, amount: 0, with_base: null, top_counts: null },
+    { kind: "labels", strength: "prefer", weight: 3, amount: null, with_base: null, top_counts: false },
+    { kind: "support", strength: "must", weight: null, amount: 750, with_base: null, top_counts: null },
+    { kind: "heavy", strength: "must", weight: null, amount: 20000, with_base: null, top_counts: null },
+    { kind: "loose", strength: "must", weight: null, amount: 30000, with_base: null, top_counts: null },
+    { kind: "together", strength: "prefer", weight: 3, amount: null, with_base: null, top_counts: null },
+    { kind: "columns", strength: "prefer", weight: 2, amount: null, with_base: null, top_counts: null },
+    { kind: "low_and_centred", strength: "prefer", weight: 2, amount: null, with_base: null, top_counts: null },
+    { kind: "flat_top", strength: "prefer", weight: 1, amount: null, with_base: null, top_counts: null },
+  ];
+  return start.map((r) => ({ ...r, ...over[r.kind] }));
+}
+
+const SET = (n: number) => `b0e10000-0000-0000-0000-00000000000${n}`;
+
+/** The two carriers' sets as the user put them (D250): the strict one's labels out and nothing over the sides. */
+export const RULES: RuleSetRow[] = [
+  {
+    id: SET(1),
+    version_id: "b0e1a000-0000-0000-0000-000000000001",
+    name: "Order pallet",
+    rules: rulesWith({}),
+    saved_at: "2026-10-16T09:00:00Z",
+    saved_by: "Alex Packer",
+    used_by: ["Road Freight's pallets that go as one", "Second Freight's pallets that go as one"],
+  },
+  {
+    id: SET(2),
+    version_id: "b0e1a000-0000-0000-0000-000000000002",
+    name: "Second carrier, breakdown",
+    rules: rulesWith({
+      overhang_sides: { strength: "must", weight: null },
+      labels: { strength: "must", weight: null },
+      columns: { weight: 3 },
+    }),
+    saved_at: "2026-10-16T09:05:00Z",
+    saved_by: "Alex Packer",
+    used_by: ["Second Freight's breakdown pallets"],
+  },
+  {
+    id: SET(3),
+    version_id: "b0e1a000-0000-0000-0000-000000000003",
+    name: "Usual carrier, breakdown",
+    rules: rulesWith({ overhang_sides: { weight: 1 }, overhang_ends: { weight: 1 } }),
+    saved_at: "2026-10-16T09:10:00Z",
+    saved_by: "Alex Packer",
+    used_by: ["Road Freight's breakdown pallets"],
+  },
+];
+
+export const CARRIERS: CarrierRow[] = [
+  {
+    id: "ca220000-0000-0000-0000-000000000001",
+    name: "Road Freight",
+    code: "ROADFREIGHT",
+    own: true,
+    usual: true,
+    breakdown_rules_id: SET(3),
+    as_one_rules_id: SET(1),
+    services: [
+      { id: "ca225000-0000-0000-0000-000000000001", name: "General", code: "GENERAL" },
+      { id: "ca225000-0000-0000-0000-000000000002", name: "Express", code: "EXPRESS" },
+    ],
+  },
+  {
+    id: "ca220000-0000-0000-0000-000000000002",
+    name: "Second Freight",
+    code: "SECONDFREIGHT",
+    own: true,
+    usual: false,
+    breakdown_rules_id: SET(2),
+    as_one_rules_id: SET(1),
+    services: [{ id: "ca225000-0000-0000-0000-000000000003", name: "Road", code: "ROAD" }],
+  },
 ];

@@ -30,7 +30,8 @@ import { Dashboard } from "@app/home/Dashboard";
 import { DASHBOARD, DASHBOARD_NO_SITE, DASHBOARD_QUIET } from "@app/home/dashboard-fixture";
 
 import { PackBenchPage } from "@app/outbound/pack/PackBenchPage";
-import { PACK_AS_IS_PLANNED, PACK_CUT, PACK_DRAG, PACK_FILLING, PACK_FIXTURE, PACK_LOOSE, PACK_PALLET, PACK_WONT, fixtureBench } from "@app/outbound/pack/fixture";
+import { PACK_AS_IS_PLANNED,
+  PACK_RULES, PACK_CUT, PACK_DRAG, PACK_FILLING, PACK_FIXTURE, PACK_LOOSE, PACK_PALLET, PACK_WONT, fixtureBench } from "@app/outbound/pack/fixture";
 import { SearchPage } from "@app/scan/SearchPage";
 import { SEARCH_FAMILY } from "@app/scan/fixture";
 import { PackQueuePage } from "@app/outbound/pack/PackQueuePage";
@@ -392,6 +393,8 @@ export const FIXTURES: readonly Screen[] = [
   app("f-pack-as-is-planned", "/fixtures/pack/as-is-planned", "Pack order — own cartons planned onto a pallet", "bench", { screen: "pack-one" }, () =>
     packBench(PACK_AS_IS_PLANNED),
   ),
+  // Carriers' rules (D250, settled 10): heavy, needs a pallet, a pallet over its weight, and one to build for another carrier.
+  app("f-pack-rules", "/fixtures/pack/rules", "Pack order — a carrier's rules", "bench", { screen: "pack-one" }, () => packBench(PACK_RULES)),
   app("f-pack-undo", "/fixtures/pack/undo", "Pack order — Undo ready", "bench", { screen: "pack-one" }, () => (
     <PackBenchPage bench={fixtureBench(PACK_FILLING, { undoable: "4 APR-PE-CLR-L into Carton 2" })} />
   )),

@@ -1618,6 +1618,10 @@ pub struct CreatePackageRequest {
     /// on their own (D247). It carries many orders, so it names none.
     #[serde(default)]
     pub breaks_down: bool,
+    /// The carrier a pallet is built for (D250, settled 9): when not said, the
+    /// one the plan says, or the workspace's usual carrier.
+    #[serde(default)]
+    pub carrier_id: Option<Uuid>,
     pub barcode: Option<String>,
     pub sscc: Option<String>,
     /// Defaults to operator_scan.
@@ -1751,9 +1755,44 @@ pub async fn create_package(
                         }
                     }
                 }
+                // **A pallet is built for a carrier, to its rules as they
+                // stand now** (D250, settled 9): the carrier said, or the one
+                // the plan says, or the usual one. The pallet keeps that
+                // version, so changing the rules later does not judge it again.
+                let carries: bool = match body.package_type_id {
+                    Some(t) => tx
+                        .query_opt("SELECT carries FROM package_type_effective WHERE id = $1", &[&t])
+                        .await?
+                        .is_some_and(|r| r.get(0)),
+                    None => false,
+                };
+                if let Some(c) = body.carrier_id {
+                    if !carries {
+                        problems.push("only a pallet is built for a carrier".into());
+                    } else if tx.query_opt("SELECT 1 FROM carrier WHERE id = $1", &[&c]).await?.is_none() {
+                        problems.push("no such carrier".into());
+                    }
+                }
                 if !problems.is_empty() {
                     return Err(ApiError::Rejected(problems.join("; ")));
                 }
+                let (carrier, rules) = if carries {
+                    let planned: Option<Uuid> = tx
+                        .query_opt("SELECT carrier_id FROM pack_plan_parcel WHERE id = $1", &[&package_id])
+                        .await?
+                        .and_then(|r| r.get(0));
+                    let carrier = match body.carrier_id.or(planned) {
+                        Some(c) => Some(c),
+                        None => crate::carriers::usual_carrier(tx).await?,
+                    };
+                    let rules = match carrier {
+                        Some(c) => crate::carriers::rules_for(tx, c, body.breaks_down).await?,
+                        None => None,
+                    };
+                    (carrier, rules)
+                } else {
+                    (None, None)
+                };
 
                 let act = client_events::claim_act(
                     tx,
@@ -1786,8 +1825,9 @@ pub async fn create_package(
                 tx.execute(
                     "INSERT INTO package (
                          id, tenant_id, fulfilment_id, package_type_id, sequence,
-                         item_packing_config_id, own_item_id, own_level, breaks_down)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::packaging_level, $9)",
+                         item_packing_config_id, own_item_id, own_level, breaks_down,
+                         carrier_id, build_rules_version_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::packaging_level, $9, $10, $11)",
                     &[
                         &package_id,
                         &tenant,
@@ -1798,6 +1838,8 @@ pub async fn create_package(
                         &own.as_ref().map(|o| o.0),
                         &own.as_ref().map(|o| o.1.clone()),
                         &body.breaks_down,
+                        &carrier,
+                        &rules,
                     ],
                 )
                 .await?;
@@ -2226,6 +2268,10 @@ pub struct SealPackageRequest {
     pub client_event_id: Uuid,
     pub occurred_at: DateTime<Utc>,
     pub source: Option<String>,
+    /// Hollow, so its lid carries what its box's lid does, or solid, so it
+    /// carries what its walls do (D249); unsaid when absent.
+    #[serde(default)]
+    pub hollow: Option<bool>,
 }
 
 #[derive(Serialize, Debug)]
@@ -2323,8 +2369,8 @@ pub async fn seal_package(
                             .query_one(
                                 "INSERT INTO package_event (
                                      tenant_id, client_event_id, package_id, kind, source,
-                                     occurred_at, recorded_by_id)
-                                 VALUES ($1, $2, $3, 'sealed', $4, $5, $6)
+                                     occurred_at, recorded_by_id, hollow)
+                                 VALUES ($1, $2, $3, 'sealed', $4, $5, $6, $7)
                                  RETURNING id",
                                 &[
                                     &tenant,
@@ -2333,6 +2379,7 @@ pub async fn seal_package(
                                     &source,
                                     &body.occurred_at,
                                     &who.person_id,
+                                    &body.hollow,
                                 ],
                             )
                             .await?
@@ -7760,6 +7807,10 @@ pub struct PackageTypeRow {
     pub packed: i64,
     /// Its photographs, a side each, the workspace's own boxes only (D252).
     pub photos: Vec<crate::boxes::BoxPhoto>,
+    /// What it carries on its walls and its lid, and its board (D249): a cut's
+    /// from its full box unless it says its own. Absent for a pallet or a skid,
+    /// which carries by its carrier's rules, and a box with no footprint.
+    pub carries: Option<crate::carrying::Carries>,
 }
 
 /// The packaging presets, shipped and tenant-owned together.
@@ -7952,7 +8003,8 @@ pub async fn package_types(
                                 t.length_mm, t.width_mm, t.height_mm, t.tare_weight_g,
                                 t.reusable, t.max_payload_g, t.tenant_id IS NOT NULL, t.suggested,
                                 e.cut_from_id, e.cut_from_name, e.full_height_mm,
-                                (SELECT count(*) FROM package p WHERE p.package_type_id = t.id)
+                                (SELECT count(*) FROM package p WHERE p.package_type_id = t.id),
+                                e.carries, e.board_walls, e.board_ect, e.wall_load_g, e.lid_load_g
                            FROM package_type t
                            JOIN package_type_effective e ON e.id = t.id
                           WHERE t.effective_from <= CURRENT_DATE
@@ -7962,6 +8014,7 @@ pub async fn package_types(
                     .await?;
                 let ids: Vec<Uuid> = rows.iter().filter(|r| r.get::<_, bool>(10)).map(|r| r.get(0)).collect();
                 let mut photos = crate::boxes::photos(tx, &ids).await?;
+                let conditions = crate::carrying::conditions(tx).await?;
                 Ok(rows
                     .iter()
                     .map(|r| PackageTypeRow {
@@ -7980,6 +8033,17 @@ pub async fn package_types(
                         cut: crate::boxes::BoxCut::of(r.get(12), r.get(13), r.get(14)),
                         packed: r.get(15),
                         photos: photos.remove(&r.get::<_, Uuid>(0)).unwrap_or_default(),
+                        carries: match (r.get::<_, bool>(3) && !r.get::<_, bool>(16), r.get::<_, Option<i32>>(4), r.get::<_, Option<i32>>(5)) {
+                            (true, Some(length), Some(width)) => Some(crate::carrying::carries(
+                                length,
+                                width,
+                                r.get::<_, Option<i16>>(17).zip(r.get(18)).map(|(walls, ect)| crate::carrying::BoxBoard { walls, ect }),
+                                r.get(19),
+                                r.get(20),
+                                &conditions,
+                            )),
+                            _ => None,
+                        },
                     })
                     .collect::<Vec<_>>())
             })
@@ -9932,6 +9996,17 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(crate::shipping::say_ships_as_is)
         .service(crate::shipping::say_upright)
         .service(crate::shipping::say_shape)
+        .service(crate::shipping::say_load)
+        .service(crate::carrying::set_carries)
+        .service(crate::carrying::set_conditions)
+        .service(crate::carriers::build_rules)
+        .service(crate::carriers::new_rule_set)
+        .service(crate::carriers::save_rule_set)
+        .service(crate::carriers::carriers)
+        .service(crate::carriers::add_carrier)
+        .service(crate::carriers::save_carrier)
+        .service(crate::carriers::add_service)
+        .service(crate::carriers::set_usual_carrier)
         .service(crate::shipping::suggest_box)
         .service(crate::shipping::box_weight)
         .service(crate::shipping::box_empty_weight)

@@ -34,6 +34,9 @@ pub struct PlannedParcel {
     pub at: Option<Spot>,
     /// The packer placed it, rather than Suggest: Suggest plans round it.
     pub placed_by_hand: bool,
+    /// A pallet built for another carrier than the usual one (settled 9).
+    #[serde(default)]
+    pub carrier_id: Option<Uuid>,
     pub lines: Vec<PlannedLine>,
 }
 
@@ -168,6 +171,18 @@ pub async fn save_plan(
                         return Err(ApiError::Rejected("a thing as it is holds only its own item".into()));
                     }
                 }
+                // Only a pallet is built for a carrier (D250).
+                let types: Vec<Option<Uuid>> =
+                    parcels.iter().filter(|p| p.carrier_id.is_some()).map(|p| p.package_type_id).collect();
+                if !types.is_empty() {
+                    let pallets: i64 = tx
+                        .query_one("SELECT count(*) FROM package_type_effective WHERE id = ANY($1) AND carries", &[&types])
+                        .await?
+                        .get(0);
+                    if types.iter().any(Option::is_none) || pallets < types.iter().collect::<HashSet<_>>().len() as i64 {
+                        return Err(ApiError::Rejected("only a pallet is built for a carrier".into()));
+                    }
+                }
                 tx.execute("DELETE FROM pack_plan_parcel WHERE fulfilment_id = $1", &[&fulfilment])
                     .await?;
                 for (position, p) in parcels.iter().enumerate() {
@@ -176,9 +191,9 @@ pub async fn save_plan(
                         "INSERT INTO pack_plan_parcel
                              (id, tenant_id, fulfilment_id, package_type_id, on_parcel_id, on_package_id,
                               at_x_mm, at_y_mm, at_z_mm, turned, placed_by_hand, position,
-                              own_item_id, own_level, item_packing_config_id)
+                              own_item_id, own_level, item_packing_config_id, carrier_id)
                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                                 $13, $14::text::packaging_level, $15)",
+                                 $13, $14::text::packaging_level, $15, $16)",
                         &[
                             &p.id,
                             &who.tenant_id,
@@ -195,6 +210,7 @@ pub async fn save_plan(
                             &p.as_is.as_ref().map(|a| a.item_id),
                             &p.as_is.as_ref().map(|a| a.level.clone()),
                             &p.as_is.as_ref().and_then(|a| a.config_id),
+                            &p.carrier_id,
                         ],
                     )
                     .await?;
@@ -233,7 +249,7 @@ pub async fn plan_of(tx: &tokio_postgres::Transaction<'_>, fulfilment: Uuid) -> 
         .query(
             "SELECT id, package_type_id, on_parcel_id, on_package_id,
                     at_x_mm, at_y_mm, at_z_mm, turned, placed_by_hand,
-                    own_item_id, own_level::text, item_packing_config_id
+                    own_item_id, own_level::text, item_packing_config_id, carrier_id
                FROM pack_plan_parcel WHERE fulfilment_id = $1
               ORDER BY position, id",
             &[&fulfilment],
@@ -255,6 +271,7 @@ pub async fn plan_of(tx: &tokio_postgres::Transaction<'_>, fulfilment: Uuid) -> 
                     _ => None,
                 },
                 placed_by_hand: r.get(8),
+                carrier_id: r.get(12),
                 lines: lines.remove(&id).unwrap_or_default(),
             }
         })
@@ -274,6 +291,7 @@ mod tests {
             on_package_id: None,
             at: None,
             placed_by_hand: true,
+            carrier_id: None,
             lines: vec![PlannedLine { line_id: Uuid::from_u128(500), quantity: 4 }],
         }
     }

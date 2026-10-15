@@ -160,6 +160,17 @@ const PAIRS = [
   ["PlannedParcel", ["PlannedParcel"]],
   ["PlannedLine", ["PlannedLine"]],
   ["PlannedAsIs", ["PlannedAsIs"]],
+  // what a box carries, and carriers' rules (D249, D250)
+  ["BoxBoard", ["BoxBoard"]],
+  ["Carries", ["Carries"]],
+  ["Conditions", ["Conditions"]],
+  ["BuildRule", ["BuildRule"]],
+  ["RuleSet", ["RuleSet"]],
+  // flattened on the wire
+  ["RuleSetRow", ["RuleSetRow", "RuleSet"]],
+  ["CarrierRow", ["CarrierRow"]],
+  ["ServiceRow", ["ServiceRow"]],
+  ["BenchCarrier", ["BenchCarrier"]],
   ["StatedSize", ["StatedSize"]],
   ["PackedRow", ["PackedRow"]],
   ["CartonSummary", ["CartonSummary"]],

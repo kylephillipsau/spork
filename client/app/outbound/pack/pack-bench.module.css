@@ -526,3 +526,24 @@
   flex-direction: column;
   gap: var(--ui-space-4);
 }
+
+/* What a parcel's weight says by its rules (settled 10): heavy, a pallet, over. */
+.marks {
+  margin: 0;
+  padding: var(--ui-space-2) var(--ui-space-4);
+  background: var(--ui-warning-soft);
+  color: var(--ui-text);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
+
+/* Solid or hollow at sealing (D249): two presses, one of them down. */
+.strength {
+  display: inline-flex;
+  gap: var(--ui-space-1);
+}
+
+/* The carrier a pallet not yet made is built for (settled 9). */
+.builtFor {
+  flex: 1 1 14rem;
+}

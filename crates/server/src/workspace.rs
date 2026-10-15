@@ -63,6 +63,10 @@ pub struct WorkspaceSite {
 pub struct Workspace {
     pub organisation: Organisation,
     pub sites: Vec<WorkspaceSite>,
+    /// The warehouse's conditions, which every box's wall estimate allows for
+    /// (D249), and what of a box's strength empty they leave it.
+    pub conditions: crate::carrying::Conditions,
+    pub conditions_share: f64,
 }
 
 /// The organisation and its warehouses.
@@ -111,7 +115,10 @@ pub async fn workspace(
                     )
                     .await?;
 
+                let conditions = crate::carrying::conditions(tx).await?;
                 Ok(Workspace {
+                    conditions,
+                    conditions_share: conditions.share(),
                     organisation: Organisation {
                         id: t.get(0),
                         name: t.get(1),

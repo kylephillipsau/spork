@@ -35,7 +35,7 @@ pub enum Id {
     J41, J42, J43, J44, J45, J46, J47, J48, J49, J50,
     J51, J52, J53, J54, J55, J56, J57, J58, J59, J60, J61, J62, J63, J64, J65, J66,
     J67, J68, J69, J70, J71, J72, J73, J74, J75, J76, J77, J78,
-    J79, J80, J81, J82,
+    J79, J80, J81, J82, J83, J84,
 }
 
 impl fmt::Display for Id {
@@ -54,6 +54,7 @@ pub const ALL: &[Id] = &[
     Id::J58, Id::J59, Id::J60, Id::J61, Id::J62, Id::J63, Id::J64, Id::J65, Id::J66,
     Id::J67, Id::J68, Id::J69, Id::J70, Id::J71, Id::J72, Id::J73, Id::J74, Id::J75,
     Id::J76, Id::J77, Id::J78, Id::J79, Id::J80, Id::J81, Id::J82,
+    Id::J83, Id::J84,
 ];
 
 /// What a failing job-asserted invariant produces.
@@ -350,6 +351,12 @@ pub fn spec(id: Id) -> Invariant {
         J82 => Invariant { id, owners: "D252", asserts_absence: true,
             statement: "A cut box is cut from a full box: the same workspace's, lower than it, with its length and width, and not itself cut from another. The act refuses each; the footprint is held by the reference, and this says when a box was changed under its cuts some other way",
             check: Check::Run(checks::j82_a_cut_is_cut_from_a_full_box) },
+        J83 => Invariant { id, owners: "D250", asserts_absence: true,
+            statement: "Only a pallet or a skid is built for a carrier and to build rules. The rules are how a pallet must be built, and a carton built to them would be judged as one. The act refuses a carrier for anything else; this finds one written some other way",
+            check: Check::Run(checks::j83_only_a_pallet_is_built_to_rules) },
+        J84 => Invariant { id, owners: "D250", asserts_absence: true,
+            statement: "Every version of a set of build rules holds each rule of the list once. A pallet keeps the version it was started under, and a version missing a rule would build it to nothing on that rule. The act writes them all; this finds a version written some other way",
+            check: Check::Run(checks::j84_a_version_holds_every_rule) },
     }
 }
 
@@ -3575,6 +3582,60 @@ pub mod checks {
         let examined: i64 = c
             .query_one("SELECT count(*) FROM package_type WHERE cut_from_id IS NOT NULL", &[])?
             .get(0);
+        Ok((examined as usize, findings))
+    }
+
+    pub fn j83_only_a_pallet_is_built_to_rules(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "SELECT p.id::text, coalesce(t.name, 'no box type')
+                   FROM package p
+                   LEFT JOIN package_type_effective t ON t.id = p.package_type_id
+                  WHERE (p.carrier_id IS NOT NULL OR p.build_rules_version_id IS NOT NULL)
+                    AND NOT coalesce(t.carries, false)
+                  ORDER BY p.id",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J83, "rules_on_a_carton",
+                    format!("package {} is built for a carrier, and it is {}, not a pallet",
+                        r.get::<_, String>(0), r.get::<_, String>(1)))
+            })
+            .collect();
+        let examined: i64 = c
+            .query_one(
+                "SELECT count(*) FROM package WHERE carrier_id IS NOT NULL OR build_rules_version_id IS NOT NULL",
+                &[],
+            )?
+            .get(0);
+        Ok((examined as usize, findings))
+    }
+
+    pub fn j84_a_version_holds_every_rule(
+        c: &mut Client,
+    ) -> Result<(usize, Vec<Finding>), postgres::Error> {
+        let findings = c
+            .query(
+                "SELECT s.name, v.id::text, count(r.kind)
+                   FROM build_rules_version v
+                   JOIN build_rules s ON s.id = v.build_rules_id
+                   LEFT JOIN build_rule r ON r.version_id = v.id
+                  GROUP BY s.name, v.id
+                 HAVING count(DISTINCT r.kind) <> cardinality(enum_range(NULL::build_rule_kind))
+                  ORDER BY s.name, v.id",
+                &[],
+            )?
+            .iter()
+            .map(|r| {
+                finding(Id::J84, "rules_missing",
+                    format!("{} version {} holds {} of the list's rules",
+                        r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, i64>(2)))
+            })
+            .collect();
+        let examined: i64 = c.query_one("SELECT count(*) FROM build_rules_version", &[])?.get(0);
         Ok((examined as usize, findings))
     }
 

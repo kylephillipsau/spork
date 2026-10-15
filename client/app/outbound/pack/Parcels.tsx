@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Boxes, FileText, Package, PackageCheck, PackageOpen, Trash2 } from "lucide-react";
 
-import { Badge, Button, Fact, Facts, Link, TextField, useDraggable, useDropTarget } from "@ui/index";
-import type { BenchLine, CartonSummary, ExpectedWeight, OnParent, PackedRow, StatedSize, Uuid } from "@domain/types";
+import { Badge, Button, Fact, Facts, Link, Select, TextField, useDraggable, useDropTarget } from "@ui/index";
+import type { BenchLine, BenchScreen, CartonSummary, ExpectedWeight, OnParent, PackedRow, StatedSize, Uuid } from "@domain/types";
 import { agreement, provenance } from "@app/measurement/baseline";
 import { href } from "@app/routing/location";
 import { kg } from "@app/common/format";
 import { cutSaying } from "@app/items/box";
 
 import { goodsKey, parcelKey, type Board, type BoardParcel, type Outcome } from "./board";
+import { builtFor, carrierOf, marksOf } from "./carrying";
 import { explain, needsCheck, offBy, uncheckedIn } from "./check";
 import { shipLabel } from "./Chosen";
 import type { PackBench } from "./usePackBench";
@@ -17,6 +18,12 @@ import s from "./pack-bench.module.css";
 /** What a parcel card can ask of the page. */
 export interface ParcelActs {
   bench: PackBench;
+  screen: BenchScreen;
+  /** Solid or hollow, as said before sealing or as proposed (D249). */
+  hollowOf: (p: BoardParcel) => boolean;
+  sayHollow: (carton: Uuid, hollow: boolean) => void;
+  /** A pallet not yet made, built for another carrier (settled 9). */
+  buildFor: (p: BoardParcel, carrier: { id: Uuid; name: string }) => void;
   /** Take a line's goods in a carton out onto the bench. */
   takeOut: (line: Uuid, carton: Uuid) => void;
   /** Ship something as it is (D196). */
@@ -60,6 +67,10 @@ export function ParcelCard({
   const limit = parcel.limit_g;
   const busy = acts.bench.busy;
   const over = live?.target === parcelKey(parcel.id) ? live.outcome : null;
+  // What its weight says, by its rules (settled 10).
+  const marks = marksOf(acts.screen, board, parcel);
+  const said = [marks.heavy, marks.pallet, marks.over].filter((m): m is string => m !== null);
+  const carriers = acts.screen.carriers;
 
   return (
     <section
@@ -79,9 +90,12 @@ export function ParcelCard({
             {parcel.count > 1 ? `${parcel.count} × ` : ""}
             {parcel.title}
           </span>
-          <span className={s.note}>{parcelWords(parcel, fill, limit)}</span>
+          <span className={s.note}>{parcelWords(parcel, fill, limit, parcel.kind === "pallet" ? builtFor(acts.screen, parcel) : null)}</span>
         </span>
         <span className={s.parcelBadges}>
+          {marks.heavy && <Badge tone="warning">Heavy</Badge>}
+          {marks.pallet && <Badge tone="warning">Needs a pallet</Badge>}
+          {marks.over && <Badge tone="danger">Over its weight</Badge>}
           {parcel.carton?.breaks_down && <Badge>Breakdown pallet</Badge>}
           {!parcel.made && (parcel.kind !== "as_is" || parcel.planned) && <Badge>{parcel.byHand ? "Placed" : "Suggested"}</Badge>}
           <Badge tone={state.tone} dot={parcel.made}>
@@ -95,6 +109,7 @@ export function ParcelCard({
           {over.verdict}
         </p>
       )}
+      {said.length > 0 && <p className={s.marks}>{said.join(" · ")}</p>}
 
       {fill !== null && parcel.kind === "box" && (
         <div className={s.fillBar} role="img" aria-label={`${fill}% full`}>
@@ -130,7 +145,34 @@ export function ParcelCard({
           <p className={s.dropHere}>Drop a carton here</p>
         ))}
 
-      {parcel.made && parcel.carton && parcel.kind === "box" && <CartonFoot carton={parcel.carton} lines={lines} bench={acts.bench} />}
+      {parcel.made && parcel.carton && parcel.kind === "box" && (
+        <CartonFoot
+          carton={parcel.carton}
+          lines={lines}
+          bench={acts.bench}
+          hollow={acts.hollowOf(parcel)}
+          sayHollow={(h) => acts.sayHollow(parcel.id, h)}
+        />
+      )}
+
+      {/* A pallet not yet made can be built for another carrier; made, it keeps its own (settled 9). */}
+      {!parcel.made && parcel.kind === "pallet" && carriers.length > 1 && (
+        <footer className={s.parcelFoot}>
+          <span className={s.builtFor}>
+            <Select
+              size="sm"
+              aria-label={`The carrier ${parcel.title} is built for`}
+              value={carrierOf(acts.screen, parcel.planned?.carrier_id ?? null)?.id}
+              disabled={busy}
+              onValueChange={(id) => {
+                const c = carriers.find((x) => x.id === id);
+                if (c) acts.buildFor(parcel, c);
+              }}
+              options={carriers.map((c) => ({ value: c.id, label: c.usual ? `${c.name}, the usual` : c.name }))}
+            />
+          </span>
+        </footer>
+      )}
 
       {!parcel.made && parcel.kind === "box" && (
         <footer className={s.parcelFoot}>
@@ -201,9 +243,10 @@ function Goods({
   );
 }
 
-/** "Medium Box, cut to 28 · 58% full · 6.8 of 25 kg · On Carton 2 (PALLET)". */
-function parcelWords(p: BoardParcel, fill: number | null, limit: number | null): string {
+/** "Medium Box, cut to 28 · 58% full · 6.8 of 25 kg · On Carton 2 (PALLET)"; a pallet's carrier and limits. */
+function parcelWords(p: BoardParcel, fill: number | null, limit: number | null, built: string | null): string {
   const parts: string[] = [];
+  if (built) parts.push(built);
   if (p.detail && p.made) parts.push(p.detail);
   if (fill !== null && p.kind === "box") parts.push(`${fill}% full`);
   if (p.weight_g !== null) parts.push(limit ? `${kg(p.weight_g)} of ${kg(limit)}` : `${kg(p.weight_g)}${p.weighed ? " weighed" : ""}`);
@@ -227,7 +270,20 @@ export function DropSlot({ target, label }: { target: "new-box" | "new-pallet"; 
  * typed, what it should weigh and whether the scale agrees, and Seal once what
  * is in it is checked. A sealed one says what it weighed.
  */
-function CartonFoot({ carton, lines, bench }: { carton: CartonSummary; lines: BenchLine[]; bench: PackBench }) {
+function CartonFoot({
+  carton,
+  lines,
+  bench,
+  hollow,
+  sayHollow,
+}: {
+  carton: CartonSummary;
+  lines: BenchLine[];
+  bench: PackBench;
+  /** Hollow or solid, said or proposed (D249). */
+  hollow: boolean;
+  sayHollow: (hollow: boolean) => void;
+}) {
   const unchecked = uncheckedIn(carton, lines);
   const stated = carton.stated_size?.height_mm ?? null;
   const [weight, setWeight] = useState(carton.gross_weight_g === null ? "" : (carton.gross_weight_g / 1000).toFixed(3));
@@ -245,6 +301,7 @@ function CartonFoot({ carton, lines, bench }: { carton: CartonSummary; lines: Be
           {carton.expected && <ExpectedFact expected={carton.expected} contents={carton.contents} />}
           <Fact label="Height">{carton.height_mm !== null ? `${carton.height_mm} mm` : null}</Fact>
           <Fact label="Footprint">{footprint}</Fact>
+          {carton.hollow !== null && <Fact label="On top">{carton.hollow ? "Hollow: its lid carries little" : "Solid: carries what its walls do"}</Fact>}
         </Facts>
       </div>
     );
@@ -284,10 +341,19 @@ function CartonFoot({ carton, lines, bench }: { carton: CartonSummary; lines: Be
           </Button>
         )}
         {unchecked.length > 0 && <span className={s.note}>Check {unchecked.join(", ")} to seal it</span>}
+        {/* Proposed from how full it is and what is in it; one press says the other (D249). */}
+        <span className={s.strength} role="group" aria-label={`Is ${carton.sequence ? `Carton ${carton.sequence}` : "it"} solid or hollow?`}>
+          <Button size="sm" aria-pressed={!hollow} disabled={bench.busy} onClick={() => sayHollow(false)}>
+            Solid
+          </Button>
+          <Button size="sm" aria-pressed={hollow} disabled={bench.busy} onClick={() => sayHollow(true)}>
+            Hollow
+          </Button>
+        </span>
         <Button size="sm" type="submit" disabled={bench.busy}>
           Record
         </Button>
-        <Button size="sm" disabled={bench.busy || unchecked.length > 0 || carton.contents.length === 0} onClick={() => void bench.seal(carton.id)}>
+        <Button size="sm" disabled={bench.busy || unchecked.length > 0 || carton.contents.length === 0} onClick={() => void bench.seal(carton.id, hollow)}>
           Seal
         </Button>
       </footer>

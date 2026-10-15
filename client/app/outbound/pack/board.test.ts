@@ -23,6 +23,7 @@ const planned = (id: string, type: string, lines: [string, number][], byHand = t
   on_package_id: null,
   at: null,
   placed_by_hand: byHand,
+  carrier_id: null,
   lines: lines.map(([line_id, quantity]) => ({ line_id, quantity })),
 });
 const withPlan = (plan: PlannedParcel[]): BenchScreen => ({ ...PACK_FILLING, plan });

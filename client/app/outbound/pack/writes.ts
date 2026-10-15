@@ -32,7 +32,9 @@ export type BenchWrite = { part: string } & (
   | ({ kind: "measure" } & Input<typeof api.measure>)
   | { kind: "contain"; carton: Uuid; pallet: Uuid; at: Spot | null }
   | { kind: "place"; carton: Uuid; location: Uuid }
-  | { kind: "seal" | "open" | "discard"; carton: Uuid }
+  /** Sealed hollow or solid, as the packer said (D249); null for a thing as it is. */
+  | { kind: "seal"; carton: Uuid; hollow: boolean | null }
+  | { kind: "open" | "discard"; carton: Uuid }
 );
 
 /** A press kept on the device until the server has every write of it. */
@@ -148,7 +150,7 @@ export function writer(screen: BenchScreen, fulfilment: Uuid): Writer {
         if (pallet) writes.push({ part: under(part, "on"), kind: "contain", carton: pp.id, pallet, at: pp.at });
         for (const l of pp.lines) add({ kind: "put", line: l.line_id, units: l.quantity, carton: pp.id }, under(part, `put:${l.line_id}`));
         // A thing as it is is sealed as it is made, as Ship does.
-        if (pp.as_is) writes.push({ part: under(part, "seal"), kind: "seal", carton: pp.id });
+        if (pp.as_is) writes.push({ part: under(part, "seal"), kind: "seal", carton: pp.id, hollow: null });
         return;
       }
       case "contain":

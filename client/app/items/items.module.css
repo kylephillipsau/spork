@@ -764,3 +764,18 @@
   color: var(--ui-text);
   font-size: var(--ui-text-2xs);
 }
+
+/* The most a thing takes on top, typed (D249). */
+.onTopLimit {
+  flex: 0 0 8rem;
+  min-width: 0;
+}
+
+/* What it takes on top, then what to say instead, wrapping under it on a phone (D249). */
+.onTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  max-width: 100%;
+}

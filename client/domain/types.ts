@@ -79,6 +79,8 @@ export interface PackUnit {
   ships_as_is: boolean;
   /** It stays the way up it stands (D200): turned round, never onto its side. */
   upright: boolean;
+  /** The most it takes on top, in grams (D249): 0 for nothing, null for no limit. */
+  on_top_g: number | null;
   size: StatedSize | null;
   /** Somebody said it has no size to measure (D138): it goes in round the rest. */
   no_size: boolean;
@@ -222,6 +224,113 @@ export interface PackageTypeRow {
   packed: number;
   /** Its photographs, a side each, the workspace's own boxes only (D252). */
   photos: BoxPhoto[];
+  /** What it carries on its walls and its lid (D249); null for a pallet or a box with no footprint. */
+  carries: Carries | null;
+}
+
+/** A box's board, as stamped (D249): single (1) or double (2) wall, and its edge crush in pounds an inch. */
+export interface BoxBoard {
+  walls: number;
+  ect: number;
+}
+
+/** What a box carries (D249), on its walls and its lid, and where each figure comes from. */
+export interface Carries {
+  walls_g: number;
+  /** Estimated from its size and board under the warehouse's conditions, not set from a test. */
+  walls_estimated: boolean;
+  /** What it crushes at empty by the estimate; null when a test set the walls. */
+  crush_g: number | null;
+  /** What its lid carries when hollow. */
+  lid_g: number;
+  /** Said of it or its full box, rather than the 10 kg to start. */
+  lid_said: boolean;
+  board: BoxBoard;
+  board_said: boolean;
+}
+
+/** The warehouse's conditions (D249), which every box's wall estimate allows for. */
+export interface Conditions {
+  humidity_pct: 50 | 60 | 70 | 80 | 90;
+  days_under_load: 1 | 10 | 30 | 90 | 180;
+  stacking: "columns" | "misaligned" | "interlocked";
+  deck_gaps: boolean;
+  handling: "careful" | "some_rough" | "rough";
+  road_factor: number;
+}
+
+/** A rule of the fixed list (D250). */
+export type RuleKind =
+  | "height"
+  | "weight"
+  | "overhang_sides"
+  | "overhang_ends"
+  | "labels"
+  | "support"
+  | "heavy"
+  | "loose"
+  | "together"
+  | "columns"
+  | "low_and_centred"
+  | "flat_top";
+
+/** One rule of a set (D250). */
+export interface BuildRule {
+  kind: RuleKind;
+  strength: "must" | "prefer" | "off";
+  /** How much a preference counts, 1 to 3; null for a must or off. */
+  weight: number | null;
+  /** Its figure: mm for height and overhang, grams for weight, heavy and loose, per thousand for support. */
+  amount: number | null;
+  /** Height only: counted with the pallet's base. */
+  with_base: boolean | null;
+  /** Labels only: a label on top of the top layer counts as facing out. */
+  top_counts: boolean | null;
+}
+
+/** A set of build rules as one version has them: a pallet keeps the version (D250). */
+export interface RuleSet {
+  id: Uuid;
+  version_id: Uuid;
+  name: string;
+  rules: BuildRule[];
+}
+
+/** `GET /build-rules`: a set as it is now. */
+export interface RuleSetRow extends RuleSet {
+  saved_at: string;
+  saved_by: string;
+  /** What points at it: "Road's breakdown pallets". */
+  used_by: string[];
+}
+
+/** `GET /carriers`: a carrier, its services, and the rules its pallets are built to (D250). */
+export interface CarrierRow {
+  id: Uuid;
+  name: string;
+  code: string;
+  /** The workspace's own, rather than the platform's. */
+  own: boolean;
+  /** The one a pallet is started under unless the board is told another (settled 9). */
+  usual: boolean;
+  breakdown_rules_id: Uuid | null;
+  as_one_rules_id: Uuid | null;
+  services: ServiceRow[];
+}
+
+export interface ServiceRow {
+  id: Uuid;
+  name: string;
+  code: string;
+}
+
+/** A carrier as the bench needs it: the rules its pallets are built to now (D250). */
+export interface BenchCarrier {
+  id: Uuid;
+  name: string;
+  usual: boolean;
+  breakdown: RuleSet | null;
+  as_one: RuleSet | null;
 }
 
 /** A box states its size; a pallet's height is the stack and only the
@@ -306,6 +415,12 @@ export interface CartonSummary {
   cut: BoxCut | null;
   /** Its box type's sides as photographed and cut, the full box's for a cut (D252). */
   faces: Partial<Record<Side, string>>;
+  /** Hollow or solid, as its newest seal said (D249); null when unsaid. */
+  hollow: boolean | null;
+  /** The carrier a pallet is built for (D250, settled 9). */
+  carrier_id: Uuid | null;
+  /** The rules a pallet is built to, as they stood when it was made. */
+  rules: RuleSet | null;
 }
 
 /** `GET /fulfilments/{id}/bench` — the whole screen, in one read. */
@@ -324,6 +439,8 @@ export interface BenchScreen {
   presets: Preset[];
   /** The board's plan (D245): parcels planned and not yet made. */
   plan: PlannedParcel[];
+  /** The carriers, each with the rules its pallets are built to now (D250). */
+  carriers: BenchCarrier[];
   wrong_box_reason_id: Uuid | null;
 }
 
@@ -348,6 +465,8 @@ export interface PlannedParcel {
   at: Spot | null;
   /** The packer placed it, rather than Suggest: Suggest plans round it. */
   placed_by_hand: boolean;
+  /** A pallet built for another carrier than the usual one (settled 9). */
+  carrier_id: Uuid | null;
   lines: PlannedLine[];
 }
 
@@ -547,6 +666,10 @@ export interface CaptureSubject {
   upright: boolean;
   /** Whose saying that is, in the same words. */
   upright_source: string;
+  /** The most it takes on top, in grams (D249): 0 for nothing, null for no limit, the default. */
+  on_top_g: number | null;
+  /** Whose saying that is, in the same words. */
+  on_top_source: string;
   /** Photographed side by side, cut to its faces and drawn: six-sided, nothing said, or a wrapping said to be box-shaped (D239). */
   box_shaped: boolean;
   /** Packed in a round type, a bucket or a tin: measured across, photographed by its side and lid (D213). */
@@ -1314,6 +1437,9 @@ export interface OwnerSet {
 export interface Workspace {
   organisation: Organisation;
   sites: WorkspaceSite[];
+  /** The warehouse's conditions (D249), and what of a box's strength empty they leave it. */
+  conditions: Conditions;
+  conditions_share: number;
 }
 
 /** One warehouse, as the file describes it (D158). */

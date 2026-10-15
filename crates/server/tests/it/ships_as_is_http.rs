@@ -177,6 +177,24 @@ async fn a_roll_in_its_own_box_ships_as_it_is() {
     assert_eq!(status, 204, "{body}");
     let (_, stood) = call(&app, bench()).await;
     assert_eq!(pack(&stood, "each")["upright"], true, "{stood}");
+
+    // ── what it takes on top, said the same way (D249) ──────────────────
+    assert!(pack(&stood, "each")["on_top_g"].is_null(), "it takes weight, unless said");
+    let load = |grams: Value| {
+        test::TestRequest::post().uri("/load").insert_header(auth.clone()).set_json(json!({
+            "item_id": item,
+            "packaging_level": "each",
+            "most_on_top_g": grams,
+            "client_event_id": Uuid::now_v7(),
+            "occurred_at": "2026-10-03T09:03:00Z"
+        }))
+    };
+    let (status, body) = call(&app, load(json!(5_000))).await;
+    assert_eq!(status, 204, "{body}");
+    let (_, loaded) = call(&app, bench()).await;
+    assert_eq!(pack(&loaded, "each")["on_top_g"], 5_000, "{loaded}");
+    let (status, below) = call(&app, load(json!(-1))).await;
+    assert_eq!(status, 400, "nothing or more: {below}");
     let (status, partless) = call(
         &app,
         test::TestRequest::post().uri("/upright").insert_header(auth.clone()).set_json(json!({

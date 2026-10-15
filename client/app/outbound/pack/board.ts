@@ -1,7 +1,8 @@
-import type { BenchLine, BenchScreen, CartonSummary, Footprint, PlannedAsIs, PlannedParcel, Preset, StatedSize, Uuid } from "@domain/types";
+import type { BenchLine, BenchScreen, CartonSummary, Footprint, PlannedAsIs, PlannedParcel, Preset, RuleSet, StatedSize, Uuid } from "@domain/types";
 
 import { keepOf } from "../../items/box.ts";
 import { arrange, boxFreight, fitInto, piecesOf, type AsIs, type Aside, type BoxPlan, type Goods, type Layer } from "./arrange.ts";
+import { carrierOf, heavierThan, palletRules, palletTare, palletWeight } from "./carrying.ts";
 import { shortOf } from "./check.ts";
 import { LEVEL_WORDS, account, boxNote, cartonDetail, cartonWeight, dimsOf, lookOf, type OrderView, type Parcel, type ParcelLine } from "./order.ts";
 
@@ -391,6 +392,8 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
   let changed = false;
   // Planned pallets this drop makes: made once, and undone by taking them apart.
   const made: Uuid[] = [];
+  // What this drop has put on each pallet so far, for its weight rule (settled 10).
+  const added = new Map<Uuid, number>();
   const parcel = (id: Uuid) => board.parcels.find((p) => p.id === id) ?? null;
   const lineOf = (id: Uuid) => screen.lines.find((l) => l.line_id === id) ?? null;
   // What is in or planned into a parcel now, with the drops so far.
@@ -402,7 +405,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
   const newPallet = (): PlannedParcel | null => {
     const pallet = screen.presets.find((p) => p.deck && p.name.toUpperCase() === "PALLET") ?? screen.presets.find((p) => p.deck);
     if (!pallet) return null;
-    const pp: PlannedParcel = { id: newId(), package_type_id: pallet.id, as_is: null, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
+    const pp: PlannedParcel = { id: newId(), package_type_id: pallet.id, as_is: null, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, carrier_id: null, lines: [] };
     plan = [...plan, pp];
     changed = true;
     return pp;
@@ -456,7 +459,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
           continue;
         }
         if (!fresh || fresh.package_type_id !== chosen.id) {
-          fresh = { id: newId(), package_type_id: chosen.id, as_is: null, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, lines: [] };
+          fresh = { id: newId(), package_type_id: chosen.id, as_is: null, on_parcel_id: null, on_package_id: null, at: null, placed_by_hand: true, carrier_id: null, lines: [] };
           plan = [...plan, fresh];
           changed = true;
         }
@@ -532,18 +535,25 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
       said.push(`${moving.title} off its pallet`);
       continue;
     }
-    let pallet: { id: Uuid; made: boolean; title: string } | null = null;
+    let pallet: { id: Uuid; made: boolean; title: string; grams: number; rules: RuleSet | null } | null = null;
     if (target === "new-pallet") {
       const pp = newPallet();
       if (!pp) return refused("There is no pallet preset to start one with");
-      pallet = { id: pp.id, made: false, title: "a new pallet" };
+      const rules = carrierOf(screen, null)?.as_one ?? null;
+      pallet = { id: pp.id, made: false, title: "a new pallet", grams: palletTare(screen, { planned: pp, carton: null }), rules };
     } else {
       const t = thingOf(target);
       const onto = t?.kind === "parcel" ? parcel(t.id) : null;
       if (!onto || onto.kind !== "pallet") return refused(`${moving.title} goes on a pallet`);
       if (onto.id === moving.on) return refused(`${moving.title} is on ${onto.title} already`);
-      pallet = { id: onto.id, made: onto.made, title: onto.title };
+      pallet = { id: onto.id, made: onto.made, title: onto.title, grams: palletWeight(screen, board, onto).grams, rules: palletRules(screen, onto) };
     }
+    // Its weight with this on it, against its rules (settled 10).
+    const going = moving.asIs ? Math.min(moving.count, how.count ?? (how.one ? 1 : moving.count)) : 1;
+    const adding = (moving.weight_g ?? 0) * going;
+    const heavier = heavierThan(pallet.rules, pallet.title, pallet.grams + (added.get(pallet.id) ?? 0) + adding);
+    if (heavier.refused) return refused(heavier.refused);
+    added.set(pallet.id, (added.get(pallet.id) ?? 0) + adding);
     if (moving.made) {
       // A made carton goes on a made pallet: one only planned is made first.
       if (!pallet.made && !made.includes(pallet.id)) {
@@ -564,7 +574,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
       // Things as they are, planned onto it one parcel each, as Ship would make them.
       const a = moving.asIs;
       const config = a.level === "each" ? null : (moving.goods[0]?.line.own_carton?.item_packing_config_id ?? null);
-      for (let i = 0; i < Math.min(a.count, how.count ?? (how.one ? 1 : a.count)); i++) {
+      for (let i = 0; i < going; i++) {
         plan = [
           ...plan,
           {
@@ -575,6 +585,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
             on_package_id: pallet.made ? pallet.id : null,
             at: null,
             placed_by_hand: true,
+            carrier_id: null,
             lines: [{ line_id: a.line, quantity: a.per }],
           },
         ];
@@ -582,6 +593,7 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
       changed = true;
     }
     said.push(`${moving.title} onto ${pallet.title}`);
+    if (heavier.said) said.push(heavier.said);
   }
 
   if (!changed && acts.length === 0) return refused(said.join(" · ") || "Nothing to move");
@@ -592,6 +604,25 @@ export function dropOn(screen: BenchScreen, board: Board, keys: readonly string[
     acts,
     undo: { plan: changed || made.length > 0 ? afresh(before, made, newId) : null, acts: undo },
     shown,
+    chooseBox: false,
+  };
+}
+
+/**
+ * A pallet not yet made, built for another carrier (settled 9): the plan
+ * changed, and undone by changing it back. A made pallet keeps the carrier
+ * and rules it was started under.
+ */
+export function buildFor(board: Board, pallet: Uuid, carrier: { id: Uuid; name: string }): Outcome {
+  const before = planOf(board);
+  const title = board.parcels.find((p) => p.id === pallet)?.title ?? "The pallet";
+  return {
+    ok: true,
+    verdict: `${title} built for ${carrier.name}`,
+    plan: before.map((pp) => (pp.id === pallet ? { ...pp, carrier_id: carrier.id } : pp)),
+    acts: [],
+    undo: { plan: before, acts: [] },
+    shown: null,
     chooseBox: false,
   };
 }
@@ -616,6 +647,7 @@ export function suggest(screen: BenchScreen, board: Board, newId: () => Uuid): P
       on_package_id: null,
       at: null,
       placed_by_hand: false,
+      carrier_id: null,
       lines: [...placed].filter(([, q]) => q > 0).map(([line_id, quantity]) => ({ line_id, quantity })),
     };
   });

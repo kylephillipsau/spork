@@ -19,6 +19,7 @@ function each(size: Dims | null, over: Partial<PackUnit> = {}): PackUnit {
     units: 1,
     ships_as_is: false,
     upright: false,
+    on_top_g: null,
     size: size && { length_mm: size[0], width_mm: size[1], height_mm: size[2] },
     no_size: false,
     gross_weight_g: 100,
