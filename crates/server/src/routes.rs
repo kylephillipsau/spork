@@ -9008,6 +9008,14 @@ pub async fn refresh_projections(
 // (migration 75), because handing it to the browser and taking it back means
 // trusting the party being authenticated to remember what they were asked.
 
+/// The relying party for this request: the one whose origin the browser names
+/// (D257). Behind the HTTPS in front, the browser's `Origin` comes through.
+fn relying_for(req: &HttpRequest) -> Result<&'static passkeys::Relying, ApiError> {
+    let parties = passkeys::shared().map_err(|e| ApiError::Configuration(e.to_string()))?;
+    let origin = req.headers().get(actix_web::http::header::ORIGIN).and_then(|v| v.to_str().ok());
+    Ok(parties.for_origin(origin))
+}
+
 #[derive(Deserialize, Debug)]
 pub struct BeginRegistration {
     /// What the person calls this key. "The blue YubiKey."
@@ -9035,7 +9043,7 @@ pub async fn passkey_registration_begin(
 ) -> Result<HttpResponse, ApiError> {
     let who = caller(&state, &req).await?;
     let _ = body.into_inner();
-    let relying = passkeys::shared().map_err(|e| ApiError::Configuration(e.to_string()))?;
+    let relying = relying_for(&req)?;
 
     let conn = state.pool.get().await?;
     crate::tenancy::ensure_app_role(&conn).await?;
@@ -9110,7 +9118,7 @@ pub async fn passkey_registration_finish(
 ) -> Result<HttpResponse, ApiError> {
     let who = caller(&state, &req).await?;
     let body = body.into_inner();
-    let relying = passkeys::shared().map_err(|e| ApiError::Configuration(e.to_string()))?;
+    let relying = relying_for(&req)?;
 
     let conn = state.pool.get().await?;
     crate::tenancy::ensure_app_role(&conn).await?;
@@ -9165,11 +9173,12 @@ pub struct BeginAuthentication {
 /// ceremony with an empty allow-list, which the browser fails in its own time.
 #[post("/passkeys/authentication/begin")]
 pub async fn passkey_authentication_begin(
+    req: HttpRequest,
     state: web::Data<AppState>,
     body: web::Json<BeginAuthentication>,
 ) -> Result<HttpResponse, ApiError> {
     let body = body.into_inner();
-    let relying = passkeys::shared().map_err(|e| ApiError::Configuration(e.to_string()))?;
+    let relying = relying_for(&req)?;
 
     let conn = state.pool.get().await?;
     crate::tenancy::ensure_app_role(&conn).await?;
@@ -9229,7 +9238,7 @@ pub async fn passkey_authentication_finish(
     body: web::Json<FinishAuthentication>,
 ) -> Result<HttpResponse, ApiError> {
     let body = body.into_inner();
-    let relying = passkeys::shared().map_err(|e| ApiError::Configuration(e.to_string()))?;
+    let relying = relying_for(&req)?;
 
     let conn = state.pool.get().await?;
     crate::tenancy::ensure_app_role(&conn).await?;

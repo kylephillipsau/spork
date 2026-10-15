@@ -73,7 +73,11 @@ async fn main() -> std::io::Result<()> {
     // origin disagrees with its id yields credentials no browser will offer
     // back, and the symptom is a button that silently does nothing.
     match spork_server::passkeys::shared() {
-        Ok(r) => tracing::info!(rp_id = %r.rp_id, origin = %r.origin, "passkeys enabled"),
+        Ok(parties) => {
+            for r in parties.all() {
+                tracing::info!(rp_id = %r.rp_id, origin = %r.origin, "passkeys enabled");
+            }
+        }
         Err(e) => {
             tracing::error!("{e}");
             std::process::exit(2);

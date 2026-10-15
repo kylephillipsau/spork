@@ -40,8 +40,10 @@ The first time you run `start` against an empty database, the server logs a setu
 token. Use it to create the first administrator. If you run `seed` instead, you
 can sign in as `kyle@example.test` / `dock-station-1`.
 
-Passkeys are bound to the relying party `localhost`. A passkey registered here
-only works at `http://localhost:18080`, not at `127.0.0.1`.
+A passkey works at the address it was added at. One added here works at
+`http://localhost:18080`, not at `127.0.0.1`. With `start -Lan`,
+`https://<computer>.local` is a relying party of its own (D257), so a paired
+device adds its own passkey there.
 
 Runtime state (the setup token and uploaded images) goes in `.local/`, which git
 ignores.
@@ -86,8 +88,9 @@ out of backups you share: its key is what devices trust.
 
 Until a device is paired, these limits apply on it:
 
-- **Sign in with a password on other devices.** Passkeys only work at
-  `localhost`, because browsers require HTTPS for them anywhere else.
+- **Sign in with a password.** Browsers offer passkeys only over HTTPS or at
+  `localhost`. Once paired, a device adds its own passkey at
+  `https://<computer>.local` (D257).
 - **Traffic is not encrypted.** Passwords cross the WiFi in plain text. That's
   why LAN mode is opt-in.
 - **The face-finder runs at a computer only.** A phone takes photos, and

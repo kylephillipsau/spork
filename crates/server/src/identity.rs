@@ -242,6 +242,8 @@ async fn pair_page(pairing: web::Data<Pairing>) -> HttpResponse {
                         li { "Check its fingerprint, shown on the phone's certificate screen, matches this one on the desk:"
                              code { (pairing.fingerprint) } }
                         li { "Open " a href=(https) { (https) } ", sign in, and choose " em { "Install app" } " from the browser's menu." }
+                        li { "To sign in with a fingerprint or face, add a passkey there under your name › " em { "Passkeys" }
+                             ". One added on another device or at another address does not work here." }
                     }
                     p.note { "The authority can vouch only for names ending in .local, so it cannot stand in for any other site." }
                 }

@@ -191,7 +191,7 @@ function Start-Spork {
             } else {
                 Write-Host "HTTPS is not set up: run scripts\local.ps1 https, then scripts\local.ps1 firewall."
             }
-            Write-Host "Passkeys work at localhost only; elsewhere, sign in with a password."
+            Write-Host "Passkeys work at localhost and, on a paired device, at https://${HostName}: each where it was added."
         }
         Write-Host "On an empty database the server logs a setup token; use it to create the first administrator."
         Write-Host ""

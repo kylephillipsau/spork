@@ -26,6 +26,14 @@
 //! `SPORK_RP_ID` and `SPORK_RP_ORIGIN` configure it, defaulting to
 //! localhost. Getting them wrong is not a subtle failure: the browser refuses
 //! before the request is sent.
+//!
+//! # A host with its own identity is two addresses (D257)
+//!
+//! With `SPORK_IDENTITY` (D255) the desk opens `localhost` and a paired device
+//! opens `https://<name>.local`. Neither name is a suffix of the other, so no
+//! one relying party serves both: each address is a relying party of its own,
+//! and a ceremony is run by the one whose origin the browser names. A passkey
+//! works at the address it was added at.
 
 use std::sync::{Arc, OnceLock};
 
@@ -88,20 +96,49 @@ impl Relying {
     }
 }
 
-static SHARED: OnceLock<Relying> = OnceLock::new();
+/// Every relying party this server answers for, the configured one first.
+pub struct Parties(Vec<Relying>);
 
-/// The process-wide relying party, built from the environment once.
+impl Parties {
+    /// The configured one, and this host's own name when it keeps an identity.
+    /// The host's name is served over HTTPS on the standard port, as `/pair`
+    /// sends a device there.
+    pub fn from_env() -> Result<Self, Problem> {
+        let mut all = vec![Relying::from_env()?];
+        if std::env::var("SPORK_IDENTITY").as_deref() == Ok("1") {
+            let name = crate::identity::host_name();
+            all.push(Relying::new(&name, &format!("https://{name}"))?);
+        }
+        Ok(Self(all))
+    }
+
+    /// **The one whose origin asked.** A request naming no origin, or one this
+    /// server was not given, gets the configured one, as before there were two.
+    pub fn for_origin(&self, origin: Option<&str>) -> &Relying {
+        origin
+            .and_then(|o| self.0.iter().find(|r| r.origin.trim_end_matches('/') == o))
+            .unwrap_or(&self.0[0])
+    }
+
+    pub fn all(&self) -> &[Relying] {
+        &self.0
+    }
+}
+
+static SHARED: OnceLock<Parties> = OnceLock::new();
+
+/// The process-wide relying parties, built from the environment once.
 ///
 /// **Not a field on `AppState`.** Every test that builds an `AppState` would
 /// have to name it, and a test about packing has no opinion about WebAuthn. The
 /// binary calls this at startup so a bad configuration stops the server rather
 /// than surfacing as a sign-in button that does nothing; by the time a handler
 /// asks, the answer is already there.
-pub fn shared() -> Result<&'static Relying, Problem> {
+pub fn shared() -> Result<&'static Parties, Problem> {
     if let Some(r) = SHARED.get() {
         return Ok(r);
     }
-    let built = Relying::from_env()?;
+    let built = Parties::from_env()?;
     Ok(SHARED.get_or_init(|| built))
 }
 
@@ -164,6 +201,20 @@ mod tests {
     fn an_origin_that_does_not_match_the_id_is_refused() {
         assert!(Relying::new("spork.example.com", "https://something-else.test").is_err());
         assert!(Relying::new("localhost", "not a url").is_err());
+    }
+
+    /// **A paired device's passkey is its address's.** The ceremony is run by
+    /// the relying party whose origin asked; anything else gets the first.
+    #[test]
+    fn the_origin_that_asked_picks_its_relying_party() {
+        let parties = Parties(vec![
+            Relying::new("localhost", "http://localhost:18080").unwrap(),
+            Relying::new("desk-1.local", "https://desk-1.local").unwrap(),
+        ]);
+        assert_eq!(parties.for_origin(Some("https://desk-1.local")).rp_id, "desk-1.local");
+        assert_eq!(parties.for_origin(Some("http://localhost:18080")).rp_id, "localhost");
+        assert_eq!(parties.for_origin(Some("http://10.0.0.5:18080")).rp_id, "localhost");
+        assert_eq!(parties.for_origin(None).rp_id, "localhost");
     }
 
     #[test]

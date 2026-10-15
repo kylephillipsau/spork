@@ -47,7 +47,7 @@ export function KeysPage({ bench }: { bench: KeysBench }) {
     <Page narrow>
       <PageHeader title="Passkeys" description="Sign in with this device's fingerprint, face or PIN instead of a password." />
 
-      <Card title="Add a passkey">
+      <Card title="Add a passkey" description="A passkey works only at the address it was added at, so add one on each device you use.">
         {bench.supported ? (
           <form
             className={s.formRow}
