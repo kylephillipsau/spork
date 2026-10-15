@@ -16479,7 +16479,8 @@ the heavy cartons low.
 
 ### D249: What a box can carry on top
 
-*Adopted 2026-10-12. Decided ahead of the build. Extends D200.*
+*Adopted 2026-10-12. Built 2026-10-16 with migration 145, the plan's M4: what
+is said and shown. The load through a stack is checked from M5. Extends D200.*
 
 **The finding.** The user's first figure, 10 kg on a hollow box, was an
 example, and they asked whether there is a standard. There is a method, not a
@@ -16538,13 +16539,51 @@ above 10kg". Then: "I actually have no idea if 10kg is a good recommendation
 ... I'd like to review and research this to make sure there aren't any
 existing specifications or standards/conventions for this already."
 
+**As built.**
+
+- **What a thing takes on top** is `subject_load` (`POST /load`, written by
+  the writer `POST /upright` shares): the most in grams, nought for nothing,
+  empty for no limit. It is inherited by `takes_on_top`, and the item card
+  shows it under "On top". Whose saying it is, which five functions now need,
+  is read in one place, `subject_asked`; `packed_in`, `ships_as_is`,
+  `keeps_upright` and `is_box` were moved onto it.
+- **A box type's board and limits** are `package_type.board_walls` and
+  `board_ect`, `wall_load_g` (from a test) and `lid_load_g`, all said at once
+  (`POST /package-types/{id}/carries`, `carrying.rs`). A cut takes its full
+  box's through `package_type_effective`. A pallet has none: it carries by its
+  carrier's rules.
+- **The estimate** is McKee's: 5.87 × edge crush × √(caliper × perimeter),
+  taking C flute (4 mm) for single wall and BC (6.5 mm) for double. That puts
+  the 2021 study's box at 272 kg and the Medium Box at about 267. It is
+  multiplied by what the conditions leave and rounded to 100 g. The walls
+  figure is 33 kg rather than the 30 the finding worked out, which assumed a
+  thinner board.
+- **The conditions** are the first of the workspace's own settings
+  (`workspace_setting`; `POST /workspace/conditions`; `GET /workspace` says
+  them and what they leave). They are the humidity most days, how long a load
+  stands, the stacking, gaps in the deck, the handling and the road factor.
+  The Fibre Box Handbook's figures for each are in `Conditions::share`, the
+  midpoint where it gives a range. To start: 70% (0.8), under ten days
+  (1.0), interlocked (0.6), decks with gaps (0.85), some rough handling
+  (0.9), and three times over for the road. That leaves about an eighth of
+  what the box crushes at empty. The table has no figure under ten days, so
+  the road factor stands for it.
+- **Solid or hollow** is `package_event.hollow`, said with the seal (`POST
+  /packages/{id}/seal`). The bench proposes it: solid when the arrangement
+  fills 85% of the box with nothing loose and everything in it takes weight,
+  hollow otherwise. The packer presses the other. A thing that ships as it
+  is is sealed with neither: what it takes on top is its own saying.
+
 **Not yet.** The Association's multipliers come from data of the 1960s and
 70s and were being revised for a 2025 edition; the setting takes the newer
-figures when they are published.
+figures when they are published. Nothing weighs what is above a box yet: the
+load through the stack is M5's, once the planner places cartons.
 
 ### D250: A carrier's rules are settings
 
-*Adopted 2026-10-12. Decided ahead of the build.*
+*Adopted 2026-10-12. Built 2026-10-16 with migration 146, the plan's M4: the
+settings, and the checks that need no positions (settled 10). The rest are
+checked from M5.*
 
 **Decision.** How a pallet must be built is a named set of **build rules**
 (`build_rules`). Each rule is one of a fixed list and is a **must** or a
@@ -16580,6 +16619,46 @@ label out and none hidden, and no overhang left or right. The second
 carrier's published fact sheet (2016) asks for no overhang on any side,
 labels on a pallet's side and not its top, columns, a flat top, and "heavy"
 on a box over 20 kg; what it asks now is worth confirming with them.
+
+**As built.**
+
+- **A set of build rules** is `build_rules`, and each save of it is a
+  `build_rules_version` with one `build_rule` for each kind on the fixed
+  list (`build_rule_kind`), so the version is the rules as they stood. A
+  rule is a must, a preference weighted one to three, or off. It keeps its
+  figure while off. Saving the same rules again makes no new version.
+  Workspace › Build rules (`carriers.rs`: `GET`, `POST /build-rules`, `PUT
+  /build-rules/{id}`). A new set starts from another or from
+  `starting_rules`: the canvas's figures, and 20 kg heavy and 30 kg loose
+  from the carrier's fact sheet. J84 finds a version missing a rule.
+- **Overhang is two rules, not four**: left and right, either side of the
+  forks, and front and back. It is as the canvas the user approved had it;
+  no carrier has been said to treat one side of a pair apart from the other.
+- **Carriers** are the workspace's own, in Workspace › Carriers (`GET`, `POST
+  /carriers`, `POST /carriers/{id}`, `POST /carriers/{id}/services`). Each
+  names its set for breakdown pallets and for pallets that go as one
+  (`carrier.breakdown_rules_id`, `as_one_rules_id`). The usual carrier is
+  the workspace's (`workspace_setting.usual_carrier_id`, `POST
+  /workspace/usual-carrier`). A carrier's services now belong to its
+  workspace, under a read and write policy as carriers have. A service names
+  no rules of its own, because a pallet is built for a carrier, not a
+  service.
+- **A pallet** is made for the carrier said, the one its plan says, or the
+  usual one, and keeps the version its kind takes then
+  (`package.carrier_id`, `build_rules_version_id`). A carton is refused a
+  carrier, and J83 finds one that got one. On the board, a pallet not yet
+  made can be built for another carrier (`pack_plan_parcel.carrier_id`).
+- **The board's checks** (`carrying.ts`) read rules, never a carrier. A
+  pallet is judged by the version it keeps; one only planned, by its
+  carrier's set for pallets that go as one, as it is now. A carton is judged
+  by its pallet's rules. A carton on no pallet is judged by the usual
+  carrier's set for breakdown pallets, which is where a loose carton goes
+  (settled 1).
+  - Over the heavy limit it is marked heavy.
+  - Over the loose limit, and delivered on its own, it needs a pallet.
+  - A pallet over its weight must is refused as a drop; over a preference,
+    it is said. A pallet that is over already is marked.
+  - Each pallet says its carrier and its height and weight limits.
 
 **Why.** The user, 2026-10-12: "the boxes must face the outside so that the
 stickers can always be on the outside face of the pallet, for [the second

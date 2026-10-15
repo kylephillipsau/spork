@@ -225,6 +225,8 @@ examined nothing.
 | J80 | No chain of packages is more than three deep: a wrap, a pallet and a carton. The act refuses a fourth level; this is the finding D24 named `nesting_too_deep`, for the facts that arrive out of order and fold into one anyway | D24, D246 | ● |
 | J81 | What is booked is what is delivered. No package on a consignment is in or on a pallet that goes as one, because the pallet carries it and booking both counts it twice; and no pallet broken down at the depot is on one, because its cartons go on with their own orders. The consignment refuses both from the events now; this catches a carton put on a pallet after it was booked | D247 | ● |
 | J82 | A cut box is cut from a full box: the same workspace's, lower than it, with its length and width, and not itself cut from another. A cut is drawn with its full box's photographs from the bottom up and takes its empty weight and limit, so a cut taller than its box or cut from a cut would be drawn and weighed from the wrong box. The act refuses each, and the footprint travels with the reference; this finds a box changed under its cuts some other way, an import writing the table directly | D252 | ● |
+| J83 | Only a pallet or a skid is built for a carrier and to build rules. The rules say how a pallet must be built, and a carton built to them would be judged as one. The act refuses a carrier for anything else; this finds one written some other way | D250 | ● |
+| J84 | Every version of a set of build rules holds each rule of the list once. A pallet keeps the version it was started under, so a version missing a rule builds it to nothing on that rule. The act writes them all; this finds a version written some other way | D250 | ● |
 
 ---
 
@@ -267,13 +269,13 @@ appears here as its current whole text.
 | | |
 |---|---|
 | Structural | 56 |
-| Job-asserted | 82 |
-| **Total** | **138** |
-| Marked for vacuity | 79 |
+| Job-asserted | 84 |
+| **Total** | **140** |
+| Marked for vacuity | 81 |
 | `specified` | 22 |
-| `implemented` | 116 |
+| `implemented` | 118 |
 
-Seventy-nine of a hundred and thirty-eight assert an absence and pass on an empty population.
+Eighty-one of a hundred and forty assert an absence and pass on an empty population.
 That is the number worth watching, because those are the entries that will report
 success on the day they stop being checked.
 

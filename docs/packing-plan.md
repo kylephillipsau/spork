@@ -38,12 +38,12 @@ weights (D224). These are not part of this plan:
 | | Designed | Built |
 |---|---|---|
 | D244 checking at the bench | yes | live 2026-10-12 |
-| D246 moving units between cartons, cartons onto pallets | yes | server done in M1, 2026-10-14; the bench doesn't use it yet |
+| D246 moving units between cartons, cartons onto pallets | yes | server done in M1, 2026-10-14; the board uses it from M3 |
 | D247 a pallet goes as one or is broken down | yes | server done in M1: what is delivered, booked and despatched; the sheet and booking line in M6 |
 | D245 the board | yes, mocked | built in M3, 2026-10-14; its gaps 2026-10-15 |
 | D248 a breakdown pallet through the day | yes, mocked | no |
-| D249 what a box carries | yes, with research | no |
-| D250 carrier rules as settings | yes, mocked | no |
+| D249 what a box carries | yes, with research | the settings built in M4, 2026-10-16; the load through a stack in M5 |
+| D250 carrier rules as settings | yes, mocked | built in M4, 2026-10-16, with the checks that need no positions; the rest in M5 |
 | D251 one planner | outline | no |
 | D252 cut-down boxes, box photos | yes, mocked | built in M2, 2026-10-14 |
 
@@ -175,8 +175,8 @@ try at the bench is the short finding; the rest waits for M3's board.*
 
 **M2: boxes cut to their heights, and box photos (D252)**
 
-*Built 2026-10-14 (migration 141, J82). The user's heights are loaded once it
-is live.*
+*Built 2026-10-14 (migration 141, J82). The user's heights were loaded on
+live the same day.*
 
 - `package_type.cut_from_id`, with Workspace › Boxes' heights, adding and
   taking away. The user's list is loaded, and the half box is linked to its
@@ -223,8 +223,11 @@ is live.*
 
 **M4: load limits and carrier build rules (D249, D250)**
 
-*Shaped 2026-10-15: the settings, and the checks that need no positions
-(settled 9 and 10).*
+*Shaped 2026-10-15 (settled 9 and 10). Built 2026-10-16 (migrations 145 and
+146, J83 and J84). As built is in D249 and D250. Overhang is two rules, left
+and right and front and back, as the canvas has it. A service names no rules
+of its own. Still to do on live: enter the carriers and their sets once the
+user names them.*
 
 - **What a thing carries:** `subject_load` on items, said and inherited as
   "this way up" is (D200): takes weight, which is the default; takes up to so

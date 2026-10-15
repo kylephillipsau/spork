@@ -147,17 +147,26 @@ the whole order (D245):
 - weigh each carton: the bench says whether the weight agrees with what it
   should weigh, within the site's tolerance (Workspace, Packing), and what
   would explain it when it doesn't (D244);
-- seal it once what is in it is checked, and copy the parcels' sizes and
-  weights for the booking (D224).
+- seal it once what is in it is checked, saying whether it is solid or
+  hollow (the bench proposes one, D249), and copy the parcels' sizes and
+  weights for the booking (D224);
+- see a parcel marked heavy, or said to need a pallet, by its carrier's
+  rules; a pallet over its weight is refused (D250).
 
 Workspace, Boxes lists each box with the heights it is cut down to, to add
 to and take from, and its photographs: a carton is drawn with them, and a cut
-one with the bottom of its full box's (D252).
+one with the bottom of its full box's (D252). Each box says what it carries
+on its walls and its lid, estimated from its size and board under the
+warehouse's conditions unless a test says (D249). Workspace, Carriers names
+who you send with, the usual one, and the build rules each one's pallets are
+built to; Workspace, Build rules keeps the sets, each rule a must, a
+preference or off (D250). An item says what it takes on top (D249).
 
 Despatch books a pallet that goes as one as itself, with the cartons on it,
 and despatches them together (D247). Breakdown pallets built through the
-day, what a box can carry, carriers' pallet rules as settings and one
-planner for boxes and pallets are decided and not yet built (D247 to D251).
+day, the load through a stack, the rules that need each carton's place, and
+one planner for boxes and pallets are decided and not yet built (D248 to
+D251).
 
 ## Picking from the tickets
 

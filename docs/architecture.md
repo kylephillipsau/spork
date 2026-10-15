@@ -286,16 +286,16 @@ with a pallet count on every delivery, and that is not the yard.
 
 ## Current state
 
-Two hundred and fifty-seven recorded decisions, a hundred and thirty-eight rules the design must always
-satisfy, and a database that a hundred and forty-four migrations build and reverse cleanly, both
+Two hundred and fifty-seven recorded decisions, a hundred and forty rules the design must always
+satisfy, and a database that a hundred and forty-six migrations build and reverse cleanly, both
 from empty and with data in them.
 
 That list of rules is what the design gets checked against, and it is now a test
 suite rather than a document. Each rule carries its own metadata and its own
 identifier, so allocating the same number twice is a compile error rather than a
-mistake anyone can make. One hundred and sixteen rules are implemented and none fails.
+mistake anyone can make. One hundred and eighteen rules are implemented and none fails.
 
-Seventy-nine of the rules state that something does not happen, and a rule of
+Eighty-one of the rules state that something does not happen, and a rule of
 that shape passes when there is nothing to check. The suite reports those
 separately: a check that examined nothing is recorded as proving nothing, rather
 than counted as a pass.
@@ -310,11 +310,12 @@ first rebuild that tried to collect the cell it named.
 
 The schema covers the two tables that carry everything, the projections folded
 from them, containment in both current and historical form, findings, and the
-policy resolver. Above it sits an API of a hundred and thirty-four endpoints and a
+policy resolver. Above it sits an API of a hundred and forty-five endpoints and a
 projection scheduler. Above that is a React client of thirty-one screens, and two retired
 addresses, `/weigh` and `/capture`, that lead to the item list (D174):
 - the pack bench and its queue, which checks each line and each carton's
-  weight (D244) and plans the boxes and the freight they make (D224); picking,
+  weight (D244), plans the boxes and the freight they make (D224), and judges
+  each parcel and pallet by its carrier's rules (D250); picking,
   receiving, put away and despatch;
 - what is still to pick: a batch of picking tickets pasted from the sheet,
   looked up against NetSuite's open orders, shared out between the people
@@ -341,7 +342,7 @@ the width it has.
 
 The gap worth naming is still on the writing half of that API, though it is much
 smaller. In August, fourteen of thirty-seven writing endpoints had never been
-exercised over HTTP. Now seven of seventy-nine are never called by an HTTP test:
+exercised over HTTP. Now seven of eighty-eight are never called by an HTTP test:
 - investigating a discrepancy;
 - the item import;
 - placing a package and opening one;

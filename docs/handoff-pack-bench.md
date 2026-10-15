@@ -1,6 +1,6 @@
 # Handoff: the pack bench, pallets, and the brand
 
-Written 2026-10-12 and brought up to date on 2026-10-15. Read this first. The
+Written 2026-10-12 and brought up to date on 2026-10-16. Read this first. The
 earlier handoff, [handoff-capture-and-search.md](./handoff-capture-and-search.md),
 still covers capture, crops, search, backups and picking, and its Next list
 still stands for those. [handoff-orders-bridge-3d.md](./handoff-orders-bridge-3d.md)
@@ -8,17 +8,24 @@ covers the toolchain, tests and layout.
 
 ## State
 
-- **Live, 2026-10-15:**
-  - `main` is pushed through cde5e10 (the gaps left from M3), then this
-    handoff;
-  - the live database is at migration 142 since 12:56 on 2026-10-14;
-  - the server and client running are D257's (acfb9e0), live since the
-    user's restart at 14:39. Asked from the `.local` name, a passkey
-    ceremony names `<computer>.local`; the bench's outbox (D256) is kept in
-    `client/dist-prev`;
-  - the gaps left from M3 and the check's layout (cde5e10) are built and
-    not live. They need migrations 143 and 144, the server and the client
-    (Deploying, below).
+- **Live, 2026-10-16:**
+  - the gaps left from M3 and the check's layout (cde5e10): the user
+    restarted at 08:03, which applied migrations 143 and 144 and started the
+    server; the client was swapped in the same morning. D257's client is kept
+    in `client/dist-prev`;
+  - M4 (D249, D250, migrations 145 and 146) is built and not live. It needs
+    both migrations, the server and the client (Deploying, below), and then
+    the carriers and their sets entered (Next).
+- 2026-10-16, M4 of the plan, what a box carries and carriers' rules, on a
+  fresh database (`spork_m4run`):
+  - every migration builds and reverses, 146 of them, from empty and with
+    both fixtures' rows;
+  - the server's unit tests pass (329), and its integration tests 168 of
+    168;
+  - the invariant suite passes but for S7 and S10, as before; J83 and J84
+    are new and hold;
+  - the client's tests (261), contract and laws pass, and the render gate
+    passes over every fixture (151 fixtures, 496 renders).
 - 2026-10-15, the gaps left from M3 (migrations 143 and 144) and the check's
   layout, on a fresh database (`spork_gaps`):
   - every migration builds and reverses, 144 of them;
@@ -96,6 +103,53 @@ covers the toolchain, tests and layout.
   - The invariant suite was not run this session.
 
 ## What landed
+
+**On 2026-10-16: M4, what a box carries and carriers' rules (D249, D250)**
+- **What a thing takes on top** (migration 145): `subject_load`, `POST
+  /load`, shown on the item card as "On top" (takes weight, up to so many
+  kg, or nothing). Whose saying it is, which five functions need, is one
+  function now, `subject_asked`.
+- **What a box carries**: its board, walls from a test and lid, said at
+  once (`POST /package-types/{id}/carries`, `carrying.rs`). Workspace ›
+  Boxes shows "On top" for each, and the opened box says each figure and
+  where it comes from. The walls are McKee's estimate under the
+  warehouse's conditions, about 33 kg for the Medium Box, unless a test
+  says.
+- **The warehouse's conditions** are the workspace's first settings of its
+  own (`workspace_setting`, `POST /workspace/conditions`), on a card under
+  Boxes.
+- **Solid or hollow at sealing** (`package_event.hollow`): the bench
+  proposes one, solid when the box is 85% full of things that take weight,
+  and the packer presses the other beside Seal.
+- **Carriers and build rules** (migration 146, `carriers.rs`):
+  - Workspace › Carriers lists the carriers, their services, the set each
+    one's breakdown pallets and pallets that go as one are built to, and
+    the usual one;
+  - Workspace › Build rules is laid out as the canvas has it: the sets
+    beside the one open, each rule a must, a preference weighted Low,
+    Medium or High, or off;
+  - each save is a new version, and a pallet keeps the version it was made
+    under;
+  - `carrier_service` now belongs to its carrier's workspace.
+- **The board** (`carrying.ts`):
+  - a parcel over its rules' heavy limit is marked Heavy;
+  - one over the loose limit, delivered on its own, is marked Needs a
+    pallet;
+  - a drop that takes a pallet past its weight must is refused, and past a
+    preference it is said;
+  - each pallet says its carrier and limits, and one not yet made can be
+    built for another carrier.
+- J83 (only a pallet is built for a carrier) and J84 (a version holds every
+  rule).
+- Tests:
+  - `carriers_http.rs`: rule sets and versions, carriers, the usual
+    carrier, a pallet keeping its rules, the plan's carrier, hollow at
+    sealing, a box's limits and the conditions;
+  - `ships_as_is_http.rs` (the load), the unit tests in `carrying.rs` and
+    `carriers.rs`, and `carrying.test.ts`;
+  - fixtures `pack/rules`, and the gloves' carton on
+    `item/sold-by-carton`. `workspace` gains the new cards, and
+    `workspace/box` a box's limits.
 
 **Later on 2026-10-15: the gaps left from M3, and the check laid out as To
 pack is**
@@ -441,6 +495,21 @@ pack is**
 
 ## Known limits
 
+- **M4 checks only what needs no positions** (settled 10). Overhang,
+  labels, support, columns and the load through the stack wait for the
+  planner (M5). A pallet's height is said and not yet checked.
+- **Weights on the board are what the board knows**: a carton's scale
+  weight, else its expected or listed weight, else what the arrangement
+  counts. A pallet nobody weighed counts its own preset's empty weight and
+  what is on it. A parcel with no weight is not marked.
+- **A made pallet keeps its carrier.** To build one for another carrier,
+  take its cartons off and start another; a pallet planned can be changed.
+- **The rules a loose carton is judged by** are the usual carrier's set for
+  breakdown pallets. A carton going to another carrier on its own is still
+  judged by those.
+- **Solid or hollow is proposed from the arrangement**: anything loose, or
+  anything said to take less on top, proposes hollow.
+
 - **What should be there is a guess.** Checking guesses it from the line's
   packs, largest first. Goods picked loose can arrive otherwise, and the
   count is one number per line, in the line's unit.
@@ -492,8 +561,11 @@ pack is**
 - **`scripts/verify-migrations.sh` drops the schema of whatever
   `DATABASE_URL` names, and its default is the working `spork` database.**
   Point it at `spork_verify`.
-- **The test database** `spork_m3run` is at migration 142. It has been
-  written to, so build a fresh one for a clean run.
+- **The test database** `spork_m4run` is at migration 146. It has been
+  written to, so build a fresh one for a clean run: `CREATE DATABASE`,
+  `DATABASE_URL=… sh scripts/migrate.sh`, then `fixtures/seed.sql`.
+- **cargo from PowerShell** needs Git's `usrin` on `PATH` for the two
+  setup tests, which call `sh`.
 - **This computer serves the live app.** Run heavy builds, tests and renders
   at below-normal priority, cargo with `-j 4`. Make a hotfix in a clean
   worktree from `HEAD`, never from a tree with half a milestone in it.
@@ -522,17 +594,18 @@ pack is**
 
 To build, in the agreed order:
 
-1. **Put the M3 gaps live** when the user says so: migrations 143 and 144,
-   the server and the client (Deploying, above). Then pack an order on the
-   board using all three, as [packing-plan.md](./packing-plan.md) says.
-2. **Try D257 on the iPhone** at `https://<computer>.local`: sign in with the
-   password, add a passkey under the name menu › Passkeys, sign out, and sign
-   in with it.
-3. **M4, D249 and D250**, as shaped on 2026-10-15 (settled 9 and 10 in the
-   plan): `subject_load`, wall and lid limits, the warehouse's conditions,
-   solid or hollow at sealing, Workspace › Carriers with a usual carrier,
-   `build_rules`, and the checks that need no positions (heavy, loose, a
-   pallet's weight).
+1. **Put M4 live** when the user says so: migrations 145 and 146, the
+   server and the client (Deploying, above).
+2. **Enter the carriers and their sets** with the user, who names the
+   carriers. In Workspace › Build rules, start "Order pallet" and the two
+   breakdown sets from the canvas: the second carrier's has overhang left
+   and right, and labels, as musts. Then in Workspace › Carriers add both
+   carriers, point each at its sets, and make the usual one usual. Until
+   then no pallet is built to any rules, and the board checks nothing.
+3. **Try M3's gaps and M4 at the bench**: pack an order using Undo of a
+   Make, things planned onto a pallet, Seal with solid or hollow, and a
+   heavy carton. Also try D257 on the iPhone at `https://<computer>.local`:
+   add a passkey under the name menu › Passkeys and sign in with it.
 4. **M5, D251:** the planner in a worker. It replaces `arrange.ts` once it is
    never worse over a test set of real orders.
 5. **M6, D247 and D248:** breakdown pallets through the day, the pallet sheet,
